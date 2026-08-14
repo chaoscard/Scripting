@@ -813,6 +813,18 @@ export async function userConnections(
   return { items: json?.user_previews ?? [], nextURL: json?.next_url ?? null }
 }
 
+export async function myPixivUsers(
+  userID: number,
+  accessToken: string
+): Promise<PixivPage<PixivUserPreview>> {
+  const json = await apiGet(
+    "/v1/user/mypixiv",
+    { user_id: String(userID) },
+    accessToken
+  )
+  return { items: json?.user_previews ?? [], nextURL: json?.next_url ?? null }
+}
+
 export async function followDetail(
   userID: number,
   accessToken: string

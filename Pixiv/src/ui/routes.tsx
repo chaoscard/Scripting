@@ -1,6 +1,7 @@
 // 全局路由表：各 Tab 根视图的 navigationDestination 共用
 // 注意：navigationDestination 必须挂在根视图属性上（不能作为 NavigationStack 子元素）
 import { NavigationDestination, VStack } from "scripting"
+import { session } from "../api/session"
 import { IllustDetailView } from "./illustDetail"
 import { VisionDetailView } from "./visionDetail"
 import { UserDetailView } from "./userDetail"
@@ -16,7 +17,6 @@ import { SeriesView } from "./seriesView"
 import { UserBookmarksView } from "./userBookmarks"
 import { UserConnectionsView } from "./userConnections"
 import { AboutView } from "./about"
-import { FollowFeedView } from "./followFeed"
 
 // 解析 "xxx:123" 形式的数值 id；非法输入返回 null（避免 NaN 传给详情页）
 function parseID(value: string, prefix: string): number | null {
@@ -83,7 +83,15 @@ export function renderDestination(page: string) {
   }
   if (page === "connections:following") return <UserConnectionsView kind="following" />
   if (page === "connections:follower") return <UserConnectionsView kind="follower" />
-  if (page === "friends") return <FollowFeedView onClose={() => {}} initialMode="friends" />
+  if (page === "friends") {
+    return (
+      <UserConnectionsView
+        kind="mypixiv"
+        userID={session.userID ?? undefined}
+        title="我的好友"
+      />
+    )
+  }
   if (page === "blockedSettings") return <BlockedSettingsView />
   if (page === "settings") return <SettingsView />
   if (page === "about") return <AboutView />

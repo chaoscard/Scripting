@@ -4,8 +4,11 @@ import {
   GeometryReader,
   HStack,
   Image,
+  Label,
   LazyVStack,
+  Menu,
   NavigationLink,
+  Picker,
   Spacer,
   Text,
   useEffect,
@@ -15,10 +18,11 @@ import {
 } from "scripting"
 import {
   followUser,
+  myPixivUsers,
   nextUsers,
   unfollowUser,
   userConnections,
-  type UserConnectionKind,
+  type Visibility,
 } from "../api/pixiv"
 import { session } from "../api/session"
 import type { PixivIllustration, PixivNovel, PixivUserPreview } from "../types"
@@ -35,7 +39,8 @@ import { novelThumbUrlOf, prefetch, thumbUrlOf } from "../image/imageLoader"
 import { onUserFollowChanged } from "../store/userFollow"
 import { usePagedList } from "./hooks"
 
-export type ConnectionRouteKind = "following" | "follower"
+export type ConnectionRouteKind = "following" | "follower" | "mypixiv"
+type ConnectionVisibility = Extract<Visibility, "public" | "private">
 
 type ConnectionPreview = PixivUserPreview & { id: number }
 
@@ -47,12 +52,14 @@ const CONNECTION_CARD_HORIZONTAL_PADDING = 10
 const TITLES: Record<ConnectionRouteKind, string> = {
   following: "我的关注",
   follower: "我的粉丝",
+  mypixiv: "我的好友",
 }
 
 export function UserConnectionsView(props: {
   kind: ConnectionRouteKind
   userID?: number
   title?: string
+  showVisibilityPicker?: boolean
 }) {
   const userID = props.userID ?? session.userID
   const title =
@@ -61,11 +68,17 @@ export function UserConnectionsView(props: {
       ? TITLES[props.kind]
       : props.kind === "following"
         ? "关注"
-        : "粉丝")
+        : props.kind === "follower"
+          ? "粉丝"
+          : "好友")
+  const [restrict, setRestrict] = useState<ConnectionVisibility>("public")
+  const showVisibilityPicker =
+    props.showVisibilityPicker ?? (props.kind === "following" && props.userID == null)
   const paged = usePagedList<ConnectionPreview>({
-    first: async (token) => normalizePage(await loadConnections(userID, props.kind, token)),
+    first: async (token) =>
+      normalizePage(await loadConnections(userID, props.kind, restrict, token)),
     more: async (nextURL, token) => normalizePage(await nextUsers(nextURL, token)),
-    deps: [userID, props.kind],
+    deps: [userID, props.kind, restrict],
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, 10).flatMap(connectionPreviewImageURLs)).cancel,
   })
@@ -81,37 +94,48 @@ export function UserConnectionsView(props: {
         )
         return (
           <RefreshableScrollView
-      navigationTitle={title}
-      navigationBarTitleDisplayMode="inline"
-      refreshable={paged.refresh}
-    >
-      {paged.initialLoading ? (
-        <LoadingView />
-      ) : paged.error && paged.items.length === 0 ? (
-        <ErrorView message={paged.error} onRetry={paged.refresh} />
-      ) : paged.items.length === 0 ? (
-        <EmptyView
-          text={props.kind === "following" ? "暂未关注用户" : "暂时没有粉丝"}
-          systemImage="person.2"
-        />
-      ) : (
-        <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10, top: 6 }}>
-          {paged.items.map((preview) => (
-            <ConnectionRow
-              key={preview.user.id}
-              preview={preview}
-              showFollowControl={props.kind === "following" && userID === session.userID}
-              previewSide={previewSide}
-            />
-          ))}
-          <LoadMoreTrigger
-            anchor={paged.items[paged.items.length - 1].user.id}
-            onLoadMore={paged.loadMore}
-            hasMore={paged.hasMore}
-            isLoading={paged.loadingMore}
-          />
-        </LazyVStack>
-      )}
+            navigationTitle={title}
+            navigationBarTitleDisplayMode="inline"
+            toolbar={
+              showVisibilityPicker
+                ? connectionToolbar({ restrict, onRestrictChange: setRestrict })
+                : undefined
+            }
+            refreshable={paged.refresh}
+          >
+            {paged.initialLoading ? (
+              <LoadingView />
+            ) : paged.error && paged.items.length === 0 ? (
+              <ErrorView message={paged.error} onRetry={paged.refresh} />
+            ) : paged.items.length === 0 ? (
+              <EmptyView
+                text={
+                  props.kind === "following"
+                    ? "暂未关注用户"
+                    : props.kind === "follower"
+                      ? "暂时没有粉丝"
+                      : "暂时没有好友"
+                }
+                systemImage="person.2"
+              />
+            ) : (
+              <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10, top: 6 }}>
+                {paged.items.map((preview) => (
+                  <ConnectionRow
+                    key={preview.user.id}
+                    preview={preview}
+                    showFollowControl={preview.user.id !== session.userID}
+                    previewSide={previewSide}
+                  />
+                ))}
+                <LoadMoreTrigger
+                  anchor={paged.items[paged.items.length - 1].user.id}
+                  onLoadMore={paged.loadMore}
+                  hasMore={paged.hasMore}
+                  isLoading={paged.loadingMore}
+                />
+              </LazyVStack>
+            )}
           </RefreshableScrollView>
         )
       }}
@@ -121,11 +145,35 @@ export function UserConnectionsView(props: {
 
 async function loadConnections(
   userID: number | null,
-  kind: UserConnectionKind,
+  kind: ConnectionRouteKind,
+  restrict: ConnectionVisibility,
   accessToken: string
 ) {
   if (userID == null) return { items: [], nextURL: null }
-  return userConnections(userID, kind, "public", accessToken)
+  if (kind === "mypixiv") return myPixivUsers(userID, accessToken)
+  return userConnections(userID, kind, restrict, accessToken)
+}
+
+function connectionToolbar(props: {
+  restrict: ConnectionVisibility
+  onRestrictChange: (restrict: ConnectionVisibility) => void
+}) {
+  return {
+    topBarTrailing: [
+      <Menu label={<Image systemName="ellipsis.circle" />}>
+        <Picker
+          title="关注范围"
+          value={props.restrict}
+          onChanged={(value: string) =>
+            props.onRestrictChange(value as ConnectionVisibility)
+          }
+        >
+          <Label tag="public" title="公开" systemImage="globe" />
+          <Label tag="private" title="私密" systemImage="lock" />
+        </Picker>
+      </Menu>,
+    ],
+  }
 }
 
 function normalizePage(page: {
