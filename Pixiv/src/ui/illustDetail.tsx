@@ -179,7 +179,7 @@ export function IllustDetailView(props: { illustID: number }) {
   if (loading) {
     return (
       <ScrollView navigationTitle="作品详情" navigationBarTitleDisplayMode="inline">
-        <LoadingView text="正在加载作品…" />
+        <LoadingView />
       </ScrollView>
     )
   }

@@ -254,7 +254,7 @@ function IllustRankingFeed(props: {
     >
       <VStack alignment="leading" spacing={10}>
         {paged.initialLoading ? (
-            <LoadingView text="正在加载排行…" />
+            <LoadingView />
           ) : paged.error && paged.items.length === 0 ? (
             <ErrorView message={paged.error} onRetry={paged.refresh} />
           ) : paged.items.length === 0 ? (
@@ -314,7 +314,7 @@ function NovelRankingFeed(props: {
     >
       <VStack alignment="leading" spacing={10}>
         {paged.initialLoading ? (
-            <LoadingView text="正在加载小说排行…" />
+            <LoadingView />
           ) : paged.error && paged.items.length === 0 ? (
             <ErrorView message={paged.error} onRetry={paged.refresh} />
           ) : paged.items.length === 0 ? (

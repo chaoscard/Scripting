@@ -110,7 +110,7 @@ export function UserBookmarksView(props: { userID: number }) {
           <VStack alignment="leading" spacing={10} padding={{ top: 4 }}>
           <BookmarkTags tags={tags} activeTag={activeTag} onTagChange={setActiveTag} />
           {illustPaged.initialLoading ? (
-            <LoadingView text="正在加载收藏…" />
+            <LoadingView />
           ) : illustPaged.error && illustPaged.items.length === 0 ? (
             <ErrorView message={illustPaged.error} onRetry={illustPaged.refresh} />
           ) : illustPaged.items.length === 0 ? (
@@ -133,7 +133,7 @@ export function UserBookmarksView(props: { userID: number }) {
       >
         <VStack alignment="leading" spacing={10} padding={{ top: 4 }}>
           {novelPaged.initialLoading ? (
-            <LoadingView text="正在加载小说收藏…" />
+            <LoadingView />
           ) : novelPaged.error && novelPaged.items.length === 0 ? (
             <ErrorView message={novelPaged.error} onRetry={novelPaged.refresh} />
           ) : novelPaged.items.length === 0 ? (

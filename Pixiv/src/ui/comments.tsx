@@ -125,7 +125,7 @@ export function CommentsSheet(props: { illustID: number }) {
         ) : null}
 
         {loading ? (
-          <LoadingView text="正在加载评论…" />
+          <LoadingView />
         ) : error && items.length === 0 ? (
           <ErrorView message={error} onRetry={load} />
         ) : items.length === 0 ? (

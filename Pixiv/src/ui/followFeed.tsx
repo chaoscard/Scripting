@@ -272,7 +272,7 @@ function FollowingIllustrationFeed(props: {
     >
       <VStack alignment="leading" spacing={10}>
         {paged.initialLoading ? (
-          <LoadingView text="正在加载关注动态…" />
+          <LoadingView />
         ) : paged.error && paged.items.length === 0 ? (
           <ErrorView message={paged.error} onRetry={paged.refresh} />
         ) : paged.items.length === 0 ? (
@@ -316,7 +316,7 @@ function FollowingNovelFeed(props: {
     >
       <VStack alignment="leading" spacing={10}>
         {paged.initialLoading ? (
-          <LoadingView text="正在加载小说关注动态…" />
+          <LoadingView />
         ) : paged.error && paged.items.length === 0 ? (
           <ErrorView message={paged.error} onRetry={paged.refresh} />
         ) : paged.items.length === 0 ? (
@@ -360,9 +360,7 @@ function WatchlistFeed(props: {
     >
       <VStack alignment="leading" spacing={10}>
         {paged.initialLoading ? (
-          <LoadingView
-            text={`正在加载${kind === "manga" ? "漫画" : "小说"}追更列表…`}
-          />
+          <LoadingView />
         ) : paged.error && paged.items.length === 0 ? (
           <ErrorView message={paged.error} onRetry={paged.refresh} />
         ) : paged.items.length === 0 ? (
@@ -409,7 +407,7 @@ function FriendIllustrationFeed(props: {
     >
       <VStack alignment="leading" spacing={10}>
         {paged.initialLoading ? (
-          <LoadingView text="正在加载好友作品…" />
+          <LoadingView />
         ) : paged.error && paged.items.length === 0 ? (
           <ErrorView message={paged.error} onRetry={paged.refresh} />
         ) : paged.items.length === 0 ? (
@@ -451,7 +449,7 @@ function FriendNovelFeed(props: {
     >
       <VStack alignment="leading" spacing={10}>
         {paged.initialLoading ? (
-          <LoadingView text="正在加载好友小说…" />
+          <LoadingView />
         ) : paged.error && paged.items.length === 0 ? (
           <ErrorView message={paged.error} onRetry={paged.refresh} />
         ) : paged.items.length === 0 ? (

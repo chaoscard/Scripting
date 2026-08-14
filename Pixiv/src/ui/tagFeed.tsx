@@ -113,7 +113,7 @@ export function TagFeedView(props: { tag: string }) {
         ) : null}
 
         {paged.initialLoading ? (
-          <LoadingView text={`正在加载 #${tag}…`} />
+          <LoadingView />
         ) : paged.error && paged.items.length === 0 ? (
           <ErrorView message={paged.error} onRetry={paged.refresh} />
         ) : paged.items.length === 0 ? (

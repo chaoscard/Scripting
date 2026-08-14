@@ -136,7 +136,7 @@ export function UserDetailView(props: { userID: number }) {
     }
     return (
       <ScrollView navigationTitle="用户主页" navigationBarTitleDisplayMode="inline">
-        <LoadingView showText={false} />
+        <LoadingView />
       </ScrollView>
     )
   }
@@ -257,7 +257,7 @@ function UserIllustFeed(props: {
       <VStack alignment="leading" spacing={12} padding={{ top: 4, bottom: 20 }}>
         <UserProfileHeader detail={props.detail} />
         {paged.initialLoading ? (
-          <LoadingView showText={false} />
+          <LoadingView />
         ) : paged.error && paged.items.length === 0 ? (
           <ErrorView message={paged.error} onRetry={paged.refresh} />
         ) : paged.items.length === 0 ? (
@@ -310,7 +310,7 @@ function UserNovelFeed(props: {
       <VStack alignment="leading" spacing={12} padding={{ top: 4, bottom: 20 }}>
         <UserProfileHeader detail={props.detail} />
         {paged.initialLoading ? (
-          <LoadingView showText={false} />
+          <LoadingView />
         ) : paged.error && paged.items.length === 0 ? (
           <ErrorView message={paged.error} onRetry={paged.refresh} />
         ) : paged.items.length === 0 ? (

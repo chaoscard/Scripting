@@ -58,7 +58,7 @@ export function UserConnectionsView(props: {
       refreshable={paged.refresh}
     >
       {paged.initialLoading ? (
-        <LoadingView text="正在加载用户…" />
+        <LoadingView />
       ) : paged.error && paged.items.length === 0 ? (
         <ErrorView message={paged.error} onRetry={paged.refresh} />
       ) : paged.items.length === 0 ? (

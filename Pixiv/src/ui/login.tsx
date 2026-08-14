@@ -16,7 +16,7 @@ import {
   generateCodeVerifier,
 } from "../api/auth"
 import { session } from "../api/session"
-import { appToolbar } from "./components"
+import { appToolbar, LoadingView } from "./components"
 
 export function LoginView(props: {
   onClose: () => void
@@ -90,41 +90,44 @@ export function LoginView(props: {
       frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
       toolbar={appToolbar(props.onClose)}
     >
-      <VStack
-        alignment="center"
-        spacing={16}
-        frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-        padding={32}
-        offset={{ x: 0, y: -104 }}
-      >
-        <Image
-          systemName="paintpalette.fill"
-          font="largeTitle"
-          foregroundStyle="#0096FA"
-          padding={{ top: 80, bottom: 12 }}
-        />
-        <VStack spacing={8} padding={{ top: 24 }}>
-          <Button
-            title={isLoading ? "正在登录…" : "使用 Pixiv 账号登录"}
-            buttonStyle="glassProminent"
-            tint="#0096FA"
-            controlSize="large"
-            disabled={isLoading}
-            action={startLogin}
+      {isLoading ? (
+        <LoadingView />
+      ) : (
+        <VStack
+          alignment="center"
+          spacing={16}
+          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          padding={32}
+          offset={{ x: 0, y: -104 }}
+        >
+          <Image
+            systemName="paintpalette.fill"
+            font="largeTitle"
+            foregroundStyle="#0096FA"
+            padding={{ top: 80, bottom: 12 }}
           />
-        </VStack>
+          <VStack spacing={8} padding={{ top: 24 }}>
+            <Button
+              title="使用 Pixiv 账号登录"
+              buttonStyle="glassProminent"
+              tint="#0096FA"
+              controlSize="large"
+              action={startLogin}
+            />
+          </VStack>
 
-        {error ? (
-          <Text
-            font="footnote"
-            foregroundStyle="systemRed"
-            multilineTextAlignment="center"
-            padding={{ top: 8 }}
-          >
-            {error}
-          </Text>
-        ) : null}
-      </VStack>
+          {error ? (
+            <Text
+              font="footnote"
+              foregroundStyle="systemRed"
+              multilineTextAlignment="center"
+              padding={{ top: 8 }}
+            >
+              {error}
+            </Text>
+          ) : null}
+        </VStack>
+      )}
     </ZStack>
   )
 }

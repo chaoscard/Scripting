@@ -168,7 +168,7 @@ export function NovelDetailView(props: { novelID: number }) {
   if (loading) {
     return (
       <ScrollView navigationTitle="小说" navigationBarTitleDisplayMode="inline">
-        <LoadingView text="正在加载小说…" />
+        <LoadingView />
       </ScrollView>
     )
   }

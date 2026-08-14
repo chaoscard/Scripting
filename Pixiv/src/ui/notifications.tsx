@@ -44,7 +44,7 @@ export function NotificationsView() {
       refreshable={paged.refresh}
     >
       {paged.initialLoading ? (
-        <LoadingView text="正在加载通知…" />
+        <LoadingView />
       ) : paged.error && paged.items.length === 0 ? (
         <ErrorView message={paged.error} onRetry={paged.refresh} />
       ) : paged.items.length === 0 ? (

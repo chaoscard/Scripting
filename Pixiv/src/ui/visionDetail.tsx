@@ -51,7 +51,7 @@ export function VisionDetailView(props: { articleID: number }) {
   if (loading) {
     return (
       <ScrollView navigationTitle="Vision" navigationBarTitleDisplayMode="inline">
-        <LoadingView text="正在加载 Vision 文章…" />
+        <LoadingView />
       </ScrollView>
     )
   }

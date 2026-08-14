@@ -204,7 +204,7 @@ function IllustFeed(props: {
     >
       <VStack alignment="leading" spacing={10}>
         {paged.initialLoading ? (
-            <LoadingView text={`正在加载${label}…`} />
+            <LoadingView />
           ) : paged.error && paged.items.length === 0 ? (
             <ErrorView message={paged.error} onRetry={paged.refresh} />
           ) : paged.items.length === 0 ? (
@@ -263,7 +263,7 @@ function NovelFeed(props: {
     >
       <VStack alignment="leading" spacing={10}>
         {paged.initialLoading ? (
-            <LoadingView text={`正在加载${label}小说…`} />
+            <LoadingView />
           ) : paged.error && paged.items.length === 0 ? (
             <ErrorView message={paged.error} onRetry={paged.refresh} />
           ) : paged.items.length === 0 ? (
@@ -306,7 +306,7 @@ function VisionFeed(props: { active: boolean; retained: boolean }) {
     >
       <VStack alignment="leading" spacing={12} padding={{ top: 4, bottom: 24 }}>
         {paged.initialLoading ? (
-          <LoadingView text="正在加载专辑…" />
+          <LoadingView />
         ) : paged.error && paged.items.length === 0 ? (
           <ErrorView message={paged.error} onRetry={paged.refresh} />
         ) : paged.items.length === 0 ? (

@@ -2,7 +2,7 @@
   "name": "Pixiv",
   "icon": "paintpalette",
   "color": "rgba(0, 150, 250, 1)",
-  "version": "0.6.8",
+  "version": "0.6.9",
   "runInApp": true,
   "description": "Liquid Glass Pixiv client",
   "localizedNames": {

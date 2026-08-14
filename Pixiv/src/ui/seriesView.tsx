@@ -2,7 +2,6 @@ import {
   HStack,
   LazyVStack,
   NavigationLink,
-  ProgressView,
   Text,
   useEffect,
   useState,
@@ -21,6 +20,7 @@ import {
   EmptyView,
   ErrorView,
   ImageNumberBadge,
+  LoadingView,
   LoadMoreTrigger,
   MasonryIllustFeed,
   NovelCard,
@@ -149,7 +149,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
       refreshable={load}
     >
       {loading ? (
-        <VStack alignment="center" padding={24}><ProgressView /></VStack>
+        <LoadingView />
       ) : error ? (
         <ErrorView message={error} onRetry={load} />
       ) : (

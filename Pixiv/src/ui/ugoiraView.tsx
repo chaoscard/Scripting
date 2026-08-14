@@ -67,19 +67,12 @@ export function UgoiraPlayerView(props: {
   return (
     <VStack
       alignment="center"
-      spacing={12}
+      spacing={0}
       aspectRatio={{ value: aspectRatioValue, contentMode: "fit" }}
       frame={{ maxWidth: "infinity" }}
       padding={40}
     >
-      {loading ? (
-        <>
-          <ProgressView />
-          <Text font="footnote" foregroundStyle="secondaryLabel">
-            正在合成动图（首次需要下载帧并渲染）…
-          </Text>
-        </>
-      ) : error ? (
+      {loading ? <ProgressView /> : error ? (
         <>
           <Text font="footnote" foregroundStyle="systemRed">
             {error}

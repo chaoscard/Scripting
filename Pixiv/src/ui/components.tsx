@@ -1508,8 +1508,8 @@ export function TagChip(props: {
   )
 }
 
-// 全局加载视图：所有加载场景统一为无文字、横向居中的圆形指示器。
-export function LoadingView(_props: { text?: string; showText?: boolean }) {
+// 全局加载视图：所有加载场景统一为居中的圆形指示器。
+export function LoadingView() {
   return (
     <HStack
       spacing={0}

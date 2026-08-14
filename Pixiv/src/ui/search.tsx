@@ -442,7 +442,7 @@ export function SearchView(props: { onClose: () => void }) {
 
           {submitted ? (
             searchLoading ? (
-              <LoadingView text="正在搜索…" />
+              <LoadingView />
             ) : searchError ? (
               <ErrorView
                 message={searchError}
