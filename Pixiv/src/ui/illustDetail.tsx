@@ -69,7 +69,7 @@ export function IllustDetailView(props: { illustID: number }) {
   const [followed, setFollowed] = useState(false)
   const [followLoading, setFollowLoading] = useState(false)
   const [showComments, setShowComments] = useState(false)
-  const [quality, setQuality] = useState(loadSettings().imageQuality)
+  const [quality, setQuality] = useState(loadSettings().detailImageQuality)
   const guard = useAsyncGuard()
   const illustRef = useLatest(illust)
   const errorRef = useLatest(error)
@@ -115,7 +115,7 @@ export function IllustDetailView(props: { illustID: number }) {
       } else {
         const total = Math.min(4, detail.page_count || 1)
         for (let k = 0; k < total; k++) {
-          prefetchURLs.push(imageUrlOf(detail, k, loadSettings().imageQuality))
+          prefetchURLs.push(imageUrlOf(detail, k, loadSettings().detailImageQuality))
         }
       }
       prefetch(prefetchURLs)
@@ -150,7 +150,7 @@ export function IllustDetailView(props: { illustID: number }) {
   useEffect(() => {
     return onSettingsChanged(() => {
       const settings = loadSettings()
-      setQuality(settings.imageQuality)
+      setQuality(settings.detailImageQuality)
       const current = illustRef.current
       if (
         current &&
@@ -265,9 +265,10 @@ export function IllustDetailView(props: { illustID: number }) {
       }
       return
     }
-    // 图片：单页保存原图；多页逐页保存全部（单页失败不中断整批）
+    // 图片：按下载质量保存单页或全部页（单页失败不中断整批）
+    const downloadQuality = loadSettings().downloadImageQuality
     for (let i = 0; i < pageCount; i++) {
-      const url = imageUrlOf(current, i, "original") ?? pageURLs[i]
+      const url = imageUrlOf(current, i, downloadQuality) ?? pageURLs[i]
       if (!url) continue
       try {
         const path = await loadImage(url)

@@ -147,14 +147,13 @@ export function historyCount(): number {
 }
 
 function recordEntry(entry: HistoryEntry): void {
-  const settings = loadSettings()
-  if (!settings.recordHistory) return
+  if (!loadSettings().recordHistory) return
   const list = [...loadEntries()]
   const key = entryKey(entry)
   const index = list.findIndex((item) => entryKey(item) === key)
   if (index >= 0) list.splice(index, 1)
   list.unshift(entry)
-  commit(list.slice(0, settings.historyLimit))
+  commit(list)
 }
 
 export function recordHistory(illustration: PixivIllustration): void {
@@ -221,12 +220,4 @@ export function clearHistoryKind(kind: HistoryContentKind): void {
 
 export function clearHistory(): void {
   commit([])
-}
-
-export function applyHistoryLimit(): void {
-  const settings = loadSettings()
-  const list = loadEntries()
-  if (list.length > settings.historyLimit) {
-    commit(list.slice(0, settings.historyLimit))
-  }
 }

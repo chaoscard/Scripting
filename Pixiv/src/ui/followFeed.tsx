@@ -255,7 +255,7 @@ function FollowingIllustrationFeed(props: {
   const paged = usePagedList<PixivIllustration>({
     first: (token) => followingFeed(scope, token),
     more: (nextURL, token) => nextIllustrations(nextURL, token),
-    filter: filterIllustrationItems,
+    filter: filterFollowingIllustrationItems,
     deps: [scope],
     enabled: active,
     onBatchPublished: (_, pendingItems) =>
@@ -299,7 +299,7 @@ function FollowingNovelFeed(props: {
   const paged = usePagedList<PixivNovel>({
     first: (token) => followingNovels(scope, token),
     more: (nextURL, token) => nextNovels(nextURL, token),
-    filter: filterNovelItems,
+    filter: filterFollowingNovelItems,
     deps: [scope],
     enabled: active,
     onBatchPublished: (_, pendingItems) =>
@@ -344,7 +344,7 @@ function WatchlistFeed(props: {
     first: (token) =>
       kind === "manga" ? watchlistManga(token) : watchlistNovels(token),
     more: (nextURL, token) => nextWatchlist(nextURL, token),
-    filter: (items) => items.filter((item) => !item.mask_text),
+    filter: (items) => items,
     deps: [kind],
     enabled: active,
     onBatchPublished: (_, pendingItems) =>
@@ -508,21 +508,34 @@ function useSettingsFilter(
   }, [active])
 }
 
-function filterIllustrationItems(items: PixivIllustration[]): PixivIllustration[] {
+function filterFollowingIllustrationItems(items: PixivIllustration[]): PixivIllustration[] {
+  const settings = loadSettings()
+  return items.filter((item) =>
+    isIllustContentVisible(item, settings, settings.followFilterExempt)
+  )
+}
+
+function filterFollowingNovelItems(items: PixivNovel[]): PixivNovel[] {
   const settings = loadSettings()
   return items.filter(
-    (item) => isIllustContentVisible(item, settings)
+    (novel) =>
+      settings.followFilterExempt || (
+        isR18ContentVisible(novel.x_restrict, settings.showR18, settings.showR18G) &&
+        (settings.showAI || novel.novel_ai_type !== 2)
+      )
   )
+}
+
+function filterIllustrationItems(items: PixivIllustration[]): PixivIllustration[] {
+  const settings = loadSettings()
+  return items.filter((item) => isIllustContentVisible(item, settings))
 }
 
 function filterNovelItems(items: PixivNovel[]): PixivNovel[] {
   const settings = loadSettings()
   return items.filter(
     (novel) =>
-      isR18ContentVisible(
-        novel.x_restrict,
-        settings.showR18,
-        settings.showR18G
-      ) && (settings.showAI || novel.novel_ai_type !== 2)
+      isR18ContentVisible(novel.x_restrict, settings.showR18, settings.showR18G) &&
+      (settings.showAI || novel.novel_ai_type !== 2)
   )
 }

@@ -208,6 +208,25 @@ async function extractZipEntries(zipPath: string, destDir: string): Promise<void
   }
 }
 
+// 动图缓存占用（字节），用于与图片缓存统一展示。
+export function ugoiraCacheUsageBytes(): number {
+  const dir = ensureDir()
+  let total = 0
+  try {
+    for (const name of FileManager.readDirectorySync(dir)) {
+      try {
+        const stat = FileManager.statSync(joinPath(dir, name))
+        total += stat.size > 0 ? stat.size : 0
+      } catch {
+        // 忽略不可读的缓存条目。
+      }
+    }
+  } catch {
+    // 缓存目录暂不可读时按零处理。
+  }
+  return total
+}
+
 // 清空动图缓存。构建任务在独立临时目录继续收尾，但旧代次不得发布。
 export function clearUgoiraCache(): void {
   cacheGeneration += 1

@@ -126,8 +126,9 @@ function touch(meta: CacheMeta, key: string, url: string, size: number): void {
 }
 
 // 按 LRU 清理超出上限的缓存
-function enforceLimit(): void {
+export function enforceCacheLimit(): void {
   const settings = loadSettings()
+  if (settings.cacheLimitMB == null) return
   const limitBytes = settings.cacheLimitMB * 1024 * 1024
   const meta = loadMeta()
   const entries = Object.entries(meta)
@@ -272,7 +273,7 @@ function requestImage(
         const meta = loadMeta()
         touch(meta, cacheKey(url), url, data.size)
         saveMeta(meta)
-        enforceLimit()
+        enforceCacheLimit()
         // 当前下载项也可能因单文件超配额被 LRU 立即淘汰；不能把失效路径
         // 交给 Image.filePath，否则会表现为下载成功后仍加载失败。
         return isUsableCacheFile(path) ? path : null
