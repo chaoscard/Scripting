@@ -19,6 +19,7 @@ import type {
   UgoiraMetadataResponse,
 } from "../types"
 import { API_BASE_URL } from "../config"
+import { notifyUserFollowChanged } from "../store/userFollow"
 import {
   apiGet,
   apiGetAbsolute,
@@ -834,6 +835,7 @@ export async function followUser(
     { user_id: String(userID), restrict },
     accessToken
   )
+  notifyUserFollowChanged(userID, true)
 }
 
 export async function unfollowUser(
@@ -845,6 +847,7 @@ export async function unfollowUser(
     { user_id: String(userID) },
     accessToken
   )
+  notifyUserFollowChanged(userID, false)
 }
 
 // ---------- 关注标签 ----------

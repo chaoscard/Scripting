@@ -134,6 +134,7 @@ export interface PixivUserDetail {
 export interface PixivUserPreview {
   user: PixivUser
   illusts: PixivIllustration[]
+  novels?: PixivNovel[]
   is_muted: boolean
 }
 

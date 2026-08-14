@@ -15,8 +15,28 @@ interface CacheMeta {
 
 let cacheDir: string | null = null
 let cacheGeneration = 0
+let cacheRevision = 0
 let cachedMeta: CacheMeta | null = null
 let metaSaveTimer: number | null = null
+const cacheChangeListeners = new Set<() => void>()
+
+export function onImageCacheChanged(listener: () => void): () => void {
+  cacheChangeListeners.add(listener)
+  return () => cacheChangeListeners.delete(listener)
+}
+
+export function imageCacheRevision(): number {
+  return cacheRevision
+}
+
+function notifyImageCacheChanged(): void {
+  for (const listener of cacheChangeListeners) {
+    try {
+      listener()
+    } catch {
+    }
+  }
+}
 
 function joinPath(...parts: string[]): string {
   return parts.join("/")
@@ -158,6 +178,7 @@ interface PrefetchState {
 }
 
 interface DownloadTask {
+  generation: number
   promise: Promise<string | null>
   started: boolean
   foregroundRequested: boolean
@@ -209,13 +230,14 @@ function requestImage(
   prefetchOwner?: PrefetchState
 ): Promise<string | null> {
   if (!url) return Promise.resolve(null)
+  const requestGeneration = cacheGeneration
   const existing = cachedFilePath(url)
   if (existing) {
     touchCachedFile(url)
     return Promise.resolve(existing)
   }
   const running = inflightDownloads.get(url)
-  if (running) {
+  if (running && running.generation === requestGeneration) {
     if (prefetchOwner) {
       running.prefetchOwners.add(prefetchOwner)
     } else {
@@ -226,6 +248,7 @@ function requestImage(
   }
 
   const record: DownloadTask = {
+    generation: requestGeneration,
     promise: Promise.resolve(null),
     started: false,
     foregroundRequested: !prefetchOwner,
@@ -236,6 +259,12 @@ function requestImage(
   record.promise = new Promise<string | null>((resolve, reject) => {
     record.run = () => {
       record.started = true
+      if (record.generation !== cacheGeneration) {
+        resolve(null)
+        activeDownloads--
+        pumpDownloads()
+        return
+      }
       if (
         !record.foregroundRequested &&
         [...record.prefetchOwners].every((owner) => owner.cancelled)
@@ -245,7 +274,7 @@ function requestImage(
         pumpDownloads()
         return
       }
-      const generation = cacheGeneration
+      const generation = record.generation
       ;(async (): Promise<string | null> => {
         let data: Data | null = null
         try {
@@ -346,6 +375,7 @@ export function cacheUsageBytes(): number {
 // 清空缓存
 export function clearCache(): void {
   cacheGeneration += 1
+  cacheRevision += 1
   if (metaSaveTimer != null) {
     clearTimeout(metaSaveTimer)
     metaSaveTimer = null
@@ -361,6 +391,7 @@ export function clearCache(): void {
     // ignore
   }
   cacheDir = null
+  notifyImageCacheChanged()
 }
 
 // 从基准 URL 推导指定页的 URL（Pixiv 文件名页号格式 _p0/_p1/...）。

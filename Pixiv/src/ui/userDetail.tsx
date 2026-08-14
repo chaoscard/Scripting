@@ -38,6 +38,7 @@ import {
   onSettingsChanged,
   unblockUser,
 } from "../store/settings"
+import { onUserFollowChanged } from "../store/userFollow"
 import { useAsyncGuard, useLatest, usePagedList } from "./hooks"
 import type { PixivIllustration, PixivNovel, PixivUserDetail } from "../types"
 import {
@@ -96,6 +97,14 @@ export function UserDetailView(props: { userID: number }) {
       if (g.isCurrent()) setDetailError(error?.message ?? "加载失败")
     }
   }
+
+  useEffect(() => {
+    return onUserFollowChanged((changedUserID, nextFollowed) => {
+      if (changedUserID !== userID) return
+      followStateVersionRef.current++
+      setFollowed(nextFollowed)
+    })
+  }, [userID])
 
   useEffect(() => {
     void loadDetail()

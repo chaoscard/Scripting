@@ -24,7 +24,13 @@ import {
   type GridItem,
   type ScrollViewProxy,
 } from "scripting"
-import { cachedFilePath, cardThumbUrlOf, loadImage } from "../image/imageLoader"
+import {
+  cachedFilePath,
+  cardThumbUrlOf,
+  imageCacheRevision,
+  loadImage,
+  onImageCacheChanged,
+} from "../image/imageLoader"
 import {
   addBookmark,
   addNovelBookmark,
@@ -175,28 +181,38 @@ export function RefreshableScrollView(props: {
 // cancelled 标志防止 url 切换后旧结果覆盖新状态
 // ratio = 图片真实宽高比（加载后从文件读取，避免容器比例不匹配导致图片变形）
 function useCachedImage(url: string | null, readIntrinsicRatio: boolean) {
-  const [loaded, setLoaded] = useState<{ url: string | null; path: string | null }>({
+  const [cacheRevision, setCacheRevision] = useState(imageCacheRevision())
+  const [loaded, setLoaded] = useState<{
+    url: string | null
+    path: string | null
+    revision: number
+  }>({
     url: null,
     path: null,
+    revision: cacheRevision,
   })
   const [failed, setFailed] = useState(false)
   const [ratio, setRatio] = useState<number | null>(null)
   // 预取已写入磁盘的文件在首帧直接使用，避免 effect 调度前短暂显示加载圈。
-  const cachedPath = useMemo(() => (url ? cachedFilePath(url) : null), [url])
-  const path = cachedPath ?? (loaded.url === url ? loaded.path : null)
+  const cachedPath = useMemo(() => (url ? cachedFilePath(url) : null), [url, cacheRevision])
+  const path = cachedPath ?? (
+    loaded.url === url && loaded.revision === cacheRevision ? loaded.path : null
+  )
+
+  useEffect(() => onImageCacheChanged(() => setCacheRevision(imageCacheRevision())), [])
 
   useEffect(() => {
     let cancelled = false
     setFailed(false)
     setRatio(null)
     if (!url) {
-      setLoaded({ url: null, path: null })
+      setLoaded({ url: null, path: null, revision: cacheRevision })
       return
     }
     loadImage(url)
       .then((p) => {
         if (!cancelled) {
-          setLoaded({ url, path: p })
+          setLoaded({ url, path: p, revision: cacheRevision })
           if (p && readIntrinsicRatio) {
             try {
               const img = UIImage.fromFile(p)
@@ -213,14 +229,14 @@ function useCachedImage(url: string | null, readIntrinsicRatio: boolean) {
       })
       .catch(() => {
         if (!cancelled) {
-          setLoaded({ url, path: null })
+          setLoaded({ url, path: null, revision: cacheRevision })
           setFailed(true)
         }
       })
     return () => {
       cancelled = true
     }
-  }, [url, readIntrinsicRatio])
+  }, [url, readIntrinsicRatio, cacheRevision])
 
   return { path, failed, ratio }
 }
