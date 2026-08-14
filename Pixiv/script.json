@@ -4,7 +4,16 @@
   "color": "rgba(0, 150, 250, 1)",
   "version": "0.6.9",
   "runInApp": true,
-  "description": "Liquid Glass Pixiv client",
+  "description": "Liquid Glass Pixiv Client",
+  "author": {
+    "name": "chaoscard",
+    "homepage": "https://github.com/chaoscard/Scripting"
+  },
+  "remoteResource": {
+    "url": "https://raw.githubusercontent.com/chaoscard/Scripting/main/Release/Pixiv.scripting",
+    "hash": "e017e7d4ba8e3ae15095a914745cd36a",
+    "autoUpdateInterval": 3600
+  },
   "localizedNames": {
     "zh": "Pixiv"
   },
