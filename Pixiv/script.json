@@ -1,33 +1,33 @@
 {
-  "entry" : "index.tsx",
-  "localizedDescriptions" : {
-    "zh" : "液态玻璃风格 Pixiv 客户端"
+  "runInApp" : true,
+  "iconImage" : null,
+  "permissions" : null,
+  "localizedNames" : {
+    "zh" : "Pixiv"
   },
-  "version" : "0.6.9",
+  "remoteResource" : {
+    "url" : "https:\/\/raw.githubusercontent.com\/chaoscard\/Scripting\/main\/Release\/Pixiv.scripting",
+    "hash" : "f93ac841ede8d9a0731ec71b5a9d40f5",
+    "autoUpdateInterval" : null
+  },
   "contributors" : [
 
   ],
-  "description" : "Liquid Glass Pixiv Client",
+  "version" : "0.7.0",
+  "localizedDescriptions" : {
+    "zh" : "液态玻璃风格 Pixiv 客户端"
+  },
+  "icon" : "paintpalette",
+  "name" : "Pixiv",
   "color" : "rgba(0, 150, 250, 1)",
+  "intentInputTypes" : [
+
+  ],
   "author" : {
     "email" : null,
     "homepage" : "https:\/\/github.com\/chaoscard\/Scripting",
     "name" : "chaoscard"
   },
-  "runInApp" : true,
-  "localizedNames" : {
-    "zh" : "Pixiv"
-  },
-  "icon" : "paintpalette",
-  "intentInputTypes" : [
-
-  ],
-  "iconImage" : null,
-  "remoteResource" : {
-    "autoUpdateInterval" : 3600,
-    "url" : "https:\/\/raw.githubusercontent.com\/chaoscard\/Scripting\/main\/Release\/Pixiv.scripting",
-    "hash" : "04ccf7ff2c35e78d11508fd157b24691"
-  },
-  "permissions" : null,
-  "name" : "Pixiv"
+  "entry" : "index.tsx",
+  "description" : "Liquid Glass Pixiv Client"
 }
