@@ -1,0 +1,32 @@
+const PIXIV_DATA_DIR_NAME = "Pixiv"
+
+function ensureDirectory(dir: string): string {
+  if (!FileManager.existsSync(dir)) {
+    FileManager.createDirectorySync(dir, true)
+  }
+  return dir
+}
+
+// Pixiv 设备本地持久数据的根目录，缓存等不应同步到 iCloud。
+export function pixivDataDirectory(): string {
+  return ensureDirectory(`${FileManager.documentsDirectory}/${PIXIV_DATA_DIR_NAME}`)
+}
+
+export function pixivDataPath(...parts: string[]): string {
+  return [pixivDataDirectory(), ...parts].join("/")
+}
+
+// 浏览记录单独保存在 iCloud Documents，以便同一脚本在多设备间同步。
+// iCloud 不可用时回退到设备本地目录，避免历史功能失效。
+export function pixivHistoryDirectory(): string {
+  if (FileManager.isiCloudEnabled) {
+    try {
+      return ensureDirectory(
+        `${FileManager.iCloudDocumentsDirectory}/${PIXIV_DATA_DIR_NAME}/History`
+      )
+    } catch {
+      // iCloud 初始化失败时使用本地回退目录。
+    }
+  }
+  return pixivDataPath("History")
+}

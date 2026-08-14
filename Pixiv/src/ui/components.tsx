@@ -1,0 +1,1613 @@
+import {
+  Button,
+  Group,
+  HStack,
+  Image,
+  LazyVStack,
+  LongPressGesture,
+  NavigationLink,
+  ProgressView,
+  ScrollView,
+  ScrollViewReader,
+  Script,
+  Spacer,
+  Text,
+  TextField,
+  Toggle,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  VStack,
+  ZStack,
+  type GridItem,
+  type ScrollViewProxy,
+} from "scripting"
+import { cachedFilePath, cardThumbUrlOf, loadImage } from "../image/imageLoader"
+import {
+  addBookmark,
+  addNovelBookmark,
+  bookmarkDetail,
+  bookmarkTags,
+  followUser,
+  novelBookmarkDetail,
+  novelBookmarkTags,
+  removeBookmark,
+  removeNovelBookmark,
+} from "../api/pixiv"
+import { session } from "../api/session"
+import { blockTag, loadSettings } from "../store/settings"
+import { useLatest, useTimedFlag } from "./hooks"
+import type {
+  PixivIllustration,
+  PixivBookmarkDetail,
+  PixivBookmarkTag,
+  PixivNovel,
+  PixivPage,
+  PixivUser,
+  PixivVisionArticle,
+  PixivWatchlistSeries,
+} from "../types"
+
+export const CORNER_ICON_SIZE = 26
+export const GRID_COLUMNS: GridItem[] = [
+  { size: { type: "flexible", min: 120, max: "infinity" } },
+  { size: { type: "flexible", min: 120, max: "infinity" } },
+]
+// 瀑布流允许最长 1:4 的竖图保留原始比例；更极端的图片仍受此下限保护。
+const MIN_MASONRY_IMAGE_RATIO = 1 / 4
+
+// 主页面共享工具栏工厂：挂载到各 Tab 的实际导航容器，详情页保留系统返回按钮。
+export function appToolbar(dismiss: () => void, title?: string, trailing?: any) {
+  return {
+    topBarLeading: [
+      <Button
+        title="收起"
+        systemImage="xmark"
+        action={() => Script.minimize()}
+      />,
+    ],
+    topBarTrailing: trailing ? [trailing] : undefined,
+    principal: title
+      ? [
+          <Text font="title2" fontWeight="bold">
+            {title}
+          </Text>,
+        ]
+      : undefined,
+  }
+}
+
+// 框架在 refreshable 的 Promise resolve 后不会自动把滚动位置弹回顶部（列表会
+// 停在用户下拉的位置）。本组件在刷新结束后主动把内容滚回顶部，恢复回弹体验。
+// 所有带下拉刷新的页面统一使用本组件，不要直接用 <ScrollView refreshable>。
+const REFRESH_TOP_KEY = "__refresh_top"
+
+export function RefreshableScrollView(props: {
+  refreshable: () => Promise<void>
+  navigationTitle?: string
+  navigationBarTitleDisplayMode?: "automatic" | "inline" | "large"
+  navigationDestination?: any
+  searchable?: {
+    value: string
+    onChanged: (value: string) => void
+    placement?:
+      | "automatic"
+      | "navigationBarDrawer"
+      | "sidebar"
+      | "toolbar"
+      | "navigationBarDrawerAlwaysDisplay"
+      | "navigationBarDrawerAutomaticDisplay"
+    prompt?: string
+    presented?: {
+      value: boolean
+      onChanged: (value: boolean) => void
+    }
+  }
+  searchSuggestions?: any
+  onSubmit?: any
+  submitLabel?: "join" | "continue" | "return" | "send" | "go" | "search" | "done" | "next" | "route"
+  children?: any
+}) {
+  // toolbar 等通用 View 属性由 Scripting 自动应用到自定义组件根视图；
+  // 不要再传给内部 ScrollView，否则导航栏会合并出重复按钮。
+  const proxyRef = useRef<ScrollViewProxy | null>(null)
+  const refreshRef = useLatest(props.refreshable)
+  const timerRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current != null) clearTimeout(timerRef.current)
+    }
+  }, [])
+
+  const handleRefresh = useCallback(async () => {
+    // 无论刷新成功还是失败，都要让刷新指示器收起并回弹
+    try {
+      await refreshRef.current()
+    } catch {
+      // 刷新失败同样需要收起指示器
+    }
+    // 等新列表渲染完成、系统开始收起刷新指示器后，再主动滚回顶部
+    if (timerRef.current != null) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => {
+      timerRef.current = null
+      const proxy = proxyRef.current
+      if (proxy) {
+        withAnimation(() => {
+          proxy.scrollTo(REFRESH_TOP_KEY, "top")
+        })
+      }
+    }, 120)
+  }, [])
+
+  return (
+    <ScrollViewReader>
+      {(proxy) => {
+        proxyRef.current = proxy
+        return (
+          <ScrollView
+            navigationTitle={props.navigationTitle}
+            navigationBarTitleDisplayMode={props.navigationBarTitleDisplayMode}
+            refreshable={handleRefresh}
+            navigationDestination={props.navigationDestination}
+            searchable={props.searchable}
+            searchSuggestions={props.searchSuggestions}
+            onSubmit={props.onSubmit}
+            submitLabel={props.submitLabel}
+          >
+            <VStack
+              key={REFRESH_TOP_KEY}
+              alignment="leading"
+              frame={{ maxWidth: "infinity" }}
+            >
+              {props.children}
+            </VStack>
+          </ScrollView>
+        )
+      }}
+    </ScrollViewReader>
+  )
+}
+
+// 异步图片加载状态（CachedImage / AvatarImage 共用）：
+// cancelled 标志防止 url 切换后旧结果覆盖新状态
+// ratio = 图片真实宽高比（加载后从文件读取，避免容器比例不匹配导致图片变形）
+function useCachedImage(url: string | null, readIntrinsicRatio: boolean) {
+  const [loaded, setLoaded] = useState<{ url: string | null; path: string | null }>({
+    url: null,
+    path: null,
+  })
+  const [failed, setFailed] = useState(false)
+  const [ratio, setRatio] = useState<number | null>(null)
+  // 预取已写入磁盘的文件在首帧直接使用，避免 effect 调度前短暂显示加载圈。
+  const cachedPath = useMemo(() => (url ? cachedFilePath(url) : null), [url])
+  const path = cachedPath ?? (loaded.url === url ? loaded.path : null)
+
+  useEffect(() => {
+    let cancelled = false
+    setFailed(false)
+    setRatio(null)
+    if (!url) {
+      setLoaded({ url: null, path: null })
+      return
+    }
+    loadImage(url)
+      .then((p) => {
+        if (!cancelled) {
+          setLoaded({ url, path: p })
+          if (p && readIntrinsicRatio) {
+            try {
+              const img = UIImage.fromFile(p)
+              if (img && img.width > 0 && img.height > 0) {
+                setRatio(img.width / img.height)
+              }
+            } catch {
+              // 读取失败则回退调用方传入的占位比例
+            }
+          } else if (!p) {
+            setFailed(true)
+          }
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLoaded({ url, path: null })
+          setFailed(true)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [url, readIntrinsicRatio])
+
+  return { path, failed, ratio }
+}
+
+// 异步图片：从网络下载到本地缓存后显示
+export function CachedImage(props: {
+  url: string | null
+  aspectRatioValue?: number // 宽/高
+  cornerRadius?: number
+  contentMode?: "fit" | "fill"
+  centerCropSquare?: boolean
+  useIntrinsicAspectRatio?: boolean
+  frame?: any // 覆盖默认整宽 frame（如固定尺寸缩略图）
+}) {
+  const {
+    url,
+    aspectRatioValue = 1,
+    cornerRadius = 10,
+    contentMode = "fill",
+    centerCropSquare = false,
+    useIntrinsicAspectRatio = true,
+    frame,
+  } = props
+  const { path, failed, ratio } = useCachedImage(url, useIntrinsicAspectRatio)
+  const centeredSquare = useMemo(() => {
+    if (!path || !centerCropSquare) return null
+    try {
+      const image = UIImage.fromFile(path)
+      if (!image || image.width <= 0 || image.height <= 0) return null
+      const side = Math.min(image.width, image.height)
+      return image.croppedTo({
+        x: (image.width - side) / 2,
+        y: (image.height - side) / 2,
+        width: side,
+        height: side,
+      })
+    } catch {
+      return null
+    }
+  }, [path, centerCropSquare])
+
+  if (path) {
+    if (centeredSquare) {
+      return (
+        <Image
+          image={centeredSquare}
+          resizable={true}
+          aspectRatio={{ value: 1, contentMode: "fill" }}
+          clipShape={{ type: "rect", cornerRadius }}
+          frame={frame ?? { maxWidth: "infinity" }}
+        />
+      )
+    }
+    // 使用图片真实宽高比；具体裁切区域和位置由调用方容器决定。
+    const displayRatio = useIntrinsicAspectRatio
+      ? ratio ?? aspectRatioValue
+      : aspectRatioValue
+    return (
+      <Image
+        filePath={path}
+        resizable={true}
+        aspectRatio={{ value: displayRatio, contentMode }}
+        clipShape={{ type: "rect", cornerRadius }}
+        scaleToFit={contentMode === "fit"}
+        scaleToFill={contentMode === "fill"}
+        frame={frame ?? { maxWidth: "infinity" }}
+      />
+    )
+  }
+
+  return (
+    <ZStack
+      aspectRatio={{ value: aspectRatioValue, contentMode: "fit" }}
+      background="systemGray6"
+      clipShape={{ type: "rect", cornerRadius }}
+      frame={frame ?? { maxWidth: "infinity" }}
+    >
+      {!url || failed ? (
+        // 无 URL / 加载失败：显示占位图标（避免空 URL 无限转圈）
+        <Image
+          systemName="photo"
+          font="title2"
+          foregroundStyle="systemGray3"
+        />
+      ) : (
+        <ProgressView />
+      )}
+    </ZStack>
+  )
+}
+
+// 追更列表标准卡片：左侧使用原始比例封面，右侧显示系列信息与操作。
+export function WatchlistSeriesCard(props: {
+  item: PixivWatchlistSeries
+  kind: "manga" | "novel"
+  onAppear?: () => void
+}) {
+  const { item, kind, onAppear } = props
+  const latestRoute = item.latest_content_id == null
+    ? null
+    : `${kind === "manga" ? "illust" : "novel"}:${item.latest_content_id}`
+  const seriesRoute = `${kind === "manga" ? "mangaSeries" : "novelSeries"}:${item.id}`
+  const date = item.last_published_content_datetime?.slice(0, 10) ?? ""
+
+  if (item.mask_text) {
+    return (
+      <VStack alignment="leading" spacing={4} padding={14} frame={{ maxWidth: "infinity" }}>
+        <Text foregroundStyle="secondaryLabel">{item.mask_text}</Text>
+      </VStack>
+    )
+  }
+
+  return (
+    <HStack alignment="top" spacing={12} padding={10} onAppear={onAppear}
+      glassEffect={{ type: "rect", cornerRadius: 14 }}
+      glassEffectTransition="materialize"
+      shadow={{ color: "#0000000F", radius: 18, y: 8 }}
+      frame={{ maxWidth: "infinity" }}
+    >
+      <CachedImage
+        url={item.url ?? null}
+        cornerRadius={8}
+        contentMode="fit"
+        useIntrinsicAspectRatio={true}
+        frame={{ width: 118, maxHeight: 176 }}
+      />
+      <VStack alignment="leading" spacing={6} frame={{ maxWidth: "infinity" }}>
+        <NavigationLink value={seriesRoute}>
+          <Text
+            font="headline"
+            fontWeight="semibold"
+            multilineTextAlignment="leading"
+            frame={{ maxWidth: "infinity", alignment: "leading" }}
+          >
+            {item.title || "未命名系列"}
+          </Text>
+        </NavigationLink>
+        {item.user?.name ? (
+          <Text font="subheadline" foregroundStyle="secondaryLabel" lineLimit={1}>
+            {item.user.name}
+          </Text>
+        ) : null}
+        <HStack alignment="center" spacing={8}>
+          <Text font="subheadline" foregroundStyle="secondaryLabel">
+            {item.published_content_count} 话{date ? ` · ${date}` : ""}
+          </Text>
+          {latestRoute ? (
+            <NavigationLink value={latestRoute}>
+              <Text
+                font="subheadline"
+                fontWeight="semibold"
+                foregroundStyle="white"
+                padding={{ horizontal: 14, vertical: 8 }}
+                background="#000000"
+                clipShape={{ type: "rect", cornerRadius: 18 }}
+              >
+                阅读
+              </Text>
+            </NavigationLink>
+          ) : null}
+        </HStack>
+      </VStack>
+    </HStack>
+  )
+}
+
+// 标签行按可用宽度预先分组。
+const NOVEL_TAG_MAX_WIDTH = 260
+
+// 小说标准卡片：推荐页与收藏页共用，保持封面、标签和统计信息一致。
+export function NovelCard(props: {
+  novel: PixivNovel
+  onAppear?: () => void
+  footerText?: string
+  markerPage?: number
+}) {
+  const { novel, onAppear, footerText, markerPage } = props
+  const [bookmarked, setBookmarked] = useState(novel.is_bookmarked)
+  const [bookmarkBusy, setBookmarkBusy] = useState(false)
+  const [showBookmarkDetail, setShowBookmarkDetail] = useState(false)
+
+  async function toggleNovelBookmark() {
+    if (bookmarkBusy) return
+    setBookmarkBusy(true)
+    try {
+      if (bookmarked) {
+        await session.call((token) => removeNovelBookmark(novel.id, token))
+        setBookmarked(false)
+      } else {
+        await session.call((token) => addNovelBookmark(novel.id, "public", token))
+        setBookmarked(true)
+      }
+    } catch {
+      // 收藏失败时保持原状态
+    } finally {
+      setBookmarkBusy(false)
+    }
+  }
+
+  function handleNovelBookmarkLongPress() {
+    const action = loadSettings().longPressBookmarkAction
+    if (action === "off") return
+    void Haptics.transient()
+    if (action === "follow") {
+      void bookmarkAndFollowNovel()
+    } else {
+      setShowBookmarkDetail(true)
+    }
+  }
+
+  async function bookmarkAndFollowNovel() {
+    if (bookmarkBusy) return
+    setBookmarkBusy(true)
+    try {
+      if (!bookmarked) {
+        await session.call((token) => addNovelBookmark(novel.id, "public", token))
+        setBookmarked(true)
+      }
+      await session.call((token) => followUser(novel.user.id, "public", token))
+    } catch {
+      // 保持卡片可继续操作
+    } finally {
+      setBookmarkBusy(false)
+    }
+  }
+
+  const coverURL =
+    novel.image_urls?.medium ??
+    novel.image_urls?.large ??
+    novel.image_urls?.square_medium ??
+    novel.cover?.urls?.["240mw"] ??
+    novel.cover?.urls?.["480mw"] ??
+    null
+
+  return (
+    <ZStack alignment="bottomTrailing">
+      <NavigationLink value={`novel:${novel.id}`}>
+        <HStack
+          spacing={10}
+          padding={10}
+          onAppear={onAppear}
+          alignment="top"
+          glassEffect={{ type: "rect", cornerRadius: 14 }}
+          glassEffectTransition="materialize"
+          shadow={{ color: "#0000000F", radius: 18, y: 8 }}
+          frame={{ maxWidth: "infinity" }}
+        >
+          <ZStack
+            frame={{ width: 68, height: 96 }}
+            clipShape={{ type: "rect", cornerRadius: 8 }}
+            background="systemGray6"
+          >
+            <CachedImage
+              url={coverURL}
+              aspectRatioValue={0.71}
+              cornerRadius={0}
+              contentMode="fill"
+              frame={{ width: 68, height: 96 }}
+            />
+          </ZStack>
+          <VStack
+            alignment="leading"
+            spacing={4}
+            frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          >
+            <Text
+              font="subheadline"
+              fontWeight="semibold"
+              multilineTextAlignment="leading"
+              frame={{ maxWidth: "infinity", alignment: "leading" }}
+            >
+              {novel.title}
+            </Text>
+            <VStack alignment="leading" spacing={2}>
+              {wrapTags(
+                novel.tags,
+                NOVEL_TAG_MAX_WIDTH,
+                (tag) => estimateTextWidth(`${tag.name} `),
+                0
+              ).map((row, ri) => (
+                <HStack key={ri} spacing={0} frame={{ maxWidth: "infinity" }}>
+                  {row.map((tag) => (
+                    <Text
+                      key={tag.name}
+                      font="caption2"
+                      foregroundStyle="secondaryLabel"
+                      lineLimit={1}
+                    >
+                      {tag.name}{" "}
+                    </Text>
+                  ))}
+                  <Spacer />
+                </HStack>
+              ))}
+            </VStack>
+            <Spacer />
+            <HStack frame={{ maxWidth: "infinity" }}>
+              <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={1}>
+                {novel.user.name}
+              </Text>
+              <Spacer />
+            </HStack>
+            <HStack frame={{ maxWidth: "infinity" }}>
+              <Text font="caption2" foregroundStyle="secondaryLabel">
+                ♥ {formatNumber(novel.total_bookmarks)}
+              </Text>
+              <HStack spacing={4}>
+                <Image systemName="eye" font="caption2" foregroundStyle="secondaryLabel" />
+                <Text font="caption2" foregroundStyle="secondaryLabel">
+                  {formatNumber(novel.total_view)}
+                </Text>
+              </HStack>
+              {novel.text_length != null ? (
+                <HStack spacing={4}>
+                  <Image systemName="character.cursor.ibeam" font="caption2" foregroundStyle="secondaryLabel" />
+                  <Text font="caption2" foregroundStyle="secondaryLabel">
+                    {novel.text_length}
+                  </Text>
+                </HStack>
+              ) : null}
+              {markerPage != null ? (
+                <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={1}>
+                  第 {markerPage} 页
+                </Text>
+              ) : null}
+              {footerText ? (
+                <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={1}>
+                  {footerText}
+                </Text>
+              ) : null}
+              <Spacer />
+            </HStack>
+          </VStack>
+        </HStack>
+      </NavigationLink>
+      <BookmarkButton
+        bookmarked={bookmarked}
+        disabled={bookmarkBusy}
+        onTap={() => void toggleNovelBookmark()}
+        onLongPress={handleNovelBookmarkLongPress}
+        sheetContent={
+          <BookmarkDetailSheet
+            item={novel}
+            bookmarked={bookmarked}
+            loadDetail={(token) => novelBookmarkDetail(novel.id, token)}
+            loadTags={(restrict, token) => novelBookmarkTags(restrict, token)}
+            save={(restrict, tags, token) => addNovelBookmark(novel.id, restrict, token, tags)}
+            onSaved={() => setBookmarked(true)}
+            onClose={() => setShowBookmarkDetail(false)}
+          />
+        }
+        sheetPresented={showBookmarkDetail}
+        onSheetChanged={setShowBookmarkDetail}
+      />
+    </ZStack>
+  )
+}
+
+// 作者头像
+export function AvatarImage(props: {
+  url: string | null
+  size?: number
+  cornerRadius?: number
+}) {
+  const { url, size = 36, cornerRadius = size / 2 } = props
+  const { path } = useCachedImage(url, false)
+
+  return (
+    <ZStack
+      frame={{ width: size, height: size }}
+      clipShape={{ type: "rect", cornerRadius }}
+    >
+      {path ? (
+        <Image
+          filePath={path}
+          resizable={true}
+          scaleToFill={true}
+          frame={{ width: size, height: size }}
+        />
+      ) : (
+        <Image
+          systemName="person.fill"
+          font="caption"
+          foregroundStyle="systemGray3"
+        />
+      )}
+    </ZStack>
+  )
+}
+
+// 网格作品卡片（列表页共用）：玻璃卡片 + 缩略图 + 标题 + 作者/收藏数/浏览数
+// 多页作品在图片左下角显示 rectangle.stack.fill + 纯数字页数。
+// cornerBadge 为图片左上角非交互角标；footerText 用于补充信息。
+// topTrailingAction 只传操作语义，按钮布局与命中区域由统一卡片模板负责。
+// 注意：属性名不能叫 badge，那是 SwiftUI 保留修饰符名（只接受 string|number），
+// 会导致 JSX 类型检查报错。
+export function ImageNumberBadge(props: { number: number; foregroundStyle?: any }) {
+  return (
+    <Text
+      font="body"
+      fontWeight="bold"
+      foregroundStyle={props.foregroundStyle ?? "primaryLabel"}
+      offset={{ x: 4, y: 4 }}
+    >
+      #{props.number}
+    </Text>
+  )
+}
+
+export interface IllustCardAction {
+  title: string
+  systemImage: string
+  tint?: any
+  foregroundStyle?: any
+  action: () => void
+}
+
+export function IllustCard(props: {
+  illust: PixivIllustration
+  onAppear?: () => void
+  flow?: boolean
+  cornerBadge?: any
+  footerText?: string
+  topTrailingAction?: IllustCardAction
+}) {
+  const {
+    illust,
+    onAppear,
+    flow = false,
+    cornerBadge,
+    footerText,
+    topTrailingAction,
+  } = props
+  const [bookmarked, setBookmarked] = useState(illust.is_bookmarked)
+  const [bookmarkBusy, setBookmarkBusy] = useState(false)
+  const [showBookmarkDetail, setShowBookmarkDetail] = useState(false)
+  const imageRatio = illust.width > 0 && illust.height > 0
+    ? Math.max(illust.width / illust.height, MIN_MASONRY_IMAGE_RATIO)
+    : 0.75
+
+  async function toggleBookmark() {
+    if (bookmarkBusy) return
+    setBookmarkBusy(true)
+    try {
+      if (bookmarked) {
+        await session.call((token) => removeBookmark(illust.id, token))
+        setBookmarked(false)
+      } else {
+        await session.call((token) => addBookmark(illust.id, "public", [], token))
+        setBookmarked(true)
+      }
+    } catch {
+      // 收藏失败时保持原状态
+    } finally {
+      setBookmarkBusy(false)
+    }
+  }
+
+  async function bookmarkAndFollow() {
+    if (bookmarkBusy) return
+    setBookmarkBusy(true)
+    try {
+      if (!bookmarked) {
+        await session.call((token) => addBookmark(illust.id, "public", [], token))
+        setBookmarked(true)
+      }
+      await session.call((token) => followUser(illust.user.id, "public", token))
+    } catch {
+      // 保持卡片可继续操作
+    } finally {
+      setBookmarkBusy(false)
+    }
+  }
+
+  function handleBookmarkLongPress() {
+    const action = loadSettings().longPressBookmarkAction
+    if (action === "off") return
+    void Haptics.transient()
+    if (action === "follow") {
+      void bookmarkAndFollow()
+    } else {
+      setShowBookmarkDetail(true)
+    }
+  }
+
+  return (
+    <ZStack
+      alignment="topTrailing"
+      frame={{ maxWidth: "infinity" }}
+    >
+      <VStack
+        alignment="leading"
+        spacing={2}
+        frame={{ maxWidth: "infinity" }}
+        onAppear={onAppear}
+        padding={4}
+        glassEffect={{ type: "rect", cornerRadius: 14 }}
+        glassEffectTransition="materialize"
+        shadow={{ color: "#0000000F", radius: 18, y: 8 }}
+      >
+        <ZStack alignment="bottomTrailing">
+          <NavigationLink value={`illust:${illust.id}`}>
+            <ZStack alignment="topLeading">
+              <ZStack
+                alignment="bottomLeading"
+                aspectRatio={{ value: flow ? imageRatio : 1, contentMode: "fill" }}
+                frame={{ maxWidth: "infinity" }}
+                clipShape={{ type: "rect", cornerRadius: 10 }}
+                clipped={true}
+              >
+                <CachedImage
+                  url={cardThumbUrlOf(illust)}
+                  aspectRatioValue={imageRatio}
+                  centerCropSquare={!flow}
+                  useIntrinsicAspectRatio={!flow}
+                  cornerRadius={10}
+                />
+                {illust.page_count > 1 ? (
+                  <PageCountBadge count={illust.page_count} />
+                ) : null}
+              </ZStack>
+              {cornerBadge ?? null}
+            </ZStack>
+          </NavigationLink>
+          <BookmarkButton
+            bookmarked={bookmarked}
+            disabled={bookmarkBusy}
+            onTap={toggleBookmark}
+            onLongPress={handleBookmarkLongPress}
+            sheetContent={
+              <BookmarkDetailSheet
+                item={illust}
+                bookmarked={bookmarked}
+                loadDetail={(token) => bookmarkDetail(illust.id, token)}
+                loadTags={(restrict, token) => bookmarkTags(session.userID ?? 0, restrict, token)}
+                save={(restrict, tags, token) =>
+                  addBookmark(illust.id, restrict, tags, token)
+                }
+                onSaved={() => setBookmarked(true)}
+                onClose={() => setShowBookmarkDetail(false)}
+              />
+            }
+            sheetPresented={showBookmarkDetail}
+            onSheetChanged={setShowBookmarkDetail}
+          />
+        </ZStack>
+        <NavigationLink value={`illust:${illust.id}`}>
+          <Text
+            font="caption"
+            fontWeight="medium"
+            lineLimit={1}
+            padding={{ horizontal: 4, top: 2 }}
+          >
+            {illust.title}
+          </Text>
+        </NavigationLink>
+        <HStack
+          spacing={5}
+          padding={{ horizontal: 4, bottom: footerText ? 0 : 4 }}
+          frame={{ maxWidth: "infinity" }}
+        >
+          <NavigationLink
+            value={`illust:${illust.id}`}
+            frame={{ maxWidth: "infinity", alignment: "leading" }}
+          >
+            <Text
+              font="caption2"
+              foregroundStyle="secondaryLabel"
+              lineLimit={1}
+              frame={{ maxWidth: "infinity", alignment: "leading" }}
+            >
+              {illust.user.name}
+            </Text>
+          </NavigationLink>
+          <HStack
+            spacing={5}
+            fixedSize={{ horizontal: true, vertical: false }}
+            layoutPriority={1}
+            frame={{ alignment: "trailing" }}
+          >
+            <HStack spacing={2} fixedSize={{ horizontal: true, vertical: false }}>
+              <Image
+                systemName="heart"
+                font="caption2"
+                foregroundStyle="label"
+              />
+              <Text
+                font="caption2"
+                foregroundStyle="secondaryLabel"
+                lineLimit={1}
+                fixedSize={{ horizontal: true, vertical: false }}
+              >
+                {formatNumber(illust.total_bookmarks)}
+              </Text>
+            </HStack>
+            <HStack spacing={2} fixedSize={{ horizontal: true, vertical: false }}>
+              <Image
+                systemName="eye"
+                font="caption2"
+                foregroundStyle="secondaryLabel"
+              />
+              <Text
+                font="caption2"
+                foregroundStyle="secondaryLabel"
+                lineLimit={1}
+                fixedSize={{ horizontal: true, vertical: false }}
+              >
+                {formatNumber(illust.total_view)}
+              </Text>
+            </HStack>
+          </HStack>
+        </HStack>
+        {footerText ? (
+          <Text
+            font="caption2"
+            foregroundStyle="secondaryLabel"
+            lineLimit={1}
+            padding={{ horizontal: 4, bottom: 4 }}
+          >
+            {footerText}
+          </Text>
+        ) : null}
+      </VStack>
+      {topTrailingAction ? (
+        <Button
+          buttonStyle="glass"
+          action={topTrailingAction.action}
+          frame={{ width: CORNER_ICON_SIZE, height: CORNER_ICON_SIZE }}
+          clipShape={{ type: "rect", cornerRadius: CORNER_ICON_SIZE / 2 }}
+          contentShape="rect"
+          zIndex={1}
+          offset={{ x: -4, y: 4 }}
+        >
+          <Image
+            systemName={topTrailingAction.systemImage}
+            font="body"
+            tint={topTrailingAction.tint}
+            foregroundStyle={topTrailingAction.foregroundStyle}
+          />
+        </Button>
+      ) : null}
+    </ZStack>
+  )
+}
+
+
+// Hanairo 风格双列流式作品布局：按作品比例估算高度，将作品持续分配到较短列。
+// 卡片本身仍统一使用 IllustCard，图片覆盖按钮不在此组件内处理。
+type MasonryItem = {
+  illust: PixivIllustration
+  index: number
+}
+
+export function LoadMoreTrigger(props: {
+  anchor: number | string
+  onLoadMore: (anchor: number | string) => void
+  hasMore: boolean
+  isLoading?: boolean
+}) {
+  if (!props.hasMore) return null
+  return (
+    <VStack
+      key={`load-more:${props.anchor}`}
+      spacing={0}
+      frame={{ height: props.isLoading ? 44 : 1, maxWidth: "infinity" }}
+      onAppear={() => props.onLoadMore(props.anchor)}
+    >
+      {props.isLoading ? (
+        <HStack spacing={0} frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
+          <Spacer />
+          <ProgressView progressViewStyle="circular" />
+          <Spacer />
+        </HStack>
+      ) : null}
+    </VStack>
+  )
+}
+
+export function MasonryIllustFeed(props: {
+  items: PixivIllustration[]
+  onLoadMore: (anchor: number | string) => void
+  hasMore?: boolean
+  isLoading?: boolean
+  cornerBadgeOf?: (illust: PixivIllustration, index: number) => any
+  footerTextOf?: (illust: PixivIllustration, index: number) => string | undefined
+  topTrailingActionOf?: (
+    illust: PixivIllustration,
+    index: number,
+  ) => IllustCardAction | undefined
+}) {
+  const [leading, trailing] = distributeMasonryItems(props.items)
+  const tail = props.items[props.items.length - 1]
+
+  function renderItem({ illust, index }: MasonryItem) {
+    return (
+      <IllustCard
+        key={illust.id}
+        illust={illust}
+        flow={true}
+        cornerBadge={props.cornerBadgeOf?.(illust, index)}
+        footerText={props.footerTextOf?.(illust, index)}
+        topTrailingAction={props.topTrailingActionOf?.(illust, index)}
+      />
+    )
+  }
+
+  return (
+    <LazyVStack alignment="leading" spacing={10} frame={{ maxWidth: "infinity" }}>
+      <HStack
+        alignment="top"
+        spacing={10}
+        padding={{ horizontal: 10 }}
+        frame={{ maxWidth: "infinity" }}
+      >
+        <LazyVStack alignment="leading" spacing={10} frame={{ maxWidth: "infinity" }}>
+          {leading.map(renderItem)}
+        </LazyVStack>
+        <LazyVStack alignment="leading" spacing={10} frame={{ maxWidth: "infinity" }}>
+          {trailing.map(renderItem)}
+        </LazyVStack>
+      </HStack>
+      {tail ? (
+        <LoadMoreTrigger
+          anchor={tail.id}
+          onLoadMore={props.onLoadMore}
+          hasMore={props.hasMore ?? true}
+          isLoading={props.isLoading}
+        />
+      ) : null}
+    </LazyVStack>
+  )
+}
+
+function distributeMasonryItems(
+  items: PixivIllustration[]
+): [MasonryItem[], MasonryItem[]] {
+  const columns: [MasonryItem[], MasonryItem[]] = [[], []]
+  const heights = [0, 0]
+  for (const [index, illust] of items.entries()) {
+    const ratio = illust.width > 0 && illust.height > 0 ? illust.width / illust.height : 0.75
+    const estimatedHeight = 1 / Math.max(ratio, MIN_MASONRY_IMAGE_RATIO) + 0.4
+    const column = heights[0] <= heights[1] ? 0 : 1
+    columns[column].push({ illust, index })
+    heights[column] += estimatedHeight
+  }
+  return columns
+}
+
+export function BookmarkDetailSheet(props: {
+  item: { id: number; title: string }
+  bookmarked: boolean
+  loadDetail: (token: string) => Promise<PixivBookmarkDetail>
+  loadTags: (restrict: "public" | "private", token: string) => Promise<PixivPage<PixivBookmarkTag>>
+  save: (restrict: "public" | "private", tags: string[], token: string) => Promise<void>
+  onSaved: () => void
+  onClose: () => void
+}) {
+  const [availableTags, setAvailableTags] = useState<PixivBookmarkTag[]>([])
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [customTag, setCustomTag] = useState("")
+  const [restrict, setRestrict] = useState<"public" | "private">("public")
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadDetail() {
+      setCustomTag("")
+      const userID = session.userID
+      if (!userID) {
+        setLoading(false)
+        return
+      }
+      try {
+        const [detail, publicTags, privateTags] = await Promise.all([
+          session.call(props.loadDetail),
+          session.call((token) => props.loadTags("public", token)),
+          session.call((token) => props.loadTags("private", token)),
+        ])
+        if (cancelled) return
+        setSelectedTags(
+          detail.is_bookmarked
+            ? (detail.tags ?? [])
+                .filter((tag) => tag.is_registered)
+                .map((tag) => tag.name)
+            : []
+        )
+        setRestrict(detail.restrict === "private" ? "private" : "public")
+        const merged = new Map<string, PixivBookmarkTag>()
+        for (const tag of detail.tags ?? []) {
+          merged.set(tag.name, { name: tag.name, count: 0 })
+        }
+        for (const tag of [...publicTags.items, ...privateTags.items]) {
+          if (!merged.has(tag.name)) merged.set(tag.name, tag)
+        }
+        setAvailableTags(Array.from(merged.values()).slice(0, 40))
+      } catch {
+        if (!cancelled) setError("收藏信息加载失败")
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    void loadDetail()
+    return () => {
+      cancelled = true
+    }
+  }, [props.item.id])
+
+  function toggleTag(name: string) {
+    setSelectedTags((current) =>
+      current.includes(name)
+        ? current.filter((tag) => tag !== name)
+        : current.length >= 10
+          ? current
+          : [...current, name]
+    )
+  }
+
+  function addCustomTag() {
+    const name = customTag.trim()
+    if (!name || selectedTags.includes(name) || selectedTags.length >= 10) return
+    setAvailableTags((current) =>
+      current.some((tag) => tag.name === name)
+        ? current
+        : [{ name, count: 0 }, ...current]
+    )
+    setSelectedTags((current) => [...current, name])
+    setCustomTag("")
+  }
+
+  function close() {
+    setCustomTag("")
+    props.onClose()
+  }
+
+  async function save() {
+    if (saving) return
+    setSaving(true)
+    setError(null)
+    try {
+      await session.call((token) =>
+        props.save(restrict, selectedTags, token)
+      )
+      props.onSaved()
+      close()
+    } catch {
+      setError("收藏保存失败，请重试")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <VStack
+      alignment="leading"
+      spacing={0}
+      padding={{ horizontal: 14, top: 10, bottom: 40 }}
+      safeAreaPadding={{ bottom: true }}
+      presentationDetents={[0.48]}
+      presentationDragIndicator="visible"
+      frame={{ maxWidth: "infinity" }}
+    >
+      <HStack
+        frame={{ maxWidth: "infinity" }}
+        padding={{ horizontal: 4, top: 0, bottom: 8 }}
+      >
+        <Button
+          action={close}
+          buttonStyle="glass"
+          frame={{ width: 32, height: 32 }}
+          clipShape={{ type: "rect", cornerRadius: 16 }}
+          contentShape="rect"
+        >
+          <Image systemName="xmark" font="title3" />
+        </Button>
+        <Spacer />
+        <Button
+          action={() => void save()}
+          buttonStyle="glass"
+          disabled={saving}
+          frame={{ width: 32, height: 32 }}
+          clipShape={{ type: "rect", cornerRadius: 16 }}
+          contentShape="rect"
+        >
+          <Image
+            systemName={props.bookmarked ? "heart.fill" : "heart"}
+            font="title3"
+            foregroundStyle={props.bookmarked && !saving ? "#FF375F" : undefined}
+          />
+        </Button>
+      </HStack>
+      <Text
+        font="caption"
+        foregroundStyle="secondaryLabel"
+        lineLimit={1}
+        padding={{ bottom: 10 }}
+      >
+        {props.item.title}
+      </Text>
+      <Text font="subheadline" fontWeight="semibold" padding={{ bottom: 8 }}>
+        收藏的标签（{selectedTags.length} / 10）
+      </Text>
+      <ScrollView
+        scrollDismissesKeyboard="never"
+        frame={{ height: 96 }}
+      >
+        {loading ? (
+          <ProgressView frame={{ maxWidth: "infinity" }} />
+        ) : availableTags.length === 0 ? (
+          <Text font="caption" foregroundStyle="secondaryLabel">
+            暂无常用标签
+          </Text>
+        ) : (
+          <VStack alignment="leading" spacing={8}>
+            {wrapTags(
+              availableTags,
+              350,
+              (tag) => estimateChipWidth(`#${tag.name}`),
+              8
+            ).map((row, rowIndex) => (
+              <HStack key={rowIndex} spacing={8}>
+                {row.map((tag) => {
+                  const selected = selectedTags.includes(tag.name)
+                  return (
+                    <Button
+                      key={tag.name}
+                      title={`${selected ? "✓ " : ""}#${tag.name}`}
+                      buttonStyle={selected ? "glassProminent" : "glass"}
+                      controlSize="mini"
+                      action={() => toggleTag(tag.name)}
+                    />
+                  )
+                })}
+              </HStack>
+            ))}
+          </VStack>
+        )}
+      </ScrollView>
+      <HStack spacing={8} frame={{ maxWidth: "infinity" }} padding={{ top: 10 }}>
+        <TextField
+          title="自定义收藏标签"
+          prompt="输入标签名称"
+          value={customTag}
+          onChanged={setCustomTag}
+          onSubmit={addCustomTag}
+          submitLabel="done"
+          frame={{ width: 280, height: 44 }}
+        />
+        <Spacer />
+        <Button
+          action={addCustomTag}
+          buttonStyle="glass"
+          disabled={!customTag.trim() || selectedTags.length >= 10}
+          frame={{ width: 28, height: 28 }}
+           clipShape={{ type: "rect", cornerRadius: 14 }}
+          contentShape="rect"
+        >
+          <Image systemName="plus" font="body" />
+        </Button>
+      </HStack>
+      <Toggle
+        title="私密收藏"
+        value={restrict === "private"}
+        onChanged={(value) => setRestrict(value ? "private" : "public")}
+      />
+      {error ? <Text foregroundStyle="systemRed">{error}</Text> : null}
+    </VStack>
+  )
+}
+
+export function BookmarkButton(props: {
+  bookmarked: boolean
+  disabled: boolean
+  onTap: () => void
+  onLongPress: () => void
+  sheetContent?: any
+  sheetPresented?: boolean
+  onSheetChanged?: (presented: boolean) => void
+}) {
+  const [longPressLocked, setLongPressLocked] = useState(false)
+
+  return (
+    <ZStack
+      frame={{ width: CORNER_ICON_SIZE, height: CORNER_ICON_SIZE }}
+      contentShape="rect"
+      zIndex={2}
+      offset={{ x: -4, y: -4 }}
+      allowsHitTesting={!props.disabled && !longPressLocked}
+      presentationDetents={[0.48]}
+      sheet={
+        props.sheetContent && props.onSheetChanged
+          ? {
+              content: props.sheetContent,
+              isPresented: props.sheetPresented ?? false,
+              onChanged: props.onSheetChanged,
+            }
+          : undefined
+      }
+    >
+      <Button
+        action={props.onTap}
+        buttonStyle="glass"
+        frame={{ width: CORNER_ICON_SIZE, height: CORNER_ICON_SIZE }}
+        clipShape={{ type: "rect", cornerRadius: CORNER_ICON_SIZE / 2 }}
+        contentShape="rect"
+        disabled={props.disabled || longPressLocked}
+        simultaneousGesture={
+          LongPressGesture({ minDuration: 500 }).onEnded(() => {
+            setLongPressLocked(true)
+            props.onLongPress()
+            setTimeout(() => setLongPressLocked(false), 1500)
+          })
+        }
+      >
+        <Image
+          systemName={props.bookmarked ? "heart.fill" : "heart"}
+          font="body"
+          foregroundStyle={props.bookmarked ? "#FF375F" : undefined}
+        />
+      </Button>
+    </ZStack>
+  )
+}
+
+function PageCountBadge(props: { count: number }) {
+  return (
+    <HStack
+      spacing={2}
+      offset={{ x: 4, y: -4 }}
+      allowsHitTesting={false}
+    >
+      <Image
+        systemName="rectangle.stack.fill"
+        font="body"
+        foregroundStyle="#FF9500"
+      />
+      <Text font="body" fontWeight="semibold" foregroundStyle="#FF9500">
+        {props.count}
+      </Text>
+    </HStack>
+  )
+}
+
+
+
+const VISION_IMAGE_RATIO = 1200 / 630
+
+export function VisionCard(props: {
+  article: PixivVisionArticle
+  onAppear?: () => void
+}) {
+  const { article, onAppear } = props
+  return (
+    <VStack
+      alignment="leading"
+      spacing={0}
+      padding={{ horizontal: 14 }}
+      frame={{ maxWidth: "infinity" }}
+      onAppear={onAppear}
+    >
+      <NavigationLink value={`vision:${article.id}`}>
+        <VStack
+          alignment="leading"
+          spacing={0}
+          frame={{ maxWidth: "infinity" }}
+          glassEffect={{ type: "rect", cornerRadius: 14 }}
+          glassEffectTransition="materialize"
+          shadow={{ color: "#0000000F", radius: 18, y: 8 }}
+        >
+          <CachedImage
+            url={article.imageURL}
+            aspectRatioValue={VISION_IMAGE_RATIO}
+            useIntrinsicAspectRatio={false}
+            cornerRadius={12}
+            contentMode="fill"
+          />
+          <VStack
+            alignment="leading"
+            spacing={6}
+            padding={{ horizontal: 12, vertical: 12 }}
+          >
+            <HStack spacing={8} frame={{ maxWidth: "infinity" }}>
+              <Text
+                font="caption"
+                fontWeight="semibold"
+                foregroundStyle="#0096FA"
+              >
+                {article.category}
+              </Text>
+              <Spacer />
+              <Text font="caption2" foregroundStyle="secondaryLabel">
+                {formatVisionDate(article.date)}
+              </Text>
+            </HStack>
+            <Text
+              font="headline"
+              fontWeight="semibold"
+              lineLimit={3}
+              multilineTextAlignment="leading"
+              frame={{ maxWidth: "infinity", alignment: "leading" }}
+            >
+              {article.title}
+            </Text>
+          </VStack>
+        </VStack>
+      </NavigationLink>
+    </VStack>
+  )
+}
+
+function formatVisionDate(value: string): string {
+  const parts = value.split("-")
+  if (parts.length !== 3) return value
+  return `${parts[0]}.${parts[1]}.${parts[2]}`
+}
+
+export function formatNumber(n: number | null | undefined): string {
+  const value = n ?? 0
+  if (value >= 10000) {
+    const wan = value / 10000
+    return `${wan % 1 === 0 ? wan : wan.toFixed(1)}万`
+  }
+  if (value >= 1000) {
+    const k = value / 1000
+    return `${k % 1 === 0 ? k : k.toFixed(1)}k`
+  }
+  return String(value)
+}
+
+// HTML 实体映射（一次性解码，避免 &amp;lt; 被二次解码成 <）
+const HTML_ENTITIES: Record<string, string> = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  "#39": "'",
+  nbsp: " ",
+}
+
+// HTML 转纯文本：Pixiv 的简介/用户简介字段是 HTML（<br>、<a> 等），
+// 清洗后以纯文本展示（与 Hanairo 的 TextSanitizer 行为一致）。
+// 顺序：先剥离标签，后解码实体（&lt;b&gt; 应显示为字面 <b> 文本）
+export function htmlToPlainText(html: string | undefined | null): string {
+  if (!html) return ""
+  return html
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&(#39|amp|lt|gt|quot|nbsp);/g, (m, name: string) => HTML_ENTITIES[name] ?? m)
+    .trim()
+}
+
+export function formatDate(iso: string | undefined | null): string {
+  if (!iso) return ""
+  try {
+    const d = new Date(iso)
+    const now = new Date()
+    const diff = now.getTime() - d.getTime()
+    if (diff < 60 * 60 * 1000) return `${Math.max(1, Math.floor(diff / 60000))}分钟前`
+    if (diff < 24 * 60 * 60 * 1000) return `${Math.floor(diff / 3600000)}小时前`
+    if (diff < 7 * 24 * 60 * 60 * 1000) return `${Math.floor(diff / 86400000)}天前`
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, "0")
+    const day = String(d.getDate()).padStart(2, "0")
+    return `${y}-${m}-${day}`
+  } catch {
+    return iso ?? ""
+  }
+}
+
+// ---------- 流式标签布局（一行多个自动换行，单个标签文本不换行） ----------
+
+// 估算文本渲染宽度（pt）：中文/全角字符按 12pt，ASCII 按 7pt（近似 mini 字号）
+export function estimateTextWidth(text: string): number {
+  let w = 0
+  for (const ch of text) {
+    w += ch.charCodeAt(0) > 255 ? 12 : 7
+  }
+  return w
+}
+
+// 标签芯片估算宽度：左右内边距 14pt + 文本宽度
+export function estimateChipWidth(text: string): number {
+  return 28 + estimateTextWidth(text)
+}
+
+// 流式分组：按估算宽度把条目排成多行，每行不超过 maxWidth（含 spacing 间隔）
+export function wrapTags<T>(
+  items: T[],
+  maxWidth: number,
+  widthOf: (item: T) => number,
+  spacing = 6
+): T[][] {
+  const rows: T[][] = []
+  let row: T[] = []
+  let used = 0
+  for (const item of items) {
+    const w = widthOf(item)
+    if (row.length > 0 && used + spacing + w > maxWidth) {
+      rows.push(row)
+      row = [item]
+      used = w
+    } else {
+      row.push(item)
+      used += (row.length > 1 ? spacing : 0) + w
+    }
+  }
+  if (row.length > 0) rows.push(row)
+  return rows
+}
+
+// 信息卡片（作品/小说详情页标签上方）：完全照标签样式 ——
+// 每个字段是一个 glass 胶囊按钮，一个字段一行；点击复制该字段内容
+export function InfoCard(props: {
+  title?: string
+  fields: { label: string; value: string | number }[]
+}) {
+  const { title = "信息", fields } = props
+  const [copied, setCopiedOn] = useTimedFlag(2000)
+
+  function copyField(f: { label: string; value: string | number }) {
+    Pasteboard.setString(`${f.label}：${f.value}`)
+    setCopiedOn()
+  }
+
+  return (
+    <VStack alignment="leading" spacing={6}>
+      <HStack spacing={8} alignment="center">
+        <Text font="footnote" fontWeight="semibold" foregroundStyle="secondaryLabel">
+          {title}
+        </Text>
+        {copied ? (
+          <Text font="caption2" fontWeight="medium" foregroundStyle="#34C759">
+            已复制 ✓
+          </Text>
+        ) : null}
+      </HStack>
+      <VStack alignment="leading" spacing={6}>
+        {fields.map((f) => (
+          <Button
+            key={f.label}
+            title={`${f.label}：${f.value}`}
+            buttonStyle="glass"
+            controlSize="mini"
+            action={() => copyField(f)}
+          />
+        ))}
+      </VStack>
+    </VStack>
+  )
+}
+
+// 作品标签徽章（详情页可用紧凑尺寸降低高密度标签区的视觉重量）
+export function TagChip(props: {
+  name: string
+  tagName?: string
+  value: string
+  compact?: boolean
+}) {
+  const { name, tagName = name, value, compact = false } = props
+  return (
+    <NavigationLink
+      value={value}
+      buttonStyle="glass"
+      controlSize={compact ? "mini" : "small"}
+      fixedSize={{ horizontal: true, vertical: false }}
+      contextMenu={{
+        menuItems: (
+          <Group>
+            <Button
+              title="屏蔽该标签"
+              systemImage="nosign"
+              role="destructive"
+              action={() => blockTag(tagName)}
+            />
+          </Group>
+        ),
+      }}
+    >
+      <Text font={compact ? "caption" : "body"} lineLimit={1}>
+        {name}
+      </Text>
+    </NavigationLink>
+  )
+}
+
+// 全局加载视图：所有加载场景统一为无文字、横向居中的圆形指示器。
+export function LoadingView(_props: { text?: string; showText?: boolean }) {
+  return (
+    <HStack
+      spacing={0}
+      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+      padding={40}
+    >
+      <Spacer />
+      <ProgressView progressViewStyle="circular" />
+      <Spacer />
+    </HStack>
+  )
+}
+
+// 错误视图
+export function ErrorView(props: {
+  message: string
+  onRetry: () => void
+}) {
+  return (
+    <ZStack
+      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+      padding={40}
+    >
+      <VStack alignment="center" spacing={14}>
+        <Image
+          systemName="wifi.exclamationmark"
+          font="largeTitle"
+          foregroundStyle="secondaryLabel"
+        />
+        <Text
+          font="subheadline"
+          foregroundStyle="secondaryLabel"
+          multilineTextAlignment="center"
+        >
+          {props.message}
+        </Text>
+        <Button
+          title="重试"
+          buttonStyle="glass"
+          action={props.onRetry}
+        />
+      </VStack>
+    </ZStack>
+  )
+}
+
+// 空视图
+export function EmptyView(props: { text?: string; systemImage?: string }) {
+  return (
+    <ZStack
+      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+      padding={60}
+    >
+      <VStack alignment="center" spacing={14}>
+        <Image
+          systemName={props.systemImage ?? "sparkles"}
+          font="largeTitle"
+          foregroundStyle="secondaryLabel"
+        />
+        <Text font="subheadline" foregroundStyle="secondaryLabel">
+          {props.text ?? "暂无内容"}
+        </Text>
+      </VStack>
+    </ZStack>
+  )
+}
+
+// 作品底部信息行（收藏数/浏览数）
+export function IllustStats(props: { illust: PixivIllustration }) {
+  const { illust } = props
+  return (
+    <Text font="caption" foregroundStyle="secondaryLabel">
+      ♥ {formatNumber(illust.total_bookmarks)} · 👁 {formatNumber(illust.total_view)}
+    </Text>
+  )
+}
+
+// 作者行
+export function AuthorRow(props: {
+  user: PixivUser
+  size?: number
+  onTap?: () => void
+}) {
+  const { user, size = 22, onTap } = props
+  const avatarUrl = user.profile_image_urls?.medium ?? null
+  return (
+    <VStack alignment="leading" spacing={2} onTapGesture={onTap}>
+      <ZStack alignment="leading">
+        <AvatarImage url={avatarUrl} size={size} />
+        <Text
+          font="footnote"
+          fontWeight="medium"
+          lineLimit={1}
+          padding={{ leading: size + 10 }}
+        >
+          {user.name}
+        </Text>
+      </ZStack>
+    </VStack>
+  )
+}

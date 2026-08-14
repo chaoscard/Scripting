@@ -1,0 +1,14 @@
+{
+  "name": "Pixiv",
+  "icon": "paintpalette",
+  "color": "rgba(0, 150, 250, 1)",
+  "version": "0.6.8",
+  "runInApp": true,
+  "description": "Liquid Glass Pixiv client",
+  "localizedNames": {
+    "zh": "Pixiv"
+  },
+  "localizedDescriptions": {
+    "zh": "液态玻璃风格 Pixiv 客户端"
+  }
+}
