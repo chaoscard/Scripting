@@ -88,6 +88,10 @@ export function SettingsView() {
       </Section>
 
       <Section header={<Text>图片质量</Text>}>
+        <Picker title="信息流" value={settings.feedImageQuality} onChanged={(value: string) => update({ feedImageQuality: value as "medium" | "large" })}>
+          <Text tag="medium">中等</Text>
+          <Text tag="large">大图</Text>
+        </Picker>
         <Picker title="详情页面" value={settings.detailImageQuality} onChanged={(value: string) => update({ detailImageQuality: value as "medium" | "large" | "original" })}>
           <Text tag="medium">中等</Text>
           <Text tag="large">大图</Text>

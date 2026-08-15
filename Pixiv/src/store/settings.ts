@@ -7,6 +7,7 @@ export interface BlockedUser {
   avatarURL?: string
 }
 
+export type FeedImageQuality = "medium" | "large"
 export type DetailImageQuality = "medium" | "large" | "original"
 export type DownloadImageQuality = "large" | "original"
 
@@ -18,6 +19,7 @@ export interface AppSettings {
   blockedTags: string[]
   blockedUsers: BlockedUser[]
   longPressBookmarkAction: "off" | "follow" | "detail"
+  feedImageQuality: FeedImageQuality
   detailImageQuality: DetailImageQuality
   downloadImageQuality: DownloadImageQuality
   prefetchEnabled: boolean
@@ -33,6 +35,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   blockedTags: [],
   blockedUsers: [],
   longPressBookmarkAction: "off",
+  feedImageQuality: "medium",
   detailImageQuality: "large",
   downloadImageQuality: "original",
   prefetchEnabled: true,
@@ -41,6 +44,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 }
 
 const KEY = "pixiv_settings_v1"
+const FEED_QUALITY_VALUES: readonly FeedImageQuality[] = ["medium", "large"]
 const DETAIL_QUALITY_VALUES: readonly DetailImageQuality[] = ["medium", "large", "original"]
 const DOWNLOAD_QUALITY_VALUES: readonly DownloadImageQuality[] = ["large", "original"]
 const LONG_PRESS_ACTION_VALUES: readonly AppSettings["longPressBookmarkAction"][] = ["off", "follow", "detail"]
@@ -163,6 +167,9 @@ export function loadSettings(): AppSettings {
     longPressBookmarkAction: isOneOf(stored?.longPressBookmarkAction, LONG_PRESS_ACTION_VALUES)
       ? stored.longPressBookmarkAction
       : DEFAULT_SETTINGS.longPressBookmarkAction,
+    feedImageQuality: isOneOf(stored?.feedImageQuality, FEED_QUALITY_VALUES)
+      ? stored.feedImageQuality
+      : DEFAULT_SETTINGS.feedImageQuality,
     detailImageQuality: isOneOf(stored?.detailImageQuality, DETAIL_QUALITY_VALUES)
       ? stored.detailImageQuality
       : legacyDetailQuality,

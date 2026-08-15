@@ -488,12 +488,23 @@ export function novelThumbUrlOf(i: {
 
 // 标准 IllustCard 裁切源：必须优先完整比例图片。
 // square_medium 可能已被 Pixiv 服务端从顶部预裁切，无法在本地恢复画面中央。
-// 极窄竖图的 medium 宽度会因 Pixiv 的长边限制而过低，改用 large 保持双列流清晰度。
-export function cardThumbUrlOf(i: {
-  width?: number
-  height?: number
-  image_urls?: { square_medium?: string; medium?: string; large?: string }
-}): string | null {
+// 依据设置的 feedImageQuality（中等/大图）选择分辨率。在“中等”模式下，极窄竖图仍优先 large 保持清晰度。
+export function cardThumbUrlOf(
+  i: {
+    width?: number
+    height?: number
+    image_urls?: { square_medium?: string; medium?: string; large?: string }
+  },
+  quality?: "medium" | "large" | unknown
+): string | null {
+  if (!i) return null
+  const selectedQuality =
+    quality === "medium" || quality === "large"
+      ? quality
+      : loadSettings().feedImageQuality
+  if (selectedQuality === "large") {
+    return i.image_urls?.large ?? i.image_urls?.medium ?? i.image_urls?.square_medium ?? null
+  }
   const ratio = i.width && i.height ? i.width / i.height : 1
   const preferLarge = ratio < 1 / 2
   return preferLarge

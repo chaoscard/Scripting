@@ -757,7 +757,7 @@ export function IllustCard(props: {
             <ZStack alignment="topLeading" frame={{ maxWidth: "infinity" }}>
               <ZStack
                 alignment="bottomLeading"
-                aspectRatio={{ value: flow ? imageRatio : 1, contentMode: "fill" }}
+                aspectRatio={{ value: flow ? imageRatio : 1, contentMode: flow ? "fit" : "fill" }}
                 frame={{ maxWidth: "infinity" }}
                 clipShape={{ type: "rect", cornerRadius: 10 }}
                 clipped={true}
@@ -765,6 +765,7 @@ export function IllustCard(props: {
                 <CachedImage
                   url={cardThumbUrlOf(illust)}
                   aspectRatioValue={imageRatio}
+                  contentMode={flow ? "fit" : "fill"}
                   centerCropSquare={!flow}
                   useIntrinsicAspectRatio={!flow}
                   cornerRadius={10}
@@ -959,29 +960,27 @@ export function MasonryIllustFeed(props: {
   }
 
   return (
-    <LazyVStack alignment="leading" spacing={10} frame={{ maxWidth: "infinity" }}>
-      <HStack
-        alignment="top"
-        spacing={10}
-        padding={{ horizontal: 10 }}
-        frame={{ maxWidth: "infinity" }}
-      >
-        <LazyVStack alignment="leading" spacing={10} frame={{ minWidth: 0, maxWidth: "infinity" }}>
-          {leading.map(renderItem)}
-        </LazyVStack>
-        <LazyVStack alignment="leading" spacing={10} frame={{ minWidth: 0, maxWidth: "infinity" }}>
-          {trailing.map(renderItem)}
-        </LazyVStack>
-      </HStack>
-      {tail ? (
-        <LoadMoreTrigger
-          anchor={tail.id}
-          onLoadMore={props.onLoadMore}
-          hasMore={props.hasMore ?? true}
-          isLoading={props.isLoading}
-        />
-      ) : null}
-    </LazyVStack>
+    <HStack
+      alignment="top"
+      spacing={10}
+      padding={{ horizontal: 10 }}
+      frame={{ maxWidth: "infinity" }}
+    >
+      <LazyVStack alignment="leading" spacing={10} frame={{ minWidth: 0, maxWidth: "infinity" }}>
+        {leading.map(renderItem)}
+        {tail ? (
+          <LoadMoreTrigger
+            anchor={tail.id}
+            onLoadMore={props.onLoadMore}
+            hasMore={props.hasMore ?? true}
+            isLoading={props.isLoading}
+          />
+        ) : null}
+      </LazyVStack>
+      <LazyVStack alignment="leading" spacing={10} frame={{ minWidth: 0, maxWidth: "infinity" }}>
+        {trailing.map(renderItem)}
+      </LazyVStack>
+    </HStack>
   )
 }
 
