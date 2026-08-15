@@ -1,6 +1,6 @@
 import { Button, HStack, Image, List, Section, Spacer, Text } from "scripting"
 import { SCRIPT_VERSION } from "../config"
-import { AvatarImage } from "./components"
+import { AvatarImage, presentExternalURL } from "./components"
 
 const GITHUB_AVATAR_URL = "https://avatars.githubusercontent.com/u/16934707?v=4"
 const HANA_IRO_AVATAR_URL = "https://github.com/youshen2.png?size=128"
@@ -13,7 +13,7 @@ export function AboutView() {
     <List navigationTitle="关于" navigationBarTitleDisplayMode="inline">
       <Section header={<Text>关于</Text>}>
         <InfoRow title="作者" value="chaoscard" />
-        <ExternalLinkRow title="主页" url="https://github.com/chaoscard/Scripting" />
+        <HomeLinkRow />
         <InfoRow title="版本" value={SCRIPT_VERSION} />
       </Section>
 
@@ -63,6 +63,25 @@ function InfoRow(props: { title: string; value: string }) {
   )
 }
 
+function HomeLinkRow() {
+  return (
+    <HStack spacing={8} frame={{ maxWidth: "infinity" }}>
+      <Text font="body">主页</Text>
+      <Button
+        buttonStyle="plain"
+        action={() => void presentExternalURL("https://github.com/chaoscard/Scripting")}
+        frame={{ maxWidth: "infinity", alignment: "leading" }}
+      >
+        <HStack spacing={8} frame={{ maxWidth: "infinity" }}>
+          <Text font="body" foregroundStyle="#007AFF">chaoscard/Scripting</Text>
+          <Spacer />
+          <Image systemName="arrow.up.right" font="footnote" foregroundStyle="tertiaryLabel" />
+        </HStack>
+      </Button>
+    </HStack>
+  )
+}
+
 function ExternalLinkRow(props: {
   title: string
   url: string
@@ -70,12 +89,7 @@ function ExternalLinkRow(props: {
   avatarCornerRadius?: number
 }) {
   return (
-    <Button
-      buttonStyle="plain"
-      action={() => {
-        void Safari.openURL(props.url)
-      }}
-    >
+    <Button buttonStyle="plain" action={() => void presentExternalURL(props.url)}>
       <HStack spacing={10} frame={{ maxWidth: "infinity" }}>
         {props.avatarURL ? (
           <AvatarImage

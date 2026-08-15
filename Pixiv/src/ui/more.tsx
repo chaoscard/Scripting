@@ -5,6 +5,7 @@ import {
   List,
   NavigationLink,
   Section,
+  Spacer,
   Text,
 } from "scripting"
 import { session } from "../api/session"
@@ -110,14 +111,24 @@ export function MoreView(props: { onClose: () => void }) {
           </HStack>
         </NavigationLink>
         <Button
-          title="注销"
-          systemImage="rectangle.portrait.and.arrow.right"
           buttonStyle="plain"
           foregroundStyle="systemRed"
           action={() => {
             session.signOut()
           }}
-        />
+        >
+          <HStack spacing={8} frame={{ maxWidth: "infinity" }}>
+            <Image systemName="rectangle.portrait.and.arrow.right" />
+            <Text font="body">注销</Text>
+            <Spacer />
+            <Image
+              systemName="chevron.right"
+              font="caption"
+              fontWeight="semibold"
+              foregroundStyle="systemRed"
+            />
+          </HStack>
+        </Button>
       </Section>
     </List>
   )

@@ -1424,6 +1424,10 @@ export function LinkedDescription(props: {
   )
 }
 
+export function presentExternalURL(url: string): Promise<void> {
+  return Safari.present(url, false)
+}
+
 function DescriptionLine(props: {
   segments: DescriptionSegment[]
   routeDestination: (route: string) => any
@@ -1511,7 +1515,7 @@ function ExternalDescriptionLink(props: { label: string; url: string }) {
   return (
     <Button
       buttonStyle="plain"
-      action={() => void Safari.present(props.url)}
+      action={() => void presentExternalURL(props.url)}
       frame={{ maxWidth: "infinity", alignment: "leading" }}
     >
       <Text

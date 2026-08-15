@@ -57,7 +57,7 @@ export function LoginView(props: {
       await webView.loadURL(buildAuthorizationURL(challenge))
       await webView.present({
         navigationTitle: "Pixiv 登录",
-        fullscreen: true,
+        fullscreen: false,
       })
     } catch (err: any) {
       authError = `无法打开登录页面：${err?.message ?? "未知错误"}`
