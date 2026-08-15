@@ -70,7 +70,7 @@ function NotificationList(props: {
       ) : paged.items.length === 0 ? (
         <EmptyView text="暂无通知" systemImage="bell" />
       ) : (
-        <VStack alignment="leading" spacing={8} padding={{ horizontal: 10, top: 6 }}>
+        <VStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
           {paged.items.map((n) => (
             <NotificationRow key={n.id} notification={n} />
           ))}

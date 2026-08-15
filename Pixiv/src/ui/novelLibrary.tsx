@@ -69,7 +69,7 @@ export function NovelLibraryView() {
       ) : paged.items.length === 0 ? (
         <EmptyView text="暂无阅读书签" systemImage="bookmark" />
       ) : (
-        <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10, top: 6 }}>
+        <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
           {paged.items.map((item) => (
             <NovelCard
               key={item.novel.id}

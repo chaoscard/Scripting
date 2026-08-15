@@ -119,7 +119,7 @@ export function UserConnectionsView(props: {
                 systemImage="person.2"
               />
             ) : (
-              <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10, top: 6 }}>
+              <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
                 {paged.items.map((preview) => (
                   <ConnectionRow
                     key={preview.user.id}

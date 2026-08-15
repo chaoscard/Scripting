@@ -7,9 +7,9 @@ import {
   Picker,
   Text,
   useEffect,
+  useRef,
   useState,
   VStack,
-  ZStack,
 } from "scripting"
 import {
   EmptyView,
@@ -59,24 +59,27 @@ function getVisibleHistory(kind: HistoryKind): HistoryEntry[] {
 
 export function HistoryView() {
   const [kind, setKind] = useState<HistoryKind>("illustration")
+  const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
+
   function clearCurrentKind() {
     clearHistoryKind(kind)
   }
 
   return (
-    <VStack
-      alignment="leading"
-      spacing={8}
-      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+    <RefreshableScrollView
+      navigationBarTitleDisplayMode="inline"
       toolbar={historyToolbar({ kind, onClear: clearCurrentKind })}
+      refreshable={() => refreshHandlerRef.current()}
     >
-      <HistoryKindPicker kind={kind} onKindChange={setKind} />
-      <ZStack frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
-        <HistoryFeed kind="illustration" active={kind === "illustration"} />
-        <HistoryFeed kind="manga" active={kind === "manga"} />
-        <HistoryFeed kind="novel" active={kind === "novel"} />
-      </ZStack>
-    </VStack>
+      <VStack alignment="leading" spacing={8}>
+        <HistoryKindPicker kind={kind} onKindChange={setKind} />
+        <HistoryFeed
+          key={kind}
+          kind={kind}
+          onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
+        />
+      </VStack>
+    </RefreshableScrollView>
   )
 }
 
@@ -145,9 +148,9 @@ function HistoryKindPicker(props: {
 
 function HistoryFeed(props: {
   kind: HistoryKind
-  active: boolean
+  onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { kind, active } = props
+  const { kind, onRegisterRefresh } = props
   const [items, setItems] = useState(() => getVisibleHistory(kind))
 
   useEffect(() => {
@@ -165,24 +168,22 @@ function HistoryFeed(props: {
     setItems(getVisibleHistory(kind))
   }
 
+  useEffect(() => {
+    onRegisterRefresh?.(async () => {
+      await refreshHistoryFromCloud()
+      reload()
+    })
+  }, [onRegisterRefresh])
+
   return (
-    <RefreshableScrollView
-      hidden={!active}
-      navigationBarTitleDisplayMode="inline"
-      refreshable={async () => {
-        await refreshHistoryFromCloud()
-        reload()
-      }}
-    >
-      <VStack alignment="leading" spacing={10} padding={{ top: 4 }}>
-        <HStack spacing={8} padding={{ horizontal: 14 }}>
-          <Text font="caption" foregroundStyle="secondaryLabel">
-            共 {items.length} 条记录
-          </Text>
-        </HStack>
-        <HistoryContent kind={kind} items={items} />
-      </VStack>
-    </RefreshableScrollView>
+    <VStack alignment="leading" spacing={10}>
+      <HStack spacing={8} padding={{ horizontal: 14 }}>
+        <Text font="caption" foregroundStyle="secondaryLabel">
+          共 {items.length} 条记录
+        </Text>
+      </HStack>
+      <HistoryContent kind={kind} items={items} />
+    </VStack>
   )
 }
 

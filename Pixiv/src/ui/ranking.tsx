@@ -9,9 +9,9 @@ import {
   ScrollView,
   Text,
   useEffect,
+  useRef,
   useState,
   VStack,
-  ZStack,
 } from "scripting"
 import { nextIllustrations, nextNovels, novelRanking, ranking } from "../api/pixiv"
 import { cardThumbUrlOf, novelThumbUrlOf, prefetch } from "../image/imageLoader"
@@ -83,6 +83,7 @@ export function RankingView(props: { onClose: () => void }) {
     useState<IllustrationRankingMode>("day")
   const [mangaMode, setMangaMode] = useState<MangaRankingMode>("day_manga")
   const [novelMode, setNovelMode] = useState<NovelRankingMode>("day")
+  const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
   const rootModes =
     kind === "illustration"
@@ -107,52 +108,46 @@ export function RankingView(props: { onClose: () => void }) {
     else if (kind === "novel") setNovelMode(value as NovelRankingMode)
   }
 
-  // 十二个榜单流完全常驻挂载，切换时仅切换原生 hidden 属性，
-  // 零销毁、零重建、零重复布局，实现毫秒级秒切。
   return (
-    <VStack
-      alignment="leading"
-      spacing={8}
-      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+    <RefreshableScrollView
+      navigationBarTitleDisplayMode="inline"
       navigationDestination={destinationElement}
       toolbar={rankingToolbar({ kind, onKindChange: setKind, onClose: props.onClose })}
+      refreshable={() => refreshHandlerRef.current()}
     >
-      {rootModes && rootSelectedMode ? (
-        <RankingModePicker
-          modes={rootModes}
-          selected={rootSelectedMode}
-          onSelect={selectRootMode}
-        />
-      ) : null}
-      <ZStack frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
-        {ILLUSTRATION_MODES.map((mode) => (
+      <VStack alignment="leading" spacing={8}>
+        {rootModes && rootSelectedMode ? (
+          <RankingModePicker
+            modes={rootModes}
+            selected={rootSelectedMode}
+            onSelect={selectRootMode}
+          />
+        ) : null}
+        {kind === "illustration" ? (
           <IllustRankingFeed
-            key={`illustration:${mode.value}`}
+            key={`illustration:${illustrationMode}`}
             kind="illustration"
-            mode={mode.value}
-            active={kind === "illustration" && illustrationMode === mode.value}
+            mode={illustrationMode}
+            onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
           />
-        ))}
-        {MANGA_MODES.map((mode) => (
+        ) : kind === "manga" ? (
           <IllustRankingFeed
-            key={`manga:${mode.value}`}
+            key={`manga:${mangaMode}`}
             kind="manga"
-            mode={mode.value}
-            active={kind === "manga" && mangaMode === mode.value}
+            mode={mangaMode}
+            onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
           />
-        ))}
-        {NOVEL_MODES.map((mode) => (
+        ) : kind === "novel" ? (
           <NovelRankingFeed
-            key={`novel:${mode.value}`}
-            mode={mode.value}
-            active={kind === "novel" && novelMode === mode.value}
+            key={`novel:${novelMode}`}
+            mode={novelMode}
+            onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
           />
-        ))}
-        <AdvancedSearchPlaceholder
-          active={kind === "advanced"}
-        />
-      </ZStack>
-    </VStack>
+        ) : (
+          <AdvancedSearchPlaceholder />
+        )}
+      </VStack>
+    </RefreshableScrollView>
   )
 }
 
@@ -208,134 +203,119 @@ function RankingModePicker(props: {
 function IllustRankingFeed(props: {
   kind: IllustRankingKind
   mode: IllustRankingMode
-  active: boolean
+  onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { kind, mode, active } = props
+  const { kind, mode, onRegisterRefresh } = props
   const paged = usePagedList<PixivIllustration>({
     first: (token) => ranking(mode, null, token),
     more: (nextURL, token) => nextIllustrations(nextURL, token),
     filter: kind === "manga" ? filterMangaRankingItems : filterRankingItems,
     deps: [kind, mode],
-    enabled: active,
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel
   })
 
+  useEffect(() => {
+    onRegisterRefresh?.(paged.refresh)
+  }, [paged.refresh, onRegisterRefresh])
+
   const pagedRef = useLatest(paged)
-  const activeRef = useLatest(active)
   useEffect(() => {
     return onSettingsChanged(() => {
-      if (!activeRef.current) return
       pagedRef.current.reapplyFilter()
       pagedRef.current.refresh()
     })
   }, [])
 
   return (
-    <RefreshableScrollView
-      hidden={!active}
-      navigationBarTitleDisplayMode="inline"
-      refreshable={paged.refresh}
-    >
-      <VStack alignment="leading" spacing={10}>
-        {paged.initialLoading ? (
-          <LoadingView />
-        ) : paged.error && paged.items.length === 0 ? (
-          <ErrorView message={paged.error} onRetry={paged.refresh} />
-        ) : paged.items.length === 0 ? (
-          <EmptyView text="暂无排行数据，下拉刷新试试" />
-        ) : (
-          <MasonryIllustFeed
-            items={paged.items}
-            onLoadMore={paged.loadMore}
-            hasMore={paged.hasMore}
-            isLoading={paged.loadingMore}
-            cornerBadgeOf={(_, index) =>
-              index < 50 ? <ImageNumberBadge number={index + 1} /> : undefined
-            }
-          />
-        )}
-      </VStack>
-    </RefreshableScrollView>
+    <VStack alignment="leading" spacing={10}>
+      {paged.initialLoading ? (
+        <LoadingView />
+      ) : paged.error && paged.items.length === 0 ? (
+        <ErrorView message={paged.error} onRetry={paged.refresh} />
+      ) : paged.items.length === 0 ? (
+        <EmptyView text="暂无排行数据，下拉刷新试试" />
+      ) : (
+        <MasonryIllustFeed
+          items={paged.items}
+          onLoadMore={paged.loadMore}
+          hasMore={paged.hasMore}
+          isLoading={paged.loadingMore}
+          cornerBadgeOf={(_, index) =>
+            index < 50 ? <ImageNumberBadge number={index + 1} /> : undefined
+          }
+        />
+      )}
+    </VStack>
   )
 }
 
 function NovelRankingFeed(props: {
   mode: NovelRankingMode
-  active: boolean
+  onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { mode, active } = props
+  const { mode, onRegisterRefresh } = props
   const paged = usePagedList<PixivNovel>({
     first: (token) => novelRanking(mode, null, token),
     more: (nextURL, token) => nextNovels(nextURL, token),
     filter: filterNovelRankingItems,
     deps: [mode],
-    enabled: active,
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, 10).map(novelThumbUrlOf)).cancel
   })
 
+  useEffect(() => {
+    onRegisterRefresh?.(paged.refresh)
+  }, [paged.refresh, onRegisterRefresh])
+
   const pagedRef = useLatest(paged)
-  const activeRef = useLatest(active)
   useEffect(() => {
     return onSettingsChanged(() => {
-      if (!activeRef.current) return
       pagedRef.current.reapplyFilter()
       pagedRef.current.refresh()
     })
   }, [])
 
   return (
-    <RefreshableScrollView
-      hidden={!active}
-      navigationBarTitleDisplayMode="inline"
-      refreshable={paged.refresh}
-    >
-      <VStack alignment="leading" spacing={10}>
-        {paged.initialLoading ? (
-          <LoadingView />
-        ) : paged.error && paged.items.length === 0 ? (
-          <ErrorView message={paged.error} onRetry={paged.refresh} />
-        ) : paged.items.length === 0 ? (
-          <EmptyView text="暂无小说排行，下拉刷新试试" systemImage="book" />
-        ) : (
-          <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
-            {paged.items.map((novel, index) => (
-              <NovelCard
-                key={novel.id}
-                novel={novel}
-                footerText={index < 50 ? `第 ${index + 1} 名` : undefined}
-              />
-            ))}
-            <LoadMoreTrigger
-              anchor={paged.items[paged.items.length - 1]?.id}
-              onLoadMore={paged.loadMore}
-              hasMore={paged.hasMore}
-              isLoading={paged.loadingMore}
+    <VStack alignment="leading" spacing={10}>
+      {paged.initialLoading ? (
+        <LoadingView />
+      ) : paged.error && paged.items.length === 0 ? (
+        <ErrorView message={paged.error} onRetry={paged.refresh} />
+      ) : paged.items.length === 0 ? (
+        <EmptyView text="暂无小说排行，下拉刷新试试" systemImage="book" />
+      ) : (
+        <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
+          {paged.items.map((novel, index) => (
+            <NovelCard
+              key={novel.id}
+              novel={novel}
+              footerText={index < 50 ? `第 ${index + 1} 名` : undefined}
             />
-          </LazyVStack>
-        )}
-      </VStack>
-    </RefreshableScrollView>
+          ))}
+          <LoadMoreTrigger
+            anchor={paged.items[paged.items.length - 1]?.id}
+            onLoadMore={paged.loadMore}
+            hasMore={paged.hasMore}
+            isLoading={paged.loadingMore}
+          />
+        </LazyVStack>
+      )}
+    </VStack>
   )
 }
 
-function AdvancedSearchPlaceholder(props: { active: boolean }) {
+function AdvancedSearchPlaceholder() {
   return (
-    <ScrollView
-      hidden={!props.active}
-      navigationBarTitleDisplayMode="inline"
-    >
-      <VStack alignment="center" spacing={12} padding={{ top: 80, horizontal: 20 }}>
-        <Image systemName="slider.horizontal.3" font="largeTitle" foregroundStyle="secondaryLabel" />
-        <Text font="headline" fontWeight="bold">
-          高级搜索
-        </Text>
-        <Text font="subheadline" foregroundStyle="secondaryLabel">
-          根据收藏数、日期区间与排序方式精确筛选
-        </Text>
-      </VStack>
-    </ScrollView>
+    <VStack alignment="center" spacing={12} padding={{ top: 80, horizontal: 20 }}>
+      <Image systemName="slider.horizontal.3" font="largeTitle" foregroundStyle="secondaryLabel" />
+      <Text font="headline" fontWeight="bold">
+        高级搜索
+      </Text>
+      <Text font="subheadline" foregroundStyle="secondaryLabel">
+        根据收藏数、日期区间与排序方式精确筛选
+      </Text>
+    </VStack>
   )
 }
 

@@ -3,9 +3,9 @@ import {
   Picker,
   Text,
   useEffect,
+  useRef,
   useState,
   VStack,
-  ZStack,
 } from "scripting"
 import {
   bookmarkTags,
@@ -91,70 +91,62 @@ export function UserBookmarksView(props: { userID: number }) {
   }, [])
 
   return (
-    <VStack
-      alignment="leading"
-      spacing={8}
-      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+    <RefreshableScrollView
       navigationTitle="收藏"
       navigationBarTitleDisplayMode="inline"
+      refreshable={async () => {
+        if (kind === "illustration") {
+          await Promise.all([illustPaged.refresh(), loadTags()])
+        } else {
+          await novelPaged.refresh()
+        }
+      }}
     >
-      <BookmarkKindPicker kind={kind} onChanged={setKind} />
-      <ZStack frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
-        <RefreshableScrollView
-          hidden={kind !== "illustration"}
-          navigationBarTitleDisplayMode="inline"
-          refreshable={async () => {
-            await Promise.all([illustPaged.refresh(), loadTags()])
-          }}
-        >
-          <VStack alignment="leading" spacing={10} padding={{ top: 4 }}>
-          <BookmarkTags tags={tags} activeTag={activeTag} onTagChange={setActiveTag} />
-          {illustPaged.initialLoading ? (
-            <LoadingView />
-          ) : illustPaged.error && illustPaged.items.length === 0 ? (
-            <ErrorView message={illustPaged.error} onRetry={illustPaged.refresh} />
-          ) : illustPaged.items.length === 0 ? (
-            <EmptyView text="暂无公开收藏作品" systemImage="heart" />
-          ) : (
-            <MasonryIllustFeed
-              items={illustPaged.items}
-              onLoadMore={illustPaged.loadMore}
-              hasMore={illustPaged.hasMore}
-              isLoading={illustPaged.loadingMore}
-            />
-          )}
-          </VStack>
-        </RefreshableScrollView>
-
-        <RefreshableScrollView
-        hidden={kind !== "novel"}
-        navigationBarTitleDisplayMode="inline"
-        refreshable={novelPaged.refresh}
-      >
-        <VStack alignment="leading" spacing={10} padding={{ top: 4 }}>
-          {novelPaged.initialLoading ? (
-            <LoadingView />
-          ) : novelPaged.error && novelPaged.items.length === 0 ? (
-            <ErrorView message={novelPaged.error} onRetry={novelPaged.refresh} />
-          ) : novelPaged.items.length === 0 ? (
-            <EmptyView text="暂无公开收藏小说" systemImage="book" />
-          ) : (
-            <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
-              {novelPaged.items.map((novel) => (
-                <NovelCard key={novel.id} novel={novel} />
-              ))}
-              <LoadMoreTrigger
-                anchor={novelPaged.items[novelPaged.items.length - 1].id}
-                onLoadMore={novelPaged.loadMore}
-                hasMore={novelPaged.hasMore}
-                isLoading={novelPaged.loadingMore}
+      <VStack alignment="leading" spacing={8}>
+        <BookmarkKindPicker kind={kind} onChanged={setKind} />
+        {kind === "illustration" ? (
+          <VStack alignment="leading" spacing={10}>
+            <BookmarkTags tags={tags} activeTag={activeTag} onTagChange={setActiveTag} />
+            {illustPaged.initialLoading ? (
+              <LoadingView />
+            ) : illustPaged.error && illustPaged.items.length === 0 ? (
+              <ErrorView message={illustPaged.error} onRetry={illustPaged.refresh} />
+            ) : illustPaged.items.length === 0 ? (
+              <EmptyView text="暂无公开收藏作品" systemImage="heart" />
+            ) : (
+              <MasonryIllustFeed
+                items={illustPaged.items}
+                onLoadMore={illustPaged.loadMore}
+                hasMore={illustPaged.hasMore}
+                isLoading={illustPaged.loadingMore}
               />
-            </LazyVStack>
-          )}
-        </VStack>
-        </RefreshableScrollView>
-      </ZStack>
-    </VStack>
+            )}
+          </VStack>
+        ) : (
+          <VStack alignment="leading" spacing={10}>
+            {novelPaged.initialLoading ? (
+              <LoadingView />
+            ) : novelPaged.error && novelPaged.items.length === 0 ? (
+              <ErrorView message={novelPaged.error} onRetry={novelPaged.refresh} />
+            ) : novelPaged.items.length === 0 ? (
+              <EmptyView text="暂无公开收藏小说" systemImage="book" />
+            ) : (
+              <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
+                {novelPaged.items.map((novel) => (
+                  <NovelCard key={novel.id} novel={novel} />
+                ))}
+                <LoadMoreTrigger
+                  anchor={novelPaged.items[novelPaged.items.length - 1].id}
+                  onLoadMore={novelPaged.loadMore}
+                  hasMore={novelPaged.hasMore}
+                  isLoading={novelPaged.loadingMore}
+                />
+              </LazyVStack>
+            )}
+          </VStack>
+        )}
+      </VStack>
+    </RefreshableScrollView>
   )
 }
 

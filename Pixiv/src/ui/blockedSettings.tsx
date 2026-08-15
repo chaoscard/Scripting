@@ -186,7 +186,7 @@ export function BlockedSettingsView() {
           : undefined
       }
     >
-      <VStack alignment="leading" spacing={10} padding={{ horizontal: 10, top: 8, bottom: 12 }}>
+      <VStack alignment="leading" spacing={8} padding={{ horizontal: 10, bottom: 12 }}>
         <Picker
           title="屏蔽类型"
           value={scope}

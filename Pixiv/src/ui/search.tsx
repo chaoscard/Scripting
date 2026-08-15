@@ -413,7 +413,7 @@ export function SearchView(props: { onClose: () => void }) {
       {mode === "advanced" ? (
         <AdvancedSearchPlaceholder />
       ) : (
-        <VStack alignment="leading" spacing={10} padding={{ top: 4 }}>
+        <VStack alignment="leading" spacing={8}>
           <SearchScopePicker scope={scope} onScopeChange={setScope} />
 
             {!submitted ? (

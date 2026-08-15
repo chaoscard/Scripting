@@ -1,4 +1,4 @@
-export const SCRIPT_VERSION = "0.7.8"
+export const SCRIPT_VERSION = "0.7.9"
 
 export const API_BASE_URL = "https://app-api.pixiv.net"
 export const OAUTH_BASE_URL = "https://oauth.secure.pixiv.net"

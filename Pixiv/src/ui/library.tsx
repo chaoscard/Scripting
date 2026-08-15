@@ -9,9 +9,9 @@ import {
   ScrollView,
   Text,
   useEffect,
+  useRef,
   useState,
   VStack,
-  ZStack,
 } from "scripting"
 import {
   bookmarkTags,
@@ -49,26 +49,31 @@ const MAX_TAG_CHIPS = 20
 export function LibraryView() {
   const [kind, setKind] = useState<LibraryKind>("illustration")
   const [restrict, setRestrict] = useState<Visibility>("public")
+  const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
   return (
-    <VStack
-      alignment="leading"
-      spacing={8}
-      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+    <RefreshableScrollView
+      navigationBarTitleDisplayMode="inline"
       toolbar={libraryToolbar({ restrict, onRestrictChange: setRestrict })}
+      refreshable={() => refreshHandlerRef.current()}
     >
-      <LibraryKindPicker kind={kind} onKindChange={setKind} />
-      <ZStack frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
-        <IllustrationLibraryFeed
-          restrict={restrict}
-          active={kind === "illustration"}
-        />
-        <NovelLibraryFeed
-          restrict={restrict}
-          active={kind === "novel"}
-        />
-      </ZStack>
-    </VStack>
+      <VStack alignment="leading" spacing={8}>
+        <LibraryKindPicker kind={kind} onKindChange={setKind} />
+        {kind === "illustration" ? (
+          <IllustrationLibraryFeed
+            key={`illustration:${restrict}`}
+            restrict={restrict}
+            onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
+          />
+        ) : (
+          <NovelLibraryFeed
+            key={`novel:${restrict}`}
+            restrict={restrict}
+            onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
+          />
+        )}
+      </VStack>
+    </RefreshableScrollView>
   )
 }
 
@@ -149,7 +154,7 @@ export function BookmarkTags(props: {
 
 function IllustrationLibraryFeed(props: {
   restrict: Visibility
-  active: boolean
+  onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
   const [tags, setTags] = useState<PixivBookmarkTag[]>([])
   const [activeTag, setActiveTag] = useState<string | null>(null)
@@ -176,59 +181,52 @@ function IllustrationLibraryFeed(props: {
     more: (nextURL, token) => nextIllustrations(nextURL, token),
     filter: filterIllustrationBookmarks,
     deps: [props.restrict, activeTag],
-    enabled: props.active,
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel,
   })
 
+  useEffect(() => {
+    props.onRegisterRefresh?.(async () => {
+      await Promise.all([paged.refresh(), loadTags()])
+    })
+  }, [paged.refresh, props.onRegisterRefresh])
+
   const pagedRef = useLatest(paged)
-  const activeRef = useLatest(props.active)
   useEffect(() => {
     return onSettingsChanged(() => {
-      if (!activeRef.current) return
       pagedRef.current.reapplyFilter()
       pagedRef.current.refresh()
     })
   }, [])
   useEffect(() => {
-    if (props.active) {
-      loadTags()
-      pagedRef.current.reapplyFilter()
-    }
-  }, [props.active, props.restrict])
+    loadTags()
+    pagedRef.current.reapplyFilter()
+  }, [props.restrict])
 
   return (
-    <RefreshableScrollView
-      hidden={!props.active}
-      navigationBarTitleDisplayMode="inline"
-      refreshable={async () => {
-        await Promise.all([paged.refresh(), loadTags()])
-      }}
-    >
-      <VStack alignment="leading" spacing={10} padding={{ top: 4 }}>
-        <BookmarkTags tags={tags} activeTag={activeTag} onTagChange={setActiveTag} />
-          {paged.initialLoading ? (
-          <LoadingView />
-        ) : paged.error && paged.items.length === 0 ? (
-          <ErrorView message={paged.error} onRetry={paged.refresh} />
-        ) : paged.items.length === 0 ? (
-          <EmptyView text="暂无收藏作品" systemImage="heart" />
-        ) : (
-          <MasonryIllustFeed
-            items={paged.items}
-            onLoadMore={paged.loadMore}
-            hasMore={paged.hasMore}
-            isLoading={paged.loadingMore}
-          />
-        )}
-      </VStack>
-    </RefreshableScrollView>
+    <VStack alignment="leading" spacing={10}>
+      <BookmarkTags tags={tags} activeTag={activeTag} onTagChange={setActiveTag} />
+      {paged.initialLoading ? (
+        <LoadingView />
+      ) : paged.error && paged.items.length === 0 ? (
+        <ErrorView message={paged.error} onRetry={paged.refresh} />
+      ) : paged.items.length === 0 ? (
+        <EmptyView text="暂无收藏作品" systemImage="heart" />
+      ) : (
+        <MasonryIllustFeed
+          items={paged.items}
+          onLoadMore={paged.loadMore}
+          hasMore={paged.hasMore}
+          isLoading={paged.loadingMore}
+        />
+      )}
+    </VStack>
   )
 }
 
 function NovelLibraryFeed(props: {
   restrict: Visibility
-  active: boolean
+  onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
   const [tags, setTags] = useState<PixivBookmarkTag[]>([])
   const [activeTag, setActiveTag] = useState<string | null>(null)
@@ -253,58 +251,51 @@ function NovelLibraryFeed(props: {
     more: (nextURL, token) => nextNovels(nextURL, token),
     filter: filterNovelBookmarks,
     deps: [props.restrict, activeTag],
-    enabled: props.active,
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, 10).map(novelThumbUrlOf)).cancel,
   })
 
+  useEffect(() => {
+    props.onRegisterRefresh?.(async () => {
+      await Promise.all([paged.refresh(), loadTags()])
+    })
+  }, [paged.refresh, props.onRegisterRefresh])
+
   const pagedRef = useLatest(paged)
-  const activeRef = useLatest(props.active)
   useEffect(() => {
     return onSettingsChanged(() => {
-      if (!activeRef.current) return
       pagedRef.current.reapplyFilter()
       pagedRef.current.refresh()
     })
   }, [])
   useEffect(() => {
-    if (props.active) {
-      loadTags()
-      pagedRef.current.reapplyFilter()
-    }
-  }, [props.active, props.restrict])
+    loadTags()
+    pagedRef.current.reapplyFilter()
+  }, [props.restrict])
 
   return (
-    <RefreshableScrollView
-      hidden={!props.active}
-      navigationBarTitleDisplayMode="inline"
-      refreshable={async () => {
-        await Promise.all([paged.refresh(), loadTags()])
-      }}
-    >
-      <VStack alignment="leading" spacing={10} padding={{ top: 4 }}>
-        <BookmarkTags tags={tags} activeTag={activeTag} onTagChange={setActiveTag} />
-          {paged.initialLoading ? (
-          <LoadingView />
-        ) : paged.error && paged.items.length === 0 ? (
-          <ErrorView message={paged.error} onRetry={paged.refresh} />
-        ) : paged.items.length === 0 ? (
-          <EmptyView text="还没有收藏小说" systemImage="book" />
-        ) : (
-          <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
-            {paged.items.map((novel) => (
-              <NovelCard key={novel.id} novel={novel} />
-            ))}
-            <LoadMoreTrigger
-              anchor={paged.items[paged.items.length - 1].id}
-              onLoadMore={paged.loadMore}
-              hasMore={paged.hasMore}
-              isLoading={paged.loadingMore}
-            />
-          </LazyVStack>
-        )}
-      </VStack>
-    </RefreshableScrollView>
+    <VStack alignment="leading" spacing={10}>
+      <BookmarkTags tags={tags} activeTag={activeTag} onTagChange={setActiveTag} />
+      {paged.initialLoading ? (
+        <LoadingView />
+      ) : paged.error && paged.items.length === 0 ? (
+        <ErrorView message={paged.error} onRetry={paged.refresh} />
+      ) : paged.items.length === 0 ? (
+        <EmptyView text="还没有收藏小说" systemImage="book" />
+      ) : (
+        <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
+          {paged.items.map((novel) => (
+            <NovelCard key={novel.id} novel={novel} />
+          ))}
+          <LoadMoreTrigger
+            anchor={paged.items[paged.items.length - 1].id}
+            onLoadMore={paged.loadMore}
+            hasMore={paged.hasMore}
+            isLoading={paged.loadingMore}
+          />
+        </LazyVStack>
+      )}
+    </VStack>
   )
 }
 
