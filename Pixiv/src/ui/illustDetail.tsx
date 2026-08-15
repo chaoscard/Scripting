@@ -44,7 +44,7 @@ import {
   BookmarkDetailSheet,
   CachedImage,
   ErrorView,
-  MasonryIllustFeed,
+  IllustFlowFeed,
   formatDate,
   formatNumber,
   htmlToPlainText,
@@ -615,7 +615,7 @@ function RelatedIllustrationsSection(props: { illustID: number }) {
       <Text font="subheadline" fontWeight="semibold" padding={{ horizontal: 14 }}>
         相关作品
       </Text>
-      <MasonryIllustFeed
+      <IllustFlowFeed
         items={paged.items}
         onLoadMore={paged.loadMore}
         hasMore={paged.hasMore}

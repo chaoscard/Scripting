@@ -43,7 +43,7 @@ import {
   ErrorView,
   LoadingView,
   LoadMoreTrigger,
-  MasonryIllustFeed,
+  IllustFlowFeed,
   NovelCard,
   RefreshableScrollView,
   WatchlistSeriesCard,
@@ -248,7 +248,7 @@ function FollowingIllustrationFeed(props: {
       ) : paged.items.length === 0 ? (
         <EmptyView text="关注的人还没有新作品" systemImage="person.2" />
       ) : (
-        <MasonryIllustFeed
+        <IllustFlowFeed
           items={paged.items}
           onLoadMore={paged.loadMore}
           hasMore={paged.hasMore}
@@ -374,7 +374,7 @@ function FriendIllustrationFeed(props: {
       ) : paged.items.length === 0 ? (
         <EmptyView text="好友还没有新作品" systemImage="person.2" />
       ) : (
-        <MasonryIllustFeed
+        <IllustFlowFeed
           items={paged.items}
           onLoadMore={paged.loadMore}
           hasMore={paged.hasMore}

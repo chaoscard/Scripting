@@ -14,7 +14,7 @@ import {
 import {
   EmptyView,
   formatDate,
-  MasonryIllustFeed,
+  IllustFlowFeed,
   NovelCard,
   RefreshableScrollView,
 } from "./components"
@@ -219,7 +219,7 @@ function HistoryContent(props: { kind: HistoryKind; items: HistoryEntry[] }) {
       entry.kind === "illust"
   )
   return (
-    <MasonryIllustFeed
+    <IllustFlowFeed
       items={illustEntries.map((entry) => entry.illustration)}
       onLoadMore={() => {}}
       hasMore={false}

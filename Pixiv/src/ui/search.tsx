@@ -62,7 +62,7 @@ import {
   ErrorView,
   LoadingView,
   LoadMoreTrigger,
-  MasonryIllustFeed,
+  IllustFlowFeed,
   NovelCard,
   RefreshableScrollView,
 } from "./components"
@@ -551,7 +551,7 @@ function SearchIllustrationResults(props: {
 }) {
   return (
     <>
-      <MasonryIllustFeed
+      <IllustFlowFeed
         items={props.items}
         onLoadMore={props.onLoadMore}
         hasMore={props.hasMore}

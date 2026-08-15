@@ -1,8 +1,14 @@
 import {
+  Image,
   Navigation,
   NavigationStack,
+  ProgressView,
+  Spacer,
   Tab,
   TabView,
+  Text,
+  VStack,
+  ZStack,
   useEffect,
   useObservable,
   useState,
@@ -15,8 +21,38 @@ import { MoreView } from "./more"
 import { LoginView } from "./login"
 import { FollowFeedView } from "./followFeed"
 
+function LaunchExperienceView() {
+  return (
+    <ZStack
+      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+      background="systemBackground"
+    >
+      <VStack
+        alignment="center"
+        spacing={20}
+        frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+      >
+        <Spacer />
+        <VStack alignment="center" spacing={14}>
+          <Image
+            systemName="paintpalette.fill"
+            font="largeTitle"
+            foregroundStyle="#0096FA"
+          />
+          <Text font="title2" fontWeight="bold">
+            Pixiv
+          </Text>
+        </VStack>
+        <ProgressView progressViewStyle="circular" />
+        <Spacer />
+      </VStack>
+    </ZStack>
+  )
+}
+
 export function RootView() {
   const [loggedIn, setLoggedIn] = useState(session.isAuthenticated)
+  const [isReady, setIsReady] = useState(false)
 
   useEffect(() => {
     return session.onAuthChanged(() => {
@@ -24,7 +60,25 @@ export function RootView() {
     })
   }, [])
 
+  useEffect(() => {
+    let cancelled = false
+    // 冷启动过渡体验：保持合理的启动就绪缓冲，等待内部首屏视图就绪
+    const timer = setTimeout(() => {
+      if (!cancelled) {
+        setIsReady(true)
+      }
+    }, 500)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [])
+
   const dismiss = Navigation.useDismiss()
+  if (!isReady) {
+    return <LaunchExperienceView />
+  }
+
   return loggedIn ? (
     <MainTabView onClose={dismiss} />
   ) : (

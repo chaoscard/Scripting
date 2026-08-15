@@ -64,8 +64,9 @@ export const GRID_COLUMNS: GridItem[] = [
   { size: { type: "flexible", min: 120, max: "infinity" } },
   { size: { type: "flexible", min: 120, max: "infinity" } },
 ]
-// 瀑布流允许最长 1:4 的竖图保留原始比例；更极端的图片仍受此下限保护。
-const MIN_MASONRY_IMAGE_RATIO = 1 / 4
+// 流式布局允许最长 1:4 的竖图保留原始比例；更极端的图片仍受此下限保护。
+const MIN_FLOW_IMAGE_RATIO = 1 / 4
+const MAX_FLOW_IMAGE_RATIO = 2.5
 
 // 主页面共享工具栏工厂：挂载到各 Tab 的实际导航容器，详情页保留系统返回按钮。
 export function appToolbar(dismiss: () => void, title?: string, trailing?: any) {
@@ -182,8 +183,7 @@ export function RefreshableScrollView(props: {
 
 // 异步图片加载状态（CachedImage / AvatarImage 共用）：
 // cancelled 标志防止 url 切换后旧结果覆盖新状态
-// ratio = 图片真实宽高比（加载后从文件读取，避免容器比例不匹配导致图片变形）
-function useCachedImage(url: string | null, readIntrinsicRatio: boolean) {
+function useCachedImage(url: string | null) {
   const [cacheRevision, setCacheRevision] = useState(imageCacheRevision())
   const [loaded, setLoaded] = useState<{
     url: string | null
@@ -195,7 +195,6 @@ function useCachedImage(url: string | null, readIntrinsicRatio: boolean) {
     revision: cacheRevision,
   })
   const [failed, setFailed] = useState(false)
-  const [ratio, setRatio] = useState<number | null>(null)
   // 预取已写入磁盘的文件在首帧直接使用，避免 effect 调度前短暂显示加载圈。
   const cachedPath = useMemo(() => (url ? cachedFilePath(url) : null), [url, cacheRevision])
   const path = cachedPath ?? (
@@ -207,21 +206,11 @@ function useCachedImage(url: string | null, readIntrinsicRatio: boolean) {
   useEffect(() => {
     let cancelled = false
     setFailed(false)
-    setRatio(null)
     if (!url) {
       setLoaded({ url: null, path: null, revision: cacheRevision })
       return
     }
     if (cachedPath) {
-      if (readIntrinsicRatio) {
-        try {
-          const img = UIImage.fromFile(cachedPath)
-          if (img && img.width > 0 && img.height > 0) {
-            setRatio(img.width / img.height)
-          }
-        } catch {
-        }
-      }
       return () => {
         cancelled = true
       }
@@ -230,16 +219,7 @@ function useCachedImage(url: string | null, readIntrinsicRatio: boolean) {
       .then((p) => {
         if (!cancelled) {
           setLoaded({ url, path: p, revision: cacheRevision })
-          if (p && readIntrinsicRatio) {
-            try {
-              const img = UIImage.fromFile(p)
-              if (img && img.width > 0 && img.height > 0) {
-                setRatio(img.width / img.height)
-              }
-            } catch {
-              // 读取失败则回退调用方传入的占位比例
-            }
-          } else if (!p) {
+          if (!p) {
             setFailed(true)
           }
         }
@@ -253,12 +233,13 @@ function useCachedImage(url: string | null, readIntrinsicRatio: boolean) {
     return () => {
       cancelled = true
     }
-  }, [url, readIntrinsicRatio, cacheRevision, cachedPath])
+  }, [url, cacheRevision, cachedPath])
 
-  return { path, failed, ratio }
+  return { path, failed }
 }
 
-// 异步图片：从网络下载到本地缓存后显示
+// 异步图片（对标 Hanairo RemoteImageView 设计）：
+// 容器宽高比由元数据严格固定，加载过程与展示过程保持零布局重排（Zero Layout Shift）。
 export function CachedImage(props: {
   url: string | null
   aspectRatioValue?: number // 宽/高
@@ -274,10 +255,9 @@ export function CachedImage(props: {
     cornerRadius = 10,
     contentMode = "fill",
     centerCropSquare = false,
-    useIntrinsicAspectRatio = true,
     frame,
   } = props
-  const { path, failed, ratio } = useCachedImage(url, useIntrinsicAspectRatio)
+  const { path, failed } = useCachedImage(url)
   const centeredSquare = useMemo(() => {
     if (!path || !centerCropSquare) return null
     try {
@@ -307,15 +287,11 @@ export function CachedImage(props: {
         />
       )
     }
-    // 使用图片真实宽高比；具体裁切区域和位置由调用方容器决定。
-    const displayRatio = useIntrinsicAspectRatio
-      ? ratio ?? aspectRatioValue
-      : aspectRatioValue
     return (
       <Image
         filePath={path}
         resizable={true}
-        aspectRatio={{ value: displayRatio, contentMode }}
+        aspectRatio={{ value: aspectRatioValue, contentMode }}
         clipShape={{ type: "rect", cornerRadius }}
         frame={frame ?? { maxWidth: "infinity" }}
       />
@@ -337,7 +313,7 @@ export function CachedImage(props: {
           foregroundStyle="systemGray3"
         />
       ) : (
-        <ProgressView />
+        <ProgressView progressViewStyle="circular" />
       )}
     </ZStack>
   )
@@ -615,7 +591,7 @@ export function AvatarImage(props: {
   cornerRadius?: number
 }) {
   const { url, size = 36, cornerRadius = size / 2 } = props
-  const { path } = useCachedImage(url, false)
+  const { path } = useCachedImage(url)
 
   return (
     <ZStack
@@ -686,9 +662,8 @@ export function IllustCard(props: {
   const [bookmarked, setBookmarked] = useState(illust.is_bookmarked)
   const [bookmarkBusy, setBookmarkBusy] = useState(false)
   const [showBookmarkDetail, setShowBookmarkDetail] = useState(false)
-  const imageRatio = illust.width > 0 && illust.height > 0
-    ? Math.max(illust.width / illust.height, MIN_MASONRY_IMAGE_RATIO)
-    : 0.75
+  const rawRatio = illust.width > 0 && illust.height > 0 ? illust.width / illust.height : 0.75
+  const imageRatio = Math.min(Math.max(rawRatio, MIN_FLOW_IMAGE_RATIO), MAX_FLOW_IMAGE_RATIO)
 
   async function toggleBookmark() {
     if (bookmarkBusy) return
@@ -764,10 +739,9 @@ export function IllustCard(props: {
               >
                 <CachedImage
                   url={cardThumbUrlOf(illust)}
-                  aspectRatioValue={imageRatio}
+                  aspectRatioValue={flow ? imageRatio : 1}
                   contentMode={flow ? "fit" : "fill"}
                   centerCropSquare={!flow}
-                  useIntrinsicAspectRatio={!flow}
                   cornerRadius={10}
                 />
                 {illust.page_count > 1 ? (
@@ -899,9 +873,9 @@ export function IllustCard(props: {
 }
 
 
-// Hanairo 风格双列流式作品布局：按作品比例估算高度，将作品持续分配到较短列。
-// 卡片本身仍统一使用 IllustCard，图片覆盖按钮不在此组件内处理。
-type MasonryItem = {
+// 双列流式作品信息流：按作品比例估算高度，将作品持续分配到较短列。
+// 卡片本身统一使用 IllustCard。
+type IllustFlowItem = {
   illust: PixivIllustration
   index: number
 }
@@ -931,7 +905,7 @@ export function LoadMoreTrigger(props: {
   )
 }
 
-export function MasonryIllustFeed(props: {
+export function IllustFlowFeed(props: {
   items: PixivIllustration[]
   onLoadMore: (anchor: number | string) => void
   hasMore?: boolean
@@ -943,15 +917,22 @@ export function MasonryIllustFeed(props: {
     index: number,
   ) => IllustCardAction | undefined
 }) {
-  const [leading, trailing] = distributeMasonryItems(props.items)
-  const tail = props.items[props.items.length - 1]
+  const [leading, trailing] = distributeFlowItems(props.items)
+  const lastItem = props.items[props.items.length - 1]
+  const lastId = lastItem ? lastItem.id : null
 
-  function renderItem({ illust, index }: MasonryItem) {
+  function renderItem({ illust, index }: IllustFlowItem) {
+    const isLast = illust.id === lastId
     return (
       <IllustCard
         key={illust.id}
         illust={illust}
         flow={true}
+        onAppear={
+          isLast && (props.hasMore ?? true)
+            ? () => props.onLoadMore(illust.id)
+            : undefined
+        }
         cornerBadge={props.cornerBadgeOf?.(illust, index)}
         footerText={props.footerTextOf?.(illust, index)}
         topTrailingAction={props.topTrailingActionOf?.(illust, index)}
@@ -960,38 +941,40 @@ export function MasonryIllustFeed(props: {
   }
 
   return (
-    <HStack
-      alignment="top"
-      spacing={10}
-      padding={{ horizontal: 10 }}
-      frame={{ maxWidth: "infinity" }}
-    >
-      <LazyVStack alignment="leading" spacing={10} frame={{ minWidth: 0, maxWidth: "infinity" }}>
-        {leading.map(renderItem)}
-        {tail ? (
-          <LoadMoreTrigger
-            anchor={tail.id}
-            onLoadMore={props.onLoadMore}
-            hasMore={props.hasMore ?? true}
-            isLoading={props.isLoading}
-          />
-        ) : null}
-      </LazyVStack>
-      <LazyVStack alignment="leading" spacing={10} frame={{ minWidth: 0, maxWidth: "infinity" }}>
-        {trailing.map(renderItem)}
-      </LazyVStack>
-    </HStack>
+    <VStack spacing={12} frame={{ maxWidth: "infinity" }}>
+      <HStack
+        alignment="top"
+        spacing={10}
+        padding={{ horizontal: 10 }}
+        frame={{ maxWidth: "infinity" }}
+      >
+        <LazyVStack alignment="leading" spacing={10} frame={{ minWidth: 0, maxWidth: "infinity" }}>
+          {leading.map(renderItem)}
+        </LazyVStack>
+        <LazyVStack alignment="leading" spacing={10} frame={{ minWidth: 0, maxWidth: "infinity" }}>
+          {trailing.map(renderItem)}
+        </LazyVStack>
+      </HStack>
+      {props.isLoading ? (
+        <HStack spacing={0} frame={{ maxWidth: "infinity", height: 44 }}>
+          <Spacer />
+          <ProgressView progressViewStyle="circular" />
+          <Spacer />
+        </HStack>
+      ) : null}
+    </VStack>
   )
 }
 
-function distributeMasonryItems(
+function distributeFlowItems(
   items: PixivIllustration[]
-): [MasonryItem[], MasonryItem[]] {
-  const columns: [MasonryItem[], MasonryItem[]] = [[], []]
+): [IllustFlowItem[], IllustFlowItem[]] {
+  const columns: [IllustFlowItem[], IllustFlowItem[]] = [[], []]
   const heights = [0, 0]
   for (const [index, illust] of items.entries()) {
-    const ratio = illust.width > 0 && illust.height > 0 ? illust.width / illust.height : 0.75
-    const estimatedHeight = 1 / Math.max(ratio, MIN_MASONRY_IMAGE_RATIO) + 0.4
+    const rawRatio = illust.width > 0 && illust.height > 0 ? illust.width / illust.height : 0.75
+    const ratio = Math.min(Math.max(rawRatio, MIN_FLOW_IMAGE_RATIO), MAX_FLOW_IMAGE_RATIO)
+    const estimatedHeight = 1 / ratio + 0.34
     const column = heights[0] <= heights[1] ? 0 : 1
     columns[column].push({ illust, index })
     heights[column] += estimatedHeight

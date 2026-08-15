@@ -29,7 +29,7 @@ import {
   ErrorView,
   LoadingView,
   LoadMoreTrigger,
-  MasonryIllustFeed,
+  IllustFlowFeed,
   NovelCard,
   RefreshableScrollView,
 } from "./components"
@@ -114,7 +114,7 @@ export function UserBookmarksView(props: { userID: number }) {
             ) : illustPaged.items.length === 0 ? (
               <EmptyView text="暂无公开收藏作品" systemImage="heart" />
             ) : (
-              <MasonryIllustFeed
+              <IllustFlowFeed
                 items={illustPaged.items}
                 onLoadMore={illustPaged.loadMore}
                 hasMore={illustPaged.hasMore}

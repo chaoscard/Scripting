@@ -51,7 +51,7 @@ import {
   LinkedDescription,
   LoadingView,
   LoadMoreTrigger,
-  MasonryIllustFeed,
+  IllustFlowFeed,
   NovelCard,
   RefreshableScrollView,
 } from "./components"
@@ -333,7 +333,7 @@ function UserIllustSection(props: {
     return <EmptyView text={emptyText} />
   }
   return (
-    <MasonryIllustFeed
+    <IllustFlowFeed
       items={paged.items}
       onLoadMore={paged.loadMore}
       hasMore={paged.hasMore}

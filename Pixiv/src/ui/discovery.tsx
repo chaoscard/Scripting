@@ -42,7 +42,7 @@ import {
   ErrorView,
   LoadingView,
   LoadMoreTrigger,
-  MasonryIllustFeed,
+  IllustFlowFeed,
   NovelCard,
   RefreshableScrollView,
   VisionCard,
@@ -204,7 +204,7 @@ function IllustFeed(props: {
       ) : paged.items.length === 0 ? (
         <EmptyView text={`暂无${label}，下拉刷新试试`} />
       ) : (
-        <MasonryIllustFeed
+        <IllustFlowFeed
           items={paged.items}
           onLoadMore={paged.loadMore}
           hasMore={paged.hasMore}

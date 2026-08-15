@@ -22,7 +22,7 @@ import {
   ImageNumberBadge,
   LoadingView,
   LoadMoreTrigger,
-  MasonryIllustFeed,
+  IllustFlowFeed,
   NovelCard,
   RefreshableScrollView,
 } from "./components"
@@ -176,7 +176,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
               )}
             </>
           ) : (
-            <MasonryIllustFeed
+            <IllustFlowFeed
               items={items}
               onLoadMore={loadMore}
               hasMore={nextURL != null}

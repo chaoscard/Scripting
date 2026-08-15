@@ -36,7 +36,7 @@ import {
   ErrorView,
   LoadingView,
   LoadMoreTrigger,
-  MasonryIllustFeed,
+  IllustFlowFeed,
   NovelCard,
   RefreshableScrollView,
 } from "./components"
@@ -213,7 +213,7 @@ function IllustrationLibraryFeed(props: {
       ) : paged.items.length === 0 ? (
         <EmptyView text="暂无收藏作品" systemImage="heart" />
       ) : (
-        <MasonryIllustFeed
+        <IllustFlowFeed
           items={paged.items}
           onLoadMore={paged.loadMore}
           hasMore={paged.hasMore}

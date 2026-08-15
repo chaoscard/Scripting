@@ -310,6 +310,7 @@ export function usePagedList<T extends { id: number | string }>(
 
   // 触底时优先发布当前服务端页的本地缓冲；缓冲耗尽后才请求下一页。
   // anchor 为触发者的稳定尾项 ID，同一尾项只允许推进一次，避免多个 onAppear 跳批。
+  // 增加平滑加载缓冲时间，配合 iOS 橡皮筋阻尼回弹，确保展开新批次前视觉稳定。
   const loadMore = useCallback(async (anchor?: number | string) => {
     if (!enabledRef.current) return
     const tail = itemsRef.current[itemsRef.current.length - 1]
@@ -320,10 +321,26 @@ export function usePagedList<T extends { id: number | string }>(
 
     const pending = pendingItemsRef.current
     if (pending.length > 0) {
-      const nextBatch = pending.slice(0, UI_BATCH_SIZE)
-      setItems((current) => mergeUniqueByID(current, nextBatch))
-      setPendingItems(pending.slice(UI_BATCH_SIZE))
-      notifyBatchPublished(nextBatch, pending.slice(UI_BATCH_SIZE))
+      if (loadingMoreTaskRef.current) return
+      const task = { id: ++moreTaskIDRef.current, seq: seqRef.current, url: "pending" }
+      loadingMoreTaskRef.current = task
+      setLoadingMore(true)
+      try {
+        // 缓冲 400ms：确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
+        await new Promise((resolve) => {
+          setTimeout(() => resolve(undefined), 400)
+        })
+        if (loadingMoreTaskRef.current !== task || !enabledRef.current) return
+        const nextBatch = pending.slice(0, UI_BATCH_SIZE)
+        setItems((current) => mergeUniqueByID(current, nextBatch))
+        setPendingItems(pending.slice(UI_BATCH_SIZE))
+        notifyBatchPublished(nextBatch, pending.slice(UI_BATCH_SIZE))
+      } finally {
+        if (loadingMoreTaskRef.current === task) {
+          loadingMoreTaskRef.current = null
+          setLoadingMore(false)
+        }
+      }
       return
     }
 
@@ -336,7 +353,13 @@ export function usePagedList<T extends { id: number | string }>(
     loadingMoreTaskRef.current = task
     setLoadingMore(true)
     try {
-      const page = await session.call((token) => moreFn(url, token))
+      const [page] = await Promise.all([
+        session.call((token) => moreFn(url, token)),
+        // 保证至少有 450ms 的平滑转圈反馈时间
+        new Promise((resolve) => {
+          setTimeout(() => resolve(undefined), 450)
+        }),
+      ])
       if (
         seq !== seqRef.current ||
         activation !== activationRef.current ||

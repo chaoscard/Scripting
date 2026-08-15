@@ -25,10 +25,8 @@ import type { PixivIllustration } from "../types"
 import {
   EmptyView,
   ErrorView,
-  GRID_COLUMNS,
-  IllustCard,
   LoadingView,
-  LoadMoreTrigger,
+  IllustFlowFeed,
   RefreshableScrollView,
 } from "./components"
 
@@ -119,17 +117,12 @@ export function TagFeedView(props: { tag: string }) {
         ) : paged.items.length === 0 ? (
           <EmptyView text="该标签下暂无作品" />
         ) : (
-          <LazyVGrid columns={GRID_COLUMNS} spacing={10} alignment="leading">
-            {paged.items.map((illust) => (
-              <IllustCard key={illust.id} illust={illust} />
-            ))}
-            <LoadMoreTrigger
-              anchor={paged.items[paged.items.length - 1].id}
-              onLoadMore={paged.loadMore}
-              hasMore={paged.hasMore}
-              isLoading={paged.loadingMore}
-            />
-          </LazyVGrid>
+          <IllustFlowFeed
+            items={paged.items}
+            onLoadMore={paged.loadMore}
+            hasMore={paged.hasMore}
+            isLoading={paged.loadingMore}
+          />
         )}
       </VStack>
     </RefreshableScrollView>
