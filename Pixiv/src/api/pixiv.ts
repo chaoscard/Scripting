@@ -1106,24 +1106,33 @@ export async function removeNovelBookmark(
 
 // ---------- 通知 ----------
 
+export interface PixivNotificationContent {
+  text: string
+  left_icon: string | null
+  left_image: string | null
+  right_icon: string | null
+  right_image: string | null
+}
+
+export interface PixivNotificationViewMore {
+  unread_exists: boolean
+  title: string
+}
+
 export interface PixivNotification {
   id: number
-  type: string
-  user?: PixivUserPreview["user"]
-  illust?: PixivIllustration
-  novel?: PixivNovel
-  comment?: PixivComment
-  created_at: string
+  created_datetime: string
+  type: number
+  content: PixivNotificationContent
+  view_more: PixivNotificationViewMore | null
+  target_url: string
+  is_read: boolean
 }
 
 export async function notifications(
   accessToken: string
 ): Promise<{ items: PixivNotification[]; nextURL: string | null }> {
-  const json = await apiGet(
-    "/v1/notification",
-    { recent_interaction_type: "illust_followed" },
-    accessToken
-  )
+  const json = await apiGet("/v1/notification/list", {}, accessToken)
   return {
     items: json?.notifications ?? [],
     nextURL: json?.next_url ?? null,
@@ -1135,6 +1144,21 @@ export async function nextNotifications(
   accessToken: string
 ): Promise<{ items: PixivNotification[]; nextURL: string | null }> {
   const json = await apiGetAbsolute(nextURL, accessToken)
+  return {
+    items: json?.notifications ?? [],
+    nextURL: json?.next_url ?? null,
+  }
+}
+
+export async function notificationViewMore(
+  notificationID: number,
+  accessToken: string
+): Promise<{ items: PixivNotification[]; nextURL: string | null }> {
+  const json = await apiGet(
+    "/v1/notification/view-more",
+    { notification_id: String(notificationID) },
+    accessToken
+  )
   return {
     items: json?.notifications ?? [],
     nextURL: json?.next_url ?? null,

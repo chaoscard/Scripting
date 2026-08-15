@@ -1,6 +1,7 @@
 import {
   Button,
   Divider,
+  Group,
   HStack,
   LongPressGesture,
   Image,
@@ -10,11 +11,9 @@ import {
   ScrollView,
   Text,
   useEffect,
-  useMemo,
   useRef,
   useState,
   VStack,
-  WebView,
 } from "scripting"
 import {
   addBookmark,
@@ -37,6 +36,7 @@ import {
   onSettingsChanged,
 } from "../store/settings"
 import { recordHistory, updateHistoryBookmark } from "../store/history"
+import { onUserFollowChanged } from "../store/userFollow"
 import { useAsyncGuard, useLatest, usePagedList } from "./hooks"
 import type { PixivIllustration } from "../types"
 import {
@@ -48,12 +48,14 @@ import {
   formatDate,
   formatNumber,
   htmlToPlainText,
+  LinkedDescription,
   LoadingView,
   TagChip,
 } from "./components"
 import { CommentsSheet } from "./comments"
 import { UgoiraPlayerView } from "./ugoiraView"
 import { buildUgoira } from "../ugoira/ugoira"
+import { renderDestination } from "./routes"
 
 const RESTRICTED_CONTENT_MESSAGE = "该作品已被内容分级设置隐藏"
 
@@ -145,6 +147,14 @@ export function IllustDetailView(props: { illustID: number }) {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [illustID])
+
+  useEffect(() => {
+    return onUserFollowChanged((changedUserID, nextFollowed) => {
+      if (changedUserID === illustRef.current?.user.id) {
+        setFollowed(nextFollowed)
+      }
+    })
+  }, [])
 
   // 设置变化时更新图片质量；关闭 R18 后立即撤下已打开的受限内容。
   useEffect(() => {
@@ -283,17 +293,29 @@ export function IllustDetailView(props: { illustID: number }) {
     }
   }
 
-  async function toggleFollow() {
+  async function followWithVisibility(restrict: "public" | "private") {
     if (followLoading) return
     setFollowLoading(true)
     try {
-      if (followed) {
-        await session.call((token) => unfollowUser(current.user.id, token))
-        setFollowed(false)
-      } else {
-        await session.call((token) => followUser(current.user.id, "public", token))
-        setFollowed(true)
-      }
+      await session.call((token) => followUser(current.user.id, restrict, token))
+      setFollowed(true)
+    } catch {
+      // ignore
+    } finally {
+      setFollowLoading(false)
+    }
+  }
+
+  async function toggleFollow() {
+    if (followLoading) return
+    if (!followed) {
+      await followWithVisibility("public")
+      return
+    }
+    setFollowLoading(true)
+    try {
+      await session.call((token) => unfollowUser(current.user.id, token))
+      setFollowed(false)
     } catch {
       // ignore
     } finally {
@@ -331,6 +353,30 @@ export function IllustDetailView(props: { illustID: number }) {
               foregroundStyle={bookmarked ? "#FF375F" : undefined}
             />
           </Button>,
+          <Button
+            buttonStyle="glass"
+            frame={{ width: 30, height: 30 }}
+            clipShape={{ type: "rect", cornerRadius: 15 }}
+            contentShape="rect"
+            disabled={followLoading}
+            action={toggleFollow}
+            contextMenu={{
+              menuItems: (
+                <Group>
+                  <Button
+                    title={followed ? "设为私密关注" : "私密关注"}
+                    systemImage="lock"
+                    disabled={followLoading}
+                    action={() => void followWithVisibility("private")}
+                  />
+                </Group>
+              ),
+            }}
+          >
+            <Image
+              systemName={followed ? "person.fill.checkmark" : "person.badge.plus"}
+            />
+          </Button>,
           <Menu
             label={<Image systemName="ellipsis.circle" />}
             buttonStyle="glass"
@@ -342,12 +388,6 @@ export function IllustDetailView(props: { illustID: number }) {
               title="评论"
               systemImage="bubble.left"
               action={() => setShowComments(true)}
-            />
-            <Button
-              title={followed ? "取消关注" : "关注"}
-              systemImage={followed ? "person.fill.checkmark" : "person.badge.plus"}
-              disabled={followLoading}
-              action={toggleFollow}
             />
             <Button
               title="下载"
@@ -475,7 +515,10 @@ export function IllustDetailView(props: { illustID: number }) {
               <Text font="subheadline" fontWeight="semibold">
                 简介
               </Text>
-              <SelectableCaption text={htmlToPlainText(current.caption)} />
+              <LinkedDescription
+                html={current.caption}
+                routeDestination={renderDestination}
+              />
             </VStack>
           ) : null}
 
@@ -542,70 +585,6 @@ export function IllustDetailView(props: { illustID: number }) {
       />
     </ScrollView>
   )
-}
-
-function SelectableCaption(props: { text: string }) {
-  const controller = useMemo(() => new WebViewController({ ephemeral: true }), [])
-  const [height, setHeight] = useState(24)
-
-  useEffect(() => {
-    let active = true
-    const html = selectableCaptionHTML(props.text)
-    void controller
-      .loadHTML(html)
-      .then(async () => {
-        const contentHeight = await controller.evaluateJavaScript<number>(
-          "return Math.ceil(document.documentElement.scrollHeight)"
-        )
-        if (active) setHeight(Math.max(24, contentHeight))
-      })
-      .catch(() => {})
-    return () => {
-      active = false
-    }
-  }, [controller, props.text])
-
-  useEffect(() => {
-    return () => controller.dispose()
-  }, [controller])
-
-  return (
-    <WebView
-      controller={controller}
-      frame={{ maxWidth: "infinity", height }}
-      padding={{ bottom: 4 }}
-    />
-  )
-}
-
-function selectableCaptionHTML(text: string): string {
-  const escaped = text
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;")
-
-  return `<!doctype html>
-<html>
-<head>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<style>
-  :root { color-scheme: light dark; }
-  html, body { margin: 0; padding: 0; background: transparent; }
-  body {
-    color: #8E8E93;
-    font: -apple-system-footnote;
-    line-height: 1.35;
-    white-space: pre-wrap;
-    overflow: hidden;
-    -webkit-user-select: text;
-    user-select: text;
-  }
-</style>
-</head>
-<body>${escaped}</body>
-</html>`
 }
 
 function RelatedIllustrationsSection(props: { illustID: number }) {

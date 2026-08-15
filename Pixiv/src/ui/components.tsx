@@ -1,5 +1,6 @@
 import {
   Button,
+  FlowLayout,
   Group,
   HStack,
   Image,
@@ -14,6 +15,7 @@ import {
   Text,
   TextField,
   Toggle,
+  WebView,
   useCallback,
   useEffect,
   useMemo,
@@ -1381,13 +1383,380 @@ const HTML_ENTITIES: Record<string, string> = {
 // 清洗后以纯文本展示（与 Hanairo 的 TextSanitizer 行为一致）。
 // 顺序：先剥离标签，后解码实体（&lt;b&gt; 应显示为字面 <b> 文本）
 export function htmlToPlainText(html: string | undefined | null): string {
+  return htmlFragmentToPlainText(html).trim()
+}
+
+function htmlFragmentToPlainText(html: string | undefined | null): string {
   if (!html) return ""
   return html
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<\/p>/gi, "\n")
     .replace(/<[^>]+>/g, "")
     .replace(/&(#39|amp|lt|gt|quot|nbsp);/g, (m, name: string) => HTML_ENTITIES[name] ?? m)
+}
+
+export function LinkedDescription(props: {
+  html: string
+  routeDestination: (route: string) => any
+}) {
+  const segments = useMemo(() => descriptionSegments(props.html), [props.html])
+  const lines = useMemo(() => descriptionLines(segments), [segments])
+  const blocks = useMemo(() => descriptionBlocks(lines), [lines])
+  return (
+    <VStack
+      alignment="leading"
+      spacing={2}
+      safeAreaPadding={{ trailing: true }}
+      frame={{ maxWidth: "infinity" }}
+    >
+      {blocks.map((block, index) =>
+        block.kind === "text" ? (
+          <SelectableDescriptionText key={`text-${index}`} text={block.text} />
+        ) : (
+          <DescriptionLine
+            key={`line-${index}`}
+            segments={block.segments}
+            routeDestination={props.routeDestination}
+          />
+        )
+      )}
+    </VStack>
+  )
+}
+
+function DescriptionLine(props: {
+  segments: DescriptionSegment[]
+  routeDestination: (route: string) => any
+}) {
+  const views: any[] = []
+  let inlineSegments: DescriptionSegment[] = []
+
+  const flushInline = () => {
+    if (inlineSegments.length === 0) return
+    views.push(
+      <FlowLayout
+        key={`inline-${views.length}`}
+        horizontalSpacing={0}
+        verticalSpacing={0}
+        frame={{ maxWidth: "infinity", alignment: "leading" }}
+      >
+        {inlineSegments.map((segment, index) => (
+          <DescriptionInlineItem
+            key={index}
+            segment={segment}
+            routeDestination={props.routeDestination}
+          />
+        ))}
+      </FlowLayout>
+    )
+    inlineSegments = []
+  }
+
+  for (const segment of props.segments) {
+    const target =
+      routeForDescriptionLink(segment.href) ??
+      routeForDescriptionLink(segment.label)
+    if (target?.startsWith("http")) {
+      flushInline()
+      views.push(
+        <ExternalDescriptionLink
+          key={`external-${views.length}`}
+          label={segment.label || segment.href}
+          url={target}
+        />
+      )
+    } else {
+      inlineSegments.push(segment)
+    }
+  }
+  flushInline()
+
+  return (
+    <VStack alignment="leading" spacing={0} frame={{ maxWidth: "infinity" }}>
+      {views}
+    </VStack>
+  )
+}
+
+function DescriptionInlineItem(props: {
+  segment: DescriptionSegment
+  routeDestination: (route: string) => any
+}) {
+  const target =
+    routeForDescriptionLink(props.segment.href) ??
+    routeForDescriptionLink(props.segment.label)
+  const content = props.segment.label || props.segment.href
+  if (!target) {
+    return (
+      <Text
+        font="footnote"
+        foregroundStyle="secondaryLabel"
+        textSelection={true}
+      >
+        {content}
+      </Text>
+    )
+  }
+  const destination = props.routeDestination(target)
+  return (
+    <NavigationLink destination={destination}>
+      <Text font="footnote" foregroundStyle="#007AFF" underline="#007AFF">
+        {content}
+      </Text>
+    </NavigationLink>
+  )
+}
+
+function ExternalDescriptionLink(props: { label: string; url: string }) {
+  return (
+    <Button
+      buttonStyle="plain"
+      action={() => void Safari.present(props.url)}
+      frame={{ maxWidth: "infinity", alignment: "leading" }}
+    >
+      <Text
+        font="footnote"
+        foregroundStyle="#007AFF"
+        underline="#007AFF"
+        multilineTextAlignment="leading"
+        fixedSize={{ horizontal: false, vertical: true }}
+        frame={{ maxWidth: "infinity", alignment: "leading" }}
+      >
+        {props.label}
+      </Text>
+    </Button>
+  )
+}
+
+type DescriptionBlock =
+  | { kind: "text"; text: string }
+  | { kind: "line"; segments: DescriptionSegment[] }
+
+function descriptionBlocks(lines: DescriptionSegment[][]): DescriptionBlock[] {
+  const blocks: DescriptionBlock[] = []
+  let textLines: string[] = []
+  const flushText = () => {
+    if (textLines.length > 0) {
+      blocks.push({ kind: "text", text: textLines.join("\n") })
+      textLines = []
+    }
+  }
+
+  for (const line of lines) {
+    const hasLink = line.some((segment) => {
+      const target =
+        routeForDescriptionLink(segment.href) ??
+        routeForDescriptionLink(segment.label)
+      return target != null
+    })
+    if (hasLink) {
+      flushText()
+      blocks.push({ kind: "line", segments: line })
+    } else {
+      textLines.push(line.map((segment) => segment.label).join(""))
+    }
+  }
+  flushText()
+  return blocks
+}
+
+function SelectableDescriptionText(props: { text: string }) {
+  const controller = useMemo(() => new WebViewController({ ephemeral: true }), [])
+  const [height, setHeight] = useState(24)
+
+  useEffect(() => {
+    let active = true
+    void controller
+      .loadHTML(selectableDescriptionHTML(props.text))
+      .then(async () => {
+        const contentHeight = await controller.evaluateJavaScript<number>(
+          "return Math.ceil(document.documentElement.scrollHeight)"
+        )
+        if (active) setHeight(Math.max(24, contentHeight))
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [controller, props.text])
+
+  useEffect(() => {
+    return () => controller.dispose()
+  }, [controller])
+
+  return (
+    <WebView
+      controller={controller}
+      frame={{ maxWidth: "infinity", height }}
+    />
+  )
+}
+
+function selectableDescriptionHTML(text: string): string {
+  const escaped = text
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;")
+
+  return `<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<style>
+  :root { color-scheme: light dark; }
+  html, body { margin: 0; padding: 0; background: transparent; }
+  body {
+    color: #8E8E93;
+    font: -apple-system-footnote;
+    line-height: 1.35;
+    white-space: pre-wrap;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    -webkit-user-select: text;
+    user-select: text;
+  }
+</style>
+</head>
+<body>${escaped}</body>
+</html>`
+}
+
+type DescriptionSegment = { label: string; href: string }
+
+function descriptionLines(
+  segments: DescriptionSegment[]
+): DescriptionSegment[][] {
+  const lines: DescriptionSegment[][] = [[]]
+  for (const segment of segments) {
+    const parts = segment.label.split("\n")
+    for (let index = 0; index < parts.length; index++) {
+      if (parts[index]) {
+        lines[lines.length - 1].push({ ...segment, label: parts[index] })
+      }
+      if (index < parts.length - 1) lines.push([])
+    }
+  }
+  return lines.filter((line) => line.length > 0)
+}
+
+function descriptionSegments(html: string): DescriptionSegment[] {
+  const prepared = html
+    .replace(/<br\s*\/?>(?:\r?\n)?/gi, "\n")
+    .replace(/<\/(div|p|li|h[1-6])>/gi, "\n")
+  const segments: DescriptionSegment[] = []
+  const anchorPattern = /<a\b[^>]*\bhref\s*=\s*(["'])(.*?)\1[^>]*>([\s\S]*?)<\/a\s*>/gi
+  let cursor = 0
+  let match: RegExpExecArray | null
+  while ((match = anchorPattern.exec(prepared)) != null) {
+    appendDescriptionTextSegments(
+      segments,
+      htmlFragmentToPlainText(prepared.slice(cursor, match.index))
+    )
+    const href = decodeDescriptionLink(match[2])
+    const label = htmlToPlainText(match[3]) || href
+    segments.push({ label, href })
+    cursor = match.index + match[0].length
+  }
+  appendDescriptionTextSegments(segments, htmlFragmentToPlainText(prepared.slice(cursor)))
+  return segments.filter((segment) => segment.label.length > 0)
+}
+
+function appendDescriptionTextSegments(
+  segments: DescriptionSegment[],
+  text: string
+) {
+  const lines = text.split(/(\n+)/)
+  for (const line of lines) {
+    const target = routeForDescriptionLink(line)
+    if (target && !target.startsWith("http")) {
+      const label = line.trim()
+      if (label) segments.push({ label, href: label })
+      continue
+    }
+    appendInlineDescriptionSegments(segments, line)
+  }
+}
+
+function appendInlineDescriptionSegments(
+  segments: DescriptionSegment[],
+  text: string
+) {
+  const pattern = /(?:https?:\/\/|www\.)[^\s<>]+|(?:https?:\/\/)?(?:www\.)?pixiv\.net\/(?:users?|user|artworks|novels)(?:\/[^\s<>]*)?|\/?(?:users?|user|artworks|novels)\/\d+(?:[/?#][^\s<>]*)?|(?:pixiv\.net\/|\/)?novel\/show\.php\?id=\d+|\b(?:uid|pid|nid)\s*[:：#=]?\s*\d+\b/gi
+  let cursor = 0
+  let match: RegExpExecArray | null
+  while ((match = pattern.exec(text)) != null) {
+    appendPlainDescriptionSegment(segments, text.slice(cursor, match.index))
+    const raw = match[0]
+    const link = raw.replace(/[),.，。！!？?;；]+$/, "")
+    if (link) segments.push({ label: link, href: link })
+    appendPlainDescriptionSegment(segments, raw.slice(link.length))
+    cursor = match.index + raw.length
+  }
+  appendPlainDescriptionSegment(segments, text.slice(cursor))
+}
+
+function appendPlainDescriptionSegment(segments: DescriptionSegment[], text: string) {
+  if (!text) return
+  const previous = segments[segments.length - 1]
+  if (previous && previous.href === "") {
+    previous.label += text
+  } else {
+    segments.push({ label: text, href: "" })
+  }
+}
+
+function routeForDescriptionLink(value: string): string | null {
+  const decoded = decodeDescriptionLink(value)
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(/／/g, "/")
     .trim()
+  if (!decoded) return null
+
+  const embeddedRoute = decoded.match(/^pixiv:\/\/(users?|user|artworks|novels)\/(\d+)$/i)
+  if (embeddedRoute) {
+    if (/^user/i.test(embeddedRoute[1])) return `user:${embeddedRoute[2]}`
+    if (/^novel/i.test(embeddedRoute[1])) return `novel:${embeddedRoute[2]}`
+    return `illust:${embeddedRoute[2]}`
+  }
+
+  const hasURLScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(decoded)
+  const isPixivURL = /^(?:https?:\/\/)?(?:www\.)?pixiv\.net(?:\/|$)/i.test(decoded)
+  const pathMatch = decoded.match(
+    /(?:^|\/)(users?|user|artworks|novels)\/(\d+)(?:[/?#].*)?$/i
+  )
+  if (pathMatch && (!hasURLScheme || isPixivURL)) {
+    const id = Number(pathMatch[2])
+    if (!Number.isFinite(id) || id <= 0) return null
+    if (/^user/i.test(pathMatch[1])) return `user:${id}`
+    if (/^novel/i.test(pathMatch[1])) return `novel:${id}`
+    return `illust:${id}`
+  }
+
+  const novelShow = decoded.match(
+    /^(?:https?:\/\/)?(?:www\.)?pixiv\.net\/(?:en\/)?novel\/show\.php\?[^#]*\bid=(\d+)/i
+  ) ?? decoded.match(
+    /^\/?(?:en\/)?novel\/show\.php\?[^#]*\bid=(\d+)/i
+  )
+  if (novelShow) return `novel:${novelShow[1]}`
+
+  const idReference = decoded.match(/(?:^|\s)(uid|pid|nid)\s*[:：#=]?\s*(\d+)(?:\s|$)/i)
+  if (idReference) {
+    if (idReference[1].toLowerCase() === "uid") return `user:${idReference[2]}`
+    if (idReference[1].toLowerCase() === "nid") return `novel:${idReference[2]}`
+    return `illust:${idReference[2]}`
+  }
+  if (/^www\./i.test(decoded)) return `https://${decoded}`
+  if (/^https?:\/\//i.test(decoded)) return decoded
+  return null
+}
+
+function decodeDescriptionLink(value: string): string {
+  return value.replace(
+    /&(#39|amp|lt|gt|quot|nbsp);/g,
+    (match, name: string) => HTML_ENTITIES[name] ?? match
+  )
 }
 
 export function formatDate(iso: string | undefined | null): string {

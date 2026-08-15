@@ -39,6 +39,7 @@ import {
   unblockUser,
 } from "../store/settings"
 import { onUserFollowChanged } from "../store/userFollow"
+import { renderDestination } from "./routes"
 import { useAsyncGuard, useLatest, usePagedList } from "./hooks"
 import type { PixivIllustration, PixivNovel, PixivUserDetail } from "../types"
 import {
@@ -49,6 +50,7 @@ import {
   formatNumber,
   htmlToPlainText,
   LoadingView,
+  LinkedDescription,
   LoadMoreTrigger,
   MasonryIllustFeed,
   NovelCard,
@@ -111,18 +113,38 @@ export function UserDetailView(props: { userID: number }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userID])
 
-  async function toggleFollow() {
+  async function followWithVisibility(restrict: "public" | "private") {
     if (followBusy || isOwnProfile) return
     const followStateVersion = ++followStateVersionRef.current
     setFollowBusy(true)
     try {
-      if (followed) {
-        await session.call((token) => unfollowUser(userID, token))
-      } else {
-        await session.call((token) => followUser(userID, "public", token))
-      }
+      await session.call((token) => followUser(userID, restrict, token))
       if (followStateVersion === followStateVersionRef.current) {
-        setFollowed(!followed)
+        setFollowed(true)
+      }
+    } catch {
+      // Keep the current UI state when the request fails.
+    } finally {
+      // 让写入期间发起的详情/补查结果失效，避免覆盖刚完成的操作。
+      if (followStateVersion === followStateVersionRef.current) {
+        followStateVersionRef.current++
+      }
+      setFollowBusy(false)
+    }
+  }
+
+  async function toggleFollow() {
+    if (followBusy || isOwnProfile) return
+    if (!followed) {
+      await followWithVisibility("public")
+      return
+    }
+    const followStateVersion = ++followStateVersionRef.current
+    setFollowBusy(true)
+    try {
+      await session.call((token) => unfollowUser(userID, token))
+      if (followStateVersion === followStateVersionRef.current) {
+        setFollowed(false)
       }
     } catch {
       // Keep the current UI state when the request fails.
@@ -169,6 +191,18 @@ export function UserDetailView(props: { userID: number }) {
               clipShape={{ type: "rect", cornerRadius: 16 }}
               contentShape="rect"
               action={toggleFollow}
+              contextMenu={{
+                menuItems: (
+                  <Group>
+                    <Button
+                      title={followed ? "设为私密关注" : "私密关注"}
+                      systemImage="lock"
+                      disabled={followBusy}
+                      action={() => void followWithVisibility("private")}
+                    />
+                  </Group>
+                ),
+              }}
             />,
           ] : []),
           <Menu label={<Image systemName="ellipsis.circle" />}>
@@ -407,9 +441,10 @@ function UserProfileHeader(props: { detail: PixivUserDetail }) {
             关于
           </Text>
           {user.comment ? (
-            <Text font="footnote" foregroundStyle="secondaryLabel">
-              {htmlToPlainText(user.comment)}
-            </Text>
+            <LinkedDescription
+              html={user.comment}
+              routeDestination={renderDestination}
+            />
           ) : (
             <Text font="footnote" foregroundStyle="secondaryLabel">
               该用户尚未填写简介

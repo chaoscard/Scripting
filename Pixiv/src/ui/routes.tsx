@@ -10,7 +10,7 @@ import { TagFeedView } from "./tagFeed"
 import { NovelLibraryView } from "./novelLibrary"
 import { LibraryView } from "./library"
 import { HistoryView } from "./history"
-import { NotificationsView } from "./notifications"
+import { NotificationViewMoreView, NotificationsView } from "./notifications"
 import { BlockedSettingsView } from "./blockedSettings"
 import { SettingsView } from "./settings"
 import { SeriesView } from "./seriesView"
@@ -65,6 +65,10 @@ export function renderDestination(page: string) {
   if (page === "library") return <LibraryView />
   if (page === "history") return <HistoryView />
   if (page === "notifications") return <NotificationsView />
+  if (page.startsWith("notificationsMore:")) {
+    const id = parseID(page, "notificationsMore:")
+    if (id != null) return <NotificationViewMoreView notificationID={id} />
+  }
   if (page.startsWith("userBookmarks:")) {
     const id = parseID(page, "userBookmarks:")
     if (id != null) return <UserBookmarksView userID={id} />
