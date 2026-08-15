@@ -30,7 +30,7 @@ import {
   onSettingsChanged,
 } from "../store/settings"
 import { destinationElement } from "./routes"
-import { useLatest, usePagedList, useRetainedKeys } from "./hooks"
+import { useLatest, usePagedList } from "./hooks"
 import type {
   PixivIllustration,
   PixivNovel,
@@ -56,10 +56,9 @@ type IllustrationKind = Exclude<FeedKind, "novel">
 export function DiscoveryView(props: { onClose: () => void }) {
   const [mode, setMode] = useState<ExploreMode>("recommended")
   const [kind, setKind] = useState<FeedKind>("illustration")
-  const activeKey = `${mode}:${mode === "vision" ? "vision" : kind}`
-  const retainedKeys = useRetainedKeys(activeKey, 2)
 
-  // 七个流保持挂载，切换时不销毁分页状态或原生 ScrollView 的浏览位置。
+  // 七个流完全常驻挂载，切换时仅切换原生 hidden 属性，
+  // 零销毁、零重建、零重复布局，实现毫秒级秒切。
   return (
     <VStack
       alignment="leading"
@@ -76,39 +75,32 @@ export function DiscoveryView(props: { onClose: () => void }) {
           mode="recommended"
           kind="illustration"
           active={mode === "recommended" && kind === "illustration"}
-          retained={retainedKeys.has("recommended:illustration")}
         />
         <IllustFeed
           mode="recommended"
           kind="manga"
           active={mode === "recommended" && kind === "manga"}
-          retained={retainedKeys.has("recommended:manga")}
         />
         <NovelFeed
           mode="recommended"
           active={mode === "recommended" && kind === "novel"}
-          retained={retainedKeys.has("recommended:novel")}
         />
         <IllustFeed
           mode="latest"
           kind="illustration"
           active={mode === "latest" && kind === "illustration"}
-          retained={retainedKeys.has("latest:illustration")}
         />
         <IllustFeed
           mode="latest"
           kind="manga"
           active={mode === "latest" && kind === "manga"}
-          retained={retainedKeys.has("latest:manga")}
         />
         <NovelFeed
           mode="latest"
           active={mode === "latest" && kind === "novel"}
-          retained={retainedKeys.has("latest:novel")}
         />
         <VisionFeed
           active={mode === "vision"}
-          retained={retainedKeys.has("vision:vision")}
         />
       </ZStack>
     </VStack>
@@ -164,9 +156,8 @@ function IllustFeed(props: {
   mode: FeedMode
   kind: IllustrationKind
   active: boolean
-  retained: boolean
 }) {
-  const { mode, kind, active, retained } = props
+  const { mode, kind, active } = props
   const paged = usePagedList<PixivIllustration>({
     first: (token) =>
       mode === "recommended"
@@ -190,12 +181,7 @@ function IllustFeed(props: {
     })
   }, [])
 
-  useEffect(() => {
-    if (active) pagedRef.current.reapplyFilter()
-  }, [active])
-
   const label = feedLabel(mode)
-  if (!active && !retained) return null
   return (
     <RefreshableScrollView
       hidden={!active}
@@ -204,20 +190,19 @@ function IllustFeed(props: {
     >
       <VStack alignment="leading" spacing={10}>
         {paged.initialLoading ? (
-            <LoadingView />
-          ) : paged.error && paged.items.length === 0 ? (
-            <ErrorView message={paged.error} onRetry={paged.refresh} />
-          ) : paged.items.length === 0 ? (
-            <EmptyView text={`暂无${label}，下拉刷新试试`} />
-          ) : (
-            <MasonryIllustFeed
-              items={paged.items}
-              onLoadMore={paged.loadMore}
-              hasMore={paged.hasMore}
-              isLoading={paged.loadingMore}
-            />
-          )}
-
+          <LoadingView />
+        ) : paged.error && paged.items.length === 0 ? (
+          <ErrorView message={paged.error} onRetry={paged.refresh} />
+        ) : paged.items.length === 0 ? (
+          <EmptyView text={`暂无${label}，下拉刷新试试`} />
+        ) : (
+          <MasonryIllustFeed
+            items={paged.items}
+            onLoadMore={paged.loadMore}
+            hasMore={paged.hasMore}
+            isLoading={paged.loadingMore}
+          />
+        )}
       </VStack>
     </RefreshableScrollView>
   )
@@ -226,9 +211,8 @@ function IllustFeed(props: {
 function NovelFeed(props: {
   mode: FeedMode
   active: boolean
-  retained: boolean
 }) {
-  const { mode, active, retained } = props
+  const { mode, active } = props
   const paged = usePagedList<PixivNovel>({
     first: (token) =>
       mode === "recommended" ? recommendedNovels(token) : newNovels(token),
@@ -249,12 +233,7 @@ function NovelFeed(props: {
     })
   }, [])
 
-  useEffect(() => {
-    if (active) pagedRef.current.reapplyFilter()
-  }, [active])
-
   const label = feedLabel(mode)
-  if (!active && !retained) return null
   return (
     <RefreshableScrollView
       hidden={!active}
@@ -263,31 +242,30 @@ function NovelFeed(props: {
     >
       <VStack alignment="leading" spacing={10}>
         {paged.initialLoading ? (
-            <LoadingView />
-          ) : paged.error && paged.items.length === 0 ? (
-            <ErrorView message={paged.error} onRetry={paged.refresh} />
-          ) : paged.items.length === 0 ? (
-            <EmptyView text={`暂无${label}小说，下拉刷新试试`} systemImage="book" />
-          ) : (
-            <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
-              {paged.items.map((novel) => (
-                <NovelCard key={novel.id} novel={novel} />
-              ))}
-              <LoadMoreTrigger
-                anchor={paged.items[paged.items.length - 1].id}
-                onLoadMore={paged.loadMore}
-                hasMore={paged.hasMore}
-                isLoading={paged.loadingMore}
-              />
-            </LazyVStack>
-          )}
-
+          <LoadingView />
+        ) : paged.error && paged.items.length === 0 ? (
+          <ErrorView message={paged.error} onRetry={paged.refresh} />
+        ) : paged.items.length === 0 ? (
+          <EmptyView text={`暂无${label}小说，下拉刷新试试`} systemImage="book" />
+        ) : (
+          <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
+            {paged.items.map((novel) => (
+              <NovelCard key={novel.id} novel={novel} />
+            ))}
+            <LoadMoreTrigger
+              anchor={paged.items[paged.items.length - 1].id}
+              onLoadMore={paged.loadMore}
+              hasMore={paged.hasMore}
+              isLoading={paged.loadingMore}
+            />
+          </LazyVStack>
+        )}
       </VStack>
     </RefreshableScrollView>
   )
 }
 
-function VisionFeed(props: { active: boolean; retained: boolean }) {
+function VisionFeed(props: { active: boolean }) {
   const paged = usePagedList<PixivVisionArticle>({
     first: (token) => visionHome(token),
     more: (nextURL, token) => nextVision(nextURL, token),
@@ -297,7 +275,6 @@ function VisionFeed(props: { active: boolean; retained: boolean }) {
       prefetch(pendingItems.slice(0, 10).map((item) => item.imageURL)).cancel
   })
 
-  if (!props.active && !props.retained) return null
   return (
     <RefreshableScrollView
       hidden={!props.active}
@@ -324,7 +301,6 @@ function VisionFeed(props: { active: boolean; retained: boolean }) {
             />
           </LazyVStack>
         )}
-
       </VStack>
     </RefreshableScrollView>
   )
@@ -332,15 +308,14 @@ function VisionFeed(props: { active: boolean; retained: boolean }) {
 
 function filterIllustItems(items: PixivIllustration[]): PixivIllustration[] {
   const settings = loadSettings()
-  return items.filter((item) =>
-    isIllustContentVisible(item, settings)
-  )
+  return items.filter((item) => isIllustContentVisible(item, settings))
 }
 
 function filterNovelItems(items: PixivNovel[]): PixivNovel[] {
   const settings = loadSettings()
-  return items.filter((item) =>
-    isR18ContentVisible(item.x_restrict, settings.showR18, settings.showR18G) &&
-    (settings.showAI || item.novel_ai_type !== 2)
+  return items.filter(
+    (item) =>
+      isR18ContentVisible(item.x_restrict, settings.showR18, settings.showR18G) &&
+      (settings.showAI || item.novel_ai_type !== 2)
   )
 }

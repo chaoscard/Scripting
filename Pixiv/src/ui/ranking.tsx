@@ -6,6 +6,7 @@ import {
   LazyVStack,
   Menu,
   Picker,
+  ScrollView,
   Text,
   useEffect,
   useState,
@@ -21,7 +22,7 @@ import {
   onSettingsChanged,
 } from "../store/settings"
 import { destinationElement } from "./routes"
-import { useLatest, usePagedList, useRetainedKeys } from "./hooks"
+import { useLatest, usePagedList } from "./hooks"
 import type { PixivIllustration, PixivNovel } from "../types"
 import {
   appToolbar,
@@ -82,15 +83,6 @@ export function RankingView(props: { onClose: () => void }) {
     useState<IllustrationRankingMode>("day")
   const [mangaMode, setMangaMode] = useState<MangaRankingMode>("day_manga")
   const [novelMode, setNovelMode] = useState<NovelRankingMode>("day")
-  const activeKey =
-    kind === "illustration"
-      ? `illustration:${illustrationMode}`
-      : kind === "manga"
-        ? `manga:${mangaMode}`
-        : kind === "novel"
-          ? `novel:${novelMode}`
-          : "advanced"
-  const retainedKeys = useRetainedKeys(activeKey, 2)
 
   const rootModes =
     kind === "illustration"
@@ -108,13 +100,15 @@ export function RankingView(props: { onClose: () => void }) {
         : kind === "novel"
           ? novelMode
           : null
+
   function selectRootMode(value: string) {
     if (kind === "illustration") setIllustrationMode(value as IllustrationRankingMode)
     else if (kind === "manga") setMangaMode(value as MangaRankingMode)
     else if (kind === "novel") setNovelMode(value as NovelRankingMode)
   }
 
-  // 十二个榜单流保持挂载，切换时不销毁分页状态或原生 ScrollView 的浏览位置。
+  // 十二个榜单流完全常驻挂载，切换时仅切换原生 hidden 属性，
+  // 零销毁、零重建、零重复布局，实现毫秒级秒切。
   return (
     <VStack
       alignment="leading"
@@ -137,7 +131,6 @@ export function RankingView(props: { onClose: () => void }) {
             kind="illustration"
             mode={mode.value}
             active={kind === "illustration" && illustrationMode === mode.value}
-            retained={retainedKeys.has(`illustration:${mode.value}`)}
           />
         ))}
         {MANGA_MODES.map((mode) => (
@@ -146,7 +139,6 @@ export function RankingView(props: { onClose: () => void }) {
             kind="manga"
             mode={mode.value}
             active={kind === "manga" && mangaMode === mode.value}
-            retained={retainedKeys.has(`manga:${mode.value}`)}
           />
         ))}
         {NOVEL_MODES.map((mode) => (
@@ -154,12 +146,10 @@ export function RankingView(props: { onClose: () => void }) {
             key={`novel:${mode.value}`}
             mode={mode.value}
             active={kind === "novel" && novelMode === mode.value}
-            retained={retainedKeys.has(`novel:${mode.value}`)}
           />
         ))}
         <AdvancedSearchPlaceholder
           active={kind === "advanced"}
-          retained={retainedKeys.has("advanced")}
         />
       </ZStack>
     </VStack>
@@ -219,9 +209,8 @@ function IllustRankingFeed(props: {
   kind: IllustRankingKind
   mode: IllustRankingMode
   active: boolean
-  retained: boolean
 }) {
-  const { kind, mode, active, retained } = props
+  const { kind, mode, active } = props
   const paged = usePagedList<PixivIllustration>({
     first: (token) => ranking(mode, null, token),
     more: (nextURL, token) => nextIllustrations(nextURL, token),
@@ -241,11 +230,7 @@ function IllustRankingFeed(props: {
       pagedRef.current.refresh()
     })
   }, [])
-  useEffect(() => {
-    if (active) pagedRef.current.reapplyFilter()
-  }, [active])
 
-  if (!active && !retained) return null
   return (
     <RefreshableScrollView
       hidden={!active}
@@ -254,23 +239,22 @@ function IllustRankingFeed(props: {
     >
       <VStack alignment="leading" spacing={10}>
         {paged.initialLoading ? (
-            <LoadingView />
-          ) : paged.error && paged.items.length === 0 ? (
-            <ErrorView message={paged.error} onRetry={paged.refresh} />
-          ) : paged.items.length === 0 ? (
-            <EmptyView text="暂无排行数据，下拉刷新试试" />
-          ) : (
-            <MasonryIllustFeed
-              items={paged.items}
-              onLoadMore={paged.loadMore}
-              hasMore={paged.hasMore}
-              isLoading={paged.loadingMore}
-              cornerBadgeOf={(_, index) =>
-                index < 50 ? <ImageNumberBadge number={index + 1} /> : undefined
-              }
-            />
-          )}
-
+          <LoadingView />
+        ) : paged.error && paged.items.length === 0 ? (
+          <ErrorView message={paged.error} onRetry={paged.refresh} />
+        ) : paged.items.length === 0 ? (
+          <EmptyView text="暂无排行数据，下拉刷新试试" />
+        ) : (
+          <MasonryIllustFeed
+            items={paged.items}
+            onLoadMore={paged.loadMore}
+            hasMore={paged.hasMore}
+            isLoading={paged.loadingMore}
+            cornerBadgeOf={(_, index) =>
+              index < 50 ? <ImageNumberBadge number={index + 1} /> : undefined
+            }
+          />
+        )}
       </VStack>
     </RefreshableScrollView>
   )
@@ -279,9 +263,8 @@ function IllustRankingFeed(props: {
 function NovelRankingFeed(props: {
   mode: NovelRankingMode
   active: boolean
-  retained: boolean
 }) {
-  const { mode, active, retained } = props
+  const { mode, active } = props
   const paged = usePagedList<PixivNovel>({
     first: (token) => novelRanking(mode, null, token),
     more: (nextURL, token) => nextNovels(nextURL, token),
@@ -301,11 +284,7 @@ function NovelRankingFeed(props: {
       pagedRef.current.refresh()
     })
   }, [])
-  useEffect(() => {
-    if (active) pagedRef.current.reapplyFilter()
-  }, [active])
 
-  if (!active && !retained) return null
   return (
     <RefreshableScrollView
       hidden={!active}
@@ -314,60 +293,67 @@ function NovelRankingFeed(props: {
     >
       <VStack alignment="leading" spacing={10}>
         {paged.initialLoading ? (
-            <LoadingView />
-          ) : paged.error && paged.items.length === 0 ? (
-            <ErrorView message={paged.error} onRetry={paged.refresh} />
-          ) : paged.items.length === 0 ? (
-            <EmptyView text="暂无小说排行数据，下拉刷新试试" systemImage="book" />
-          ) : (
-            <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
-              {paged.items.map((novel) => (
-                <NovelCard key={novel.id} novel={novel} />
-              ))}
-              <LoadMoreTrigger
-                anchor={paged.items[paged.items.length - 1].id}
-                onLoadMore={paged.loadMore}
-                hasMore={paged.hasMore}
-                isLoading={paged.loadingMore}
+          <LoadingView />
+        ) : paged.error && paged.items.length === 0 ? (
+          <ErrorView message={paged.error} onRetry={paged.refresh} />
+        ) : paged.items.length === 0 ? (
+          <EmptyView text="暂无小说排行，下拉刷新试试" systemImage="book" />
+        ) : (
+          <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
+            {paged.items.map((novel, index) => (
+              <NovelCard
+                key={novel.id}
+                novel={novel}
+                footerText={index < 50 ? `第 ${index + 1} 名` : undefined}
               />
-            </LazyVStack>
-          )}
-
+            ))}
+            <LoadMoreTrigger
+              anchor={paged.items[paged.items.length - 1]?.id}
+              onLoadMore={paged.loadMore}
+              hasMore={paged.hasMore}
+              isLoading={paged.loadingMore}
+            />
+          </LazyVStack>
+        )}
       </VStack>
     </RefreshableScrollView>
   )
 }
 
-function AdvancedSearchPlaceholder(props: { active: boolean; retained: boolean }) {
-  if (!props.active && !props.retained) return null
+function AdvancedSearchPlaceholder(props: { active: boolean }) {
   return (
-    <VStack
+    <ScrollView
       hidden={!props.active}
-      alignment="leading"
-      spacing={12}
-      padding={{ horizontal: 20, top: 24 }}
-      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+      navigationBarTitleDisplayMode="inline"
     >
-      <EmptyView text="高级搜索即将推出" systemImage="slider.horizontal.3" />
-    </VStack>
+      <VStack alignment="center" spacing={12} padding={{ top: 80, horizontal: 20 }}>
+        <Image systemName="slider.horizontal.3" font="largeTitle" foregroundStyle="secondaryLabel" />
+        <Text font="headline" fontWeight="bold">
+          高级搜索
+        </Text>
+        <Text font="subheadline" foregroundStyle="secondaryLabel">
+          根据收藏数、日期区间与排序方式精确筛选
+        </Text>
+      </VStack>
+    </ScrollView>
   )
 }
 
 function filterRankingItems(items: PixivIllustration[]): PixivIllustration[] {
   const settings = loadSettings()
-  return items.filter((item) =>
-    isIllustContentVisible(item, settings)
-  )
+  return items.filter((item) => isIllustContentVisible(item, settings))
 }
 
 function filterMangaRankingItems(items: PixivIllustration[]): PixivIllustration[] {
-  return filterRankingItems(items).filter((item) => item.type === "manga")
+  const settings = loadSettings()
+  return items.filter((item) => isIllustContentVisible(item, settings))
 }
 
 function filterNovelRankingItems(items: PixivNovel[]): PixivNovel[] {
   const settings = loadSettings()
-  return items.filter((item) =>
-    isR18ContentVisible(item.x_restrict, settings.showR18, settings.showR18G) &&
-    (settings.showAI || item.novel_ai_type !== 2)
+  return items.filter(
+    (item) =>
+      isR18ContentVisible(item.x_restrict, settings.showR18, settings.showR18G) &&
+      (settings.showAI || item.novel_ai_type !== 2)
   )
 }

@@ -31,8 +31,12 @@ import {
   onSettingsChanged,
 } from "../store/settings"
 import { destinationElement } from "./routes"
-import { useLatest, usePagedList, useRetainedKeys } from "./hooks"
-import type { PixivIllustration, PixivNovel, PixivWatchlistSeries } from "../types"
+import { useLatest, usePagedList } from "./hooks"
+import type {
+  PixivIllustration,
+  PixivNovel,
+  PixivWatchlistSeries,
+} from "../types"
 import {
   appToolbar,
   EmptyView,
@@ -45,30 +49,23 @@ import {
   WatchlistSeriesCard,
 } from "./components"
 
-type FollowMode = "following" | "watchlist" | "friends"
-type FollowScope = "all" | "private"
+export type FollowMode = "following" | "watchlist" | "friends"
+export type FollowScope = "all" | "private"
 type WorkKind = "illust" | "novel"
 type WatchKind = "manga" | "novel"
 
-const WORK_KINDS: ReadonlyArray<WorkKind> = ["illust", "novel"]
-const WATCH_KINDS: ReadonlyArray<WatchKind> = ["manga", "novel"]
+const WATCH_KINDS: WatchKind[] = ["manga", "novel"]
+const WORK_KINDS: WorkKind[] = ["illust", "novel"]
 
 export function FollowFeedView(props: {
-  onClose: () => void
   initialMode?: FollowMode
+  onClose: () => void
 }) {
   const [mode, setMode] = useState<FollowMode>(props.initialMode ?? "following")
   const [scope, setScope] = useState<FollowScope>("all")
   const [followingKind, setFollowingKind] = useState<WorkKind>("illust")
   const [watchKind, setWatchKind] = useState<WatchKind>("manga")
   const [friendKind, setFriendKind] = useState<WorkKind>("illust")
-  const activeKey =
-    mode === "following"
-      ? `following:${scope}:${followingKind}`
-      : mode === "watchlist"
-        ? `watchlist:${watchKind}`
-        : `friends:${friendKind}`
-  const retainedKeys = useRetainedKeys(activeKey, 2)
 
   const segmentedValue =
     mode === "following"
@@ -82,7 +79,8 @@ export function FollowFeedView(props: {
     else setFriendKind(value as WorkKind)
   }
 
-  // 八个流保持挂载，切换时保留各自的分页游标、内容与原生滚动位置。
+  // 八个流完全常驻挂载，切换时仅切换原生 hidden 属性，
+  // 零销毁、零重建、零重复布局，实现毫秒级秒切。
   return (
     <VStack
       alignment="leading"
@@ -108,14 +106,12 @@ export function FollowFeedView(props: {
           active={
             mode === "following" && scope === "all" && followingKind === "illust"
           }
-          retained={retainedKeys.has("following:all:illust")}
         />
         <FollowingNovelFeed
           scope="all"
           active={
             mode === "following" && scope === "all" && followingKind === "novel"
           }
-          retained={retainedKeys.has("following:all:novel")}
         />
         <FollowingIllustrationFeed
           scope="private"
@@ -124,7 +120,6 @@ export function FollowFeedView(props: {
             scope === "private" &&
             followingKind === "illust"
           }
-          retained={retainedKeys.has("following:private:illust")}
         />
         <FollowingNovelFeed
           scope="private"
@@ -133,14 +128,12 @@ export function FollowFeedView(props: {
             scope === "private" &&
             followingKind === "novel"
           }
-          retained={retainedKeys.has("following:private:novel")}
         />
         {WATCH_KINDS.map((kind) => (
           <WatchlistFeed
             key={`watchlist:${kind}`}
             kind={kind}
             active={mode === "watchlist" && watchKind === kind}
-            retained={retainedKeys.has(`watchlist:${kind}`)}
           />
         ))}
         {WORK_KINDS.map((kind) =>
@@ -148,13 +141,11 @@ export function FollowFeedView(props: {
             <FriendIllustrationFeed
               key={`friends:${kind}`}
               active={mode === "friends" && friendKind === kind}
-              retained={retainedKeys.has(`friends:${kind}`)}
             />
           ) : (
             <FriendNovelFeed
               key={`friends:${kind}`}
               active={mode === "friends" && friendKind === kind}
-              retained={retainedKeys.has(`friends:${kind}`)}
             />
           )
         )}
@@ -202,11 +193,15 @@ function followToolbar(props: {
         </>
       ) : (
         <Picker
-          title="内容来源"
+          title="动态类型"
           value={props.mode}
           onChanged={(value: string) => props.onModeChange(value as FollowMode)}
         >
-          <Label tag="watchlist" title="追更" systemImage="bookmark" />
+          <Label
+            tag="watchlist"
+            title="追更"
+            systemImage="bookmark"
+          />
           <Label
             tag="friends"
             title="好友"
@@ -249,9 +244,8 @@ function FollowKindPicker(props: {
 function FollowingIllustrationFeed(props: {
   scope: FollowScope
   active: boolean
-  retained: boolean
 }) {
-  const { scope, active, retained } = props
+  const { scope, active } = props
   const paged = usePagedList<PixivIllustration>({
     first: (token) => followingFeed(scope, token),
     more: (nextURL, token) => nextIllustrations(nextURL, token),
@@ -263,7 +257,6 @@ function FollowingIllustrationFeed(props: {
   })
   useSettingsFilter(paged, active)
 
-  if (!active && !retained) return null
   return (
     <RefreshableScrollView
       hidden={!active}
@@ -293,9 +286,8 @@ function FollowingIllustrationFeed(props: {
 function FollowingNovelFeed(props: {
   scope: FollowScope
   active: boolean
-  retained: boolean
 }) {
-  const { scope, active, retained } = props
+  const { scope, active } = props
   const paged = usePagedList<PixivNovel>({
     first: (token) => followingNovels(scope, token),
     more: (nextURL, token) => nextNovels(nextURL, token),
@@ -307,7 +299,6 @@ function FollowingNovelFeed(props: {
   })
   useSettingsFilter(paged, active)
 
-  if (!active && !retained) return null
   return (
     <RefreshableScrollView
       hidden={!active}
@@ -337,9 +328,8 @@ function FollowingNovelFeed(props: {
 function WatchlistFeed(props: {
   kind: WatchKind
   active: boolean
-  retained: boolean
 }) {
-  const { kind, active, retained } = props
+  const { kind, active } = props
   const paged = usePagedList<PixivWatchlistSeries>({
     first: (token) =>
       kind === "manga" ? watchlistManga(token) : watchlistNovels(token),
@@ -348,10 +338,17 @@ function WatchlistFeed(props: {
     deps: [kind],
     enabled: active,
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map((item) => item.url ?? null)).cancel
+      prefetch(pendingItems.slice(0, 10).map(watchlistThumbUrlOf)).cancel
   })
+  const pagedRef = useLatest(paged)
+  const activeRef = useLatest(active)
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      if (!activeRef.current) return
+      pagedRef.current.refresh()
+    })
+  }, [])
 
-  if (!active && !retained) return null
   return (
     <RefreshableScrollView
       hidden={!active}
@@ -364,9 +361,9 @@ function WatchlistFeed(props: {
         ) : paged.error && paged.items.length === 0 ? (
           <ErrorView message={paged.error} onRetry={paged.refresh} />
         ) : paged.items.length === 0 ? (
-          <EmptyView text="还没有加入追更列表的系列" systemImage="bookmark" />
+          <EmptyView text={`暂无追更${kind === "manga" ? "漫画" : "小说"}`} systemImage="bookmark" />
         ) : (
-          <LazyVStack alignment="leading" spacing={10} padding={{ horizontal: 10 }}>
+          <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
             {paged.items.map((item) => (
               <WatchlistSeriesCard key={item.id} item={item} kind={kind} />
             ))}
@@ -385,7 +382,6 @@ function WatchlistFeed(props: {
 
 function FriendIllustrationFeed(props: {
   active: boolean
-  retained: boolean
 }) {
   const paged = usePagedList<PixivIllustration>({
     first: myPixivFeed,
@@ -398,7 +394,6 @@ function FriendIllustrationFeed(props: {
   })
   useSettingsFilter(paged, props.active)
 
-  if (!props.active && !props.retained) return null
   return (
     <RefreshableScrollView
       hidden={!props.active}
@@ -427,7 +422,6 @@ function FriendIllustrationFeed(props: {
 
 function FriendNovelFeed(props: {
   active: boolean
-  retained: boolean
 }) {
   const paged = usePagedList<PixivNovel>({
     first: myPixivNovels,
@@ -440,7 +434,6 @@ function FriendNovelFeed(props: {
   })
   useSettingsFilter(paged, props.active)
 
-  if (!props.active && !props.retained) return null
   return (
     <RefreshableScrollView
       hidden={!props.active}
@@ -488,7 +481,6 @@ function NovelFeedItems(props: {
   )
 }
 
-
 function useSettingsFilter(
   paged: ReturnType<typeof usePagedList<PixivIllustration>> | ReturnType<typeof usePagedList<PixivNovel>>,
   active: boolean
@@ -502,10 +494,6 @@ function useSettingsFilter(
       pagedRef.current.refresh()
     })
   }, [])
-
-  useEffect(() => {
-    if (active) pagedRef.current.reapplyFilter()
-  }, [active])
 }
 
 function filterFollowingIllustrationItems(items: PixivIllustration[]): PixivIllustration[] {
@@ -534,8 +522,12 @@ function filterIllustrationItems(items: PixivIllustration[]): PixivIllustration[
 function filterNovelItems(items: PixivNovel[]): PixivNovel[] {
   const settings = loadSettings()
   return items.filter(
-    (novel) =>
-      isR18ContentVisible(novel.x_restrict, settings.showR18, settings.showR18G) &&
-      (settings.showAI || novel.novel_ai_type !== 2)
+    (item) =>
+      isR18ContentVisible(item.x_restrict, settings.showR18, settings.showR18G) &&
+      (settings.showAI || item.novel_ai_type !== 2)
   )
+}
+
+function watchlistThumbUrlOf(item: PixivWatchlistSeries): string | null {
+  return item.url ?? null
 }

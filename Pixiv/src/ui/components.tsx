@@ -211,6 +211,20 @@ function useCachedImage(url: string | null, readIntrinsicRatio: boolean) {
       setLoaded({ url: null, path: null, revision: cacheRevision })
       return
     }
+    if (cachedPath) {
+      if (readIntrinsicRatio) {
+        try {
+          const img = UIImage.fromFile(cachedPath)
+          if (img && img.width > 0 && img.height > 0) {
+            setRatio(img.width / img.height)
+          }
+        } catch {
+        }
+      }
+      return () => {
+        cancelled = true
+      }
+    }
     loadImage(url)
       .then((p) => {
         if (!cancelled) {
@@ -238,7 +252,7 @@ function useCachedImage(url: string | null, readIntrinsicRatio: boolean) {
     return () => {
       cancelled = true
     }
-  }, [url, readIntrinsicRatio, cacheRevision])
+  }, [url, readIntrinsicRatio, cacheRevision, cachedPath])
 
   return { path, failed, ratio }
 }
@@ -302,8 +316,6 @@ export function CachedImage(props: {
         resizable={true}
         aspectRatio={{ value: displayRatio, contentMode }}
         clipShape={{ type: "rect", cornerRadius }}
-        scaleToFit={contentMode === "fit"}
-        scaleToFill={contentMode === "fill"}
         frame={frame ?? { maxWidth: "infinity" }}
       />
     )
@@ -311,7 +323,7 @@ export function CachedImage(props: {
 
   return (
     <ZStack
-      aspectRatio={{ value: aspectRatioValue, contentMode: "fit" }}
+      aspectRatio={{ value: aspectRatioValue, contentMode }}
       background="systemGray6"
       clipShape={{ type: "rect", cornerRadius }}
       frame={frame ?? { maxWidth: "infinity" }}
@@ -354,7 +366,6 @@ export function WatchlistSeriesCard(props: {
   return (
     <HStack alignment="top" spacing={12} padding={10} onAppear={onAppear}
       glassEffect={{ type: "rect", cornerRadius: 14 }}
-      glassEffectTransition="materialize"
       shadow={{ color: "#0000000F", radius: 18, y: 8 }}
       frame={{ maxWidth: "infinity" }}
     >
@@ -482,8 +493,7 @@ export function NovelCard(props: {
           onAppear={onAppear}
           alignment="top"
           glassEffect={{ type: "rect", cornerRadius: 14 }}
-          glassEffectTransition="materialize"
-          shadow={{ color: "#0000000F", radius: 18, y: 8 }}
+            shadow={{ color: "#0000000F", radius: 18, y: 8 }}
           frame={{ maxWidth: "infinity" }}
         >
           <ZStack
@@ -732,16 +742,18 @@ export function IllustCard(props: {
       <VStack
         alignment="leading"
         spacing={2}
-        frame={{ maxWidth: "infinity" }}
+        frame={{ minWidth: 0, maxWidth: "infinity" }}
         onAppear={onAppear}
         padding={4}
         glassEffect={{ type: "rect", cornerRadius: 14 }}
-        glassEffectTransition="materialize"
         shadow={{ color: "#0000000F", radius: 18, y: 8 }}
       >
-        <ZStack alignment="bottomTrailing">
-          <NavigationLink value={`illust:${illust.id}`}>
-            <ZStack alignment="topLeading">
+        <ZStack alignment="bottomTrailing" frame={{ maxWidth: "infinity" }}>
+          <NavigationLink
+            value={`illust:${illust.id}`}
+            frame={{ maxWidth: "infinity" }}
+          >
+            <ZStack alignment="topLeading" frame={{ maxWidth: "infinity" }}>
               <ZStack
                 alignment="bottomLeading"
                 aspectRatio={{ value: flow ? imageRatio : 1, contentMode: "fill" }}
@@ -953,10 +965,10 @@ export function MasonryIllustFeed(props: {
         padding={{ horizontal: 10 }}
         frame={{ maxWidth: "infinity" }}
       >
-        <LazyVStack alignment="leading" spacing={10} frame={{ maxWidth: "infinity" }}>
+        <LazyVStack alignment="leading" spacing={10} frame={{ minWidth: 0, maxWidth: "infinity" }}>
           {leading.map(renderItem)}
         </LazyVStack>
-        <LazyVStack alignment="leading" spacing={10} frame={{ maxWidth: "infinity" }}>
+        <LazyVStack alignment="leading" spacing={10} frame={{ minWidth: 0, maxWidth: "infinity" }}>
           {trailing.map(renderItem)}
         </LazyVStack>
       </HStack>
@@ -1306,8 +1318,7 @@ export function VisionCard(props: {
           spacing={0}
           frame={{ maxWidth: "infinity" }}
           glassEffect={{ type: "rect", cornerRadius: 14 }}
-          glassEffectTransition="materialize"
-          shadow={{ color: "#0000000F", radius: 18, y: 8 }}
+            shadow={{ color: "#0000000F", radius: 18, y: 8 }}
         >
           <CachedImage
             url={article.imageURL}

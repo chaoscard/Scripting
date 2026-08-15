@@ -15,7 +15,7 @@ import { BlockedSettingsView } from "./blockedSettings"
 import { SettingsView } from "./settings"
 import { SeriesView } from "./seriesView"
 import { UserBookmarksView } from "./userBookmarks"
-import { UserConnectionsView } from "./userConnections"
+import { UserConnectionsView, type ConnectionRouteKind } from "./userConnections"
 import { AboutView } from "./about"
 
 // 解析 "xxx:123" 形式的数值 id；非法输入返回 null（避免 NaN 传给详情页）
@@ -78,11 +78,17 @@ export function renderDestination(page: string) {
     const kind = parts[1]
     const id = parts.length === 3 ? Number(parts[2]) : null
     if (
-      (kind === "following" || kind === "follower") &&
+      (kind === "following" || kind === "mypixiv") &&
       Number.isFinite(id) &&
       (id as number) > 0
     ) {
-      return <UserConnectionsView kind={kind} userID={id as number} />
+      return (
+        <UserConnectionsView
+          kind={kind as ConnectionRouteKind}
+          userID={id as number}
+          title={kind === "mypixiv" ? "好友" : "关注"}
+        />
+      )
     }
   }
   if (page === "connections:following") return <UserConnectionsView kind="following" />

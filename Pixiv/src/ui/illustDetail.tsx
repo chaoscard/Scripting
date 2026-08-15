@@ -439,10 +439,10 @@ export function IllustDetailView(props: { illustID: number }) {
         {/* 大图区：动图走播放器；图片无限向下滚动展示全部页 */}
         <VStack
           alignment="center"
-          spacing={8}
+          spacing={4}
           frame={{ maxWidth: "infinity" }}
           background="systemGray6"
-          padding={{ vertical: 10 }}
+          padding={{ top: 0, bottom: 6 }}
         >
           {current.type === "ugoira" ? (
             <UgoiraPlayerView
@@ -450,13 +450,13 @@ export function IllustDetailView(props: { illustID: number }) {
               aspectRatioValue={pageAspect}
             />
           ) : pageCount > 1 ? (
-            <LazyVStack spacing={10} alignment="center">
+            <LazyVStack spacing={4} alignment="center">
               {pageURLs.map((url, idx) => (
                 <CachedImage
                   key={idx}
                   url={url}
                   aspectRatioValue={pageAspect}
-                  cornerRadius={8}
+                  cornerRadius={6}
                   contentMode="fit"
                 />
               ))}
@@ -465,7 +465,7 @@ export function IllustDetailView(props: { illustID: number }) {
             <CachedImage
               url={pageURLs[0] ?? null}
               aspectRatioValue={pageAspect}
-              cornerRadius={12}
+              cornerRadius={8}
               contentMode="fit"
             />
           )}
