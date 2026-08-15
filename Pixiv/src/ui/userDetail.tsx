@@ -15,7 +15,6 @@ import {
   useRef,
   useState,
   VStack,
-  ZStack,
 } from "scripting"
 import {
   followDetail,
@@ -49,8 +48,8 @@ import {
   ErrorView,
   formatNumber,
   htmlToPlainText,
-  LoadingView,
   LinkedDescription,
+  LoadingView,
   LoadMoreTrigger,
   MasonryIllustFeed,
   NovelCard,
@@ -58,7 +57,6 @@ import {
 } from "./components"
 
 type UserWorkKind = "illust" | "manga" | "novel"
-type IllustrationKind = Exclude<UserWorkKind, "novel">
 
 export function UserDetailView(props: { userID: number }) {
   const { userID } = props
@@ -67,9 +65,47 @@ export function UserDetailView(props: { userID: number }) {
   const [detailError, setDetailError] = useState<string | null>(null)
   const [followBusy, setFollowBusy] = useState(false)
   const [kind, setKind] = useState<UserWorkKind>("illust")
+
   const guard = useAsyncGuard()
   const followStateVersionRef = useRef(0)
   const isOwnProfile = session.userID === userID
+
+  // 插画、漫画、小说三条作品流分别维护独立的分页状态机，
+  // 仅在当前分类被激活时触发网络请求，切换时保留已加载数据。
+  const illustPaged = usePagedList<PixivIllustration>({
+    first: (token) => userWorks(userID, "illust", token),
+    more: (nextURL, token) => nextIllustrations(nextURL, token),
+    filter: filterIllustrations,
+    deps: [userID, "illust"],
+    enabled: kind === "illust",
+    onBatchPublished: (_, pendingItems) =>
+      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel,
+  })
+
+  const mangaPaged = usePagedList<PixivIllustration>({
+    first: (token) => userWorks(userID, "manga", token),
+    more: (nextURL, token) => nextIllustrations(nextURL, token),
+    filter: filterIllustrations,
+    deps: [userID, "manga"],
+    enabled: kind === "manga",
+    onBatchPublished: (_, pendingItems) =>
+      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel,
+  })
+
+  const novelPaged = usePagedList<PixivNovel>({
+    first: (token) => userNovels(userID, token),
+    more: (nextURL, token) => nextNovels(nextURL, token),
+    filter: filterNovels,
+    deps: [userID],
+    enabled: kind === "novel",
+    onBatchPublished: (_, pendingItems) =>
+      prefetch(pendingItems.slice(0, 10).map(novelThumbUrlOf)).cancel,
+  })
+
+  const illustRef = useLatest(illustPaged)
+  const mangaRef = useLatest(mangaPaged)
+  const novelRef = useLatest(novelPaged)
+  const kindRef = useLatest(kind)
 
   async function loadDetail() {
     const g = guard()
@@ -113,6 +149,21 @@ export function UserDetailView(props: { userID: number }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userID])
 
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      illustRef.current.reapplyFilter()
+      mangaRef.current.reapplyFilter()
+      novelRef.current.reapplyFilter()
+      if (kindRef.current === "illust") {
+        illustRef.current.refresh()
+      } else if (kindRef.current === "manga") {
+        mangaRef.current.refresh()
+      } else {
+        novelRef.current.refresh()
+      }
+    })
+  }, [])
+
   async function followWithVisibility(restrict: "public" | "private") {
     if (followBusy || isOwnProfile) return
     const followStateVersion = ++followStateVersionRef.current
@@ -125,7 +176,6 @@ export function UserDetailView(props: { userID: number }) {
     } catch {
       // Keep the current UI state when the request fails.
     } finally {
-      // 让写入期间发起的详情/补查结果失效，避免覆盖刚完成的操作。
       if (followStateVersion === followStateVersionRef.current) {
         followStateVersionRef.current++
       }
@@ -149,12 +199,21 @@ export function UserDetailView(props: { userID: number }) {
     } catch {
       // Keep the current UI state when the request fails.
     } finally {
-      // 让写入期间发起的详情/补查结果失效，避免覆盖刚完成的操作。
       if (followStateVersion === followStateVersionRef.current) {
         followStateVersionRef.current++
       }
       setFollowBusy(false)
     }
+  }
+
+  async function handleRefresh() {
+    const refreshWorks =
+      kind === "illust"
+        ? illustPaged.refresh()
+        : kind === "manga"
+          ? mangaPaged.refresh()
+          : novelPaged.refresh()
+    await Promise.all([loadDetail(), refreshWorks])
   }
 
   if (!detail) {
@@ -173,12 +232,10 @@ export function UserDetailView(props: { userID: number }) {
   }
 
   return (
-    <VStack
-      alignment="leading"
-      spacing={8}
-      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+    <RefreshableScrollView
       navigationTitle={detail.user.name}
       navigationBarTitleDisplayMode="inline"
+      refreshable={handleRefresh}
       toolbar={{
         topBarTrailing: [
           ...(!isOwnProfile ? [
@@ -240,155 +297,99 @@ export function UserDetailView(props: { userID: number }) {
         ],
       }}
     >
-      <UserWorkPicker kind={kind} onChanged={setKind} />
-      <ZStack frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
-        <UserIllustFeed
-          detail={detail}
-          kind="illust"
-          active={kind === "illust"}
-          onRefresh={loadDetail}
-        />
-        <UserIllustFeed
-          detail={detail}
-          kind="manga"
-          active={kind === "manga"}
-          onRefresh={loadDetail}
-        />
-        <UserNovelFeed
-          detail={detail}
-          active={kind === "novel"}
-          onRefresh={loadDetail}
-        />
-      </ZStack>
-    </VStack>
-  )
-}
-
-function UserIllustFeed(props: {
-  detail: PixivUserDetail
-  kind: IllustrationKind
-  active: boolean
-  onRefresh: () => Promise<void>
-}) {
-  const paged = usePagedList<PixivIllustration>({
-    first: (token) => userWorks(props.detail.user.id, props.kind, token),
-    more: (nextURL, token) => nextIllustrations(nextURL, token),
-    filter: filterIllustrations,
-    deps: [props.detail.user.id, props.kind],
-    enabled: props.active,
-    onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel,
-  })
-  const pagedRef = useLatest(paged)
-  const activeRef = useLatest(props.active)
-
-  useEffect(() => {
-    return onSettingsChanged(() => {
-      pagedRef.current.reapplyFilter()
-      if (activeRef.current) pagedRef.current.refresh()
-    })
-  }, [])
-
-  return (
-    <RefreshableScrollView
-      hidden={!props.active}
-      navigationBarTitleDisplayMode="inline"
-      refreshable={async () => {
-        await Promise.all([props.onRefresh(), paged.refresh()])
-      }}
-    >
       <VStack alignment="leading" spacing={12} padding={{ top: 4, bottom: 20 }}>
-        <UserProfileHeader detail={props.detail} />
-        {paged.initialLoading ? (
-          <LoadingView />
-        ) : paged.error && paged.items.length === 0 ? (
-          <ErrorView message={paged.error} onRetry={paged.refresh} />
-        ) : paged.items.length === 0 ? (
-          <EmptyView text="暂无投稿作品" />
+        {/* 单一常驻的个人资料头部，切换投稿类型时不重载或重建 */}
+        <UserProfileHeader detail={detail} />
+
+        {/* 位于个人资料和作品列表之间的分段选择器 */}
+        <UserWorkPicker kind={kind} onChanged={setKind} />
+
+        {/* 当前激活的作品分类流 */}
+        {kind === "illust" ? (
+          <UserIllustSection paged={illustPaged} emptyText="暂无插画投稿" />
+        ) : kind === "manga" ? (
+          <UserIllustSection paged={mangaPaged} emptyText="暂无漫画投稿" />
         ) : (
-          <MasonryIllustFeed
-            items={paged.items}
-            onLoadMore={paged.loadMore}
-            hasMore={paged.hasMore}
-            isLoading={paged.loadingMore}
-          />
+          <UserNovelSection paged={novelPaged} />
         )}
       </VStack>
     </RefreshableScrollView>
   )
 }
 
-function UserNovelFeed(props: {
-  detail: PixivUserDetail
-  active: boolean
-  onRefresh: () => Promise<void>
+function UserIllustSection(props: {
+  paged: ReturnType<typeof usePagedList<PixivIllustration>>
+  emptyText: string
 }) {
-  const paged = usePagedList<PixivNovel>({
-    first: (token) => userNovels(props.detail.user.id, token),
-    more: (nextURL, token) => nextNovels(nextURL, token),
-    filter: filterNovels,
-    deps: [props.detail.user.id],
-    enabled: props.active,
-    onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(novelThumbUrlOf)).cancel,
-  })
-  const pagedRef = useLatest(paged)
-  const activeRef = useLatest(props.active)
+  const { paged, emptyText } = props
 
-  useEffect(() => {
-    return onSettingsChanged(() => {
-      pagedRef.current.reapplyFilter()
-      if (activeRef.current) pagedRef.current.refresh()
-    })
-  }, [])
-
+  if (paged.initialLoading) {
+    return <LoadingView />
+  }
+  if (paged.error && paged.items.length === 0) {
+    return <ErrorView message={paged.error} onRetry={paged.refresh} />
+  }
+  if (paged.items.length === 0) {
+    return <EmptyView text={emptyText} />
+  }
   return (
-    <RefreshableScrollView
-      hidden={!props.active}
-      navigationBarTitleDisplayMode="inline"
-      refreshable={async () => {
-        await Promise.all([props.onRefresh(), paged.refresh()])
-      }}
-    >
-      <VStack alignment="leading" spacing={12} padding={{ top: 4, bottom: 20 }}>
-        <UserProfileHeader detail={props.detail} />
-        {paged.initialLoading ? (
-          <LoadingView />
-        ) : paged.error && paged.items.length === 0 ? (
-          <ErrorView message={paged.error} onRetry={paged.refresh} />
-        ) : paged.items.length === 0 ? (
-          <EmptyView text="暂无小说投稿" systemImage="book" />
-        ) : (
-          <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
-            {paged.items.map((novel) => (
-              <NovelCard key={novel.id} novel={novel} />
-            ))}
-            <LoadMoreTrigger
-              anchor={paged.items[paged.items.length - 1].id}
-              onLoadMore={paged.loadMore}
-              hasMore={paged.hasMore}
-              isLoading={paged.loadingMore}
-            />
-          </LazyVStack>
-        )}
-      </VStack>
-    </RefreshableScrollView>
+    <MasonryIllustFeed
+      items={paged.items}
+      onLoadMore={paged.loadMore}
+      hasMore={paged.hasMore}
+      isLoading={paged.loadingMore}
+    />
+  )
+}
+
+function UserNovelSection(props: {
+  paged: ReturnType<typeof usePagedList<PixivNovel>>
+}) {
+  const { paged } = props
+
+  if (paged.initialLoading) {
+    return <LoadingView />
+  }
+  if (paged.error && paged.items.length === 0) {
+    return <ErrorView message={paged.error} onRetry={paged.refresh} />
+  }
+  if (paged.items.length === 0) {
+    return <EmptyView text="暂无小说投稿" systemImage="book" />
+  }
+  return (
+    <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
+      {paged.items.map((novel) => (
+        <NovelCard key={novel.id} novel={novel} />
+      ))}
+      <LoadMoreTrigger
+        anchor={paged.items[paged.items.length - 1].id}
+        onLoadMore={paged.loadMore}
+        hasMore={paged.hasMore}
+        isLoading={paged.loadingMore}
+      />
+    </LazyVStack>
   )
 }
 
 function UserProfileHeader(props: { detail: PixivUserDetail }) {
   const { detail } = props
   const { user, profile, workspace } = detail
+  const introduction = htmlToPlainText(user.comment).trim()
   const fields = [
-    profile.webpage ? ["主页", profile.webpage] : null,
-    profile.gender ? ["性别", profile.gender] : null,
-    profile.birth ? ["生日", profile.birth] : null,
-    profile.region ? ["地区", profile.region] : null,
-    profile.job ? ["职业", profile.job] : null,
-    profile.twitter_url
-      ? ["X", profile.twitter_account ? `@${profile.twitter_account}` : profile.twitter_url]
+    profile.webpage?.trim() ? ["主页", profile.webpage.trim()] : null,
+    profile.gender?.trim() ? ["性别", profile.gender.trim()] : null,
+    profile.birth?.trim() ? ["生日", profile.birth.trim()] : null,
+    profile.region?.trim() ? ["地区", profile.region.trim()] : null,
+    profile.job?.trim() ? ["职业", profile.job.trim()] : null,
+    profile.twitter_url?.trim()
+      ? [
+          "X",
+          profile.twitter_account?.trim()
+            ? `@${profile.twitter_account.trim()}`
+            : profile.twitter_url.trim(),
+        ]
       : null,
-    workspace?.comment ? ["创作环境", workspace.comment] : null,
+    workspace?.comment?.trim() ? ["创作环境", workspace.comment.trim()] : null,
   ].filter((field): field is [string, string] => field != null)
 
   return (
@@ -436,35 +437,56 @@ function UserProfileHeader(props: { detail: PixivUserDetail }) {
           </VStack>
         </HStack>
 
-        <VStack alignment="leading" spacing={6}>
-          <Text font="subheadline" fontWeight="semibold">
-            关于
-          </Text>
-          {user.comment ? (
-            <LinkedDescription
-              html={user.comment}
-              routeDestination={renderDestination}
-            />
-          ) : (
-            <Text font="footnote" foregroundStyle="secondaryLabel">
-              该用户尚未填写简介
+        {introduction ? (
+          <VStack alignment="leading" spacing={6} frame={{ maxWidth: "infinity" }}>
+            <Text font="subheadline" fontWeight="semibold" foregroundStyle="secondaryLabel">
+              简介
             </Text>
-          )}
-        </VStack>
+            <VStack
+              alignment="leading"
+              spacing={6}
+              padding={12}
+              glassEffect={{ type: "rect", cornerRadius: 14 }}
+              frame={{ maxWidth: "infinity" }}
+            >
+              <LinkedDescription
+                html={user.comment ?? ""}
+                routeDestination={renderDestination}
+                nativePlainText
+              />
+            </VStack>
+          </VStack>
+        ) : null}
 
         {fields.length > 0 ? (
-          <VStack alignment="leading" spacing={8}>
-            <Divider />
-            {fields.map(([label, value]) => (
-              <HStack key={label} alignment="top" spacing={10}>
-                <Text font="footnote" foregroundStyle="secondaryLabel" frame={{ width: 58, alignment: "leading" }}>
-                  {label}
-                </Text>
-                <Text font="footnote" frame={{ maxWidth: "infinity", alignment: "leading" }}>
-                  {value}
-                </Text>
-              </HStack>
-            ))}
+          <VStack alignment="leading" spacing={6} frame={{ maxWidth: "infinity" }}>
+            <Text font="subheadline" fontWeight="semibold" foregroundStyle="secondaryLabel">
+              关于
+            </Text>
+            <VStack
+              alignment="leading"
+              spacing={8}
+              padding={12}
+              glassEffect={{ type: "rect", cornerRadius: 14 }}
+              frame={{ maxWidth: "infinity" }}
+            >
+              {fields.map(([label, value]) => (
+                <HStack key={label} alignment="top" spacing={10}>
+                  <Text
+                    font="footnote"
+                    frame={{ width: 58, alignment: "leading" }}
+                  >
+                    {label}
+                  </Text>
+                  <Text
+                    font="footnote"
+                    frame={{ maxWidth: "infinity", alignment: "leading" }}
+                  >
+                    {value}
+                  </Text>
+                </HStack>
+              ))}
+            </VStack>
           </VStack>
         ) : null}
       </VStack>

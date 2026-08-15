@@ -1398,6 +1398,7 @@ function htmlFragmentToPlainText(html: string | undefined | null): string {
 export function LinkedDescription(props: {
   html: string
   routeDestination: (route: string) => any
+  nativePlainText?: boolean
 }) {
   const segments = useMemo(() => descriptionSegments(props.html), [props.html])
   const lines = useMemo(() => descriptionLines(segments), [segments])
@@ -1411,7 +1412,19 @@ export function LinkedDescription(props: {
     >
       {blocks.map((block, index) =>
         block.kind === "text" ? (
-          <SelectableDescriptionText key={`text-${index}`} text={block.text} />
+          props.nativePlainText ? (
+            <Text
+              key={`text-${index}`}
+              font="footnote"
+              multilineTextAlignment="leading"
+              textSelection={true}
+              frame={{ maxWidth: "infinity", alignment: "leading" }}
+            >
+              {block.text}
+            </Text>
+          ) : (
+            <SelectableDescriptionText key={`text-${index}`} text={block.text} />
+          )
         ) : (
           <DescriptionLine
             key={`line-${index}`}
@@ -1591,6 +1604,7 @@ function SelectableDescriptionText(props: { text: string }) {
   return (
     <WebView
       controller={controller}
+      background="clear"
       frame={{ maxWidth: "infinity", height }}
     />
   )

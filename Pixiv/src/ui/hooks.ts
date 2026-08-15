@@ -162,7 +162,8 @@ export function usePagedList<T extends { id: number | string }>(
   const [pendingItems, setPendingItems] = useState<T[]>([])
   const [nextURL, setNextURL] = useState<string | null>(null)
   const [loadingMore, setLoadingMore] = useState(false)
-  const [initialLoading, setInitialLoading] = useState(enabled)
+  // 未激活的常驻流在首次显示前也应保持首屏加载态，避免切换时先短暂渲染空态。
+  const [initialLoading, setInitialLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const seqRef = useRef(0)
@@ -205,7 +206,6 @@ export function usePagedList<T extends { id: number | string }>(
     // 首次加载尚未完成就离开时，下次激活必须重新请求，不能停在加载中。
     if (itemsRef.current.length === 0 && initialLoadingRef.current) {
       hasLoadedRef.current = false
-      setInitialLoading(false)
     }
   }
 
