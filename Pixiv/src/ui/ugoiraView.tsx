@@ -15,8 +15,9 @@ import type { UgoiraResult } from "../ugoira/ugoira"
 export function UgoiraPlayerView(props: {
   illustID: number
   aspectRatioValue: number
+  onLoaded?: (success: boolean) => void
 }) {
-  const { illustID, aspectRatioValue } = props
+  const { illustID, aspectRatioValue, onLoaded } = props
   const [result, setResult] = useState<UgoiraResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -32,16 +33,21 @@ export function UgoiraPlayerView(props: {
     if (cached) {
       setResult(cached)
       setLoading(false)
+      onLoaded?.(true)
       return
     }
     setLoading(true)
     buildUgoira(illustID)
       .then((r) => {
-        if (seq === seqRef.current) setResult(r)
+        if (seq === seqRef.current) {
+          setResult(r)
+          onLoaded?.(true)
+        }
       })
       .catch((err: any) => {
         if (seq === seqRef.current) {
           setError(err?.message ?? "动图合成失败")
+          onLoaded?.(false)
         }
       })
       .finally(() => {

@@ -183,7 +183,10 @@ export function RefreshableScrollView(props: {
 
 // 异步图片加载状态（CachedImage / AvatarImage 共用）：
 // cancelled 标志防止 url 切换后旧结果覆盖新状态
-function useCachedImage(url: string | null) {
+function useCachedImage(
+  url: string | null,
+  onLoaded?: (success: boolean) => void
+) {
   const [cacheRevision, setCacheRevision] = useState(imageCacheRevision())
   const [loaded, setLoaded] = useState<{
     url: string | null
@@ -200,14 +203,22 @@ function useCachedImage(url: string | null) {
   const path = cachedPath ?? (
     loaded.url === url && loaded.revision === cacheRevision ? loaded.path : null
   )
+  const onLoadedRef = useLatest(onLoaded)
 
   useEffect(() => onImageCacheChanged(() => setCacheRevision(imageCacheRevision())), [])
+
+  useEffect(() => {
+    if (cachedPath) {
+      onLoadedRef.current?.(true)
+    }
+  }, [cachedPath, onLoadedRef])
 
   useEffect(() => {
     let cancelled = false
     setFailed(false)
     if (!url) {
       setLoaded({ url: null, path: null, revision: cacheRevision })
+      onLoadedRef.current?.(false)
       return
     }
     if (cachedPath) {
@@ -221,6 +232,9 @@ function useCachedImage(url: string | null) {
           setLoaded({ url, path: p, revision: cacheRevision })
           if (!p) {
             setFailed(true)
+            onLoadedRef.current?.(false)
+          } else {
+            onLoadedRef.current?.(true)
           }
         }
       })
@@ -228,12 +242,13 @@ function useCachedImage(url: string | null) {
         if (!cancelled) {
           setLoaded({ url, path: null, revision: cacheRevision })
           setFailed(true)
+          onLoadedRef.current?.(false)
         }
       })
     return () => {
       cancelled = true
     }
-  }, [url, cacheRevision, cachedPath])
+  }, [url, cacheRevision, cachedPath, onLoadedRef])
 
   return { path, failed }
 }
@@ -248,6 +263,7 @@ export function CachedImage(props: {
   centerCropSquare?: boolean
   useIntrinsicAspectRatio?: boolean
   frame?: any // 覆盖默认整宽 frame（如固定尺寸缩略图）
+  onLoaded?: (success: boolean) => void
 }) {
   const {
     url,
@@ -255,9 +271,11 @@ export function CachedImage(props: {
     cornerRadius = 10,
     contentMode = "fill",
     centerCropSquare = false,
+    useIntrinsicAspectRatio = false,
     frame,
+    onLoaded,
   } = props
-  const { path, failed } = useCachedImage(url)
+  const { path, failed } = useCachedImage(url, onLoaded)
   const centeredSquare = useMemo(() => {
     if (!path || !centerCropSquare) return null
     try {
@@ -275,6 +293,21 @@ export function CachedImage(props: {
     }
   }, [path, centerCropSquare])
 
+  const intrinsicAspect = useMemo(() => {
+    if (!path || !useIntrinsicAspectRatio) return null
+    try {
+      const image = UIImage.fromFile(path)
+      if (image && image.width > 0 && image.height > 0) {
+        return image.width / image.height
+      }
+    } catch {
+      return null
+    }
+    return null
+  }, [path, useIntrinsicAspectRatio])
+
+  const effectiveRatio = intrinsicAspect ?? aspectRatioValue
+
   if (path) {
     if (centeredSquare) {
       return (
@@ -291,7 +324,7 @@ export function CachedImage(props: {
       <Image
         filePath={path}
         resizable={true}
-        aspectRatio={{ value: aspectRatioValue, contentMode }}
+        aspectRatio={{ value: effectiveRatio, contentMode }}
         clipShape={{ type: "rect", cornerRadius }}
         frame={frame ?? { maxWidth: "infinity" }}
       />

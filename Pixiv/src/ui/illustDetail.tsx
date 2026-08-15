@@ -8,7 +8,9 @@ import {
   LazyVStack,
   Menu,
   NavigationLink,
+  ProgressView,
   ScrollView,
+  Spacer,
   Text,
   useEffect,
   useRef,
@@ -72,6 +74,7 @@ export function IllustDetailView(props: { illustID: number }) {
   const [followLoading, setFollowLoading] = useState(false)
   const [showComments, setShowComments] = useState(false)
   const [quality, setQuality] = useState(loadSettings().detailImageQuality)
+  const [mediaReady, setMediaReady] = useState(false)
   const guard = useAsyncGuard()
   const illustRef = useLatest(illust)
   const errorRef = useLatest(error)
@@ -83,6 +86,7 @@ export function IllustDetailView(props: { illustID: number }) {
     const g = guard()
     setLoading(true)
     setError(null)
+    setMediaReady(false)
     try {
       const detail = await session.call((token) =>
         illustrationDetail(illustID, token)
@@ -145,6 +149,11 @@ export function IllustDetailView(props: { illustID: number }) {
 
   useEffect(() => {
     load()
+    // 保底机制：若本体大图文件较大在 1.2 秒内仍在下载，自动放行相关作品请求，避免下方留白卡死
+    const timer = setTimeout(() => {
+      setMediaReady(true)
+    }, 1200)
+    return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [illustID])
 
@@ -448,6 +457,7 @@ export function IllustDetailView(props: { illustID: number }) {
             <UgoiraPlayerView
               illustID={current.id}
               aspectRatioValue={pageAspect}
+              onLoaded={() => setMediaReady(true)}
             />
           ) : pageCount > 1 ? (
             <LazyVStack spacing={4} alignment="center">
@@ -456,8 +466,10 @@ export function IllustDetailView(props: { illustID: number }) {
                   key={idx}
                   url={url}
                   aspectRatioValue={pageAspect}
+                  useIntrinsicAspectRatio={true}
                   cornerRadius={6}
                   contentMode="fit"
+                  onLoaded={idx === 0 ? () => setMediaReady(true) : undefined}
                 />
               ))}
             </LazyVStack>
@@ -465,8 +477,10 @@ export function IllustDetailView(props: { illustID: number }) {
             <CachedImage
               url={pageURLs[0] ?? null}
               aspectRatioValue={pageAspect}
+              useIntrinsicAspectRatio={true}
               cornerRadius={8}
               contentMode="fit"
+              onLoaded={() => setMediaReady(true)}
             />
           )}
         </VStack>
@@ -549,7 +563,10 @@ export function IllustDetailView(props: { illustID: number }) {
           ) : null}
         </VStack>
 
-        <RelatedIllustrationsSection illustID={current.id} />
+        <RelatedIllustrationsSection
+          illustID={current.id}
+          enabled={mediaReady}
+        />
       </VStack>
 
       <VStack
@@ -587,12 +604,17 @@ export function IllustDetailView(props: { illustID: number }) {
   )
 }
 
-function RelatedIllustrationsSection(props: { illustID: number }) {
+function RelatedIllustrationsSection(props: {
+  illustID: number
+  enabled?: boolean
+}) {
+  const { enabled = true } = props
   const paged = usePagedList<PixivIllustration>({
     first: (token) => relatedIllustrations(props.illustID, token),
     more: (nextURL, token) => nextIllustrations(nextURL, token),
     filter: filterRelatedIllustrations,
     deps: [props.illustID],
+    enabled,
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel,
   })
@@ -605,22 +627,46 @@ function RelatedIllustrationsSection(props: { illustID: number }) {
     })
   }, [])
 
-  if (paged.initialLoading || (paged.error && paged.items.length === 0)) {
+  if (paged.initialLoading && !enabled) {
     return null
   }
-  if (paged.items.length === 0) return null
 
   return (
     <VStack alignment="leading" spacing={8} padding={{ top: 4 }}>
       <Text font="subheadline" fontWeight="semibold" padding={{ horizontal: 14 }}>
         相关作品
       </Text>
-      <IllustFlowFeed
-        items={paged.items}
-        onLoadMore={paged.loadMore}
-        hasMore={paged.hasMore}
-        isLoading={paged.loadingMore}
-      />
+      {paged.initialLoading ? (
+        <HStack spacing={0} frame={{ maxWidth: "infinity", height: 80 }}>
+          <Spacer />
+          <ProgressView progressViewStyle="circular" />
+          <Spacer />
+        </HStack>
+      ) : paged.error && paged.items.length === 0 ? (
+        <VStack alignment="center" spacing={8} padding={16} frame={{ maxWidth: "infinity" }}>
+          <Text font="footnote" foregroundStyle="secondaryLabel">
+            相关作品加载失败
+          </Text>
+          <Button
+            title="重试"
+            buttonStyle="glass"
+            action={() => paged.refresh()}
+          />
+        </VStack>
+      ) : paged.items.length > 0 ? (
+        <IllustFlowFeed
+          items={paged.items}
+          onLoadMore={paged.loadMore}
+          hasMore={paged.hasMore}
+          isLoading={paged.loadingMore}
+        />
+      ) : (
+        <HStack spacing={0} padding={{ horizontal: 14, vertical: 8 }}>
+          <Text font="footnote" foregroundStyle="secondaryLabel">
+            暂无相关作品
+          </Text>
+        </HStack>
+      )}
     </VStack>
   )
 }
