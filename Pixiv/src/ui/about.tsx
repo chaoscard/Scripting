@@ -22,17 +22,19 @@ export function AboutView() {
           title="Notsfsssf/pixez-flutter"
           url="https://github.com/Notsfsssf/pixez-flutter"
           avatarURL={GITHUB_AVATAR_URL}
+          avatarCornerRadius={6}
         />
         <ExternalLinkRow
           title="youshen2/Hanairo"
           url="https://github.com/youshen2/Hanairo"
           avatarURL={HANA_IRO_AVATAR_URL}
+          avatarCornerRadius={6}
         />
         <ExternalLinkRow
           title="npmjs/pixiv-api-client"
           url="https://www.npmjs.com/package/pixiv-api-client"
           avatarURL={NPM_ICON_URL}
-          avatarCornerRadius={7}
+          avatarCornerRadius={6}
         />
       </Section>
 
@@ -69,14 +71,13 @@ function HomeLinkRow() {
   return (
     <HStack spacing={8} frame={{ maxWidth: "infinity" }}>
       <Text font="body">主页</Text>
+      <Spacer />
       <Button
         buttonStyle="plain"
         action={() => void presentExternalURL("https://github.com/chaoscard/Scripting")}
-        frame={{ maxWidth: "infinity", alignment: "leading" }}
       >
-        <HStack spacing={8} frame={{ maxWidth: "infinity" }}>
+        <HStack spacing={4}>
           <Text font="body" foregroundStyle="#007AFF">chaoscard/Scripting</Text>
-          <Spacer />
           <Image systemName="arrow.up.right" font="footnote" foregroundStyle="tertiaryLabel" />
         </HStack>
       </Button>
@@ -97,10 +98,10 @@ function ExternalLinkRow(props: {
           <AvatarImage
             url={props.avatarURL}
             size={28}
-            cornerRadius={props.avatarCornerRadius}
+            cornerRadius={props.avatarCornerRadius ?? 6}
           />
         ) : null}
-        <Text font="body" foregroundStyle="#007AFF">{props.title}</Text>
+        <Text font="body">{props.title}</Text>
         <Spacer />
         <Image systemName="arrow.up.right" font="footnote" foregroundStyle="tertiaryLabel" />
       </HStack>
