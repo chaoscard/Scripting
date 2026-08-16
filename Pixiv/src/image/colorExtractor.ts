@@ -12,8 +12,22 @@ export interface UserAmbientResult {
   dark: UserAmbientPalette
 }
 
+export interface IllustAmbientPalette {
+  topColor: Color
+  midColor: Color
+  backgroundColor: Color
+}
+
+export interface IllustAmbientResult {
+  light: IllustAmbientPalette
+  dark: IllustAmbientPalette
+}
+
 // 内存缓存：URL -> UserAmbientResult
 const paletteCache = new Map<string, UserAmbientResult>()
+
+// 内存缓存：URL -> IllustAmbientResult
+const illustPaletteCache = new Map<string, IllustAmbientResult>()
 
 function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
   const max = Math.max(r, g, b)
@@ -65,7 +79,7 @@ function hslToRgb(h: number, s: number, l: number): [number, number, number] {
 }
 
 /**
- * 提升色彩饱和度与明度，使氛围延伸柔和、高级而不过度浓艳
+ * 适度增强色彩饱和度与明度，使氛围延伸自然生动、层次分明
  */
 function boostVibrancy(
   red: number,
@@ -74,12 +88,12 @@ function boostVibrancy(
   isDark: boolean
 ): [number, number, number] {
   const [h, s, l] = rgbToHsl(red, green, blue)
-  // 适度调整饱和度，保持柔和优雅
-  const boostedS = Math.min(0.80, Math.max(0.18, s * 1.15 + 0.05))
+  // 适度提升饱和度，保持色彩丰富与生动
+  const boostedS = Math.min(0.72, Math.max(0.15, s * 1.05))
   // 约束明度在清爽舒适的区间
   const targetL = isDark
-    ? Math.min(0.55, Math.max(0.28, l * 0.9))
-    : Math.min(0.78, Math.max(0.50, l * 1.05))
+    ? Math.min(0.50, Math.max(0.26, l * 0.90))
+    : Math.min(0.80, Math.max(0.52, l * 1.04))
   return hslToRgb(h, boostedS, targetL)
 }
 
@@ -153,14 +167,14 @@ export async function extractUserAmbientPalette(
     const dRawG = bestDominant.green ?? 0
     const dRawB = bestDominant.blue ?? 0
 
-    // 浅色模式色彩调和（适度减弱浓度，清爽自然）
+    // 浅色模式色彩调和（适度浓郁，氛围生动）
     const [bLightR, bLightG, bLightB] = boostVibrancy(bRawR, bRawG, bRawB, false)
     const [dLightR, dLightG, dLightB] = boostVibrancy(dRawR, dRawG, dRawB, false)
 
     const lightPalette: UserAmbientPalette = {
-      topColor: `rgba(${bLightR},${bLightG},${bLightB},0.50)` as Color,
-      midColor: `rgba(${dLightR},${dLightG},${dLightB},0.24)` as Color,
-      worksColor: `rgba(${dLightR},${dLightG},${dLightB},0.10)` as Color,
+      topColor: `rgba(${bLightR},${bLightG},${bLightB},0.38)` as Color,
+      midColor: `rgba(${dLightR},${dLightG},${dLightB},0.18)` as Color,
+      worksColor: `rgba(${dLightR},${dLightG},${dLightB},0.06)` as Color,
     }
 
     // 深色模式色彩调和（暗夜微光，深邃通透）
@@ -168,9 +182,9 @@ export async function extractUserAmbientPalette(
     const [dDarkR, dDarkG, dDarkB] = boostVibrancy(dRawR, dRawG, dRawB, true)
 
     const darkPalette: UserAmbientPalette = {
-      topColor: `rgba(${bDarkR},${bDarkG},${bDarkB},0.60)` as Color,
-      midColor: `rgba(${dDarkR},${dDarkG},${dDarkB},0.30)` as Color,
-      worksColor: `rgba(${dDarkR},${dDarkG},${dDarkB},0.12)` as Color,
+      topColor: `rgba(${bDarkR},${bDarkG},${bDarkB},0.44)` as Color,
+      midColor: `rgba(${dDarkR},${dDarkG},${dDarkB},0.22)` as Color,
+      worksColor: `rgba(${dDarkR},${dDarkG},${dDarkB},0.08)` as Color,
     }
 
     const result: UserAmbientResult = {
@@ -181,6 +195,107 @@ export async function extractUserAmbientPalette(
     return result
   } catch (err) {
     console.log("extractUserAmbientPalette error:", err)
+    return null
+  }
+}
+
+/**
+ * 同步尝试从内存缓存中获取已计算的插画/漫画氛围色盘
+ */
+export function getCachedIllustAmbientPalette(
+  url: string | null | undefined,
+  isDark: boolean
+): IllustAmbientPalette | null {
+  if (!url) return null
+  const cached = illustPaletteCache.get(url)
+  if (!cached) return null
+  return isDark ? cached.dark : cached.light
+}
+
+/**
+ * 异步从插画/漫画封面提取氛围色（顶部主色与全局核心色调），生成与画作呼应的自然渐变
+ */
+export async function extractIllustAmbientPalette(
+  url: string | null | undefined
+): Promise<IllustAmbientResult | null> {
+  if (!url) return null
+  const cached = illustPaletteCache.get(url)
+  if (cached) return cached
+
+  try {
+    let filePath = cachedFilePath(url)
+    if (!filePath) {
+      filePath = await loadImage(url, 0)
+    }
+    if (!filePath) return null
+
+    const uiImage = UIImage.fromFile(filePath)
+    if (!uiImage || uiImage.width <= 0 || uiImage.height <= 0) return null
+
+    // 1. 顶部 30% 区域采样（无缝衔接顶部导航区）
+    const cropH = Math.max(2, Math.round(uiImage.height * 0.3))
+    const topCrop = uiImage.croppedTo({
+      x: 0,
+      y: 0,
+      width: uiImage.width,
+      height: cropH,
+    })
+    const topAvg = topCrop?.averageColor() ?? uiImage.averageColor()
+
+    // 2. 全局多主色采样：在主色列表中优先选取鲜活度适中的颜色
+    const dominants = uiImage.dominantColors(6)
+    let bestDominant = uiImage.averageColor()
+    if (dominants && dominants.length > 0) {
+      let maxScore = -1
+      for (const d of dominants) {
+        const c = d.color
+        const [, s] = rgbToHsl(c.red ?? 0, c.green ?? 0, c.blue ?? 0)
+        const score = s * 1.6 + d.fraction
+        if (score > maxScore) {
+          maxScore = score
+          bestDominant = c
+        }
+      }
+    }
+
+    if (!topAvg || !bestDominant) return null
+
+    const tRawR = topAvg.red ?? 0
+    const tRawG = topAvg.green ?? 0
+    const tRawB = topAvg.blue ?? 0
+
+    const dRawR = bestDominant.red ?? 0
+    const dRawG = bestDominant.green ?? 0
+    const dRawB = bestDominant.blue ?? 0
+
+    // 浅色模式色彩调和（顶部适度浓郁，主体背景自然晕染）
+    const [tLightR, tLightG, tLightB] = boostVibrancy(tRawR, tRawG, tRawB, false)
+    const [dLightR, dLightG, dLightB] = boostVibrancy(dRawR, dRawG, dRawB, false)
+
+    const lightPalette: IllustAmbientPalette = {
+      topColor: `rgba(${tLightR},${tLightG},${tLightB},0.46)` as Color,
+      midColor: `rgba(${dLightR},${dLightG},${dLightB},0.24)` as Color,
+      backgroundColor: `rgba(${dLightR},${dLightG},${dLightB},0.08)` as Color,
+    }
+
+    // 深色模式色彩调和（暗夜微光，深邃通透）
+    const [tDarkR, tDarkG, tDarkB] = boostVibrancy(tRawR, tRawG, tRawB, true)
+    const [dDarkR, dDarkG, dDarkB] = boostVibrancy(dRawR, dRawG, dRawB, true)
+
+    const darkPalette: IllustAmbientPalette = {
+      topColor: `rgba(${tDarkR},${tDarkG},${tDarkB},0.54)` as Color,
+      midColor: `rgba(${dDarkR},${dDarkG},${dDarkB},0.28)` as Color,
+      backgroundColor: `rgba(${dDarkR},${dDarkG},${dDarkB},0.10)` as Color,
+    }
+
+    const result: IllustAmbientResult = {
+      light: lightPalette,
+      dark: darkPalette,
+    }
+    illustPaletteCache.set(url, result)
+    return result
+  } catch (err) {
+    console.log("extractIllustAmbientPalette error:", err)
     return null
   }
 }

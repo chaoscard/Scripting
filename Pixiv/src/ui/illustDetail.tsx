@@ -12,6 +12,7 @@ import {
   ScrollView,
   Spacer,
   Text,
+  useColorScheme,
   useEffect,
   useRef,
   useState,
@@ -32,6 +33,11 @@ import {
 import { session } from "../api/session"
 import { cardThumbUrlOf, imageUrlOf, loadImage, prefetch } from "../image/imageLoader"
 import {
+  extractIllustAmbientPalette,
+  getCachedIllustAmbientPalette,
+  type IllustAmbientPalette,
+} from "../image/colorExtractor"
+import {
   isIllustContentVisible,
   isR18ContentVisible,
   loadSettings,
@@ -47,12 +53,14 @@ import {
   CachedImage,
   ErrorView,
   IllustFlowFeed,
+  estimateChipWidth,
   formatDate,
   formatNumber,
   htmlToPlainText,
   LinkedDescription,
   LoadingView,
   TagChip,
+  wrapTags,
 } from "./components"
 import { CommentsSheet } from "./comments"
 import { UgoiraPlayerView } from "./ugoiraView"
@@ -63,7 +71,12 @@ const RESTRICTED_CONTENT_MESSAGE = "该作品已被内容分级设置隐藏"
 
 export function IllustDetailView(props: { illustID: number }) {
   const { illustID } = props
+  const colorScheme = useColorScheme()
+  const isDark = colorScheme === "dark"
   const [illust, setIllust] = useState<PixivIllustration | null>(null)
+  const [ambientPalette, setAmbientPalette] = useState<IllustAmbientPalette | null>(
+    null
+  )
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [bookmarked, setBookmarked] = useState(false)
@@ -164,6 +177,28 @@ export function IllustDetailView(props: { illustID: number }) {
       }
     })
   }, [])
+
+  useEffect(() => {
+    const coverUrl = illust
+      ? (cardThumbUrlOf(illust) ?? imageUrlOf(illust, 0, quality))
+      : null
+    if (!coverUrl) {
+      setAmbientPalette(null)
+      return
+    }
+    let active = true
+    const cached = getCachedIllustAmbientPalette(coverUrl, isDark)
+    if (cached) {
+      setAmbientPalette(cached)
+    }
+    void extractIllustAmbientPalette(coverUrl).then((result) => {
+      if (!active || !result) return
+      setAmbientPalette(isDark ? result.dark : result.light)
+    })
+    return () => {
+      active = false
+    }
+  }, [illust?.id, quality, isDark])
 
   // 设置变化时更新图片质量；关闭 R18 后立即撤下已打开的受限内容。
   useEffect(() => {
@@ -340,6 +375,39 @@ export function IllustDetailView(props: { illustID: number }) {
     <ScrollView
       navigationTitle={current.title}
       navigationBarTitleDisplayMode="inline"
+      toolbarBackground={
+        ambientPalette
+          ? {
+              style: ambientPalette.topColor,
+              bars: ["navigationBar"],
+            }
+          : undefined
+      }
+      toolbarBackgroundVisibility={
+        ambientPalette
+          ? {
+              visibility: "visible",
+              bars: ["navigationBar"],
+            }
+          : {
+              visibility: "hidden",
+              bars: ["navigationBar"],
+            }
+      }
+      background={
+        ambientPalette
+          ? {
+              colors: [
+                ambientPalette.topColor,
+                ambientPalette.midColor,
+                ambientPalette.backgroundColor,
+                ambientPalette.backgroundColor,
+              ],
+              startPoint: "top",
+              endPoint: "bottom",
+            }
+          : undefined
+      }
       toolbar={{
         topBarTrailing: [
           <Button
@@ -450,7 +518,6 @@ export function IllustDetailView(props: { illustID: number }) {
           alignment="center"
           spacing={4}
           frame={{ maxWidth: "infinity" }}
-          background="systemGray6"
           padding={{ top: 0, bottom: 6 }}
         >
           {current.type === "ugoira" ? (
@@ -538,29 +605,35 @@ export function IllustDetailView(props: { illustID: number }) {
             </VStack>
           ) : null}
 
-          {/* 标签：横向拖动查看完整标签，避免长文本撑破页面 */}
+          {/* 标签：流式换行展示所有标签 */}
           {current.tags.length > 0 ? (
             <VStack alignment="leading" spacing={6}>
               <Text font="subheadline" fontWeight="semibold">
                 标签
               </Text>
-              <ScrollView axes="horizontal">
-                <HStack spacing={6}>
-                  {current.tags.map((tag) => (
-                    <TagChip
-                      key={tag.name}
-                      tagName={tag.name}
-                      value={`tag:${encodeURIComponent(tag.name)}`}
-                      name={
-                        tag.translated_name
-                          ? `${tag.name}（${tag.translated_name}）`
-                          : tag.name
-                      }
-                      compact
-                    />
-                  ))}
-                </HStack>
-              </ScrollView>
+              <VStack alignment="leading" spacing={6}>
+                {wrapTags(
+                  current.tags,
+                  350,
+                  (tag) =>
+                    estimateChipWidth(
+                      `#${tag.name}${tag.translated_name ? ` ${tag.translated_name}` : ""}`
+                    )
+                ).map((row, ri) => (
+                  <HStack key={ri} spacing={6}>
+                    {row.map((tag) => (
+                      <TagChip
+                        key={tag.name}
+                        name={tag.name}
+                        tagName={tag.name}
+                        translatedName={tag.translated_name ?? undefined}
+                        value={`tag:${encodeURIComponent(tag.name)}`}
+                        compact
+                      />
+                    ))}
+                  </HStack>
+                ))}
+              </VStack>
             </VStack>
           ) : null}
         </VStack>

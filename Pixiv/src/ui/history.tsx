@@ -213,6 +213,13 @@ function HistoryContent(props: { kind: HistoryKind; items: HistoryEntry[] }) {
             novel={entry.novel as PixivNovel}
             priority={index}
             footerText={formatDate(new Date(entry.viewedAt).toISOString())}
+            topTrailingAction={{
+              title: "移除",
+              systemImage: "trash",
+              tint: "#FF3B30",
+              foregroundStyle: "systemRed",
+              action: () => removeHistoryEntry("novel", entry.novel.id),
+            }}
             onAppear={
               entry.novel.id === lastNovel?.novel.id && visibleCount < novels.length
                 ? () => setVisibleCount((c) => Math.min(c + 10, novels.length))

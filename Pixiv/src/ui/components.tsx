@@ -511,8 +511,16 @@ export function NovelCard(props: {
   priority?: number
   footerText?: string
   markerPage?: number
+  topTrailingAction?: IllustCardAction
 }) {
-  const { novel, onAppear, priority, footerText, markerPage } = props
+  const {
+    novel,
+    onAppear,
+    priority,
+    footerText,
+    markerPage,
+    topTrailingAction,
+  } = props
   const [bookmarked, setBookmarked] = useState(novel.is_bookmarked)
   const [bookmarkBusy, setBookmarkBusy] = useState(false)
   const [showBookmarkDetail, setShowBookmarkDetail] = useState(false)
@@ -571,126 +579,147 @@ export function NovelCard(props: {
     null
 
   return (
-    <ZStack alignment="bottomTrailing">
-      <NavigationLink value={`novel:${novel.id}`}>
-        <HStack
-          spacing={10}
-          padding={10}
-          onAppear={onAppear}
-          alignment="top"
-          glassEffect={{ type: "rect", cornerRadius: 14 }}
+    <ZStack alignment="topTrailing" frame={{ maxWidth: "infinity" }}>
+      <ZStack alignment="bottomTrailing" frame={{ maxWidth: "infinity" }}>
+        <NavigationLink value={`novel:${novel.id}`}>
+          <HStack
+            spacing={10}
+            padding={10}
+            onAppear={onAppear}
+            alignment="top"
+            glassEffect={{ type: "rect", cornerRadius: 14 }}
             shadow={{ color: "#0000000F", radius: 18, y: 8 }}
-          frame={{ maxWidth: "infinity" }}
-        >
-          <ZStack
-            frame={{ width: 68, height: 96 }}
-            clipShape={{ type: "rect", cornerRadius: 8 }}
-            background="systemGray6"
+            frame={{ maxWidth: "infinity" }}
           >
-            <CachedImage
-              url={coverURL}
-              aspectRatioValue={0.71}
-              centerCropAspect={0.71}
-              cornerRadius={0}
-              contentMode="fill"
-              priority={priority}
+            <ZStack
               frame={{ width: 68, height: 96 }}
-            />
-          </ZStack>
-          <VStack
-            alignment="leading"
-            spacing={4}
-            frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-          >
-            <Text
-              font="subheadline"
-              fontWeight="semibold"
-              multilineTextAlignment="leading"
-              frame={{ maxWidth: "infinity", alignment: "leading" }}
+              clipShape={{ type: "rect", cornerRadius: 8 }}
+              background="systemGray6"
             >
-              {novel.title}
-            </Text>
-            <VStack alignment="leading" spacing={2}>
-              {wrapTags(
-                novel.tags,
-                NOVEL_TAG_MAX_WIDTH,
-                (tag) => estimateTextWidth(`${tag.name} `),
-                0
-              ).map((row, ri) => (
-                <HStack key={ri} spacing={0} frame={{ maxWidth: "infinity" }}>
-                  {row.map((tag) => (
-                    <Text
-                      key={tag.name}
-                      font="caption2"
-                      foregroundStyle="secondaryLabel"
-                      lineLimit={1}
-                    >
-                      {tag.name}{" "}
-                    </Text>
-                  ))}
-                  <Spacer />
-                </HStack>
-              ))}
-            </VStack>
-            <Spacer />
-            <HStack frame={{ maxWidth: "infinity" }}>
-              <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={1}>
-                {novel.user.name}
+              <CachedImage
+                url={coverURL}
+                aspectRatioValue={0.71}
+                centerCropAspect={0.71}
+                cornerRadius={0}
+                contentMode="fill"
+                priority={priority}
+                frame={{ width: 68, height: 96 }}
+              />
+            </ZStack>
+            <VStack
+              alignment="leading"
+              spacing={4}
+              frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+            >
+              <Text
+                font="subheadline"
+                fontWeight="semibold"
+                multilineTextAlignment="leading"
+                frame={{ maxWidth: "infinity", alignment: "leading" }}
+                padding={{ trailing: topTrailingAction ? 24 : 0 }}
+              >
+                {novel.title}
               </Text>
+              <VStack alignment="leading" spacing={2}>
+                {wrapTags(
+                  novel.tags,
+                  NOVEL_TAG_MAX_WIDTH,
+                  (tag) => estimateTextWidth(`${tag.name} `),
+                  0
+                ).map((row, ri) => (
+                  <HStack key={ri} spacing={0} frame={{ maxWidth: "infinity" }}>
+                    {row.map((tag) => (
+                      <Text
+                        key={tag.name}
+                        font="caption2"
+                        foregroundStyle="secondaryLabel"
+                        lineLimit={1}
+                      >
+                        {tag.name}{" "}
+                      </Text>
+                    ))}
+                    <Spacer />
+                  </HStack>
+                ))}
+              </VStack>
               <Spacer />
-            </HStack>
-            <HStack frame={{ maxWidth: "infinity" }}>
-              <Text font="caption2" foregroundStyle="secondaryLabel">
-                ♥ {formatNumber(novel.total_bookmarks)}
-              </Text>
-              <HStack spacing={4}>
-                <Image systemName="eye" font="caption2" foregroundStyle="secondaryLabel" />
-                <Text font="caption2" foregroundStyle="secondaryLabel">
-                  {formatNumber(novel.total_view)}
+              <HStack frame={{ maxWidth: "infinity" }}>
+                <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={1}>
+                  {novel.user.name}
                 </Text>
+                <Spacer />
               </HStack>
-              {novel.text_length != null ? (
+              <HStack frame={{ maxWidth: "infinity" }}>
+                <Text font="caption2" foregroundStyle="secondaryLabel">
+                  ♥ {formatNumber(novel.total_bookmarks)}
+                </Text>
                 <HStack spacing={4}>
-                  <Image systemName="character.cursor.ibeam" font="caption2" foregroundStyle="secondaryLabel" />
+                  <Image systemName="eye" font="caption2" foregroundStyle="secondaryLabel" />
                   <Text font="caption2" foregroundStyle="secondaryLabel">
-                    {novel.text_length}
+                    {formatNumber(novel.total_view)}
                   </Text>
                 </HStack>
-              ) : null}
-              {markerPage != null ? (
-                <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={1}>
-                  第 {markerPage} 页
-                </Text>
-              ) : null}
-              {footerText ? (
-                <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={1}>
-                  {footerText}
-                </Text>
-              ) : null}
-              <Spacer />
-            </HStack>
-          </VStack>
-        </HStack>
-      </NavigationLink>
-      <BookmarkButton
-        bookmarked={bookmarked}
-        disabled={bookmarkBusy}
-        onTap={() => void toggleNovelBookmark()}
-        onLongPress={handleNovelBookmarkLongPress}
-        sheetContent={
-          <BookmarkDetailSheet
-            item={novel}
-            bookmarked={bookmarked}
-            loadDetail={(token) => novelBookmarkDetail(novel.id, token)}
-            loadTags={(restrict, token) => novelBookmarkTags(restrict, token)}
-            save={(restrict, tags, token) => addNovelBookmark(novel.id, restrict, token, tags)}
-            onSaved={() => setBookmarked(true)}
-            onClose={() => setShowBookmarkDetail(false)}
+                {novel.text_length != null ? (
+                  <HStack spacing={4}>
+                    <Image systemName="character.cursor.ibeam" font="caption2" foregroundStyle="secondaryLabel" />
+                    <Text font="caption2" foregroundStyle="secondaryLabel">
+                      {novel.text_length}
+                    </Text>
+                  </HStack>
+                ) : null}
+                {markerPage != null ? (
+                  <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={1}>
+                    第 {markerPage} 页
+                  </Text>
+                ) : null}
+                {footerText ? (
+                  <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={1}>
+                    {footerText}
+                  </Text>
+                ) : null}
+                <Spacer />
+              </HStack>
+            </VStack>
+          </HStack>
+        </NavigationLink>
+        <BookmarkButton
+          bookmarked={bookmarked}
+          disabled={bookmarkBusy}
+          onTap={() => void toggleNovelBookmark()}
+          onLongPress={handleNovelBookmarkLongPress}
+          sheetContent={
+            <BookmarkDetailSheet
+              item={novel}
+              bookmarked={bookmarked}
+              loadDetail={(token) => novelBookmarkDetail(novel.id, token)}
+              loadTags={(restrict, token) => novelBookmarkTags(restrict, token)}
+              save={(restrict, tags, token) => addNovelBookmark(novel.id, restrict, token, tags)}
+              onSaved={() => setBookmarked(true)}
+              onClose={() => setShowBookmarkDetail(false)}
+            />
+          }
+          sheetPresented={showBookmarkDetail}
+          onSheetChanged={setShowBookmarkDetail}
+        />
+      </ZStack>
+      {topTrailingAction ? (
+        <Button
+          buttonStyle="glass"
+          action={topTrailingAction.action}
+          frame={{ width: CORNER_ICON_SIZE, height: CORNER_ICON_SIZE }}
+          clipShape={{ type: "rect", cornerRadius: CORNER_ICON_SIZE / 2 }}
+          contentShape="rect"
+          zIndex={1}
+          offset={{ x: -4, y: 4 }}
+        >
+          <Image
+            systemName={topTrailingAction.systemImage}
+            font="body"
+            tint={topTrailingAction.tint}
+            foregroundStyle={topTrailingAction.foregroundStyle}
           />
-        }
-        sheetPresented={showBookmarkDetail}
-        onSheetChanged={setShowBookmarkDetail}
-      />
+        </Button>
+      ) : null}
     </ZStack>
   )
 }
@@ -1580,19 +1609,16 @@ export function LinkedDescription(props: {
     >
       {blocks.map((block, index) =>
         block.kind === "text" ? (
-          props.nativePlainText ? (
-            <Text
-              key={`text-${index}`}
-              font="footnote"
-              multilineTextAlignment="leading"
-              textSelection={true}
-              frame={{ maxWidth: "infinity", alignment: "leading" }}
-            >
-              {block.text}
-            </Text>
-          ) : (
-            <SelectableDescriptionText key={`text-${index}`} text={block.text} />
-          )
+          <Text
+            key={`text-${index}`}
+            font="footnote"
+            foregroundStyle="secondaryLabel"
+            multilineTextAlignment="leading"
+            textSelection={true}
+            frame={{ maxWidth: "infinity", alignment: "leading" }}
+          >
+            {block.text}
+          </Text>
         ) : (
           <DescriptionLine
             key={`line-${index}`}
@@ -1743,70 +1769,6 @@ function descriptionBlocks(lines: DescriptionSegment[][]): DescriptionBlock[] {
   }
   flushText()
   return blocks
-}
-
-function SelectableDescriptionText(props: { text: string }) {
-  const controller = useMemo(() => new WebViewController({ ephemeral: true }), [])
-  const [height, setHeight] = useState(24)
-
-  useEffect(() => {
-    let active = true
-    void controller
-      .loadHTML(selectableDescriptionHTML(props.text))
-      .then(async () => {
-        const contentHeight = await controller.evaluateJavaScript<number>(
-          "return Math.ceil(document.documentElement.scrollHeight)"
-        )
-        if (active) setHeight(Math.max(24, contentHeight))
-      })
-      .catch(() => {})
-    return () => {
-      active = false
-    }
-  }, [controller, props.text])
-
-  useEffect(() => {
-    return () => controller.dispose()
-  }, [controller])
-
-  return (
-    <WebView
-      controller={controller}
-      background="clear"
-      frame={{ maxWidth: "infinity", height }}
-    />
-  )
-}
-
-function selectableDescriptionHTML(text: string): string {
-  const escaped = text
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;")
-
-  return `<!doctype html>
-<html>
-<head>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<style>
-  :root { color-scheme: light dark; }
-  html, body { margin: 0; padding: 0; background: transparent; }
-  body {
-    color: #8E8E93;
-    font: -apple-system-footnote;
-    line-height: 1.35;
-    white-space: pre-wrap;
-    overflow: hidden;
-    overflow-wrap: anywhere;
-    -webkit-user-select: text;
-    user-select: text;
-  }
-</style>
-</head>
-<body>${escaped}</body>
-</html>`
 }
 
 type DescriptionSegment = { label: string; href: string }
@@ -2051,10 +2013,11 @@ export function InfoCard(props: {
 export function TagChip(props: {
   name: string
   tagName?: string
+  translatedName?: string
   value: string
   compact?: boolean
 }) {
-  const { name, tagName = name, value, compact = false } = props
+  const { name, tagName = name, translatedName, value, compact = false } = props
   return (
     <NavigationLink
       value={value}
@@ -2074,9 +2037,27 @@ export function TagChip(props: {
         ),
       }}
     >
-      <Text font={compact ? "caption" : "body"} lineLimit={1}>
-        {name}
-      </Text>
+      <HStack spacing={3} alignment="center">
+        <Text
+          font={compact ? "caption2" : "caption"}
+          foregroundStyle="#0096FA"
+          fontWeight="semibold"
+        >
+          #
+        </Text>
+        <Text font={compact ? "caption" : "body"} lineLimit={1}>
+          {name}
+        </Text>
+        {translatedName ? (
+          <Text
+            font={compact ? "caption2" : "caption"}
+            foregroundStyle="secondaryLabel"
+            lineLimit={1}
+          >
+            {translatedName}
+          </Text>
+        ) : null}
+      </HStack>
     </NavigationLink>
   )
 }

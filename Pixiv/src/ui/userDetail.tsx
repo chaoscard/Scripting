@@ -350,20 +350,6 @@ export function UserDetailView(props: { userID: number }) {
         spacing={12}
         padding={{ top: 0, bottom: 20 }}
         frame={{ maxWidth: "infinity" }}
-        background={
-          ambientPalette
-            ? {
-                colors: [
-                  ambientPalette.topColor,
-                  ambientPalette.midColor,
-                  ambientPalette.worksColor,
-                  ambientPalette.worksColor,
-                ],
-                startPoint: "top",
-                endPoint: "bottom",
-              }
-            : undefined
-        }
       >
         {/* 单一常驻的个人资料头部 */}
         <UserProfileHeader

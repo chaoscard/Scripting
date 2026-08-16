@@ -18,6 +18,7 @@ import {
   clearCache,
   enforceCacheLimit,
 } from "../image/imageLoader"
+import { clearHistory, historyCount, onHistoryChanged } from "../store/history"
 import { loadSettings, onSettingsChanged, updateSettings } from "../store/settings"
 import { clearUgoiraCache, ugoiraCacheUsageBytes } from "../ugoira/ugoira"
 import { useTimedFlag } from "./hooks"
@@ -28,16 +29,30 @@ export function SettingsView() {
   const [settings, setSettings] = useState(loadSettings())
   const [cacheSize, setCacheSize] = useState<number | null>(null)
   const [cacheCleared, setCacheCleared] = useTimedFlag()
+  const [historyTotal, setHistoryTotal] = useState<number>(() => historyCount())
+  const [historyCleared, setHistoryCleared] = useTimedFlag()
 
   function refreshCacheSize() {
     setCacheSize(cacheUsageBytes() + ugoiraCacheUsageBytes())
   }
 
+  function refreshHistoryTotal() {
+    setHistoryTotal(historyCount())
+  }
+
   useEffect(() => {
     refreshCacheSize()
-    return onSettingsChanged(() => {
+    refreshHistoryTotal()
+    const unsubscribeSettings = onSettingsChanged(() => {
       refreshCacheSize()
     })
+    const unsubscribeHistory = onHistoryChanged(() => {
+      refreshHistoryTotal()
+    })
+    return () => {
+      unsubscribeSettings()
+      unsubscribeHistory()
+    }
   }, [])
 
   function update(patch: Partial<typeof settings>) {
@@ -49,6 +64,12 @@ export function SettingsView() {
     clearUgoiraCache()
     setCacheCleared()
     setCacheSize(0)
+  }
+
+  function clearAllHistory() {
+    clearHistory()
+    setHistoryCleared()
+    setHistoryTotal(0)
   }
 
   function formatSize(bytes: number): string {
@@ -109,6 +130,21 @@ export function SettingsView() {
 
       <Section header={<Text>浏览记录</Text>}>
         <Toggle title="浏览记录" value={settings.recordHistory} onChanged={(value) => update({ recordHistory: value })} />
+        <HStack spacing={8}>
+          <Text>当前记录数量</Text>
+          <Spacer />
+          <Text font="body" foregroundStyle="secondaryLabel">{`${historyTotal} 条`}</Text>
+          <Button
+            action={() => {}}
+            buttonStyle="glass"
+            frame={{ width: 30, height: 30 }}
+            clipShape={{ type: "rect", cornerRadius: 15 }}
+            contentShape="rect"
+            simultaneousGesture={LongPressGesture({ minDuration: 500 }).onEnded(clearAllHistory)}
+          >
+            <Image systemName={historyCleared ? "checkmark" : "trash"} foregroundStyle={historyCleared ? "systemGreen" : "systemRed"} />
+          </Button>
+        </HStack>
       </Section>
 
       <Section header={<Text>缓存管理</Text>}>
