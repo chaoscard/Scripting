@@ -6,12 +6,20 @@ import {
   NavigationLink,
   ScrollView,
   Text,
+  useColorScheme,
   useEffect,
   useMemo,
+  useRef,
   useState,
   VStack,
   ZStack,
 } from "scripting"
+import {
+  extractUserAmbientPalette,
+  getCachedUserAmbientPalette,
+  type UserAmbientPalette,
+} from "../image/colorExtractor"
+import { cardThumbUrlOf, prefetch } from "../image/imageLoader"
 import {
   addWatchlistSeries,
   deleteWatchlistSeries,
@@ -52,6 +60,8 @@ import {
 import { renderDestination } from "./routes"
 
 type SeriesKind = "manga" | "novel"
+
+const UI_BATCH_SIZE = 10
 
 function seriesIllust(item: PixivIllustrationSeriesItem, authorFallback: PixivUser | null = null): PixivIllustration {
   const raw = item as any
@@ -185,6 +195,15 @@ function SeriesIntroduction(props: {
 }
 
 export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
+  const colorScheme = useColorScheme()
+  const isDark = colorScheme === "dark"
+  const [ambientPalette, setAmbientPalette] = useState<UserAmbientPalette | null>(
+    null
+  )
+  const [ambientEnabled, setAmbientEnabled] = useState(
+    () => loadSettings().ambientImmersion
+  )
+
   const [title, setTitle] = useState("系列")
   const [caption, setCaption] = useState("")
   const [coverUrl, setCoverUrl] = useState<string | null>(null)
@@ -194,16 +213,29 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
   const [watchLoading, setWatchLoading] = useState(false)
   const [isAscending, setIsAscending] = useState(true)
 
-  const [novels, setNovels] = useState<PixivNovel[]>([])
-  const [items, setItems] = useState<PixivIllustration[]>([])
+  // 全量已获取且过滤后的数据池（支持正序/倒序切换与分批派发）
+  const allIllustsRef = useRef<PixivIllustration[]>([])
+  const allNovelsRef = useRef<PixivNovel[]>([])
+
+  // 当前已发布到 UI 的分批数据（初始严格为前 10 条）
+  const [publishedIllusts, setPublishedIllusts] = useState<PixivIllustration[]>([])
+  const [pendingIllusts, setPendingIllusts] = useState<PixivIllustration[]>([])
+
+  const [publishedNovels, setPublishedNovels] = useState<PixivNovel[]>([])
+  const [pendingNovels, setPendingNovels] = useState<PixivNovel[]>([])
+
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [nextURL, setNextURL] = useState<string | null>(null)
   const [loadingMore, setLoadingMore] = useState(false)
+  const loadingMoreLockRef = useRef(false)
+  const prefetchTaskRef = useRef<{ cancel: () => void } | null>(null)
 
   async function load() {
     setLoading(true)
     setError(null)
+    loadingMoreLockRef.current = false
+    setLoadingMore(false)
     try {
       if (props.kind === "manga") {
         const result = await session.call((token) => illustrationSeries(props.seriesID, token))
@@ -229,11 +261,25 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
 
         const rawIllusts = Array.isArray(result.illusts) ? result.illusts : []
         const mappedIllusts = rawIllusts.map((it) => seriesIllust(it, seriesAuthor))
+        const filtered = filterSeriesIllusts(mappedIllusts, isExempt)
+        allIllustsRef.current = filtered
         setWorkCount(detail.series_work_count ?? rawIllusts.length)
 
-        setNovels([])
+        const sorted = isAscending ? filtered : [...filtered].reverse()
+        const pub = sorted.slice(0, UI_BATCH_SIZE)
+        const pend = sorted.slice(UI_BATCH_SIZE)
+
+        setPublishedIllusts(pub)
+        setPendingIllusts(pend)
+        setPublishedNovels([])
+        setPendingNovels([])
         setNextURL(result.next_url ?? null)
-        setItems(filterSeriesIllusts(mappedIllusts, isExempt))
+
+        prefetchTaskRef.current?.cancel()
+        prefetchTaskRef.current = prefetch([
+          ...pub.map(cardThumbUrlOf),
+          ...pend.slice(0, UI_BATCH_SIZE).map(cardThumbUrlOf),
+        ])
       } else {
         const result = await session.call((token) => novelSeries(props.seriesID, token))
         const detail = result.novel_series_detail
@@ -257,11 +303,19 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
         setCoverUrl(cover)
 
         const rawNovels = Array.isArray(result.novels) ? result.novels : []
+        const filtered = filterSeriesNovels(rawNovels, isExempt)
+        allNovelsRef.current = filtered
         setWorkCount(detail.content_count ?? rawNovels.length)
 
-        setNovels(filterSeriesNovels(rawNovels, isExempt))
+        const sorted = isAscending ? filtered : [...filtered].reverse()
+        const pub = sorted.slice(0, UI_BATCH_SIZE)
+        const pend = sorted.slice(UI_BATCH_SIZE)
+
+        setPublishedNovels(pub)
+        setPendingNovels(pend)
+        setPublishedIllusts([])
+        setPendingIllusts([])
         setNextURL(result.next_url ?? null)
-        setItems([])
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "系列加载失败")
@@ -271,33 +325,75 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
   }
 
   async function loadMore() {
-    if (!nextURL || loadingMore) return
-    setLoadingMore(true)
-    try {
-      if (props.kind === "novel") {
-        const result = await session.call((token) => nextNovelSeries(nextURL, token))
-        const rawNovels = Array.isArray(result.novels) ? result.novels : []
-        const filtered = filterSeriesNovels(rawNovels, isWatched)
-        setNovels((current) => {
-          const seen = new Set(current.map((novel) => novel.id))
-          return [...current, ...filtered.filter((novel) => !seen.has(novel.id))]
-        })
-        setNextURL(result.next_url ?? null)
-      } else {
-        const result = await session.call((token) => nextIllustrationSeries(nextURL, token))
-        const rawIllusts = Array.isArray(result.illusts) ? result.illusts : []
-        const mappedIllusts = rawIllusts.map((it) => seriesIllust(it, author))
-        const filtered = filterSeriesIllusts(mappedIllusts, isWatched)
-        setItems((current) => {
-          const seen = new Set(current.map((item) => item.id))
-          return [...current, ...filtered.filter((item) => !seen.has(item.id))]
-        })
-        setNextURL(result.next_url ?? null)
+    if (loadingMoreLockRef.current) return
+    if (props.kind === "manga") {
+      if (pendingIllusts.length === 0 && !nextURL) return
+      loadingMoreLockRef.current = true
+      setLoadingMore(true)
+      try {
+        if (pendingIllusts.length > 0) {
+          // 缓冲 1300ms：确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
+          await new Promise((resolve) => setTimeout(() => resolve(undefined), 1300))
+          const nextBatch = pendingIllusts.slice(0, UI_BATCH_SIZE)
+          const remaining = pendingIllusts.slice(UI_BATCH_SIZE)
+          setPublishedIllusts((current) => [...current, ...nextBatch])
+          setPendingIllusts(remaining)
+          prefetchTaskRef.current?.cancel()
+          prefetchTaskRef.current = prefetch(remaining.slice(0, UI_BATCH_SIZE).map(cardThumbUrlOf))
+        } else if (nextURL) {
+          const [result] = await Promise.all([
+            session.call((token) => nextIllustrationSeries(nextURL, token)),
+            new Promise((resolve) => setTimeout(() => resolve(undefined), 1300)),
+          ])
+          const rawIllusts = Array.isArray(result.illusts) ? result.illusts : []
+          const mappedIllusts = rawIllusts.map((it) => seriesIllust(it, author))
+          const filtered = filterSeriesIllusts(mappedIllusts, isWatched)
+          allIllustsRef.current = [...allIllustsRef.current, ...filtered]
+          const nextBatch = filtered.slice(0, UI_BATCH_SIZE)
+          const remaining = filtered.slice(UI_BATCH_SIZE)
+          setPublishedIllusts((current) => [...current, ...nextBatch])
+          setPendingIllusts(remaining)
+          setNextURL(result.next_url ?? null)
+          prefetchTaskRef.current?.cancel()
+          prefetchTaskRef.current = prefetch(remaining.slice(0, UI_BATCH_SIZE).map(cardThumbUrlOf))
+        }
+      } catch {
+        // 出错静默，允许用户再次触底重试
+      } finally {
+        loadingMoreLockRef.current = false
+        setLoadingMore(false)
       }
-    } catch {
-      // 保留已加载章节，下一次滚动仍可重试
-    } finally {
-      setLoadingMore(false)
+    } else {
+      if (pendingNovels.length === 0 && !nextURL) return
+      loadingMoreLockRef.current = true
+      setLoadingMore(true)
+      try {
+        if (pendingNovels.length > 0) {
+          await new Promise((resolve) => setTimeout(() => resolve(undefined), 1300))
+          const nextBatch = pendingNovels.slice(0, UI_BATCH_SIZE)
+          const remaining = pendingNovels.slice(UI_BATCH_SIZE)
+          setPublishedNovels((current) => [...current, ...nextBatch])
+          setPendingNovels(remaining)
+        } else if (nextURL) {
+          const [result] = await Promise.all([
+            session.call((token) => nextNovelSeries(nextURL, token)),
+            new Promise((resolve) => setTimeout(() => resolve(undefined), 1300)),
+          ])
+          const rawNovels = Array.isArray(result.novels) ? result.novels : []
+          const filtered = filterSeriesNovels(rawNovels, isWatched)
+          allNovelsRef.current = [...allNovelsRef.current, ...filtered]
+          const nextBatch = filtered.slice(0, UI_BATCH_SIZE)
+          const remaining = filtered.slice(UI_BATCH_SIZE)
+          setPublishedNovels((current) => [...current, ...nextBatch])
+          setPendingNovels(remaining)
+          setNextURL(result.next_url ?? null)
+        }
+      } catch {
+        // 出错静默
+      } finally {
+        loadingMoreLockRef.current = false
+        setLoadingMore(false)
+      }
     }
   }
 
@@ -327,7 +423,31 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
   }, [props.kind, props.seriesID])
 
   useEffect(() => {
+    if (!ambientEnabled) {
+      setAmbientPalette(null)
+      return
+    }
+    if (!coverUrl) {
+      setAmbientPalette(null)
+      return
+    }
+    let active = true
+    const cached = getCachedUserAmbientPalette(coverUrl, isDark)
+    if (cached) {
+      setAmbientPalette(cached)
+    }
+    void extractUserAmbientPalette(coverUrl).then((result) => {
+      if (!active || !result) return
+      setAmbientPalette(isDark ? result.dark : result.light)
+    })
+    return () => {
+      active = false
+    }
+  }, [coverUrl, isDark, ambientEnabled])
+
+  useEffect(() => {
     return onSettingsChanged(() => {
+      setAmbientEnabled(loadSettings().ambientImmersion)
       void load()
     })
   }, [])
@@ -356,9 +476,6 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
     )
   }
 
-  const displayNovels = isAscending ? novels : [...novels].reverse()
-  const displayItems = isAscending ? items : [...items].reverse()
-
   return (
     <RefreshableScrollView
       navigationTitle={title}
@@ -366,6 +483,20 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
       toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
       ignoresSafeArea={{ edges: "top" }}
       refreshable={load}
+      background={
+        ambientEnabled && ambientPalette
+          ? {
+              colors: [
+                ambientPalette.topColor,
+                ambientPalette.midColor,
+                ambientPalette.worksColor,
+                ambientPalette.worksColor,
+              ],
+              startPoint: "top",
+              endPoint: "bottom",
+            }
+          : undefined
+      }
       toolbar={{
         topBarTrailing: [
           <Button
@@ -388,7 +519,26 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
             contentShape="rect"
             action={() => {
               void Haptics.transient()
-              setIsAscending((prev) => !prev)
+              setIsAscending((prev) => {
+                const nextAsc = !prev
+                if (props.kind === "manga") {
+                  const sorted = nextAsc ? allIllustsRef.current : [...allIllustsRef.current].reverse()
+                  const pub = sorted.slice(0, UI_BATCH_SIZE)
+                  const pend = sorted.slice(UI_BATCH_SIZE)
+                  setPublishedIllusts(pub)
+                  setPendingIllusts(pend)
+                  prefetchTaskRef.current?.cancel()
+                  prefetchTaskRef.current = prefetch([
+                    ...pub.map(cardThumbUrlOf),
+                    ...pend.slice(0, UI_BATCH_SIZE).map(cardThumbUrlOf),
+                  ])
+                } else {
+                  const sorted = nextAsc ? allNovelsRef.current : [...allNovelsRef.current].reverse()
+                  setPublishedNovels(sorted.slice(0, UI_BATCH_SIZE))
+                  setPendingNovels(sorted.slice(UI_BATCH_SIZE))
+                }
+                return nextAsc
+              })
             }}
           >
             <Image systemName={isAscending ? "arrow.up" : "arrow.down"} />
@@ -412,7 +562,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
       }}
     >
       <VStack alignment="leading" spacing={0} frame={{ maxWidth: "infinity" }}>
-        {/* 沉浸式顶部背景图（同用户主页实现） */}
+        {/* 沉浸式顶部背景图与居中悬浮胶囊标题 */}
         <ZStack alignment="bottom" frame={{ maxWidth: "infinity" }}>
           {coverUrl ? (
             <CachedImage
@@ -434,25 +584,34 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
               }}
             />
           )}
+
+          {/* 胶囊状液态玻璃标题：垂直中心线对齐封面底边（参考用户主页头像位置） */}
+          <HStack
+            alignment="center"
+            padding={{ horizontal: 20, vertical: 9 }}
+            glassEffect={{ type: "capsule", style: "continuous" }}
+            clipShape={{ type: "capsule", style: "continuous" }}
+            shadow={{ color: "#00000028", radius: 10, y: 4 }}
+            offset={{ x: 0, y: 19 }}
+          >
+            <Text
+              font="headline"
+              fontWeight="bold"
+              multilineTextAlignment="center"
+              lineLimit={2}
+            >
+              {title}
+            </Text>
+          </HStack>
         </ZStack>
 
         {/* 系列信息 */}
         <VStack
           alignment="center"
           spacing={6}
-          padding={{ top: 14, horizontal: 16, bottom: 8 }}
+          padding={{ top: 28, horizontal: 16, bottom: 8 }}
           frame={{ maxWidth: "infinity" }}
         >
-          {/* 标题居中显示 */}
-          <Text
-            font="title3"
-            fontWeight="bold"
-            multilineTextAlignment="center"
-            frame={{ maxWidth: "infinity", alignment: "center" }}
-          >
-            {title}
-          </Text>
-
           {/* 共多少话居中显示，放在标题下方，字体加大一号 (caption) */}
           {workCount != null ? (
             <Text
@@ -483,20 +642,20 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
         {/* 章节列表 */}
         {props.kind === "novel" ? (
           <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10, top: 4 }}>
-            {displayNovels.length === 0 ? (
+            {publishedNovels.length === 0 ? (
               <EmptyView
                 text="暂无可显示的小说章节"
                 systemImage="book"
               />
             ) : (
               <>
-                {displayNovels.map((novel, index) => (
+                {publishedNovels.map((novel, index) => (
                   <NovelCard key={novel.id} novel={novel} priority={index} />
                 ))}
                 <LoadMoreTrigger
-                  anchor={novels[novels.length - 1].id}
+                  anchor={publishedNovels[publishedNovels.length - 1].id}
                   onLoadMore={loadMore}
-                  hasMore={nextURL != null}
+                  hasMore={pendingNovels.length > 0 || nextURL != null}
                   isLoading={loadingMore}
                 />
               </>
@@ -504,20 +663,24 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
           </LazyVStack>
         ) : (
           <VStack alignment="leading" spacing={8} padding={{ top: 4 }} frame={{ maxWidth: "infinity" }}>
-            {displayItems.length === 0 ? (
+            {publishedIllusts.length === 0 ? (
               <EmptyView
                 text="暂无可显示的漫画章节"
                 systemImage="photo.on.rectangle"
               />
             ) : (
               <IllustFlowFeed
-                items={displayItems}
+                items={publishedIllusts}
                 onLoadMore={loadMore}
-                hasMore={nextURL != null}
+                hasMore={pendingIllusts.length > 0 || nextURL != null}
                 isLoading={loadingMore}
                 cornerBadgeOf={(_, index) => (
                   <ImageNumberBadge
-                    number={isAscending ? index + 1 : items.length - index}
+                    number={
+                      isAscending
+                        ? index + 1
+                        : (workCount ?? allIllustsRef.current.length) - index
+                    }
                   />
                 )}
               />
