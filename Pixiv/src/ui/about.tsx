@@ -92,19 +92,21 @@ function ExternalLinkRow(props: {
   avatarCornerRadius?: number
 }) {
   return (
-    <Button buttonStyle="plain" action={() => void presentExternalURL(props.url)}>
-      <HStack spacing={10} frame={{ maxWidth: "infinity" }}>
-        {props.avatarURL ? (
-          <AvatarImage
-            url={props.avatarURL}
-            size={28}
-            cornerRadius={props.avatarCornerRadius ?? 6}
-          />
-        ) : null}
-        <Text font="body">{props.title}</Text>
-        <Spacer />
-        <Image systemName="arrow.up.right" font="footnote" foregroundStyle="tertiaryLabel" />
-      </HStack>
-    </Button>
+    <HStack spacing={10} frame={{ maxWidth: "infinity" }}>
+      {props.avatarURL ? (
+        <AvatarImage
+          url={props.avatarURL}
+          size={28}
+          cornerRadius={props.avatarCornerRadius ?? 6}
+        />
+      ) : null}
+      <Spacer />
+      <Button buttonStyle="plain" action={() => void presentExternalURL(props.url)}>
+        <HStack spacing={4}>
+          <Text font="body" foregroundStyle="#007AFF">{props.title}</Text>
+          <Image systemName="arrow.up.right" font="footnote" foregroundStyle="tertiaryLabel" />
+        </HStack>
+      </Button>
+    </HStack>
   )
 }
