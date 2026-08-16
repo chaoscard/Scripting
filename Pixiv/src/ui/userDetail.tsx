@@ -12,6 +12,7 @@ import {
   ScrollView,
   Spacer,
   Text,
+  useColorScheme,
   useEffect,
   useMemo,
   useRef,
@@ -19,6 +20,11 @@ import {
   VStack,
   ZStack,
 } from "scripting"
+import {
+  extractUserAmbientPalette,
+  getCachedUserAmbientPalette,
+  type UserAmbientPalette,
+} from "../image/colorExtractor"
 import {
   fetchWebUserDetail,
   followDetail,
@@ -74,12 +80,17 @@ type UserWorkKind = "illust" | "manga" | "novel"
 
 export function UserDetailView(props: { userID: number }) {
   const { userID } = props
+  const colorScheme = useColorScheme()
+  const isDark = colorScheme === "dark"
   const [detail, setDetail] = useState<PixivUserDetail | null>(null)
   const [webDetail, setWebDetail] = useState<PixivWebUserDetail | null>(null)
   const [followed, setFollowed] = useState(false)
   const [detailError, setDetailError] = useState<string | null>(null)
   const [followBusy, setFollowBusy] = useState(false)
   const [kind, setKind] = useState<UserWorkKind>("illust")
+  const [ambientPalette, setAmbientPalette] = useState<UserAmbientPalette | null>(
+    null
+  )
 
   const guard = useAsyncGuard()
   const followStateVersionRef = useRef(0)
@@ -129,6 +140,26 @@ export function UserDetailView(props: { userID: number }) {
       if (g.isCurrent()) setDetailError(error?.message ?? "加载失败")
     }
   }
+
+  useEffect(() => {
+    const bgUrl = detail?.profile.background_image_url
+    if (!bgUrl) {
+      setAmbientPalette(null)
+      return
+    }
+    let active = true
+    const cached = getCachedUserAmbientPalette(bgUrl, isDark)
+    if (cached) {
+      setAmbientPalette(cached)
+    }
+    void extractUserAmbientPalette(bgUrl).then((result) => {
+      if (!active || !result) return
+      setAmbientPalette(isDark ? result.dark : result.light)
+    })
+    return () => {
+      active = false
+    }
+  }, [detail?.profile.background_image_url, isDark])
 
   useEffect(() => {
     return onUserFollowChanged((changedUserID, nextFollowed) => {
@@ -211,6 +242,20 @@ export function UserDetailView(props: { userID: number }) {
       toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
       ignoresSafeArea={{ edges: "top" }}
       refreshable={handleRefresh}
+      background={
+        ambientPalette
+          ? {
+              colors: [
+                ambientPalette.topColor,
+                ambientPalette.midColor,
+                ambientPalette.worksColor,
+                ambientPalette.worksColor,
+              ],
+              startPoint: "top",
+              endPoint: "bottom",
+            }
+          : undefined
+      }
       toolbar={{
         topBarTrailing: [
           ...(!isOwnProfile ? [
@@ -300,9 +345,32 @@ export function UserDetailView(props: { userID: number }) {
         ],
       }}
     >
-      <VStack alignment="leading" spacing={12} padding={{ top: 0, bottom: 20 }} frame={{ maxWidth: "infinity" }}>
+      <VStack
+        alignment="leading"
+        spacing={12}
+        padding={{ top: 0, bottom: 20 }}
+        frame={{ maxWidth: "infinity" }}
+        background={
+          ambientPalette
+            ? {
+                colors: [
+                  ambientPalette.topColor,
+                  ambientPalette.midColor,
+                  ambientPalette.worksColor,
+                  ambientPalette.worksColor,
+                ],
+                startPoint: "top",
+                endPoint: "bottom",
+              }
+            : undefined
+        }
+      >
         {/* 单一常驻的个人资料头部 */}
-        <UserProfileHeader detail={detail} webDetail={webDetail} />
+        <UserProfileHeader
+          detail={detail}
+          webDetail={webDetail}
+          ambientPalette={ambientPalette}
+        />
 
         {/* 位于个人资料和作品列表之间的分段选择器 */}
         <UserWorkPicker kind={kind} onChanged={setKind} />
@@ -591,46 +659,47 @@ function UserSocialBar(props: { socials: SocialLinkItem[] }) {
   return (
     <HStack
       alignment="center"
+      spacing={10}
       frame={{ maxWidth: "infinity", alignment: "center" }}
       padding={{ vertical: 2 }}
     >
-      <HStack
-        alignment="center"
-        spacing={12}
-        padding={{ horizontal: 14, vertical: 6 }}
-        glassEffect="capsule"
-      >
-        {props.socials.map((item) => (
-          <Button
-            key={item.id}
-            title=""
-            systemImage={item.systemImage}
-            buttonStyle="plain"
-            frame={{ width: 32, height: 32 }}
-            clipShape="circle"
-            contentShape="circle"
-            action={() => {
-              void Safari.present(item.url, false)
-            }}
-            contextMenu={{
-              menuItems: (
-                <Group>
-                  <Button
-                    title={`在浏览器中打开 ${item.name}`}
-                    systemImage="safari"
-                    action={() => void Safari.openURL(item.url)}
-                  />
-                  <Button
-                    title="复制链接"
-                    systemImage="doc.on.doc"
-                    action={() => void Pasteboard.setString(item.url)}
-                  />
-                </Group>
-              ),
-            }}
-          />
-        ))}
-      </HStack>
+      {props.socials.map((item) => (
+        <Button
+          key={item.id}
+          buttonStyle="plain"
+          action={() => {
+            void Safari.present(item.url, false)
+          }}
+          contextMenu={{
+            menuItems: (
+              <Group>
+                <Button
+                  title={`在浏览器中打开 ${item.name}`}
+                  systemImage="safari"
+                  action={() => void Safari.openURL(item.url)}
+                />
+                <Button
+                  title="复制链接"
+                  systemImage="doc.on.doc"
+                  action={() => void Pasteboard.setString(item.url)}
+                />
+              </Group>
+            ),
+          }}
+        >
+          <ZStack
+            alignment="center"
+            frame={{ width: 30, height: 30 }}
+            glassEffect="circle"
+          >
+            <Image
+              systemName={item.systemImage}
+              font="subheadline"
+              frame={{ alignment: "center" }}
+            />
+          </ZStack>
+        </Button>
+      ))}
     </HStack>
   )
 }
@@ -815,8 +884,9 @@ function buildAboutFields(
 function UserProfileHeader(props: {
   detail: PixivUserDetail
   webDetail: PixivWebUserDetail | null
+  ambientPalette?: UserAmbientPalette | null
 }) {
-  const { detail, webDetail } = props
+  const { detail, webDetail, ambientPalette } = props
   const { user, profile } = detail
 
   const socialLinks = useMemo(
@@ -838,7 +908,7 @@ function UserProfileHeader(props: {
   return (
     <VStack
       alignment="leading"
-      spacing={12}
+      spacing={0}
       frame={{ maxWidth: "infinity" }}
     >
       {/* 沉浸式顶部背景图与居中悬浮头像 */}
@@ -884,7 +954,7 @@ function UserProfileHeader(props: {
       <VStack
         alignment="leading"
         spacing={12}
-        padding={{ top: ringSize / 2 + 10, horizontal: 16 }}
+        padding={{ top: ringSize / 2 + 14, horizontal: 16, bottom: 8 }}
         frame={{ maxWidth: "infinity" }}
       >
         {/* 社媒图标栏：居中展示，距离头像有段呼吸空间 */}

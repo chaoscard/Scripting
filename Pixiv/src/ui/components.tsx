@@ -127,6 +127,7 @@ export function RefreshableScrollView(props: {
   ignoresSafeArea?: any
   toolbarBackground?: any
   toolbarBackgroundVisibility?: any
+  background?: any
   children?: any
 }) {
   // toolbar 等通用 View 属性由 Scripting 自动应用到自定义组件根视图；
@@ -178,11 +179,13 @@ export function RefreshableScrollView(props: {
             ignoresSafeArea={props.ignoresSafeArea}
             toolbarBackground={props.toolbarBackground}
             toolbarBackgroundVisibility={props.toolbarBackgroundVisibility}
+            background={props.background}
           >
             <VStack
               key={REFRESH_TOP_KEY}
               alignment="leading"
               frame={{ maxWidth: "infinity" }}
+              background={props.background}
             >
               {props.children}
             </VStack>
@@ -1484,24 +1487,80 @@ const HTML_ENTITIES: Record<string, string> = {
   lt: "<",
   gt: ">",
   quot: '"',
-  "#39": "'",
+  apos: "'",
   nbsp: " ",
+  copy: "©",
+  reg: "®",
+  trade: "™",
+  mdash: "—",
+  ndash: "–",
+  hellip: "…",
+  lsquo: "‘",
+  rsquo: "’",
+  ldquo: "“",
+  rdquo: "”",
+  bull: "•",
+  middot: "·",
+  deg: "°",
+  plusmn: "±",
+  times: "×",
+  divide: "÷",
+  hearts: "♥",
+}
+
+export function decodeHtmlEntities(text: string): string {
+  if (!text || !text.includes("&")) return text || ""
+  return text
+    // 1. 十六进制数字实体 &#x2C; / &#X2c;
+    .replace(/&#[xX]([0-9a-fA-F]+);/g, (match, hex) => {
+      const code = parseInt(hex, 16)
+      if (!isNaN(code) && code > 0 && code <= 0x10ffff) {
+        try {
+          return String.fromCodePoint(code)
+        } catch {
+          return match
+        }
+      }
+      return match
+    })
+    // 2. 十进制数字实体 &#44; / &#39; / &#12304; 等
+    .replace(/&#(\d+);/g, (match, num) => {
+      const code = parseInt(num, 10)
+      if (!isNaN(code) && code > 0 && code <= 0x10ffff) {
+        try {
+          return String.fromCodePoint(code)
+        } catch {
+          return match
+        }
+      }
+      return match
+    })
+    // 3. 命名实体 &amp; / &quot; 等
+    .replace(/&([a-zA-Z]+);/g, (match, name) => {
+      return HTML_ENTITIES[name.toLowerCase()] ?? match
+    })
 }
 
 // HTML 转纯文本：Pixiv 的简介/用户简介字段是 HTML（<br>、<a> 等），
 // 清洗后以纯文本展示（与 Hanairo 的 TextSanitizer 行为一致）。
-// 顺序：先剥离标签，后解码实体（&lt;b&gt; 应显示为字面 <b> 文本）
+// 顺序：先剥离标签，后完整解码 HTML 实体（含十进制 &#44; 与十六进制实体）
 export function htmlToPlainText(html: string | undefined | null): string {
   return htmlFragmentToPlainText(html).trim()
 }
 
 function htmlFragmentToPlainText(html: string | undefined | null): string {
   if (!html) return ""
-  return html
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/p>/gi, "\n")
+  const stripped = html
+    .replace(/\r\n|\r/g, "\n")
+    .replace(/<(?:\s*\/?\s*)br(?:\s*\/?\s*|\s+[^>]*)>(?:\r?\n)?/gi, "\n")
+    .replace(/<\/(div|p|li|h[1-6])>/gi, "\n")
     .replace(/<[^>]+>/g, "")
-    .replace(/&(#39|amp|lt|gt|quot|nbsp);/g, (m, name: string) => HTML_ENTITIES[name] ?? m)
+    // 清理换行后遗留的孤立残存斜杠（如由 <br /> 误残存的 \n/ Mail ）
+    .replace(
+      /\n\s*\/\s*(?=[A-Za-z0-9\u4e00-\u9fa5\uac00-\ud7af\u3040-\u30ff])/g,
+      "\n"
+    )
+  return decodeHtmlEntities(stripped)
 }
 
 export function LinkedDescription(props: {
@@ -1770,8 +1829,13 @@ function descriptionLines(
 
 function descriptionSegments(html: string): DescriptionSegment[] {
   const prepared = html
-    .replace(/<br\s*\/?>(?:\r?\n)?/gi, "\n")
+    .replace(/\r\n|\r/g, "\n")
+    .replace(/<(?:\s*\/?\s*)br(?:\s*\/?\s*|\s+[^>]*)>(?:\r?\n)?/gi, "\n")
     .replace(/<\/(div|p|li|h[1-6])>/gi, "\n")
+    .replace(
+      /\n\s*\/\s*(?=[A-Za-z0-9\u4e00-\u9fa5\uac00-\ud7af\u3040-\u30ff])/g,
+      "\n"
+    )
   const segments: DescriptionSegment[] = []
   const anchorPattern = /<a\b[^>]*\bhref\s*=\s*(["'])(.*?)\1[^>]*>([\s\S]*?)<\/a\s*>/gi
   let cursor = 0
@@ -1880,10 +1944,7 @@ function routeForDescriptionLink(value: string): string | null {
 }
 
 function decodeDescriptionLink(value: string): string {
-  return value.replace(
-    /&(#39|amp|lt|gt|quot|nbsp);/g,
-    (match, name: string) => HTML_ENTITIES[name] ?? match
-  )
+  return decodeHtmlEntities(value)
 }
 
 export function formatDate(iso: string | undefined | null): string {
