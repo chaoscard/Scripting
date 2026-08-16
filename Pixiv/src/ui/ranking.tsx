@@ -290,6 +290,7 @@ function NovelRankingFeed(props: {
             <NovelCard
               key={novel.id}
               novel={novel}
+              priority={index}
               footerText={index < 50 ? `第 ${index + 1} 名` : undefined}
             />
           ))}

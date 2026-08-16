@@ -284,8 +284,8 @@ function NovelLibraryFeed(props: {
         <EmptyView text="还没有收藏小说" systemImage="book" />
       ) : (
         <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
-          {paged.items.map((novel) => (
-            <NovelCard key={novel.id} novel={novel} />
+          {paged.items.map((novel, index) => (
+            <NovelCard key={novel.id} novel={novel} priority={index} />
           ))}
           <LoadMoreTrigger
             anchor={paged.items[paged.items.length - 1].id}

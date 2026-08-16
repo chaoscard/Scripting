@@ -469,6 +469,7 @@ export function IllustDetailView(props: { illustID: number }) {
                   useIntrinsicAspectRatio={true}
                   cornerRadius={6}
                   contentMode="fit"
+                  priority={idx}
                   onLoaded={idx === 0 ? () => setMediaReady(true) : undefined}
                 />
               ))}
@@ -480,6 +481,7 @@ export function IllustDetailView(props: { illustID: number }) {
               useIntrinsicAspectRatio={true}
               cornerRadius={8}
               contentMode="fit"
+              priority={0}
               onLoaded={() => setMediaReady(true)}
             />
           )}

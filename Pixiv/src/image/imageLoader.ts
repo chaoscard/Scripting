@@ -172,10 +172,14 @@ export function enforceCacheLimit(): void {
 }
 
 // 图片下载并发控制：同一 URL 在途去重 + 全局最多 4 个并发。
-// 预取可在出队前取消；可见卡片随后请求同一 URL 时会提升为前台任务。
+// 引入优先级调度：前台视图根据卡片在信息流中的自然次序传入 priority（值越小越优先），
+// 保证自顶向下优先加载最上方的卡片，消除左右列分发造成的挂载先后偏差。
+// 预取可在出队前取消；可见卡片随后请求同一 URL 时会提升为前台任务并更新优先级。
 interface PrefetchState {
   cancelled: boolean
 }
+
+export const DEFAULT_IMAGE_PRIORITY = 999999
 
 interface DownloadTask {
   generation: number
@@ -183,6 +187,7 @@ interface DownloadTask {
   started: boolean
   foregroundRequested: boolean
   prefetchOwners: Set<PrefetchState>
+  priority: number
   queue: "foreground" | "prefetch" | null
   run: () => void
 }
@@ -204,9 +209,37 @@ function pumpDownloads(): void {
   }
 }
 
-function queueDownload(task: DownloadTask, priority: "foreground" | "prefetch"): void {
-  task.queue = priority
-  ;(priority === "foreground" ? foregroundQueue : prefetchQueue).push(task)
+function insertForegroundTask(task: DownloadTask): void {
+  task.queue = "foreground"
+  // 保持按 priority 升序（priority 小的优先；相同 priority 保持先进先出）
+  const index = foregroundQueue.findIndex((t) => t.priority > task.priority)
+  if (index === -1) {
+    foregroundQueue.push(task)
+  } else {
+    foregroundQueue.splice(index, 0, task)
+  }
+}
+
+function updateTaskPriority(task: DownloadTask, newPriority: number): void {
+  if (newPriority < task.priority) {
+    task.priority = newPriority
+    if (task.queue === "foreground") {
+      const idx = foregroundQueue.indexOf(task)
+      if (idx >= 0) {
+        foregroundQueue.splice(idx, 1)
+        insertForegroundTask(task)
+      }
+    }
+  }
+}
+
+function queueDownload(task: DownloadTask, queueType: "foreground" | "prefetch"): void {
+  if (queueType === "foreground") {
+    insertForegroundTask(task)
+  } else {
+    task.queue = "prefetch"
+    prefetchQueue.push(task)
+  }
   pumpDownloads()
 }
 
@@ -214,20 +247,23 @@ function promoteQueuedDownload(task: DownloadTask): void {
   if (task.started || task.queue !== "prefetch") return
   const index = prefetchQueue.indexOf(task)
   if (index >= 0) prefetchQueue.splice(index, 1)
-  task.queue = "foreground"
-  foregroundQueue.push(task)
+  insertForegroundTask(task)
   pumpDownloads()
 }
 
 // 下载图片到缓存（带 Referer），返回本地路径；失败返回 null。
-// 可见图片会将同 URL 的排队预取提升为不可取消的前台任务。
-export async function loadImage(url: string): Promise<string | null> {
-  return requestImage(url)
+// 可见图片会将同 URL 的排队预取提升为不可取消的前台任务，并以指定优先级排队。
+export async function loadImage(
+  url: string,
+  priority = DEFAULT_IMAGE_PRIORITY
+): Promise<string | null> {
+  return requestImage(url, undefined, priority)
 }
 
 function requestImage(
   url: string,
-  prefetchOwner?: PrefetchState
+  prefetchOwner?: PrefetchState,
+  priority = DEFAULT_IMAGE_PRIORITY
 ): Promise<string | null> {
   if (!url) return Promise.resolve(null)
   const requestGeneration = cacheGeneration
@@ -242,6 +278,7 @@ function requestImage(
       running.prefetchOwners.add(prefetchOwner)
     } else {
       running.foregroundRequested = true
+      updateTaskPriority(running, priority)
       promoteQueuedDownload(running)
     }
     return running.promise
@@ -253,6 +290,7 @@ function requestImage(
     started: false,
     foregroundRequested: !prefetchOwner,
     prefetchOwners: new Set(prefetchOwner ? [prefetchOwner] : []),
+    priority: prefetchOwner ? DEFAULT_IMAGE_PRIORITY : priority,
     queue: null,
     run: () => {},
   }
@@ -269,6 +307,9 @@ function requestImage(
         !record.foregroundRequested &&
         [...record.prefetchOwners].every((owner) => owner.cancelled)
       ) {
+        if (inflightDownloads.get(url) === record) {
+          inflightDownloads.delete(url)
+        }
         resolve(null)
         activeDownloads--
         pumpDownloads()

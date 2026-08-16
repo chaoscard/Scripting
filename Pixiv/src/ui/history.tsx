@@ -188,6 +188,8 @@ function HistoryFeed(props: {
 }
 
 function HistoryContent(props: { kind: HistoryKind; items: HistoryEntry[] }) {
+  const [visibleCount, setVisibleCount] = useState(10)
+
   if (props.items.length === 0) {
     const text =
       props.kind === "novel"
@@ -201,13 +203,21 @@ function HistoryContent(props: { kind: HistoryKind; items: HistoryEntry[] }) {
       (entry): entry is Extract<HistoryEntry, { kind: "novel" }> =>
         entry.kind === "novel"
     )
+    const visibleNovels = novels.slice(0, visibleCount)
+    const lastNovel = visibleNovels[visibleNovels.length - 1]
     return (
       <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
-        {novels.map((entry) => (
+        {visibleNovels.map((entry, index) => (
           <NovelCard
             key={entry.novel.id}
             novel={entry.novel as PixivNovel}
+            priority={index}
             footerText={formatDate(new Date(entry.viewedAt).toISOString())}
+            onAppear={
+              entry.novel.id === lastNovel?.novel.id && visibleCount < novels.length
+                ? () => setVisibleCount((c) => Math.min(c + 10, novels.length))
+                : undefined
+            }
           />
         ))}
       </LazyVStack>
@@ -218,13 +228,15 @@ function HistoryContent(props: { kind: HistoryKind; items: HistoryEntry[] }) {
     (entry): entry is Extract<HistoryEntry, { kind: "illust" }> =>
       entry.kind === "illust"
   )
+  const visibleIllusts = illustEntries.slice(0, visibleCount)
+
   return (
     <IllustFlowFeed
-      items={illustEntries.map((entry) => entry.illustration)}
-      onLoadMore={() => {}}
-      hasMore={false}
+      items={visibleIllusts.map((entry) => entry.illustration)}
+      onLoadMore={() => setVisibleCount((c) => Math.min(c + 10, illustEntries.length))}
+      hasMore={visibleCount < illustEntries.length}
       footerTextOf={(_, index) =>
-        formatDate(new Date(illustEntries[index].viewedAt).toISOString())
+        formatDate(new Date(visibleIllusts[index].viewedAt).toISOString())
       }
       topTrailingActionOf={(illust) => ({
         title: "移除",

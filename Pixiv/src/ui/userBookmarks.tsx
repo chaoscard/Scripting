@@ -132,8 +132,8 @@ export function UserBookmarksView(props: { userID: number }) {
               <EmptyView text="暂无公开收藏小说" systemImage="book" />
             ) : (
               <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
-                {novelPaged.items.map((novel) => (
-                  <NovelCard key={novel.id} novel={novel} />
+                {novelPaged.items.map((novel, index) => (
+                  <NovelCard key={novel.id} novel={novel} priority={index} />
                 ))}
                 <LoadMoreTrigger
                   anchor={novelPaged.items[novelPaged.items.length - 1].id}

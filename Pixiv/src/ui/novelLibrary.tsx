@@ -70,10 +70,11 @@ export function NovelLibraryView() {
         <EmptyView text="暂无阅读书签" systemImage="bookmark" />
       ) : (
         <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
-          {paged.items.map((item) => (
+          {paged.items.map((item, index) => (
             <NovelCard
               key={item.novel.id}
               novel={item.novel}
+              priority={index}
               markerPage={item.novel_marker.page}
             />
           ))}

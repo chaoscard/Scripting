@@ -253,8 +253,8 @@ function NovelFeed(props: {
         <EmptyView text={`暂无${label}小说，下拉刷新试试`} systemImage="book" />
       ) : (
         <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
-          {paged.items.map((novel) => (
-            <NovelCard key={novel.id} novel={novel} />
+          {paged.items.map((novel, index) => (
+            <NovelCard key={novel.id} novel={novel} priority={index} />
           ))}
           <LoadMoreTrigger
             anchor={paged.items[paged.items.length - 1].id}
@@ -294,8 +294,8 @@ function VisionFeed(props: {
         <EmptyView text="暂无专辑，下拉刷新试试" systemImage="rectangle.stack" />
       ) : (
         <LazyVStack alignment="leading" spacing={12}>
-          {paged.items.map((article) => (
-            <VisionCard key={article.id} article={article} />
+          {paged.items.map((article, index) => (
+            <VisionCard key={article.id} article={article} priority={index} />
           ))}
           <LoadMoreTrigger
             anchor={paged.items[paged.items.length - 1].id}

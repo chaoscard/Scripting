@@ -569,8 +569,8 @@ function NovelResults(props: {
 }) {
   return (
     <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
-      {props.items.map((novel) => (
-        <NovelCard key={novel.id} novel={novel} />
+      {props.items.map((novel, index) => (
+        <NovelCard key={novel.id} novel={novel} priority={index} />
       ))}
       <LoadMoreTrigger
         anchor={props.items[props.items.length - 1].id}

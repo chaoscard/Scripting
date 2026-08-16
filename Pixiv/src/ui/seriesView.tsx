@@ -163,8 +163,8 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
                 />
               ) : (
                 <>
-                  {novels.map((novel) => (
-                    <NovelCard key={novel.id} novel={novel} />
+                  {novels.map((novel, index) => (
+                    <NovelCard key={novel.id} novel={novel} priority={index} />
                   ))}
                   <LoadMoreTrigger
                     anchor={novels[novels.length - 1].id}

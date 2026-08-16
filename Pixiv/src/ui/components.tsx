@@ -182,10 +182,11 @@ export function RefreshableScrollView(props: {
 }
 
 // 异步图片加载状态（CachedImage / AvatarImage 共用）：
-// cancelled 标志防止 url 切换后旧结果覆盖新状态
+// cancelled 标志防止 url 切换后旧结果覆盖新状态；支持 priority 优先级调度
 function useCachedImage(
   url: string | null,
-  onLoaded?: (success: boolean) => void
+  onLoaded?: (success: boolean) => void,
+  priority?: number
 ) {
   const [cacheRevision, setCacheRevision] = useState(imageCacheRevision())
   const [loaded, setLoaded] = useState<{
@@ -215,6 +216,7 @@ function useCachedImage(
 
   useEffect(() => {
     let cancelled = false
+    let retryTimer: number | null = null
     setFailed(false)
     if (!url) {
       setLoaded({ url: null, path: null, revision: cacheRevision })
@@ -226,29 +228,49 @@ function useCachedImage(
         cancelled = true
       }
     }
-    loadImage(url)
-      .then((p) => {
-        if (!cancelled) {
-          setLoaded({ url, path: p, revision: cacheRevision })
-          if (!p) {
-            setFailed(true)
-            onLoadedRef.current?.(false)
-          } else {
-            onLoadedRef.current?.(true)
+
+    const doLoad = (isRetry = false) => {
+      loadImage(url, priority)
+        .then((p) => {
+          if (!cancelled) {
+            if (p) {
+              setLoaded({ url, path: p, revision: cacheRevision })
+              setFailed(false)
+              onLoadedRef.current?.(true)
+            } else if (!isRetry) {
+              // 自动重试一次（对抗预取竞争、取消误杀或瞬时网络抖动）
+              retryTimer = setTimeout(() => {
+                if (!cancelled) doLoad(true)
+              }, 400)
+            } else {
+              setLoaded({ url, path: null, revision: cacheRevision })
+              setFailed(true)
+              onLoadedRef.current?.(false)
+            }
           }
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setLoaded({ url, path: null, revision: cacheRevision })
-          setFailed(true)
-          onLoadedRef.current?.(false)
-        }
-      })
+        })
+        .catch(() => {
+          if (!cancelled) {
+            if (!isRetry) {
+              retryTimer = setTimeout(() => {
+                if (!cancelled) doLoad(true)
+              }, 400)
+            } else {
+              setLoaded({ url, path: null, revision: cacheRevision })
+              setFailed(true)
+              onLoadedRef.current?.(false)
+            }
+          }
+        })
+    }
+
+    doLoad(false)
+
     return () => {
       cancelled = true
+      if (retryTimer != null) clearTimeout(retryTimer)
     }
-  }, [url, cacheRevision, cachedPath, onLoadedRef])
+  }, [url, cacheRevision, cachedPath, onLoadedRef, priority])
 
   return { path, failed }
 }
@@ -264,6 +286,7 @@ export function CachedImage(props: {
   useIntrinsicAspectRatio?: boolean
   frame?: any // 覆盖默认整宽 frame（如固定尺寸缩略图）
   onLoaded?: (success: boolean) => void
+  priority?: number
 }) {
   const {
     url,
@@ -274,8 +297,9 @@ export function CachedImage(props: {
     useIntrinsicAspectRatio = false,
     frame,
     onLoaded,
+    priority,
   } = props
-  const { path, failed } = useCachedImage(url, onLoaded)
+  const { path, failed } = useCachedImage(url, onLoaded, priority)
   const centeredSquare = useMemo(() => {
     if (!path || !centerCropSquare) return null
     try {
@@ -433,10 +457,11 @@ const NOVEL_TAG_MAX_WIDTH = 260
 export function NovelCard(props: {
   novel: PixivNovel
   onAppear?: () => void
+  priority?: number
   footerText?: string
   markerPage?: number
 }) {
-  const { novel, onAppear, footerText, markerPage } = props
+  const { novel, onAppear, priority, footerText, markerPage } = props
   const [bookmarked, setBookmarked] = useState(novel.is_bookmarked)
   const [bookmarkBusy, setBookmarkBusy] = useState(false)
   const [showBookmarkDetail, setShowBookmarkDetail] = useState(false)
@@ -516,6 +541,7 @@ export function NovelCard(props: {
               aspectRatioValue={0.71}
               cornerRadius={0}
               contentMode="fill"
+              priority={priority}
               frame={{ width: 68, height: 96 }}
             />
           </ZStack>
@@ -680,6 +706,7 @@ export function IllustCard(props: {
   illust: PixivIllustration
   onAppear?: () => void
   flow?: boolean
+  priority?: number
   cornerBadge?: any
   footerText?: string
   topTrailingAction?: IllustCardAction
@@ -688,6 +715,7 @@ export function IllustCard(props: {
     illust,
     onAppear,
     flow = false,
+    priority,
     cornerBadge,
     footerText,
     topTrailingAction,
@@ -776,6 +804,7 @@ export function IllustCard(props: {
                   contentMode={flow ? "fit" : "fill"}
                   centerCropSquare={!flow}
                   cornerRadius={10}
+                  priority={priority}
                 />
                 {illust.page_count > 1 ? (
                   <PageCountBadge count={illust.page_count} />
@@ -961,6 +990,7 @@ export function IllustFlowFeed(props: {
         key={illust.id}
         illust={illust}
         flow={true}
+        priority={index}
         onAppear={
           isLast && (props.hasMore ?? true)
             ? () => props.onLoadMore(illust.id)
@@ -1318,8 +1348,9 @@ const VISION_IMAGE_RATIO = 1200 / 630
 export function VisionCard(props: {
   article: PixivVisionArticle
   onAppear?: () => void
+  priority?: number
 }) {
-  const { article, onAppear } = props
+  const { article, onAppear, priority } = props
   return (
     <VStack
       alignment="leading"
@@ -1342,6 +1373,7 @@ export function VisionCard(props: {
             useIntrinsicAspectRatio={false}
             cornerRadius={12}
             contentMode="fill"
+            priority={priority}
           />
           <VStack
             alignment="leading"
