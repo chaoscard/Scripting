@@ -126,19 +126,12 @@ export function IllustDetailView(props: { illustID: number }) {
         recordedIDRef.current = detail.id
         recordHistory(detail)
       }
-      // 预取前几页大图（meta_pages 缺失时走 URL 推导兜底）
+      // 预取前几页图片（由 imageUrlOf 统一处理画质设置与 1:3 极窄长图原图兜底）
       const prefetchURLs: (string | null | undefined)[] = []
-      if (detail.meta_pages.length > 0) {
-        prefetchURLs.push(
-          ...detail.meta_pages
-            .slice(0, 4)
-            .map((p) => p.image_urls?.large ?? p.image_urls?.medium)
-        )
-      } else {
-        const total = Math.min(4, detail.page_count || 1)
-        for (let k = 0; k < total; k++) {
-          prefetchURLs.push(imageUrlOf(detail, k, loadSettings().detailImageQuality))
-        }
+      const detailQuality = loadSettings().detailImageQuality
+      const total = Math.min(4, detail.page_count || detail.meta_pages?.length || 1)
+      for (let k = 0; k < total; k++) {
+        prefetchURLs.push(imageUrlOf(detail, k, detailQuality))
       }
       prefetch(prefetchURLs)
       // 并行加载收藏状态与关注状态（与主请求共用序号：页面切换后全部作废）
@@ -502,6 +495,18 @@ export function IllustDetailView(props: { illustID: number }) {
                 title={`PID：${current.id}`}
                 action={() => Pasteboard.setString(String(current.id))}
               />
+              {pageCount > 1 && (
+                <Button
+                  title={`页数：${pageCount}页`}
+                  action={() => Pasteboard.setString(`页数：${pageCount}页`)}
+                />
+              )}
+              {Boolean(current.width && current.height) && (
+                <Button
+                  title={`分辨率：${current.width}×${current.height}`}
+                  action={() => Pasteboard.setString(`分辨率：${current.width}×${current.height}`)}
+                />
+              )}
             </Menu>
           </Menu>,
           <NavigationLink

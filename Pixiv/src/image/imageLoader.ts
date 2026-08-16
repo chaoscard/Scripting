@@ -452,6 +452,8 @@ function derivePageURL(
 
 export function imageUrlOf(
   i: {
+    width?: number
+    height?: number
     image_urls?: PixivImageUrls
     meta_pages?: { image_urls: PixivImageUrls }[]
     meta_single_page?: { original_image_url?: string }
@@ -460,16 +462,21 @@ export function imageUrlOf(
   quality: "medium" | "large" | "original"
 ): string | null {
   if (!i) return null
+  const ratio = i.width && i.height ? i.width / i.height : 1
+  // 详情页兜底：宽高比达到 1:3（极窄长图）启用原图画质
+  const effectiveQuality: "medium" | "large" | "original" =
+    ratio < 1 / 3 ? "original" : quality
+
   // 多页：优先 meta_pages 对应页
   if (i.meta_pages && i.meta_pages.length > 0) {
     const page = i.meta_pages[pageIndex]
     if (page) {
       const urls = page.image_urls
-      if (quality === "original") {
+      if (effectiveQuality === "original") {
         // 多页作品的原图在 meta_pages[i].image_urls.original
         return urls?.original ?? urls?.large ?? null
       }
-      if (quality === "medium") {
+      if (effectiveQuality === "medium") {
         return urls?.medium ?? urls?.large ?? null
       }
       return urls?.large ?? urls?.medium ?? null
@@ -477,23 +484,23 @@ export function imageUrlOf(
     // meta_pages 长度不足（API 异常）：用第一页 URL 推导
     const first = i.meta_pages[0]?.image_urls
     const base =
-      quality === "original"
+      effectiveQuality === "original"
         ? (first?.original ?? first?.large)
-        : quality === "medium"
+        : effectiveQuality === "medium"
           ? (first?.medium ?? first?.large)
           : (first?.large ?? first?.medium)
     return derivePageURL(base, pageIndex)
   }
   // 单页 / API 未返回多页：从第一页 URL 推导（覆盖漫画只返回 meta_single_page 的情况）
   let base: string | null | undefined
-  if (quality === "original") {
+  if (effectiveQuality === "original") {
     base =
       i.meta_single_page?.original_image_url ??
       i.image_urls?.original ??
       i.image_urls?.large ??
       i.image_urls?.medium ??
       null
-  } else if (quality === "medium") {
+  } else if (effectiveQuality === "medium") {
     base = i.image_urls?.medium ?? i.image_urls?.large ?? i.image_urls?.square_medium ?? null
   } else {
     base = i.image_urls?.large ?? i.image_urls?.medium ?? i.image_urls?.square_medium ?? null
@@ -529,26 +536,43 @@ export function novelThumbUrlOf(i: {
 
 // 标准 IllustCard 裁切源：必须优先完整比例图片。
 // square_medium 可能已被 Pixiv 服务端从顶部预裁切，无法在本地恢复画面中央。
-// 依据设置的 feedImageQuality（中等/大图）选择分辨率。在“中等”模式下，极窄竖图仍优先 large 保持清晰度。
+// 依据设置的 feedImageQuality（中等/大图）选择分辨率。
+// 兜底逻辑：
+// 1. 宽高比达到 1:5 的超长条漫/长图，启用原图画质（original），避免拉伸失真；
+// 2. 宽高比达到 1:2 的窄竖图或设置项为大图，优先大图画质（large）保持清晰度。
 export function cardThumbUrlOf(
   i: {
     width?: number
     height?: number
-    image_urls?: { square_medium?: string; medium?: string; large?: string }
+    image_urls?: PixivImageUrls | { square_medium?: string; medium?: string; large?: string; original?: string }
+    meta_pages?: { image_urls: PixivImageUrls }[]
+    meta_single_page?: { original_image_url?: string }
   },
   quality?: "medium" | "large" | unknown
 ): string | null {
   if (!i) return null
+  const ratio = i.width && i.height ? i.width / i.height : 1
+
+  // 1) 达到 1:5 的极长长图：启用原图画质
+  if (ratio < 1 / 5) {
+    const original =
+      i.meta_single_page?.original_image_url ??
+      i.meta_pages?.[0]?.image_urls?.original ??
+      (i.image_urls as any)?.original ??
+      imageUrlOf(i as any, 0, "original")
+    if (original) return original
+  }
+
   const selectedQuality =
     quality === "medium" || quality === "large"
       ? quality
       : loadSettings().feedImageQuality
-  if (selectedQuality === "large") {
+
+  // 2) 用户设置大图或达到 1:2 的窄竖图：启用大图画质
+  if (selectedQuality === "large" || ratio < 1 / 2) {
     return i.image_urls?.large ?? i.image_urls?.medium ?? i.image_urls?.square_medium ?? null
   }
-  const ratio = i.width && i.height ? i.width / i.height : 1
-  const preferLarge = ratio < 1 / 2
-  return preferLarge
-    ? (i.image_urls?.large ?? i.image_urls?.medium ?? i.image_urls?.square_medium ?? null)
-    : (i.image_urls?.medium ?? i.image_urls?.large ?? i.image_urls?.square_medium ?? null)
+
+  // 3) 普通中等图
+  return i.image_urls?.medium ?? i.image_urls?.large ?? i.image_urls?.square_medium ?? null
 }
