@@ -1061,23 +1061,21 @@ export function IllustFlowFeed(props: {
     index: number,
   ) => IllustCardAction | undefined
 }) {
-  const [leading, trailing] = distributeFlowItems(props.items)
+  const [leading, trailing] = useMemo(
+    () => distributeFlowItems(props.items),
+    [props.items]
+  )
   const lastItem = props.items[props.items.length - 1]
   const lastId = lastItem ? lastItem.id : null
+  const triggerAnchor = lastId != null ? String(lastId) : ""
 
   function renderItem({ illust, index }: IllustFlowItem) {
-    const isLast = illust.id === lastId
     return (
       <IllustCard
         key={illust.id}
         illust={illust}
         flow={true}
         priority={index}
-        onAppear={
-          isLast && (props.hasMore ?? true)
-            ? () => props.onLoadMore(illust.id)
-            : undefined
-        }
         cornerBadge={props.cornerBadgeOf?.(illust, index)}
         footerText={props.footerTextOf?.(illust, index)}
         topTrailingAction={props.topTrailingActionOf?.(illust, index)}
@@ -1095,9 +1093,25 @@ export function IllustFlowFeed(props: {
       >
         <LazyVStack alignment="leading" spacing={10} frame={{ minWidth: 0, maxWidth: "infinity" }}>
           {leading.map(renderItem)}
+          {props.hasMore && triggerAnchor ? (
+            <VStack
+              key={`trigger-l:${triggerAnchor}`}
+              spacing={0}
+              frame={{ height: 20, maxWidth: "infinity" }}
+              onAppear={() => props.onLoadMore(triggerAnchor)}
+            />
+          ) : null}
         </LazyVStack>
         <LazyVStack alignment="leading" spacing={10} frame={{ minWidth: 0, maxWidth: "infinity" }}>
           {trailing.map(renderItem)}
+          {props.hasMore && triggerAnchor ? (
+            <VStack
+              key={`trigger-r:${triggerAnchor}`}
+              spacing={0}
+              frame={{ height: 20, maxWidth: "infinity" }}
+              onAppear={() => props.onLoadMore(triggerAnchor)}
+            />
+          ) : null}
         </LazyVStack>
       </HStack>
       {props.isLoading ? (

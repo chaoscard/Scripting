@@ -536,10 +536,7 @@ export function novelThumbUrlOf(i: {
 
 // 标准 IllustCard 裁切源：必须优先完整比例图片。
 // square_medium 可能已被 Pixiv 服务端从顶部预裁切，无法在本地恢复画面中央。
-// 依据设置的 feedImageQuality（中等/大图）选择分辨率。
-// 兜底逻辑：
-// 1. 宽高比达到 1:5 的超长条漫/长图，启用原图画质（original），避免拉伸失真；
-// 2. 宽高比达到 1:2 的窄竖图或设置项为大图，优先大图画质（large）保持清晰度。
+// 依据设置的 feedImageQuality（中等/大图）选择分辨率。在“中等”模式下，极窄竖图仍优先 large 保持清晰度。
 export function cardThumbUrlOf(
   i: {
     width?: number
@@ -551,28 +548,16 @@ export function cardThumbUrlOf(
   quality?: "medium" | "large" | unknown
 ): string | null {
   if (!i) return null
-  const ratio = i.width && i.height ? i.width / i.height : 1
-
-  // 1) 达到 1:5 的极长长图：启用原图画质
-  if (ratio < 1 / 5) {
-    const original =
-      i.meta_single_page?.original_image_url ??
-      i.meta_pages?.[0]?.image_urls?.original ??
-      (i.image_urls as any)?.original ??
-      imageUrlOf(i as any, 0, "original")
-    if (original) return original
-  }
-
   const selectedQuality =
     quality === "medium" || quality === "large"
       ? quality
       : loadSettings().feedImageQuality
-
-  // 2) 用户设置大图或达到 1:2 的窄竖图：启用大图画质
-  if (selectedQuality === "large" || ratio < 1 / 2) {
+  if (selectedQuality === "large") {
     return i.image_urls?.large ?? i.image_urls?.medium ?? i.image_urls?.square_medium ?? null
   }
-
-  // 3) 普通中等图
-  return i.image_urls?.medium ?? i.image_urls?.large ?? i.image_urls?.square_medium ?? null
+  const ratio = i.width && i.height ? i.width / i.height : 1
+  const preferLarge = ratio < 1 / 2
+  return preferLarge
+    ? (i.image_urls?.large ?? i.image_urls?.medium ?? i.image_urls?.square_medium ?? null)
+    : (i.image_urls?.medium ?? i.image_urls?.large ?? i.image_urls?.square_medium ?? null)
 }
