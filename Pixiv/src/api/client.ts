@@ -316,6 +316,27 @@ export async function apiGetPublicText(
   return data?.toRawString() ?? ""
 }
 
+// 请求公开网页 JSON，不携带 Pixiv Authorization，并限制首跳及重定向 Origin。
+export async function apiGetPublicJson<T = any>(
+  url: string,
+  allowedOrigin: string,
+  extraHeaders?: Record<string, string>
+): Promise<T> {
+  const { status, data } = await rawRequest(url, "GET", {
+    headers: {
+      Accept: "application/json",
+      ...(extraHeaders ?? {}),
+    },
+    allowedOrigin,
+  })
+  if (status < 200 || status >= 300) {
+    const message = await parseError(data)
+    throw new PixivError(status, message || `请求失败（${status}）`)
+  }
+  if (!data) throw new PixivError(status, "空响应")
+  return JSON.parse(data.toRawString() ?? "")
+}
+
 // 下载二进制（图片等），带 Referer；跳过 API 限速（图片 CDN 并发下载）
 export async function downloadBinary(
   url: string,

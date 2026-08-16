@@ -89,6 +89,12 @@ export function MoreView(props: { onClose: () => void }) {
             <Text font="body">我的好友</Text>
           </HStack>
         </NavigationLink>
+        <NavigationLink value="myWorks">
+          <HStack spacing={8}>
+            <Image systemName="photo.stack.fill" foregroundStyle="#FF9500" />
+            <Text font="body">我的作品</Text>
+          </HStack>
+        </NavigationLink>
         <NavigationLink value="notifications">
           <HStack spacing={8}>
             <Image systemName="bell.fill" foregroundStyle="#FF375F" />

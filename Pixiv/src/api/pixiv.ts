@@ -16,6 +16,7 @@ import type {
   PixivTrendingTag,
   PixivUserDetail,
   PixivUserPreview,
+  PixivWebUserDetail,
   UgoiraMetadataResponse,
 } from "../types"
 import { API_BASE_URL } from "../config"
@@ -23,6 +24,7 @@ import { notifyUserFollowChanged } from "../store/userFollow"
 import {
   apiGet,
   apiGetAbsolute,
+  apiGetPublicJson,
   apiGetPublicText,
   apiGetText,
   apiPost,
@@ -710,6 +712,29 @@ export async function postComment(
 }
 
 // ---------- 用户 ----------
+
+const WEB_BASE_ORIGIN = "https://www.pixiv.net"
+const WEB_USER_AGENT =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/26.6"
+
+export async function fetchWebUserDetail(
+  userID: number
+): Promise<PixivWebUserDetail | null> {
+  const url = `${WEB_BASE_ORIGIN}/ajax/user/${userID}?full=1`
+  try {
+    const json = await apiGetPublicJson<any>(url, WEB_BASE_ORIGIN, {
+      "User-Agent": WEB_USER_AGENT,
+      Referer: `${WEB_BASE_ORIGIN}/users/${userID}`,
+    })
+    if (json?.error === false && json?.body) {
+      return json.body as PixivWebUserDetail
+    }
+    return null
+  } catch (error) {
+    console.log("fetchWebUserDetail error:", error)
+    return null
+  }
+}
 
 export async function userDetail(
   id: number,

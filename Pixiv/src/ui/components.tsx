@@ -295,6 +295,7 @@ export function CachedImage(props: {
   cornerRadius?: number
   contentMode?: "fit" | "fill"
   centerCropSquare?: boolean
+  centerCropAspect?: number
   useIntrinsicAspectRatio?: boolean
   frame?: any // 覆盖默认整宽 frame（如固定尺寸缩略图）
   onLoaded?: (success: boolean) => void
@@ -306,28 +307,63 @@ export function CachedImage(props: {
     cornerRadius = 10,
     contentMode = "fill",
     centerCropSquare = false,
+    centerCropAspect,
     useIntrinsicAspectRatio = false,
     frame,
     onLoaded,
     priority,
   } = props
   const { path, failed } = useCachedImage(url, onLoaded, priority)
-  const centeredSquare = useMemo(() => {
-    if (!path || !centerCropSquare) return null
-    try {
-      const image = UIImage.fromFile(path)
-      if (!image || image.width <= 0 || image.height <= 0) return null
-      const side = Math.min(image.width, image.height)
-      return image.croppedTo({
-        x: (image.width - side) / 2,
-        y: (image.height - side) / 2,
-        width: side,
-        height: side,
-      })
-    } catch {
-      return null
+  const croppedImage = useMemo(() => {
+    if (!path) return null
+    if (centerCropSquare) {
+      try {
+        const image = UIImage.fromFile(path)
+        if (!image || image.width <= 0 || image.height <= 0) return null
+        const side = Math.min(image.width, image.height)
+        return image.croppedTo({
+          x: (image.width - side) / 2,
+          y: (image.height - side) / 2,
+          width: side,
+          height: side,
+        })
+      } catch {
+        return null
+      }
     }
-  }, [path, centerCropSquare])
+    if (centerCropAspect != null && centerCropAspect > 0) {
+      try {
+        const image = UIImage.fromFile(path)
+        if (!image || image.width <= 0 || image.height <= 0) return null
+        const currentAspect = image.width / image.height
+        // 若图片纵横比与目标纵横比差异大于 1%，则进行居中裁切
+        if (Math.abs(currentAspect - centerCropAspect) > 0.01) {
+          if (currentAspect > centerCropAspect) {
+            // 图片更宽（例如超宽横图封面），截取横向正中间部分
+            const targetWidth = image.height * centerCropAspect
+            return image.croppedTo({
+              x: (image.width - targetWidth) / 2,
+              y: 0,
+              width: targetWidth,
+              height: image.height,
+            })
+          } else {
+            // 图片更高，截取纵向正中间部分
+            const targetHeight = image.width / centerCropAspect
+            return image.croppedTo({
+              x: 0,
+              y: (image.height - targetHeight) / 2,
+              width: image.width,
+              height: targetHeight,
+            })
+          }
+        }
+      } catch {
+        return null
+      }
+    }
+    return null
+  }, [path, centerCropSquare, centerCropAspect])
 
   const intrinsicAspect = useMemo(() => {
     if (!path || !useIntrinsicAspectRatio) return null
@@ -342,15 +378,15 @@ export function CachedImage(props: {
     return null
   }, [path, useIntrinsicAspectRatio])
 
-  const effectiveRatio = intrinsicAspect ?? aspectRatioValue
+  const effectiveRatio = croppedImage ? (centerCropAspect ?? 1) : (intrinsicAspect ?? aspectRatioValue)
 
   if (path) {
-    if (centeredSquare) {
+    if (croppedImage) {
       return (
         <Image
-          image={centeredSquare}
+          image={croppedImage}
           resizable={true}
-          aspectRatio={{ value: 1, contentMode: "fill" }}
+          aspectRatio={{ value: effectiveRatio, contentMode: "fill" }}
           clipShape={{ type: "rect", cornerRadius }}
           frame={frame ?? { maxWidth: "infinity" }}
         />
@@ -551,6 +587,7 @@ export function NovelCard(props: {
             <CachedImage
               url={coverURL}
               aspectRatioValue={0.71}
+              centerCropAspect={0.71}
               cornerRadius={0}
               contentMode="fill"
               priority={priority}

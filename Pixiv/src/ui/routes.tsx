@@ -16,6 +16,7 @@ import { SettingsView } from "./settings"
 import { SeriesView } from "./seriesView"
 import { UserBookmarksView } from "./userBookmarks"
 import { UserConnectionsView, type ConnectionRouteKind } from "./userConnections"
+import { UserWorksView } from "./userWorks"
 import { AboutView } from "./about"
 
 // 解析 "xxx:123" 形式的数值 id；非法输入返回 null（避免 NaN 传给详情页）
@@ -101,6 +102,13 @@ export function renderDestination(page: string) {
         title="我的好友"
       />
     )
+  }
+  if (page === "myWorks") {
+    return <UserWorksView title="我的作品" />
+  }
+  if (page.startsWith("userWorks:")) {
+    const id = parseID(page, "userWorks:")
+    if (id != null) return <UserWorksView userID={id} title="作品" />
   }
   if (page === "blockedSettings") return <BlockedSettingsView />
   if (page === "settings") return <SettingsView />

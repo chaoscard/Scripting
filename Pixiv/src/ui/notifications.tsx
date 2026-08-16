@@ -70,7 +70,7 @@ function NotificationList(props: {
       ) : paged.items.length === 0 ? (
         <EmptyView text="暂无通知" systemImage="bell" />
       ) : (
-        <VStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
+        <VStack alignment="leading" spacing={8} padding={{ horizontal: 10 }} frame={{ maxWidth: "infinity", alignment: "leading" }}>
           {paged.items.map((n) => (
             <NotificationRow key={n.id} notification={n} />
           ))}
@@ -101,6 +101,12 @@ function NotificationRow(props: { notification: PixivNotification }) {
   const leadingIcon = n.content.left_icon
   const leadingImage = n.content.left_image
   const trailingImage = n.content.right_image ?? n.content.right_icon
+
+  const isNovel =
+    n.target_url.includes("/novels/") ||
+    n.target_url.includes("novels") ||
+    (target != null && target.startsWith("novel:"))
+
   const content = (
     <HStack
       spacing={10}
@@ -108,7 +114,7 @@ function NotificationRow(props: { notification: PixivNotification }) {
       padding={10}
       glassEffect={{ type: "rect", cornerRadius: 8 }}
       glassEffectTransition="materialize"
-      frame={{ maxWidth: "infinity" }}
+      frame={{ maxWidth: "infinity", alignment: "leading" }}
     >
       {leadingIcon ? (
         <AvatarImage url={leadingIcon} size={42} />
@@ -116,9 +122,10 @@ function NotificationRow(props: { notification: PixivNotification }) {
         <CachedImage
           url={leadingImage}
           aspectRatioValue={1}
-          useIntrinsicAspectRatio={false}
+          contentMode={isNovel ? "fit" : "fill"}
+          useIntrinsicAspectRatio={isNovel}
           cornerRadius={6}
-          frame={{ width: 42, height: 42 }}
+          frame={isNovel ? { maxWidth: 42, maxHeight: 42 } : { width: 42, height: 42 }}
         />
       ) : (
         <Image
@@ -128,8 +135,13 @@ function NotificationRow(props: { notification: PixivNotification }) {
           frame={{ width: 42, height: 42 }}
         />
       )}
-      <VStack alignment="leading" spacing={3} frame={{ maxWidth: "infinity" }}>
-        <Text font="footnote" lineLimit={2} multilineTextAlignment="leading">
+      <VStack alignment="leading" spacing={3} frame={{ maxWidth: "infinity", alignment: "leading" }}>
+        <Text
+          font="footnote"
+          lineLimit={2}
+          multilineTextAlignment="leading"
+          frame={{ maxWidth: "infinity", alignment: "leading" }}
+        >
           {htmlToPlainText(n.content.text)}
         </Text>
         {n.view_more?.title ? (
@@ -143,7 +155,11 @@ function NotificationRow(props: { notification: PixivNotification }) {
             {n.view_more.title}
           </Text>
         ) : null}
-        <Text font="caption2" foregroundStyle="secondaryLabel">
+        <Text
+          font="caption2"
+          foregroundStyle="secondaryLabel"
+          frame={{ maxWidth: "infinity", alignment: "leading" }}
+        >
           {formatDate(n.created_datetime)}
         </Text>
       </VStack>
@@ -151,9 +167,10 @@ function NotificationRow(props: { notification: PixivNotification }) {
         <CachedImage
           url={trailingImage}
           aspectRatioValue={1}
-          useIntrinsicAspectRatio={false}
+          contentMode={isNovel ? "fit" : "fill"}
+          useIntrinsicAspectRatio={isNovel}
           cornerRadius={6}
-          frame={{ width: 56, height: 56 }}
+          frame={isNovel ? { maxWidth: 56, maxHeight: 56 } : { width: 56, height: 56 }}
         />
       ) : n.view_more ? (
         <Image

@@ -131,6 +131,50 @@ export interface PixivUserDetail {
   } | null
 }
 
+export interface PixivWebSocialItem {
+  url: string
+}
+
+export interface PixivWebNamedField {
+  name: string | null
+  privacyLevel?: string | null
+  region?: string | null
+  prefecture?: string | null
+}
+
+export interface PixivWebWorkspace {
+  userWorkspacePc?: string | null
+  userWorkspaceMonitor?: string | null
+  userWorkspaceTool?: string | null
+  userWorkspaceTablet?: string | null
+  userWorkspaceMouse?: string | null
+  userWorkspaceScanner?: string | null
+  userWorkspacePrinter?: string | null
+  userWorkspaceDesktop?: string | null
+  userWorkspaceMusic?: string | null
+  userWorkspaceDesk?: string | null
+  userWorkspaceChair?: string | null
+  userWorkspaceComment?: string | null
+  [key: string]: string | null | undefined
+}
+
+export interface PixivWebUserDetail {
+  userId: string
+  name: string
+  image?: string
+  imageBig?: string
+  comment?: string
+  commentHtml?: string
+  webpage?: string | null
+  social?: Record<string, PixivWebSocialItem> | PixivWebSocialItem[] | null
+  region?: PixivWebNamedField | null
+  age?: PixivWebNamedField | null
+  birthDay?: PixivWebNamedField | null
+  gender?: PixivWebNamedField | null
+  job?: PixivWebNamedField | null
+  workspace?: PixivWebWorkspace | null
+}
+
 export interface PixivUserPreview {
   user: PixivUser
   illusts: PixivIllustration[]

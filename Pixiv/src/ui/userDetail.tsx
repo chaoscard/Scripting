@@ -13,12 +13,14 @@ import {
   Spacer,
   Text,
   useEffect,
+  useMemo,
   useRef,
   useState,
   VStack,
   ZStack,
 } from "scripting"
 import {
+  fetchWebUserDetail,
   followDetail,
   followUser,
   nextIllustrations,
@@ -48,7 +50,12 @@ import {
 import { onUserFollowChanged } from "../store/userFollow"
 import { renderDestination } from "./routes"
 import { useAsyncGuard, useLatest, usePagedList } from "./hooks"
-import type { PixivIllustration, PixivNovel, PixivUserDetail } from "../types"
+import type {
+  PixivIllustration,
+  PixivNovel,
+  PixivUserDetail,
+  PixivWebUserDetail,
+} from "../types"
 import {
   AvatarImage,
   CachedImage,
@@ -68,6 +75,7 @@ type UserWorkKind = "illust" | "manga" | "novel"
 export function UserDetailView(props: { userID: number }) {
   const { userID } = props
   const [detail, setDetail] = useState<PixivUserDetail | null>(null)
+  const [webDetail, setWebDetail] = useState<PixivWebUserDetail | null>(null)
   const [followed, setFollowed] = useState(false)
   const [detailError, setDetailError] = useState<string | null>(null)
   const [followBusy, setFollowBusy] = useState(false)
@@ -83,7 +91,10 @@ export function UserDetailView(props: { userID: number }) {
     const followStateVersion = followStateVersionRef.current
     setDetailError(null)
     try {
-      const result = await session.call((token) => userDetail(userID, token))
+      const [result, webResult] = await Promise.all([
+        session.call((token) => userDetail(userID, token)),
+        fetchWebUserDetail(userID),
+      ])
       if (!g.isCurrent()) return
 
       // 优先预热背景图与头像，确保首次渲染即获得真实比例，防止头像位置跳动
@@ -97,6 +108,7 @@ export function UserDetailView(props: { userID: number }) {
 
       if (!g.isCurrent()) return
       setDetail(result)
+      setWebDetail(webResult)
       if (followStateVersion === followStateVersionRef.current) {
         setFollowed(result.user.is_followed ?? false)
       }
@@ -225,6 +237,17 @@ export function UserDetailView(props: { userID: number }) {
               }}
             />,
           ] : []),
+          <Button
+            title="分享"
+            systemImage="square.and.arrow.up"
+            buttonStyle="glass"
+            frame={{ width: 32, height: 32 }}
+            clipShape={{ type: "rect", cornerRadius: 16 }}
+            contentShape="rect"
+            action={() => {
+              void ShareSheet.present([`https://www.pixiv.net/users/${userID}`])
+            }}
+          />,
           <Menu label={<Image systemName="ellipsis.circle" />}>
             <NavigationLink value={`userConnections:following:${userID}`}>
               <Label title="查看关注" systemImage="person.2" />
@@ -279,7 +302,7 @@ export function UserDetailView(props: { userID: number }) {
     >
       <VStack alignment="leading" spacing={12} padding={{ top: 0, bottom: 20 }} frame={{ maxWidth: "infinity" }}>
         {/* 单一常驻的个人资料头部 */}
-        <UserProfileHeader detail={detail} />
+        <UserProfileHeader detail={detail} webDetail={webDetail} />
 
         {/* 位于个人资料和作品列表之间的分段选择器 */}
         <UserWorkPicker kind={kind} onChanged={setKind} />
@@ -418,26 +441,396 @@ function UserNovelFeed(props: {
   )
 }
 
-function UserProfileHeader(props: { detail: PixivUserDetail }) {
-  const { detail } = props
-  const { user, profile, workspace } = detail
-  const introduction = htmlToPlainText(user.comment).trim()
-  const fields = [
-    profile.webpage?.trim() ? ["主页", profile.webpage.trim()] : null,
-    profile.gender?.trim() ? ["性别", profile.gender.trim()] : null,
-    profile.birth?.trim() ? ["生日", profile.birth.trim()] : null,
-    profile.region?.trim() ? ["地区", profile.region.trim()] : null,
-    profile.job?.trim() ? ["职业", profile.job.trim()] : null,
-    profile.twitter_url?.trim()
-      ? [
-          "X",
-          profile.twitter_account?.trim()
-            ? `@${profile.twitter_account.trim()}`
-            : profile.twitter_url.trim(),
-        ]
-      : null,
-    workspace?.comment?.trim() ? ["创作环境", workspace.comment.trim()] : null,
-  ].filter((field): field is [string, string] => field != null)
+interface SocialLinkItem {
+  id: string
+  name: string
+  url: string
+  systemImage: string
+}
+
+function extractSocialLinks(
+  detail: PixivUserDetail,
+  webDetail: PixivWebUserDetail | null
+): SocialLinkItem[] {
+  const links: SocialLinkItem[] = []
+  const seenUrls = new Set<string>()
+
+  function addLink(
+    id: string,
+    name: string,
+    rawUrl: string | undefined | null,
+    systemImage: string
+  ) {
+    if (!rawUrl) return
+    const trimmed = rawUrl.trim()
+    if (
+      !trimmed ||
+      (!trimmed.startsWith("http://") && !trimmed.startsWith("https://"))
+    ) {
+      return
+    }
+    if (seenUrls.has(trimmed)) return
+    seenUrls.add(trimmed)
+    links.push({ id, name, url: trimmed, systemImage })
+  }
+
+  // 1. 从网页端提取 social 对象 / 列表
+  if (webDetail?.social) {
+    if (Array.isArray(webDetail.social)) {
+      webDetail.social.forEach((item, index) => {
+        if (item?.url) {
+          const meta = inferSocialMeta(item.url, `social_${index}`)
+          addLink(meta.id, meta.name, item.url, meta.systemImage)
+        }
+      })
+    } else if (typeof webDetail.social === "object") {
+      for (const [key, item] of Object.entries(webDetail.social)) {
+        if (item?.url) {
+          const meta = socialMetaForKey(key, item.url)
+          addLink(meta.id, meta.name, item.url, meta.systemImage)
+        }
+      }
+    }
+  }
+
+  // 2. 从网页端提取 webpage（个人主页）
+  if (webDetail?.webpage) {
+    addLink("webpage", "主页", webDetail.webpage, "globe")
+  }
+
+  // 3. Fallback: App API twitter
+  if (detail.profile.twitter_url) {
+    addLink("twitter_app", "X", detail.profile.twitter_url, "xmark")
+  }
+
+  // 4. Fallback: App API webpage
+  if (detail.profile.webpage) {
+    addLink("webpage_app", "主页", detail.profile.webpage, "globe")
+  }
+
+  return links
+}
+
+function socialMetaForKey(
+  key: string,
+  url: string
+): { id: string; name: string; systemImage: string } {
+  const lowerKey = key.toLowerCase()
+  if (lowerKey === "twitter" || lowerKey === "x") {
+    return { id: "twitter", name: "X", systemImage: "xmark" }
+  }
+  if (lowerKey === "pawoo") {
+    return {
+      id: "pawoo",
+      name: "Pawoo",
+      systemImage: "antenna.radiowaves.left.and.right",
+    }
+  }
+  if (lowerKey === "circlems") {
+    return {
+      id: "circlems",
+      name: "Circle.ms",
+      systemImage: "circle.grid.2x2.fill",
+    }
+  }
+  if (lowerKey === "instagram") {
+    return { id: "instagram", name: "Instagram", systemImage: "camera.fill" }
+  }
+  if (lowerKey === "bluesky") {
+    return { id: "bluesky", name: "Bluesky", systemImage: "cloud.fill" }
+  }
+  return inferSocialMeta(url, key)
+}
+
+function inferSocialMeta(
+  url: string,
+  defaultId: string
+): { id: string; name: string; systemImage: string } {
+  const lower = url.toLowerCase()
+  if (lower.includes("twitter.com") || lower.includes("x.com")) {
+    return { id: "twitter", name: "X", systemImage: "xmark" }
+  }
+  if (lower.includes("pawoo.net")) {
+    return {
+      id: "pawoo",
+      name: "Pawoo",
+      systemImage: "antenna.radiowaves.left.and.right",
+    }
+  }
+  if (lower.includes("circle.ms")) {
+    return {
+      id: "circlems",
+      name: "Circle.ms",
+      systemImage: "circle.grid.2x2.fill",
+    }
+  }
+  if (lower.includes("instagram.com")) {
+    return { id: "instagram", name: "Instagram", systemImage: "camera.fill" }
+  }
+  if (lower.includes("bsky.app") || lower.includes("bluesky")) {
+    return { id: "bluesky", name: "Bluesky", systemImage: "cloud.fill" }
+  }
+  if (lower.includes("youtube.com") || lower.includes("youtu.be")) {
+    return {
+      id: "youtube",
+      name: "YouTube",
+      systemImage: "play.rectangle.fill",
+    }
+  }
+  if (lower.includes("github.com")) {
+    return { id: "github", name: "GitHub", systemImage: "curlybraces" }
+  }
+  if (lower.includes("weibo.com") || lower.includes("weibo.cn")) {
+    return { id: "weibo", name: "微博", systemImage: "eye.fill" }
+  }
+  return { id: defaultId, name: "主页", systemImage: "link" }
+}
+
+function UserSocialBar(props: { socials: SocialLinkItem[] }) {
+  if (props.socials.length === 0) return null
+  return (
+    <HStack
+      alignment="center"
+      frame={{ maxWidth: "infinity", alignment: "center" }}
+      padding={{ vertical: 2 }}
+    >
+      <HStack
+        alignment="center"
+        spacing={12}
+        padding={{ horizontal: 14, vertical: 6 }}
+        glassEffect="capsule"
+      >
+        {props.socials.map((item) => (
+          <Button
+            key={item.id}
+            title=""
+            systemImage={item.systemImage}
+            buttonStyle="plain"
+            frame={{ width: 32, height: 32 }}
+            clipShape="circle"
+            contentShape="circle"
+            action={() => {
+              void Safari.present(item.url, false)
+            }}
+            contextMenu={{
+              menuItems: (
+                <Group>
+                  <Button
+                    title={`在浏览器中打开 ${item.name}`}
+                    systemImage="safari"
+                    action={() => void Safari.openURL(item.url)}
+                  />
+                  <Button
+                    title="复制链接"
+                    systemImage="doc.on.doc"
+                    action={() => void Pasteboard.setString(item.url)}
+                  />
+                </Group>
+              ),
+            }}
+          />
+        ))}
+      </HStack>
+    </HStack>
+  )
+}
+
+function ExpandableIntroduction(props: {
+  commentHtml: string
+  rawComment: string
+  routeDestination: (route: string) => any
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const plainText = useMemo(
+    () => htmlToPlainText(props.rawComment || props.commentHtml).trim(),
+    [props.rawComment, props.commentHtml]
+  )
+
+  const lines = useMemo(() => plainText.split(/\r?\n/), [plainText])
+  const exceedsFiveLines = lines.length > 5 || plainText.length > 220
+
+  if (!plainText) return null
+
+  const collapsedText = useMemo(() => {
+    if (!exceedsFiveLines) return plainText
+    return lines.slice(0, 5).join("\n")
+  }, [lines, exceedsFiveLines, plainText])
+
+  return (
+    <VStack alignment="leading" spacing={6} frame={{ maxWidth: "infinity" }}>
+      <Text
+        font="subheadline"
+        fontWeight="semibold"
+        foregroundStyle="secondaryLabel"
+      >
+        简介
+      </Text>
+      <VStack
+        alignment="leading"
+        spacing={8}
+        padding={12}
+        glassEffect={{ type: "rect", cornerRadius: 14 }}
+        frame={{ maxWidth: "infinity" }}
+        contentShape="rect"
+        onTapGesture={
+          exceedsFiveLines
+            ? () => {
+                setExpanded((prev) => !prev)
+              }
+            : undefined
+        }
+      >
+        {expanded || !exceedsFiveLines ? (
+          <LinkedDescription
+            html={props.commentHtml || props.rawComment}
+            routeDestination={props.routeDestination}
+            nativePlainText
+          />
+        ) : (
+          <Text
+            font="footnote"
+            multilineTextAlignment="leading"
+            lineLimit={5}
+            frame={{ maxWidth: "infinity", alignment: "leading" }}
+          >
+            {collapsedText}
+          </Text>
+        )}
+
+        {exceedsFiveLines ? (
+          <HStack
+            alignment="center"
+            spacing={4}
+            frame={{ maxWidth: "infinity", alignment: "center" }}
+            padding={{ top: 2 }}
+          >
+            <Text font="caption2" foregroundStyle="secondaryLabel">
+              {expanded ? "点击收起" : "点击展开全文"}
+            </Text>
+            <Image
+              systemName={expanded ? "chevron.up" : "chevron.down"}
+              font="caption2"
+              foregroundStyle="secondaryLabel"
+            />
+          </HStack>
+        ) : null}
+      </VStack>
+    </VStack>
+  )
+}
+
+function buildAboutFields(
+  detail: PixivUserDetail,
+  webDetail: PixivWebUserDetail | null
+): Array<[string, string]> {
+  const fields: Array<[string, string]> = []
+
+  // 地区
+  const region =
+    webDetail?.region?.name?.trim() || detail.profile.region?.trim()
+  if (region) {
+    fields.push(["地区", region])
+  }
+
+  // 年龄
+  const age = webDetail?.age?.name?.trim()
+  if (age) {
+    fields.push(["年龄", age])
+  }
+
+  // 生日
+  const birth =
+    webDetail?.birthDay?.name?.trim() || detail.profile.birth?.trim()
+  if (birth) {
+    fields.push(["生日", birth])
+  }
+
+  // 性别
+  const gender =
+    webDetail?.gender?.name?.trim() || detail.profile.gender?.trim()
+  if (gender) {
+    fields.push(["性别", gender])
+  }
+
+  // 职业
+  const job = webDetail?.job?.name?.trim() || detail.profile.job?.trim()
+  if (job) {
+    fields.push(["职业", job])
+  }
+
+  // 创作环境（Workspace）
+  const ws = webDetail?.workspace
+  if (ws && typeof ws === "object") {
+    if (ws.userWorkspacePc?.trim()) {
+      fields.push(["电脑", ws.userWorkspacePc.trim()])
+    }
+    if (ws.userWorkspaceMonitor?.trim()) {
+      fields.push(["显示器", ws.userWorkspaceMonitor.trim()])
+    }
+    if (ws.userWorkspaceTool?.trim()) {
+      fields.push(["软件", ws.userWorkspaceTool.trim()])
+    }
+    if (ws.userWorkspaceTablet?.trim()) {
+      fields.push(["数位板", ws.userWorkspaceTablet.trim()])
+    }
+    if (ws.userWorkspaceMouse?.trim()) {
+      fields.push(["鼠标", ws.userWorkspaceMouse.trim()])
+    }
+    if (ws.userWorkspaceScanner?.trim()) {
+      fields.push(["扫描仪", ws.userWorkspaceScanner.trim()])
+    }
+    if (ws.userWorkspacePrinter?.trim()) {
+      fields.push(["打印机", ws.userWorkspacePrinter.trim()])
+    }
+    if (ws.userWorkspaceDesktop?.trim()) {
+      fields.push(["桌面物品", ws.userWorkspaceDesktop.trim()])
+    }
+    if (ws.userWorkspaceMusic?.trim()) {
+      fields.push(["绘图音乐", ws.userWorkspaceMusic.trim()])
+    }
+    if (ws.userWorkspaceDesk?.trim()) {
+      fields.push(["桌子", ws.userWorkspaceDesk.trim()])
+    }
+    if (ws.userWorkspaceChair?.trim()) {
+      fields.push(["椅子", ws.userWorkspaceChair.trim()])
+    }
+    if (ws.userWorkspaceComment?.trim()) {
+      fields.push(["其他", ws.userWorkspaceComment.trim()])
+    }
+  } else if (detail.workspace) {
+    const appWs = detail.workspace
+    if (appWs.pc?.trim()) fields.push(["电脑", appWs.pc.trim()])
+    if (appWs.monitor?.trim()) fields.push(["显示器", appWs.monitor.trim()])
+    if (appWs.tool?.trim()) fields.push(["软件", appWs.tool.trim()])
+    if (appWs.tablet?.trim()) fields.push(["数位板", appWs.tablet.trim()])
+    if (appWs.music?.trim()) fields.push(["绘图音乐", appWs.music.trim()])
+    if (appWs.desk?.trim()) fields.push(["桌子", appWs.desk.trim()])
+    if (appWs.chair?.trim()) fields.push(["椅子", appWs.chair.trim()])
+    if (appWs.comment?.trim()) fields.push(["创作环境", appWs.comment.trim()])
+  }
+
+  return fields
+}
+
+function UserProfileHeader(props: {
+  detail: PixivUserDetail
+  webDetail: PixivWebUserDetail | null
+}) {
+  const { detail, webDetail } = props
+  const { user, profile } = detail
+
+  const socialLinks = useMemo(
+    () => extractSocialLinks(detail, webDetail),
+    [detail, webDetail]
+  )
+  const aboutFields = useMemo(
+    () => buildAboutFields(detail, webDetail),
+    [detail, webDetail]
+  )
+
+  const commentHtml =
+    webDetail?.commentHtml || webDetail?.comment || user.comment || ""
+  const rawComment = webDetail?.comment || user.comment || ""
 
   const avatarSize = 74
   const ringSize = avatarSize + 4
@@ -488,33 +881,30 @@ function UserProfileHeader(props: { detail: PixivUserDetail }) {
         </ZStack>
       </ZStack>
 
-      <VStack alignment="leading" spacing={12} padding={{ top: ringSize / 2 + 4, horizontal: 16 }} frame={{ maxWidth: "infinity" }}>
-        {/* 简介 */}
-        {introduction ? (
-          <VStack alignment="leading" spacing={6} frame={{ maxWidth: "infinity" }}>
-            <Text font="subheadline" fontWeight="semibold" foregroundStyle="secondaryLabel">
-              简介
-            </Text>
-            <VStack
-              alignment="leading"
-              spacing={6}
-              padding={12}
-              glassEffect={{ type: "rect", cornerRadius: 14 }}
-              frame={{ maxWidth: "infinity" }}
-            >
-              <LinkedDescription
-                html={user.comment ?? ""}
-                routeDestination={renderDestination}
-                nativePlainText
-              />
-            </VStack>
-          </VStack>
-        ) : null}
+      <VStack
+        alignment="leading"
+        spacing={12}
+        padding={{ top: ringSize / 2 + 10, horizontal: 16 }}
+        frame={{ maxWidth: "infinity" }}
+      >
+        {/* 社媒图标栏：居中展示，距离头像有段呼吸空间 */}
+        <UserSocialBar socials={socialLinks} />
 
-        {/* 关于信息 */}
-        {fields.length > 0 ? (
+        {/* 简介：从网页端取，默认展示五行，超过五行点击文本框下拉展示 */}
+        <ExpandableIntroduction
+          commentHtml={commentHtml}
+          rawComment={rawComment}
+          routeDestination={renderDestination}
+        />
+
+        {/* 关于信息：地区，年龄，生日，性别，职业，创作环境各字段 */}
+        {aboutFields.length > 0 ? (
           <VStack alignment="leading" spacing={6} frame={{ maxWidth: "infinity" }}>
-            <Text font="subheadline" fontWeight="semibold" foregroundStyle="secondaryLabel">
+            <Text
+              font="subheadline"
+              fontWeight="semibold"
+              foregroundStyle="secondaryLabel"
+            >
               关于
             </Text>
             <VStack
@@ -524,10 +914,11 @@ function UserProfileHeader(props: { detail: PixivUserDetail }) {
               glassEffect={{ type: "rect", cornerRadius: 14 }}
               frame={{ maxWidth: "infinity" }}
             >
-              {fields.map(([label, value]) => (
+              {aboutFields.map(([label, value]) => (
                 <HStack key={label} alignment="top" spacing={10}>
                   <Text
                     font="footnote"
+                    foregroundStyle="secondaryLabel"
                     frame={{ width: 58, alignment: "leading" }}
                   >
                     {label}
