@@ -73,9 +73,15 @@ export function appToolbar(dismiss: () => void, title?: string, trailing?: any) 
   return {
     topBarLeading: [
       <Button
-        title="收起"
+        title="关闭"
         systemImage="xmark"
-        action={() => Script.minimize()}
+        action={() => {
+          if (loadSettings().closeButtonAction === "exit") {
+            Script.exit()
+          } else {
+            Script.minimize()
+          }
+        }}
       />,
     ],
     topBarTrailing: trailing ? [trailing] : undefined,

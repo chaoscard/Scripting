@@ -156,9 +156,17 @@ function rankingToolbar(props: {
   onKindChange: (kind: RankingKind) => void
   onClose: () => void
 }) {
+  const title =
+    props.kind === "illustration"
+      ? "插画"
+      : props.kind === "manga"
+        ? "漫画"
+        : props.kind === "novel"
+          ? "小说"
+          : "高级"
   return appToolbar(
     props.onClose,
-    "排行",
+    title,
     <Menu label={<Image systemName="ellipsis.circle" />}>
       <Picker
         title="排行榜类型"

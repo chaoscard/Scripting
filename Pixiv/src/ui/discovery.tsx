@@ -266,9 +266,15 @@ function exploreToolbar(props: {
   onModeChange: (mode: ExploreMode) => void
   onClose: () => void
 }) {
+  const title =
+    props.mode === "recommended"
+      ? "推荐"
+      : props.mode === "latest"
+        ? "最新"
+        : "专辑"
   return appToolbar(
     props.onClose,
-    "探索",
+    title,
     <Menu label={<Image systemName="ellipsis.circle" />}>
       <Picker
         title="探索类型"

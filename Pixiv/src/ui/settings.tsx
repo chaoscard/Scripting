@@ -79,11 +79,15 @@ export function SettingsView() {
         </NavigationLink>
       </Section>
 
-      <Section header={<Text>收藏</Text>}>
-        <Picker title="长按按钮" value={settings.longPressBookmarkAction} onChanged={(value: string) => update({ longPressBookmarkAction: value as "off" | "follow" | "detail" })}>
+      <Section header={<Text>操作按钮</Text>}>
+        <Picker title="长按收藏按钮" value={settings.longPressBookmarkAction} onChanged={(value: string) => update({ longPressBookmarkAction: value as "off" | "follow" | "detail" })}>
           <Text tag="off">关闭长按功能</Text>
           <Text tag="follow">一键关注作者</Text>
           <Text tag="detail">打开收藏窗口</Text>
+        </Picker>
+        <Picker title="关闭按钮行为" value={settings.closeButtonAction} onChanged={(value: string) => update({ closeButtonAction: value as "minimize" | "exit" })}>
+          <Text tag="minimize">后台运行</Text>
+          <Text tag="exit">完全关闭</Text>
         </Picker>
       </Section>
 

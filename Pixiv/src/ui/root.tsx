@@ -63,13 +63,13 @@ export function RootView() {
 
   useEffect(() => {
     let cancelled = false
-    // 冷启动过渡体验：加长启动就绪缓冲（2000ms），给首屏网络请求与首批图片解码留出充分时间，
+    // 冷启动过渡体验：启动就绪缓冲（1500ms），给首屏网络请求与首批图片解码留出充分时间，
     // 确保过渡后首屏卡片与图片完全就绪、无空白闪烁。
     const timer = setTimeout(() => {
       if (!cancelled) {
         setIsReady(true)
       }
-    }, 2000)
+    }, 1500)
     return () => {
       cancelled = true
       clearTimeout(timer)

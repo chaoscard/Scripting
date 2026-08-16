@@ -10,6 +10,7 @@ export interface BlockedUser {
 export type FeedImageQuality = "medium" | "large"
 export type DetailImageQuality = "medium" | "large" | "original"
 export type DownloadImageQuality = "large" | "original"
+export type CloseButtonAction = "minimize" | "exit"
 
 export interface AppSettings {
   showR18: boolean
@@ -19,6 +20,7 @@ export interface AppSettings {
   blockedTags: string[]
   blockedUsers: BlockedUser[]
   longPressBookmarkAction: "off" | "follow" | "detail"
+  closeButtonAction: CloseButtonAction
   feedImageQuality: FeedImageQuality
   detailImageQuality: DetailImageQuality
   downloadImageQuality: DownloadImageQuality
@@ -35,6 +37,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   blockedTags: [],
   blockedUsers: [],
   longPressBookmarkAction: "off",
+  closeButtonAction: "minimize",
   feedImageQuality: "medium",
   detailImageQuality: "large",
   downloadImageQuality: "original",
@@ -48,6 +51,7 @@ const FEED_QUALITY_VALUES: readonly FeedImageQuality[] = ["medium", "large"]
 const DETAIL_QUALITY_VALUES: readonly DetailImageQuality[] = ["medium", "large", "original"]
 const DOWNLOAD_QUALITY_VALUES: readonly DownloadImageQuality[] = ["large", "original"]
 const LONG_PRESS_ACTION_VALUES: readonly AppSettings["longPressBookmarkAction"][] = ["off", "follow", "detail"]
+const CLOSE_BUTTON_ACTION_VALUES: readonly CloseButtonAction[] = ["minimize", "exit"]
 const CACHE_LIMIT_VALUES = [300, 500, 1000, 2000] as const
 
 function isOneOf<T extends string>(value: unknown, values: readonly T[]): value is T {
@@ -167,6 +171,9 @@ export function loadSettings(): AppSettings {
     longPressBookmarkAction: isOneOf(stored?.longPressBookmarkAction, LONG_PRESS_ACTION_VALUES)
       ? stored.longPressBookmarkAction
       : DEFAULT_SETTINGS.longPressBookmarkAction,
+    closeButtonAction: isOneOf(stored?.closeButtonAction, CLOSE_BUTTON_ACTION_VALUES)
+      ? stored.closeButtonAction
+      : DEFAULT_SETTINGS.closeButtonAction,
     feedImageQuality: isOneOf(stored?.feedImageQuality, FEED_QUALITY_VALUES)
       ? stored.feedImageQuality
       : DEFAULT_SETTINGS.feedImageQuality,

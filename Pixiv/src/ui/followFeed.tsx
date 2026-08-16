@@ -121,10 +121,12 @@ export function FollowFeedView(props: {
           />
         ) : friendKind === "illust" ? (
           <FriendIllustrationFeed
+            key="friends:illust"
             onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
           />
         ) : (
           <FriendNovelFeed
+            key="friends:novel"
             onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
           />
         )}
@@ -140,54 +142,44 @@ function followToolbar(props: {
   onScopeChange: (scope: FollowScope) => void
   onClose: () => void
 }) {
+  const title =
+    props.mode === "following"
+      ? "关注"
+      : props.mode === "watchlist"
+        ? "追更"
+        : "好友"
   return appToolbar(
     props.onClose,
-    "关注",
+    title,
     <Menu label={<Image systemName="ellipsis.circle" />}>
       <Menu title="关注" systemImage="person.2">
-        <Picker
-          title="关注范围"
-          value={props.scope}
-          onChanged={(value: string) => {
+        <Button
+          title="公开"
+          systemImage="person.2"
+          action={() => {
             props.onModeChange("following")
-            props.onScopeChange(value as FollowScope)
+            props.onScopeChange("all")
           }}
-        >
-          <Label tag="all" title="全部" systemImage="person.2" />
-          <Label tag="private" title="私密" systemImage="lock" />
-        </Picker>
+        />
+        <Button
+          title="私密"
+          systemImage="lock"
+          action={() => {
+            props.onModeChange("following")
+            props.onScopeChange("private")
+          }}
+        />
       </Menu>
-      {props.mode === "following" ? (
-        <>
-          <Button
-            title="追更"
-            systemImage="bookmark"
-            action={() => props.onModeChange("watchlist")}
-          />
-          <Button
-            title="好友"
-            systemImage="person.2.badge.gearshape"
-            action={() => props.onModeChange("friends")}
-          />
-        </>
-      ) : (
-        <Picker
-          title="动态类型"
-          value={props.mode}
-          onChanged={(value: string) => props.onModeChange(value as FollowMode)}
-        >
-          <Label
-            tag="watchlist"
-            title="追更"
-            systemImage="bookmark"
-          />
-          <Label
-            tag="friends"
-            title="好友"
-            systemImage="person.2.badge.gearshape"
-          />
-        </Picker>
-      )}
+      <Button
+        title="追更"
+        systemImage="bookmark"
+        action={() => props.onModeChange("watchlist")}
+      />
+      <Button
+        title="好友"
+        systemImage="person.2.badge.gearshape"
+        action={() => props.onModeChange("friends")}
+      />
     </Menu>
   )
 }
