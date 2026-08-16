@@ -19,6 +19,7 @@ export interface AppSettings {
   followFilterExempt: boolean
   blockedTags: string[]
   blockedUsers: BlockedUser[]
+  ambientImmersion: boolean
   longPressBookmarkAction: "off" | "follow" | "detail"
   closeButtonAction: CloseButtonAction
   feedImageQuality: FeedImageQuality
@@ -36,6 +37,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   followFilterExempt: false,
   blockedTags: [],
   blockedUsers: [],
+  ambientImmersion: true,
   longPressBookmarkAction: "off",
   closeButtonAction: "minimize",
   feedImageQuality: "medium",
@@ -168,6 +170,7 @@ export function loadSettings(): AppSettings {
           }))
           .filter((user) => user.id > 0 && user.name.length > 0)
       : DEFAULT_SETTINGS.blockedUsers,
+    ambientImmersion: boolOr(stored?.ambientImmersion, DEFAULT_SETTINGS.ambientImmersion),
     longPressBookmarkAction: isOneOf(stored?.longPressBookmarkAction, LONG_PRESS_ACTION_VALUES)
       ? stored.longPressBookmarkAction
       : DEFAULT_SETTINGS.longPressBookmarkAction,

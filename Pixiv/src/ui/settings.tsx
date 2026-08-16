@@ -100,7 +100,8 @@ export function SettingsView() {
         </NavigationLink>
       </Section>
 
-      <Section header={<Text>操作按钮</Text>}>
+      <Section header={<Text>功能</Text>}>
+        <Toggle title="沉浸效果" value={settings.ambientImmersion} onChanged={(value) => update({ ambientImmersion: value })} />
         <Picker title="长按收藏按钮" value={settings.longPressBookmarkAction} onChanged={(value: string) => update({ longPressBookmarkAction: value as "off" | "follow" | "detail" })}>
           <Text tag="off">关闭长按功能</Text>
           <Text tag="follow">一键关注作者</Text>

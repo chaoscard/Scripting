@@ -36,7 +36,7 @@ import {
   wrapTags,
 } from "./components"
 
-const TAG_ROW_WIDTH = 350
+const TAG_ROW_WIDTH = 320
 const RESTRICTED_CONTENT_MESSAGE = "该小说已被内容分级设置隐藏"
 const TEXT_CHUNK_SIZE = 2000
 

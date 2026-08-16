@@ -1592,10 +1592,19 @@ function htmlFragmentToPlainText(html: string | undefined | null): string {
   return decodeHtmlEntities(stripped)
 }
 
+export function makeBreakableText(text: string): string {
+  if (!text) return ""
+  // 在 URL/英文长单词常见的分隔符（/ ? = & _ - . : # % @ ~）后面插入零宽空格 \u200B，
+  // 允许 iOS / SwiftUI 文本引擎在屏幕窄边处自然折行，而不会撑爆页面容器宽度。
+  // 若字符后已有空白字符或已有 \u200B，则不重复插入。
+  return text.replace(/([/?=&_\-.:#%@~])(?!\s|\u200b|$)/g, "$1\u200B")
+}
+
 export function LinkedDescription(props: {
   html: string
   routeDestination: (route: string) => any
   nativePlainText?: boolean
+  foregroundStyle?: any
 }) {
   const segments = useMemo(() => descriptionSegments(props.html), [props.html])
   const lines = useMemo(() => descriptionLines(segments), [segments])
@@ -1603,8 +1612,7 @@ export function LinkedDescription(props: {
   return (
     <VStack
       alignment="leading"
-      spacing={2}
-      safeAreaPadding={{ trailing: true }}
+      spacing={4}
       frame={{ maxWidth: "infinity" }}
     >
       {blocks.map((block, index) =>
@@ -1612,18 +1620,20 @@ export function LinkedDescription(props: {
           <Text
             key={`text-${index}`}
             font="footnote"
-            foregroundStyle="secondaryLabel"
+            foregroundStyle={props.foregroundStyle}
             multilineTextAlignment="leading"
             textSelection={true}
+            fixedSize={{ horizontal: false, vertical: true }}
             frame={{ maxWidth: "infinity", alignment: "leading" }}
           >
-            {block.text}
+            {makeBreakableText(block.text)}
           </Text>
         ) : (
           <DescriptionLine
             key={`line-${index}`}
             segments={block.segments}
             routeDestination={props.routeDestination}
+            foregroundStyle={props.foregroundStyle}
           />
         )
       )}
@@ -1638,6 +1648,7 @@ export function presentExternalURL(url: string): Promise<void> {
 function DescriptionLine(props: {
   segments: DescriptionSegment[]
   routeDestination: (route: string) => any
+  foregroundStyle?: any
 }) {
   const views: any[] = []
   let inlineSegments: DescriptionSegment[] = []
@@ -1656,6 +1667,7 @@ function DescriptionLine(props: {
             key={index}
             segment={segment}
             routeDestination={props.routeDestination}
+            foregroundStyle={props.foregroundStyle}
           />
         ))}
       </FlowLayout>
@@ -1692,6 +1704,7 @@ function DescriptionLine(props: {
 function DescriptionInlineItem(props: {
   segment: DescriptionSegment
   routeDestination: (route: string) => any
+  foregroundStyle?: any
 }) {
   const target =
     routeForDescriptionLink(props.segment.href) ??
@@ -1701,18 +1714,24 @@ function DescriptionInlineItem(props: {
     return (
       <Text
         font="footnote"
-        foregroundStyle="secondaryLabel"
+        foregroundStyle={props.foregroundStyle}
         textSelection={true}
+        fixedSize={{ horizontal: false, vertical: true }}
       >
-        {content}
+        {makeBreakableText(content)}
       </Text>
     )
   }
   const destination = props.routeDestination(target)
   return (
     <NavigationLink destination={destination}>
-      <Text font="footnote" foregroundStyle="#007AFF" underline="#007AFF">
-        {content}
+      <Text
+        font="footnote"
+        foregroundStyle="#007AFF"
+        underline="#007AFF"
+        fixedSize={{ horizontal: false, vertical: true }}
+      >
+        {makeBreakableText(content)}
       </Text>
     </NavigationLink>
   )
@@ -1720,22 +1739,18 @@ function DescriptionInlineItem(props: {
 
 function ExternalDescriptionLink(props: { label: string; url: string }) {
   return (
-    <Button
-      buttonStyle="plain"
-      action={() => void presentExternalURL(props.url)}
+    <Text
+      font="footnote"
+      foregroundStyle="#007AFF"
+      underline="#007AFF"
+      multilineTextAlignment="leading"
+      fixedSize={{ horizontal: false, vertical: true }}
       frame={{ maxWidth: "infinity", alignment: "leading" }}
+      contentShape="rect"
+      onTapGesture={() => void presentExternalURL(props.url)}
     >
-      <Text
-        font="footnote"
-        foregroundStyle="#007AFF"
-        underline="#007AFF"
-        multilineTextAlignment="leading"
-        fixedSize={{ horizontal: false, vertical: true }}
-        frame={{ maxWidth: "infinity", alignment: "leading" }}
-      >
-        {props.label}
-      </Text>
-    </Button>
+      {makeBreakableText(props.label)}
+    </Text>
   )
 }
 

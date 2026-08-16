@@ -77,6 +77,9 @@ export function IllustDetailView(props: { illustID: number }) {
   const [ambientPalette, setAmbientPalette] = useState<IllustAmbientPalette | null>(
     null
   )
+  const [ambientEnabled, setAmbientEnabled] = useState(
+    () => loadSettings().ambientImmersion
+  )
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [bookmarked, setBookmarked] = useState(false)
@@ -179,6 +182,10 @@ export function IllustDetailView(props: { illustID: number }) {
   }, [])
 
   useEffect(() => {
+    if (!ambientEnabled) {
+      setAmbientPalette(null)
+      return
+    }
     const coverUrl = illust
       ? (cardThumbUrlOf(illust) ?? imageUrlOf(illust, 0, quality))
       : null
@@ -198,13 +205,14 @@ export function IllustDetailView(props: { illustID: number }) {
     return () => {
       active = false
     }
-  }, [illust?.id, quality, isDark])
+  }, [illust?.id, quality, isDark, ambientEnabled])
 
-  // 设置变化时更新图片质量；关闭 R18 后立即撤下已打开的受限内容。
+  // 设置变化时更新图片质量与沉浸式开关；关闭 R18 后立即撤下已打开的受限内容。
   useEffect(() => {
     return onSettingsChanged(() => {
       const settings = loadSettings()
       setQuality(settings.detailImageQuality)
+      setAmbientEnabled(settings.ambientImmersion)
       const current = illustRef.current
       if (
         current &&
@@ -376,7 +384,7 @@ export function IllustDetailView(props: { illustID: number }) {
       navigationTitle={current.title}
       navigationBarTitleDisplayMode="inline"
       toolbarBackground={
-        ambientPalette
+        ambientEnabled && ambientPalette
           ? {
               style: ambientPalette.topColor,
               bars: ["navigationBar"],
@@ -384,7 +392,7 @@ export function IllustDetailView(props: { illustID: number }) {
           : undefined
       }
       toolbarBackgroundVisibility={
-        ambientPalette
+        ambientEnabled && ambientPalette
           ? {
               visibility: "visible",
               bars: ["navigationBar"],
@@ -395,7 +403,7 @@ export function IllustDetailView(props: { illustID: number }) {
             }
       }
       background={
-        ambientPalette
+        ambientEnabled && ambientPalette
           ? {
               colors: [
                 ambientPalette.topColor,
@@ -512,7 +520,7 @@ export function IllustDetailView(props: { illustID: number }) {
       }}
      
     >
-      <VStack alignment="leading" spacing={12}>
+      <VStack alignment="leading" spacing={12} frame={{ maxWidth: "infinity" }}>
         {/* 大图区：动图走播放器；图片无限向下滚动展示全部页 */}
         <VStack
           alignment="center"
@@ -614,7 +622,7 @@ export function IllustDetailView(props: { illustID: number }) {
               <VStack alignment="leading" spacing={6}>
                 {wrapTags(
                   current.tags,
-                  350,
+                  280,
                   (tag) =>
                     estimateChipWidth(
                       `#${tag.name}${tag.translated_name ? ` ${tag.translated_name}` : ""}`

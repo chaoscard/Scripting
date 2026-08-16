@@ -91,6 +91,9 @@ export function UserDetailView(props: { userID: number }) {
   const [ambientPalette, setAmbientPalette] = useState<UserAmbientPalette | null>(
     null
   )
+  const [ambientEnabled, setAmbientEnabled] = useState(
+    () => loadSettings().ambientImmersion
+  )
 
   const guard = useAsyncGuard()
   const followStateVersionRef = useRef(0)
@@ -142,6 +145,10 @@ export function UserDetailView(props: { userID: number }) {
   }
 
   useEffect(() => {
+    if (!ambientEnabled) {
+      setAmbientPalette(null)
+      return
+    }
     const bgUrl = detail?.profile.background_image_url
     if (!bgUrl) {
       setAmbientPalette(null)
@@ -159,7 +166,13 @@ export function UserDetailView(props: { userID: number }) {
     return () => {
       active = false
     }
-  }, [detail?.profile.background_image_url, isDark])
+  }, [detail?.profile.background_image_url, isDark, ambientEnabled])
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      setAmbientEnabled(loadSettings().ambientImmersion)
+    })
+  }, [])
 
   useEffect(() => {
     return onUserFollowChanged((changedUserID, nextFollowed) => {
@@ -243,7 +256,7 @@ export function UserDetailView(props: { userID: number }) {
       ignoresSafeArea={{ edges: "top" }}
       refreshable={handleRefresh}
       background={
-        ambientPalette
+        ambientEnabled && ambientPalette
           ? {
               colors: [
                 ambientPalette.topColor,
@@ -723,7 +736,7 @@ function ExpandableIntroduction(props: {
       <VStack
         alignment="leading"
         spacing={8}
-        padding={12}
+        padding={{ top: 12, horizontal: 12, bottom: exceedsFiveLines ? 10 : 12 }}
         glassEffect={{ type: "rect", cornerRadius: 14 }}
         frame={{ maxWidth: "infinity" }}
         contentShape="rect"
@@ -757,7 +770,7 @@ function ExpandableIntroduction(props: {
             alignment="center"
             spacing={4}
             frame={{ maxWidth: "infinity", alignment: "center" }}
-            padding={{ top: 2 }}
+            padding={{ top: 4, bottom: 2 }}
           >
             <Text font="caption2" foregroundStyle="secondaryLabel">
               {expanded ? "点击收起" : "点击展开全文"}
