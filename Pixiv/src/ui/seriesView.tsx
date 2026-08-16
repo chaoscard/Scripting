@@ -123,11 +123,6 @@ function SeriesIntroduction(props: {
 
   if (!plainText) return null
 
-  const collapsedText = useMemo(() => {
-    if (!exceedsFiveLines) return plainText
-    return lines.slice(0, 5).join("\n")
-  }, [lines, exceedsFiveLines, plainText])
-
   return (
     <VStack
       alignment="leading"
@@ -145,22 +140,11 @@ function SeriesIntroduction(props: {
           : undefined
       }
     >
-      {expanded || !exceedsFiveLines ? (
-        <LinkedDescription
-          html={props.caption}
-          routeDestination={props.routeDestination}
-          nativePlainText
-        />
-      ) : (
-        <Text
-          font="footnote"
-          multilineTextAlignment="leading"
-          lineLimit={5}
-          frame={{ maxWidth: "infinity", alignment: "leading" }}
-        >
-          {collapsedText}
-        </Text>
-      )}
+      <LinkedDescription
+        html={props.caption}
+        routeDestination={props.routeDestination}
+        lineLimit={!expanded && exceedsFiveLines ? 5 : undefined}
+      />
 
       {exceedsFiveLines ? (
         <HStack

@@ -719,11 +719,6 @@ function ExpandableIntroduction(props: {
 
   if (!plainText) return null
 
-  const collapsedText = useMemo(() => {
-    if (!exceedsFiveLines) return plainText
-    return lines.slice(0, 5).join("\n")
-  }, [lines, exceedsFiveLines, plainText])
-
   return (
     <VStack alignment="leading" spacing={6} frame={{ maxWidth: "infinity" }}>
       <Text
@@ -748,22 +743,11 @@ function ExpandableIntroduction(props: {
             : undefined
         }
       >
-        {expanded || !exceedsFiveLines ? (
-          <LinkedDescription
-            html={props.commentHtml || props.rawComment}
-            routeDestination={props.routeDestination}
-            nativePlainText
-          />
-        ) : (
-          <Text
-            font="footnote"
-            multilineTextAlignment="leading"
-            lineLimit={5}
-            frame={{ maxWidth: "infinity", alignment: "leading" }}
-          >
-            {collapsedText}
-          </Text>
-        )}
+        <LinkedDescription
+          html={props.commentHtml || props.rawComment || ""}
+          routeDestination={props.routeDestination}
+          lineLimit={!expanded && exceedsFiveLines ? 5 : undefined}
+        />
 
         {exceedsFiveLines ? (
           <HStack

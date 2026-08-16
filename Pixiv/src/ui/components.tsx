@@ -7,7 +7,9 @@ import {
   Image,
   LazyVStack,
   LongPressGesture,
+  Navigation,
   NavigationLink,
+  NavigationStack,
   ProgressView,
   ScrollView,
   ScrollViewReader,
@@ -26,6 +28,7 @@ import {
   ZStack,
   type GridItem,
   type ScrollViewProxy,
+  type StyledText,
 } from "scripting"
 
 import {
@@ -1738,42 +1741,75 @@ export function makeBreakableText(text: string): string {
 
 export function LinkedDescription(props: {
   html: string
-  routeDestination: (route: string) => any
+  routeDestination?: (route: string) => any
   nativePlainText?: boolean
   foregroundStyle?: any
+  lineLimit?: number
+  font?: any
 }) {
   const segments = useMemo(() => descriptionSegments(props.html), [props.html])
-  const lines = useMemo(() => descriptionLines(segments), [segments])
-  const blocks = useMemo(() => descriptionBlocks(lines), [lines])
+
+  const styledText = useMemo<StyledText>(() => {
+    const items: (string | StyledText)[] = []
+
+    for (const segment of segments) {
+      const target =
+        routeForDescriptionLink(segment.href) ??
+        routeForDescriptionLink(segment.label)
+
+      if (target) {
+        if (target.startsWith("http")) {
+          items.push({
+            content: segment.label,
+            foregroundColor: "#007AFF",
+            underlineStyle: "single",
+            onTapGesture: () => {
+              void presentExternalURL(target)
+            },
+          })
+        } else {
+          items.push({
+            content: segment.label,
+            foregroundColor: "#007AFF",
+            underlineStyle: "single",
+            onTapGesture: () => {
+              if (props.routeDestination) {
+                const dest = props.routeDestination(target)
+                if (dest) {
+                  void Navigation.present(
+                    <NavigationStack>
+                      {dest}
+                    </NavigationStack>
+                  )
+                }
+              }
+            },
+          })
+        }
+      } else {
+        items.push(segment.label)
+      }
+    }
+
+    return {
+      font: props.font ?? "footnote",
+      foregroundColor: props.foregroundStyle,
+      paragraphStyle: {
+        lineBreakMode: "byCharWrapping",
+        lineSpacing: 4,
+      },
+      content: items,
+    }
+  }, [segments, props.routeDestination, props.foregroundStyle, props.font])
+
   return (
-    <VStack
-      alignment="leading"
-      spacing={4}
-      frame={{ maxWidth: "infinity" }}
-    >
-      {blocks.map((block, index) =>
-        block.kind === "text" ? (
-          <Text
-            key={`text-${index}`}
-            font="footnote"
-            foregroundStyle={props.foregroundStyle}
-            multilineTextAlignment="leading"
-            textSelection={true}
-            fixedSize={{ horizontal: false, vertical: true }}
-            frame={{ maxWidth: "infinity", alignment: "leading" }}
-          >
-            {makeBreakableText(block.text)}
-          </Text>
-        ) : (
-          <DescriptionLine
-            key={`line-${index}`}
-            segments={block.segments}
-            routeDestination={props.routeDestination}
-            foregroundStyle={props.foregroundStyle}
-          />
-        )
-      )}
-    </VStack>
+    <Text
+      styledText={styledText}
+      textSelection={true}
+      lineLimit={props.lineLimit}
+      multilineTextAlignment="leading"
+      frame={{ maxWidth: "infinity", alignment: "leading" }}
+    />
   )
 }
 
@@ -1781,205 +1817,7 @@ export function presentExternalURL(url: string): Promise<void> {
   return Safari.present(url, false)
 }
 
-function DescriptionLine(props: {
-  segments: DescriptionSegment[]
-  routeDestination: (route: string) => any
-  foregroundStyle?: any
-}) {
-  const views: any[] = []
-  let inlineSegments: DescriptionSegment[] = []
-
-  const flushInline = () => {
-    if (inlineSegments.length === 0) return
-    views.push(
-      <FlowLayout
-        key={`inline-${views.length}`}
-        horizontalSpacing={0}
-        verticalSpacing={0}
-        frame={{ maxWidth: "infinity", alignment: "leading" }}
-      >
-        {inlineSegments.map((segment, index) => (
-          <DescriptionInlineItem
-            key={index}
-            segment={segment}
-            routeDestination={props.routeDestination}
-            foregroundStyle={props.foregroundStyle}
-          />
-        ))}
-      </FlowLayout>
-    )
-    inlineSegments = []
-  }
-
-  for (const segment of props.segments) {
-    const target =
-      routeForDescriptionLink(segment.href) ??
-      routeForDescriptionLink(segment.label)
-    if (
-      target &&
-      (target.startsWith("http") ||
-        segment.label.length > 20 ||
-        /^https?:\/\//i.test(segment.href))
-    ) {
-      flushInline()
-      views.push(
-        <ExternalDescriptionLink
-          key={`link-${views.length}`}
-          label={segment.label || segment.href}
-          target={target}
-          routeDestination={props.routeDestination}
-        />
-      )
-    } else {
-      inlineSegments.push(segment)
-    }
-  }
-  flushInline()
-
-  return (
-    <VStack alignment="leading" spacing={2} frame={{ maxWidth: "infinity" }}>
-      {views}
-    </VStack>
-  )
-}
-
-function DescriptionInlineItem(props: {
-  segment: DescriptionSegment
-  routeDestination: (route: string) => any
-  foregroundStyle?: any
-}) {
-  const target =
-    routeForDescriptionLink(props.segment.href) ??
-    routeForDescriptionLink(props.segment.label)
-  const content = props.segment.label || props.segment.href
-  if (!target) {
-    return (
-      <Text
-        font="footnote"
-        foregroundStyle={props.foregroundStyle}
-        textSelection={true}
-      >
-        {makeBreakableText(content)}
-      </Text>
-    )
-  }
-  if (target.startsWith("http")) {
-    return (
-      <Text
-        font="footnote"
-        foregroundStyle="#007AFF"
-        underline="#007AFF"
-        contentShape="rect"
-        onTapGesture={() => void presentExternalURL(target)}
-      >
-        {makeBreakableText(content)}
-      </Text>
-    )
-  }
-  const destination = props.routeDestination(target)
-  return (
-    <NavigationLink destination={destination}>
-      <Text
-        font="footnote"
-        foregroundStyle="#007AFF"
-        underline="#007AFF"
-      >
-        {makeBreakableText(content)}
-      </Text>
-    </NavigationLink>
-  )
-}
-
-function ExternalDescriptionLink(props: {
-  label: string
-  target: string
-  routeDestination: (route: string) => any
-}) {
-  const isHttp = props.target.startsWith("http")
-  if (!isHttp) {
-    const destination = props.routeDestination(props.target)
-    return (
-      <NavigationLink destination={destination}>
-        <Text
-          font="footnote"
-          foregroundStyle="#007AFF"
-          underline="#007AFF"
-          multilineTextAlignment="leading"
-          textSelection={true}
-          frame={{ maxWidth: "infinity", alignment: "leading" }}
-        >
-          {makeBreakableText(props.label)}
-        </Text>
-      </NavigationLink>
-    )
-  }
-  return (
-    <Text
-      font="footnote"
-      foregroundStyle="#007AFF"
-      underline="#007AFF"
-      multilineTextAlignment="leading"
-      textSelection={true}
-      frame={{ maxWidth: "infinity", alignment: "leading" }}
-      contentShape="rect"
-      onTapGesture={() => void presentExternalURL(props.target)}
-    >
-      {makeBreakableText(props.label)}
-    </Text>
-  )
-}
-
-
-
-type DescriptionBlock =
-  | { kind: "text"; text: string }
-  | { kind: "line"; segments: DescriptionSegment[] }
-
-function descriptionBlocks(lines: DescriptionSegment[][]): DescriptionBlock[] {
-  const blocks: DescriptionBlock[] = []
-  let textLines: string[] = []
-  const flushText = () => {
-    if (textLines.length > 0) {
-      blocks.push({ kind: "text", text: textLines.join("\n") })
-      textLines = []
-    }
-  }
-
-  for (const line of lines) {
-    const hasLink = line.some((segment) => {
-      const target =
-        routeForDescriptionLink(segment.href) ??
-        routeForDescriptionLink(segment.label)
-      return target != null
-    })
-    if (hasLink) {
-      flushText()
-      blocks.push({ kind: "line", segments: line })
-    } else {
-      textLines.push(line.map((segment) => segment.label).join(""))
-    }
-  }
-  flushText()
-  return blocks
-}
-
 type DescriptionSegment = { label: string; href: string }
-
-function descriptionLines(
-  segments: DescriptionSegment[]
-): DescriptionSegment[][] {
-  const lines: DescriptionSegment[][] = [[]]
-  for (const segment of segments) {
-    const parts = segment.label.split("\n")
-    for (let index = 0; index < parts.length; index++) {
-      if (parts[index]) {
-        lines[lines.length - 1].push({ ...segment, label: parts[index] })
-      }
-      if (index < parts.length - 1) lines.push([])
-    }
-  }
-  return lines.filter((line) => line.length > 0)
-}
 
 function descriptionSegments(html: string): DescriptionSegment[] {
   const prepared = html
