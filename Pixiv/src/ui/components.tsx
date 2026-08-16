@@ -118,6 +118,9 @@ export function RefreshableScrollView(props: {
   searchSuggestions?: any
   onSubmit?: any
   submitLabel?: "join" | "continue" | "return" | "send" | "go" | "search" | "done" | "next" | "route"
+  ignoresSafeArea?: any
+  toolbarBackground?: any
+  toolbarBackgroundVisibility?: any
   children?: any
 }) {
   // toolbar 等通用 View 属性由 Scripting 自动应用到自定义组件根视图；
@@ -166,6 +169,9 @@ export function RefreshableScrollView(props: {
             searchSuggestions={props.searchSuggestions}
             onSubmit={props.onSubmit}
             submitLabel={props.submitLabel}
+            ignoresSafeArea={props.ignoresSafeArea}
+            toolbarBackground={props.toolbarBackground}
+            toolbarBackgroundVisibility={props.toolbarBackgroundVisibility}
           >
             <VStack
               key={REFRESH_TOP_KEY}
@@ -648,9 +654,10 @@ export function AvatarImage(props: {
   url: string | null
   size?: number
   cornerRadius?: number
+  priority?: number
 }) {
-  const { url, size = 36, cornerRadius = size / 2 } = props
-  const { path } = useCachedImage(url)
+  const { url, size = 36, cornerRadius = size / 2, priority } = props
+  const { path } = useCachedImage(url, undefined, priority)
 
   return (
     <ZStack

@@ -78,7 +78,7 @@ export function renderDestination(page: string) {
     const kind = parts[1]
     const id = parts.length === 3 ? Number(parts[2]) : null
     if (
-      (kind === "following" || kind === "mypixiv") &&
+      (kind === "following" || kind === "follower" || kind === "mypixiv") &&
       Number.isFinite(id) &&
       (id as number) > 0
     ) {
@@ -86,7 +86,7 @@ export function renderDestination(page: string) {
         <UserConnectionsView
           kind={kind as ConnectionRouteKind}
           userID={id as number}
-          title={kind === "mypixiv" ? "好友" : "关注"}
+          title={kind === "mypixiv" ? "好友" : kind === "follower" ? "粉丝" : "关注"}
         />
       )
     }
