@@ -70,53 +70,195 @@ export function DiscoveryView(props: { onClose: () => void }) {
           <FeedKindPicker kind={kind} onKindChange={setKind} />
         )}
         {mode === "vision" ? (
-          <VisionFeed onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }} />
-        ) : mode === "recommended" ? (
-          kind === "illustration" ? (
-            <IllustFeed
-              key="recommended:illustration"
-              mode="recommended"
-              kind="illustration"
-              onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
-            />
-          ) : kind === "manga" ? (
-            <IllustFeed
-              key="recommended:manga"
-              mode="recommended"
-              kind="manga"
-              onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
-            />
-          ) : (
-            <NovelFeed
-              key="recommended:novel"
-              mode="recommended"
-              onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
-            />
-          )
-        ) : kind === "illustration" ? (
-          <IllustFeed
-            key="latest:illustration"
-            mode="latest"
-            kind="illustration"
-            onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
+          <VisionExploreFeed
+            key="vision"
+            onRegisterRefresh={(fn) => {
+              refreshHandlerRef.current = fn
+            }}
           />
-        ) : kind === "manga" ? (
-          <IllustFeed
-            key="latest:manga"
-            mode="latest"
-            kind="manga"
-            onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
+        ) : mode === "recommended" ? (
+          <RecommendedExploreFeed
+            key="recommended"
+            kind={kind}
+            onRegisterRefresh={(fn) => {
+              refreshHandlerRef.current = fn
+            }}
           />
         ) : (
-          <NovelFeed
-            key="latest:novel"
-            mode="latest"
-            onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
+          <LatestExploreFeed
+            key="latest"
+            kind={kind}
+            onRegisterRefresh={(fn) => {
+              refreshHandlerRef.current = fn
+            }}
           />
         )}
       </VStack>
     </RefreshableScrollView>
   )
+}
+
+function RecommendedExploreFeed(props: {
+  kind: FeedKind
+  onRegisterRefresh?: (fn: () => Promise<void>) => void
+}) {
+  const { kind, onRegisterRefresh } = props
+
+  // 1. 推荐 - 插画
+  const illustPaged = usePagedList<PixivIllustration>({
+    first: (token) => recommendations("illustration", token),
+    more: (nextURL, token) => nextIllustrations(nextURL, token),
+    filter: filterIllustItems,
+    deps: ["recommended", "illustration"],
+    enabled: kind === "illustration",
+    onBatchPublished: (_, pendingItems) =>
+      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel,
+  })
+
+  // 2. 推荐 - 漫画
+  const mangaPaged = usePagedList<PixivIllustration>({
+    first: (token) => recommendations("manga", token),
+    more: (nextURL, token) => nextIllustrations(nextURL, token),
+    filter: filterIllustItems,
+    deps: ["recommended", "manga"],
+    enabled: kind === "manga",
+    onBatchPublished: (_, pendingItems) =>
+      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel,
+  })
+
+  // 3. 推荐 - 小说
+  const novelPaged = usePagedList<PixivNovel>({
+    first: (token) => recommendedNovels(token),
+    more: (nextURL, token) => nextNovels(nextURL, token),
+    filter: filterNovelItems,
+    deps: ["recommended"],
+    enabled: kind === "novel",
+    onBatchPublished: (_, pendingItems) =>
+      prefetch(pendingItems.slice(0, 10).map(novelThumbUrlOf)).cancel,
+  })
+
+  const illustPagedRef = useLatest(illustPaged)
+  const mangaPagedRef = useLatest(mangaPaged)
+  const novelPagedRef = useLatest(novelPaged)
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      illustPagedRef.current.reapplyFilter()
+      mangaPagedRef.current.reapplyFilter()
+      novelPagedRef.current.reapplyFilter()
+    })
+  }, [])
+
+  const activeRefresh =
+    kind === "illustration"
+      ? illustPaged.refresh
+      : kind === "manga"
+        ? mangaPaged.refresh
+        : novelPaged.refresh
+
+  useEffect(() => {
+    onRegisterRefresh?.(activeRefresh)
+  }, [activeRefresh, onRegisterRefresh])
+
+  if (kind === "illustration") {
+    return <IllustFeedContent paged={illustPaged} label="推荐" />
+  }
+  if (kind === "manga") {
+    return <IllustFeedContent paged={mangaPaged} label="推荐" />
+  }
+  return <NovelFeedContent paged={novelPaged} label="推荐" />
+}
+
+function LatestExploreFeed(props: {
+  kind: FeedKind
+  onRegisterRefresh?: (fn: () => Promise<void>) => void
+}) {
+  const { kind, onRegisterRefresh } = props
+
+  // 1. 最新 - 插画
+  const illustPaged = usePagedList<PixivIllustration>({
+    first: (token) => newIllustrations("illustration", token),
+    more: (nextURL, token) => nextIllustrations(nextURL, token),
+    filter: filterIllustItems,
+    deps: ["latest", "illustration"],
+    enabled: kind === "illustration",
+    onBatchPublished: (_, pendingItems) =>
+      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel,
+  })
+
+  // 2. 最新 - 漫画
+  const mangaPaged = usePagedList<PixivIllustration>({
+    first: (token) => newIllustrations("manga", token),
+    more: (nextURL, token) => nextIllustrations(nextURL, token),
+    filter: filterIllustItems,
+    deps: ["latest", "manga"],
+    enabled: kind === "manga",
+    onBatchPublished: (_, pendingItems) =>
+      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel,
+  })
+
+  // 3. 最新 - 小说
+  const novelPaged = usePagedList<PixivNovel>({
+    first: (token) => newNovels(token),
+    more: (nextURL, token) => nextNovels(nextURL, token),
+    filter: filterNovelItems,
+    deps: ["latest"],
+    enabled: kind === "novel",
+    onBatchPublished: (_, pendingItems) =>
+      prefetch(pendingItems.slice(0, 10).map(novelThumbUrlOf)).cancel,
+  })
+
+  const illustPagedRef = useLatest(illustPaged)
+  const mangaPagedRef = useLatest(mangaPaged)
+  const novelPagedRef = useLatest(novelPaged)
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      illustPagedRef.current.reapplyFilter()
+      mangaPagedRef.current.reapplyFilter()
+      novelPagedRef.current.reapplyFilter()
+    })
+  }, [])
+
+  const activeRefresh =
+    kind === "illustration"
+      ? illustPaged.refresh
+      : kind === "manga"
+        ? mangaPaged.refresh
+        : novelPaged.refresh
+
+  useEffect(() => {
+    onRegisterRefresh?.(activeRefresh)
+  }, [activeRefresh, onRegisterRefresh])
+
+  if (kind === "illustration") {
+    return <IllustFeedContent paged={illustPaged} label="最新作品" />
+  }
+  if (kind === "manga") {
+    return <IllustFeedContent paged={mangaPaged} label="最新作品" />
+  }
+  return <NovelFeedContent paged={novelPaged} label="最新作品" />
+}
+
+function VisionExploreFeed(props: {
+  onRegisterRefresh?: (fn: () => Promise<void>) => void
+}) {
+  const { onRegisterRefresh } = props
+
+  const visionPaged = usePagedList<PixivVisionArticle>({
+    first: (token) => visionHome(token),
+    more: (nextURL, token) => nextVision(nextURL, token),
+    deps: [],
+    enabled: true,
+    onBatchPublished: (_, pendingItems) =>
+      prefetch(pendingItems.slice(0, 10).map((item) => item.imageURL)).cancel,
+  })
+
+  useEffect(() => {
+    onRegisterRefresh?.(visionPaged.refresh)
+  }, [visionPaged.refresh, onRegisterRefresh])
+
+  return <VisionFeedContent paged={visionPaged} />
 }
 
 function exploreToolbar(props: {
@@ -164,37 +306,11 @@ function feedLabel(mode: FeedMode): string {
   return mode === "recommended" ? "推荐" : "最新作品"
 }
 
-function IllustFeed(props: {
-  mode: FeedMode
-  kind: IllustrationKind
-  onRegisterRefresh?: (fn: () => Promise<void>) => void
+function IllustFeedContent(props: {
+  paged: ReturnType<typeof usePagedList<PixivIllustration>>
+  label: string
 }) {
-  const { mode, kind, onRegisterRefresh } = props
-  const paged = usePagedList<PixivIllustration>({
-    first: (token) =>
-      mode === "recommended"
-        ? recommendations(kind, token)
-        : newIllustrations(kind, token),
-    more: (nextURL, token) => nextIllustrations(nextURL, token),
-    filter: filterIllustItems,
-    deps: [mode, kind],
-    onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel
-  })
-
-  useEffect(() => {
-    onRegisterRefresh?.(paged.refresh)
-  }, [paged.refresh, onRegisterRefresh])
-
-  const pagedRef = useLatest(paged)
-  useEffect(() => {
-    return onSettingsChanged(() => {
-      pagedRef.current.reapplyFilter()
-      pagedRef.current.refresh()
-    })
-  }, [])
-
-  const label = feedLabel(mode)
+  const { paged, label } = props
   return (
     <VStack alignment="leading" spacing={10}>
       {paged.initialLoading ? (
@@ -215,34 +331,11 @@ function IllustFeed(props: {
   )
 }
 
-function NovelFeed(props: {
-  mode: FeedMode
-  onRegisterRefresh?: (fn: () => Promise<void>) => void
+function NovelFeedContent(props: {
+  paged: ReturnType<typeof usePagedList<PixivNovel>>
+  label: string
 }) {
-  const { mode, onRegisterRefresh } = props
-  const paged = usePagedList<PixivNovel>({
-    first: (token) =>
-      mode === "recommended" ? recommendedNovels(token) : newNovels(token),
-    more: (nextURL, token) => nextNovels(nextURL, token),
-    filter: filterNovelItems,
-    deps: [mode],
-    onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(novelThumbUrlOf)).cancel
-  })
-
-  useEffect(() => {
-    onRegisterRefresh?.(paged.refresh)
-  }, [paged.refresh, onRegisterRefresh])
-
-  const pagedRef = useLatest(paged)
-  useEffect(() => {
-    return onSettingsChanged(() => {
-      pagedRef.current.reapplyFilter()
-      pagedRef.current.refresh()
-    })
-  }, [])
-
-  const label = feedLabel(mode)
+  const { paged, label } = props
   return (
     <VStack alignment="leading" spacing={10}>
       {paged.initialLoading ? (
@@ -268,22 +361,10 @@ function NovelFeed(props: {
   )
 }
 
-function VisionFeed(props: {
-  onRegisterRefresh?: (fn: () => Promise<void>) => void
+function VisionFeedContent(props: {
+  paged: ReturnType<typeof usePagedList<PixivVisionArticle>>
 }) {
-  const { onRegisterRefresh } = props
-  const paged = usePagedList<PixivVisionArticle>({
-    first: (token) => visionHome(token),
-    more: (nextURL, token) => nextVision(nextURL, token),
-    deps: [],
-    onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map((item) => item.imageURL)).cancel
-  })
-
-  useEffect(() => {
-    onRegisterRefresh?.(paged.refresh)
-  }, [paged.refresh, onRegisterRefresh])
-
+  const { paged } = props
   return (
     <VStack alignment="leading" spacing={12} padding={{ top: 4, bottom: 24 }}>
       {paged.initialLoading ? (

@@ -1,4 +1,4 @@
-import { Button, HStack, Image, List, Section, Spacer, Text } from "scripting"
+import { Button, HStack, Image, List, Section, Spacer, Text, ZStack } from "scripting"
 import { SCRIPT_VERSION } from "../config"
 import { AvatarImage, presentExternalURL } from "./components"
 
@@ -93,13 +93,18 @@ function ExternalLinkRow(props: {
 }) {
   return (
     <HStack spacing={10} frame={{ maxWidth: "infinity" }}>
-      {props.avatarURL ? (
-        <AvatarImage
-          url={props.avatarURL}
-          size={28}
-          cornerRadius={props.avatarCornerRadius ?? 6}
-        />
-      ) : null}
+      <ZStack alignment="leading">
+        <Text font="caption" frame={{ width: 0, height: 0 }} foregroundStyle="clear">
+          {" "}
+        </Text>
+        {props.avatarURL ? (
+          <AvatarImage
+            url={props.avatarURL}
+            size={28}
+            cornerRadius={props.avatarCornerRadius ?? 6}
+          />
+        ) : null}
+      </ZStack>
       <Spacer />
       <Button buttonStyle="plain" action={() => void presentExternalURL(props.url)}>
         <HStack spacing={4}>
