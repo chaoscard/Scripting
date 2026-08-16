@@ -466,6 +466,32 @@ export async function watchlistNovels(
   return { items: json?.series ?? [], nextURL: json?.next_url ?? null }
 }
 
+export async function addWatchlistSeries(
+  seriesID: number,
+  kind: "manga" | "novel",
+  accessToken: string
+): Promise<void> {
+  const endpoint = kind === "manga" ? "/v1/watchlist/manga/add" : "/v1/watchlist/novel/add"
+  const body: Record<string, string> =
+    kind === "manga"
+      ? { illust_series_id: String(seriesID), series_id: String(seriesID) }
+      : { novel_series_id: String(seriesID), series_id: String(seriesID) }
+  await apiPost(endpoint, body, accessToken)
+}
+
+export async function deleteWatchlistSeries(
+  seriesID: number,
+  kind: "manga" | "novel",
+  accessToken: string
+): Promise<void> {
+  const endpoint = kind === "manga" ? "/v1/watchlist/manga/delete" : "/v1/watchlist/novel/delete"
+  const body: Record<string, string> =
+    kind === "manga"
+      ? { illust_series_id: String(seriesID), series_id: String(seriesID) }
+      : { novel_series_id: String(seriesID), series_id: String(seriesID) }
+  await apiPost(endpoint, body, accessToken)
+}
+
 // ---------- 收藏 ----------
 
 export async function bookmarks(

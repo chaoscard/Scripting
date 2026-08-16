@@ -258,12 +258,22 @@ export interface PixivIllustrationSeriesItem {
   caption?: string
 }
 
+export interface PixivIllustrationSeriesDetail {
+  id: number
+  title: string
+  caption?: string
+  series_work_count?: number
+  is_concluded?: boolean
+  is_original?: boolean
+  is_watched?: boolean
+  watchlist_added?: boolean
+  url?: string | null
+  cover_image_urls?: PixivImageUrls
+  user?: PixivUser | null
+}
+
 export interface PixivIllustrationSeriesResponse {
-  illust_series_detail: {
-    id: number
-    title: string
-    series_work_count?: number
-  }
+  illust_series_detail: PixivIllustrationSeriesDetail
   illust_series_first_illust?: PixivIllustrationSeriesItem | null
   illusts: PixivIllustrationSeriesItem[]
   next_url?: string | null
@@ -276,13 +286,22 @@ export interface PixivNovelSeriesItem {
   image_urls?: PixivImageUrls
 }
 
+export interface PixivNovelSeriesDetail {
+  id: number
+  title: string
+  caption?: string
+  content_count?: number
+  is_concluded?: boolean
+  is_original?: boolean
+  is_watched?: boolean
+  watchlist_added?: boolean
+  url?: string | null
+  cover_image_urls?: PixivImageUrls
+  user?: PixivUser | null
+}
+
 export interface PixivNovelSeriesResponse {
-  novel_series_detail: {
-    id: number
-    title: string
-    content_count?: number
-    user?: PixivUser | null
-  }
+  novel_series_detail: PixivNovelSeriesDetail
   novel_series_first_novel?: PixivNovel | null
   novel_series_latest_novel?: PixivNovel | null
   novels: PixivNovel[]

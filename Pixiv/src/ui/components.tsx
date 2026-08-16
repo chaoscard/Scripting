@@ -551,22 +551,16 @@ export function MangaWatchlistCard(props: {
         <ZStack
           alignment="center"
           frame={{ width: 34, height: 34 }}
-          zIndex={2}
+          glassEffect="circle"
+          contentShape="circle"
           offset={{ x: -8, y: -8 }}
+          zIndex={2}
         >
-          <Button
-            action={() => {}}
-            buttonStyle="glass"
-            buttonBorderShape="circle"
-            clipShape="circle"
-            contentShape="circle"
-            frame={{ width: 34, height: 34 }}
-          >
-            <Image
-              systemName="book"
-              font="subheadline"
-            />
-          </Button>
+          <Image
+            systemName="book"
+            font="subheadline"
+            foregroundStyle="label"
+          />
         </ZStack>
       </NavigationLink>
     </ZStack>
@@ -1821,13 +1815,19 @@ function DescriptionLine(props: {
     const target =
       routeForDescriptionLink(segment.href) ??
       routeForDescriptionLink(segment.label)
-    if (target?.startsWith("http")) {
+    if (
+      target &&
+      (target.startsWith("http") ||
+        segment.label.length > 20 ||
+        /^https?:\/\//i.test(segment.href))
+    ) {
       flushInline()
       views.push(
         <ExternalDescriptionLink
-          key={`external-${views.length}`}
+          key={`link-${views.length}`}
           label={segment.label || segment.href}
-          url={target}
+          target={target}
+          routeDestination={props.routeDestination}
         />
       )
     } else {
@@ -1837,7 +1837,7 @@ function DescriptionLine(props: {
   flushInline()
 
   return (
-    <VStack alignment="leading" spacing={0} frame={{ maxWidth: "infinity" }}>
+    <VStack alignment="leading" spacing={2} frame={{ maxWidth: "infinity" }}>
       {views}
     </VStack>
   )
@@ -1858,7 +1858,19 @@ function DescriptionInlineItem(props: {
         font="footnote"
         foregroundStyle={props.foregroundStyle}
         textSelection={true}
-        fixedSize={{ horizontal: false, vertical: true }}
+      >
+        {makeBreakableText(content)}
+      </Text>
+    )
+  }
+  if (target.startsWith("http")) {
+    return (
+      <Text
+        font="footnote"
+        foregroundStyle="#007AFF"
+        underline="#007AFF"
+        contentShape="rect"
+        onTapGesture={() => void presentExternalURL(target)}
       >
         {makeBreakableText(content)}
       </Text>
@@ -1871,7 +1883,6 @@ function DescriptionInlineItem(props: {
         font="footnote"
         foregroundStyle="#007AFF"
         underline="#007AFF"
-        fixedSize={{ horizontal: false, vertical: true }}
       >
         {makeBreakableText(content)}
       </Text>
@@ -1879,22 +1890,46 @@ function DescriptionInlineItem(props: {
   )
 }
 
-function ExternalDescriptionLink(props: { label: string; url: string }) {
+function ExternalDescriptionLink(props: {
+  label: string
+  target: string
+  routeDestination: (route: string) => any
+}) {
+  const isHttp = props.target.startsWith("http")
+  if (!isHttp) {
+    const destination = props.routeDestination(props.target)
+    return (
+      <NavigationLink destination={destination}>
+        <Text
+          font="footnote"
+          foregroundStyle="#007AFF"
+          underline="#007AFF"
+          multilineTextAlignment="leading"
+          textSelection={true}
+          frame={{ maxWidth: "infinity", alignment: "leading" }}
+        >
+          {makeBreakableText(props.label)}
+        </Text>
+      </NavigationLink>
+    )
+  }
   return (
     <Text
       font="footnote"
       foregroundStyle="#007AFF"
       underline="#007AFF"
       multilineTextAlignment="leading"
-      fixedSize={{ horizontal: false, vertical: true }}
+      textSelection={true}
       frame={{ maxWidth: "infinity", alignment: "leading" }}
       contentShape="rect"
-      onTapGesture={() => void presentExternalURL(props.url)}
+      onTapGesture={() => void presentExternalURL(props.target)}
     >
       {makeBreakableText(props.label)}
     </Text>
   )
 }
+
+
 
 type DescriptionBlock =
   | { kind: "text"; text: string }
@@ -1979,12 +2014,7 @@ function appendDescriptionTextSegments(
 ) {
   const lines = text.split(/(\n+)/)
   for (const line of lines) {
-    const target = routeForDescriptionLink(line)
-    if (target && !target.startsWith("http")) {
-      const label = line.trim()
-      if (label) segments.push({ label, href: label })
-      continue
-    }
+    if (!line) continue
     appendInlineDescriptionSegments(segments, line)
   }
 }
@@ -1993,7 +2023,16 @@ function appendInlineDescriptionSegments(
   segments: DescriptionSegment[],
   text: string
 ) {
-  const pattern = /(?:https?:\/\/|www\.)[^\s<>]+|(?:https?:\/\/)?(?:www\.)?pixiv\.net\/(?:users?|user|artworks|novels)(?:\/[^\s<>]*)?|\/?(?:users?|user|artworks|novels)\/\d+(?:[/?#][^\s<>]*)?|(?:pixiv\.net\/|\/)?novel\/show\.php\?id=\d+|\b(?:uid|pid|nid)\s*[:：#=]?\s*\d+\b/gi
+  const urlChar = "[a-zA-Z0-9\\-._~:/?#\\[\\]@!$&'()*+,;%=]"
+  const pattern = new RegExp(
+    "(?:https?:\\/\\/|www\\.)" + urlChar + "+|" +
+    "(?:https?:\\/\\/)?(?:www\\.)?pixiv\\.net\\/(?:users?|user|artworks|novels?|novel|manga|illusts?|illust)" + urlChar + "*|" +
+    "\\/?(?:users?|user|artworks|novels?|novel|manga|illusts?|illust)\\/" + urlChar + "+|" +
+    "(?:pixiv\\.net\\/|\\/)?novel\\/show\\.php\\?id=\\d+|" +
+    "\\b(?:uid|pid|nid)\\s*[:：#=]?\\s*\\d+\\b|" +
+    "pixiv:\\/\\/" + urlChar + "+",
+    "gi"
+  )
   let cursor = 0
   let match: RegExpExecArray | null
   while ((match = pattern.exec(text)) != null) {
@@ -2001,7 +2040,9 @@ function appendInlineDescriptionSegments(
     const raw = match[0]
     const link = raw.replace(/[),.，。！!？?;；]+$/, "")
     if (link) segments.push({ label: link, href: link })
-    appendPlainDescriptionSegment(segments, raw.slice(link.length))
+    if (raw.length > link.length) {
+      appendPlainDescriptionSegment(segments, raw.slice(link.length))
+    }
     cursor = match.index + raw.length
   }
   appendPlainDescriptionSegment(segments, text.slice(cursor))
@@ -2024,41 +2065,82 @@ function routeForDescriptionLink(value: string): string | null {
     .trim()
   if (!decoded) return null
 
-  const embeddedRoute = decoded.match(/^pixiv:\/\/(users?|user|artworks|novels)\/(\d+)$/i)
-  if (embeddedRoute) {
-    if (/^user/i.test(embeddedRoute[1])) return `user:${embeddedRoute[2]}`
-    if (/^novel/i.test(embeddedRoute[1])) return `novel:${embeddedRoute[2]}`
-    return `illust:${embeddedRoute[2]}`
+  // 1. pixiv:// custom scheme
+  const embeddedSeries = decoded.match(
+    /^pixiv:\/\/(?:novel\/series|novels\/series|manga\/series|illust\/series|illusts\/series)\/(\d+)$/i
+  )
+  if (embeddedSeries) {
+    if (/novel/i.test(embeddedSeries[0])) return `novelSeries:${embeddedSeries[1]}`
+    return `mangaSeries:${embeddedSeries[1]}`
+  }
+
+  const embeddedItem = decoded.match(/^pixiv:\/\/(users?|user|artworks|novels?|novel|illusts?|illust)\/(\d+)$/i)
+  if (embeddedItem) {
+    if (/^user/i.test(embeddedItem[1])) return `user:${embeddedItem[2]}`
+    if (/^novel/i.test(embeddedItem[1])) return `novel:${embeddedItem[2]}`
+    return `illust:${embeddedItem[2]}`
   }
 
   const hasURLScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(decoded)
   const isPixivURL = /^(?:https?:\/\/)?(?:www\.)?pixiv\.net(?:\/|$)/i.test(decoded)
+
+  // 2. novel series / manga series: pixiv.net/novel/series/123 or pixiv.net/user/123/series/456 or pixiv.net/manga/series/123
+  const novelSeriesMatch = decoded.match(
+    /(?:https?:\/\/(?:www\.)?pixiv\.net)?\/(?:en\/)?novel\/series\/(\d+)(?:[/?#].*)?$/i
+  )
+  if (novelSeriesMatch && (!hasURLScheme || isPixivURL)) {
+    const id = Number(novelSeriesMatch[1])
+    if (Number.isFinite(id) && id > 0) return `novelSeries:${id}`
+  }
+
+  const mangaSeriesMatch = decoded.match(
+    /(?:https?:\/\/(?:www\.)?pixiv\.net)?\/(?:en\/)?(?:users?|user)\/\d+\/series\/(\d+)(?:[/?#].*)?$/i
+  ) ?? decoded.match(
+    /(?:https?:\/\/(?:www\.)?pixiv\.net)?\/(?:en\/)?(?:manga|illust|illusts)\/series\/(\d+)(?:[/?#].*)?$/i
+  )
+  if (mangaSeriesMatch && (!hasURLScheme || isPixivURL)) {
+    const id = Number(mangaSeriesMatch[1])
+    if (Number.isFinite(id) && id > 0) return `mangaSeries:${id}`
+  }
+
+  // 3. user / novel / illust: pixiv.net/users/123, pixiv.net/artworks/123, pixiv.net/novel/123
   const pathMatch = decoded.match(
-    /(?:^|\/)(users?|user|artworks|novels)\/(\d+)(?:[/?#].*)?$/i
+    /(?:https?:\/\/(?:www\.)?pixiv\.net)?\/(?:en\/)?(users?|user|artworks|novels?|novel|illusts?|illust)\/(\d+)(?:[/?#].*)?$/i
   )
   if (pathMatch && (!hasURLScheme || isPixivURL)) {
     const id = Number(pathMatch[2])
-    if (!Number.isFinite(id) || id <= 0) return null
-    if (/^user/i.test(pathMatch[1])) return `user:${id}`
-    if (/^novel/i.test(pathMatch[1])) return `novel:${id}`
-    return `illust:${id}`
+    if (Number.isFinite(id) && id > 0) {
+      if (/^user/i.test(pathMatch[1])) return `user:${id}`
+      if (/^novel/i.test(pathMatch[1])) return `novel:${id}`
+      return `illust:${id}`
+    }
   }
 
+  // 4. legacy novel show: pixiv.net/novel/show.php?id=123
   const novelShow = decoded.match(
     /^(?:https?:\/\/)?(?:www\.)?pixiv\.net\/(?:en\/)?novel\/show\.php\?[^#]*\bid=(\d+)/i
   ) ?? decoded.match(
     /^\/?(?:en\/)?novel\/show\.php\?[^#]*\bid=(\d+)/i
   )
-  if (novelShow) return `novel:${novelShow[1]}`
-
-  const idReference = decoded.match(/(?:^|\s)(uid|pid|nid)\s*[:：#=]?\s*(\d+)(?:\s|$)/i)
-  if (idReference) {
-    if (idReference[1].toLowerCase() === "uid") return `user:${idReference[2]}`
-    if (idReference[1].toLowerCase() === "nid") return `novel:${idReference[2]}`
-    return `illust:${idReference[2]}`
+  if (novelShow) {
+    const id = Number(novelShow[1])
+    if (Number.isFinite(id) && id > 0) return `novel:${id}`
   }
+
+  // 5. uid: 123, pid: 123, nid: 123
+  const idReference = decoded.match(/^(?:uid|pid|nid)\s*[:：#=]?\s*(\d+)$/i)
+  if (idReference) {
+    const kind = idReference[1].toLowerCase()
+    const id = idReference[2]
+    if (kind === "uid") return `user:${id}`
+    if (kind === "nid") return `novel:${id}`
+    return `illust:${id}`
+  }
+
+  // 6. External http / www links
   if (/^www\./i.test(decoded)) return `https://${decoded}`
   if (/^https?:\/\//i.test(decoded)) return decoded
+
   return null
 }
 
