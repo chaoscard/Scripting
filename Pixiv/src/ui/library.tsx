@@ -195,7 +195,6 @@ function IllustrationLibraryFeed(props: {
   useEffect(() => {
     return onSettingsChanged(() => {
       pagedRef.current.reapplyFilter()
-      pagedRef.current.refresh()
     })
   }, [])
   useEffect(() => {
@@ -265,7 +264,6 @@ function NovelLibraryFeed(props: {
   useEffect(() => {
     return onSettingsChanged(() => {
       pagedRef.current.reapplyFilter()
-      pagedRef.current.refresh()
     })
   }, [])
   useEffect(() => {

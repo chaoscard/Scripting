@@ -81,19 +81,29 @@ export function RootView() {
 
   if (!loggedIn) {
     return (
-      <NavigationStack>
-        <LoginView
-          onClose={dismiss}
-          onSuccess={() => {
-            setLoggedIn(true)
-          }}
-        />
-      </NavigationStack>
+      <ZStack
+        frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+        background="systemBackground"
+        ignoresSafeArea={true}
+      >
+        <NavigationStack>
+          <LoginView
+            onClose={dismiss}
+            onSuccess={() => {
+              setLoggedIn(true)
+            }}
+          />
+        </NavigationStack>
+      </ZStack>
     )
   }
 
   return (
-    <ZStack frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
+    <ZStack
+      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+      background="systemBackground"
+      ignoresSafeArea={true}
+    >
       {/* 底层：主界面在第 0 毫秒即挂载并全力在后台请求数据与预载图片 */}
       <MainTabView onClose={dismiss} />
 
@@ -109,7 +119,9 @@ export function TabNavigationStack(props: { children: any }) {
   return <NavigationStack>{props.children}</NavigationStack>
 }
 
-function MainTabView(props: { onClose: () => void }) {
+function MainTabView(props: {
+  onClose: () => void
+}) {
   const selection = useObservable<string>("discovery")
   const discoveryPath = useObservable<string[]>([])
   const rankingPath = useObservable<string[]>([])
@@ -135,7 +147,10 @@ function MainTabView(props: { onClose: () => void }) {
   }, [selection, discoveryPath, rankingPath, followingPath, searchPath, morePath])
 
   return (
-    <TabView selection={selection} tabBarMinimizeBehavior="onScrollDown">
+    <TabView
+      selection={selection}
+      tabBarMinimizeBehavior="onScrollDown"
+    >
       <Tab title="探索" systemImage="photo.on.rectangle.angled" value="discovery">
         <NavigationStack path={discoveryPath}>
           <DiscoveryView onClose={props.onClose} />

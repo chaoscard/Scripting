@@ -83,7 +83,10 @@ export function SettingsView() {
   }
 
   return (
-    <List navigationTitle="设置" navigationBarTitleDisplayMode="inline">
+    <List
+      navigationTitle="设置"
+      navigationBarTitleDisplayMode="inline"
+    >
       <Section header={<Text>内容过滤</Text>}>
         <Toggle title="显示 R18 作品" value={settings.showR18} onChanged={(value) => update({ showR18: value })} />
         <Toggle title="显示 R18G 作品" value={settings.showR18G} onChanged={(value) => update({ showR18G: value })} />
@@ -102,6 +105,10 @@ export function SettingsView() {
 
       <Section header={<Text>功能</Text>}>
         <Toggle title="沉浸效果" value={settings.ambientImmersion} onChanged={(value) => update({ ambientImmersion: value })} />
+        <Picker title="追更顺序" value={settings.watchlistSortOrder} onChanged={(value: string) => update({ watchlistSortOrder: value as "asc" | "desc" })}>
+          <Text tag="asc">从第一话开始</Text>
+          <Text tag="desc">从最新话开始</Text>
+        </Picker>
         <Picker title="长按收藏按钮" value={settings.longPressBookmarkAction} onChanged={(value: string) => update({ longPressBookmarkAction: value as "off" | "follow" | "detail" })}>
           <Text tag="off">关闭长按功能</Text>
           <Text tag="follow">一键关注作者</Text>

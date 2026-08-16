@@ -58,7 +58,6 @@ export function TagFeedView(props: { tag: string }) {
   useEffect(() => {
     return onSettingsChanged(() => {
       pagedRef.current.reapplyFilter()
-      pagedRef.current.refresh()
     })
   }, [])
 

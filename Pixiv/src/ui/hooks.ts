@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "scripting"
 import { session } from "../api/session"
+import { loadSettings } from "../store/settings"
 
 // ---------- 通用 hooks ----------
 

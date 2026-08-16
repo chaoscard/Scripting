@@ -35,6 +35,7 @@ import {
   isUserBlocked,
   loadSettings,
   onSettingsChanged,
+  updateSettings,
 } from "../store/settings"
 import type {
   PixivIllustration,
@@ -63,7 +64,11 @@ type SeriesKind = "manga" | "novel"
 
 const UI_BATCH_SIZE = 10
 
-function seriesIllust(item: PixivIllustrationSeriesItem, authorFallback: PixivUser | null = null): PixivIllustration {
+function seriesIllust(
+  item: PixivIllustrationSeriesItem,
+  authorFallback: PixivUser | null = null,
+  episodeNumber?: number
+): PixivIllustration {
   const raw = item as any
   const illustType = item.illust_type ?? raw.type ?? (raw.illustType === 1 ? "manga" : raw.illustType === 2 ? "ugoira" : "illust")
   return {
@@ -90,6 +95,7 @@ function seriesIllust(item: PixivIllustrationSeriesItem, authorFallback: PixivUs
     width: item.width ?? 0,
     height: item.height ?? 0,
     x_restrict: item.x_restrict ?? raw.x_restrict ?? raw.xRestrict ?? 0,
+    episode_number: episodeNumber,
     meta_single_page: item.meta_single_page ?? {},
     meta_pages: item.meta_pages ?? (raw.meta_pages ? raw.meta_pages : []),
     total_view: item.total_view ?? raw.total_view ?? raw.totalView ?? 0,
@@ -211,7 +217,9 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
   const [workCount, setWorkCount] = useState<number | null>(null)
   const [isWatched, setIsWatched] = useState(false)
   const [watchLoading, setWatchLoading] = useState(false)
-  const [isAscending, setIsAscending] = useState(true)
+  const [isAscending, setIsAscending] = useState(
+    () => loadSettings().watchlistSortOrder === "asc"
+  )
 
   // 全量已获取且过滤后的数据池（支持正序/倒序切换与分批派发）
   const allIllustsRef = useRef<PixivIllustration[]>([])
@@ -226,7 +234,6 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
 
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-  const [nextURL, setNextURL] = useState<string | null>(null)
   const [loadingMore, setLoadingMore] = useState(false)
   const loadingMoreLockRef = useRef(false)
   const prefetchTaskRef = useRef<{ cancel: () => void } | null>(null)
@@ -236,6 +243,9 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
     setError(null)
     loadingMoreLockRef.current = false
     setLoadingMore(false)
+    const currentSettings = loadSettings()
+    const currentAsc = currentSettings.watchlistSortOrder === "asc"
+    setIsAscending(currentAsc)
     try {
       if (props.kind === "manga") {
         const result = await session.call((token) => illustrationSeries(props.seriesID, token))
@@ -259,13 +269,35 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
         )
         setCoverUrl(cover)
 
-        const rawIllusts = Array.isArray(result.illusts) ? result.illusts : []
-        const mappedIllusts = rawIllusts.map((it) => seriesIllust(it, seriesAuthor))
+        const allRawIllusts: PixivIllustrationSeriesItem[] = Array.isArray(result.illusts) ? [...result.illusts] : []
+        let currentNextURL = result.next_url ?? null
+
+        // 循环拉取后续全部章节分页，组装系列完整作品列表（Pixiv 单次请求最多返回 30 条）
+        while (currentNextURL && allRawIllusts.length < 500) {
+          try {
+            const nextResult = await session.call((token) => nextIllustrationSeries(currentNextURL!, token))
+            if (Array.isArray(nextResult.illusts) && nextResult.illusts.length > 0) {
+              allRawIllusts.push(...nextResult.illusts)
+              currentNextURL = nextResult.next_url ?? null
+            } else {
+              break
+            }
+          } catch {
+            break
+          }
+        }
+
+        // Pixiv API 返回的全部章节数组为全局倒序（[最新一话, ..., 第 1 话]）
+        // 整体反转为自然正序（[第 1 话, ..., 最新一话]），并为每一话固定标注绝对真实话数 episode_number
+        const rawAscending = [...allRawIllusts].reverse()
+        const mappedIllusts = rawAscending.map((it, idx) =>
+          seriesIllust(it, seriesAuthor, idx + 1)
+        )
         const filtered = filterSeriesIllusts(mappedIllusts, isExempt)
         allIllustsRef.current = filtered
-        setWorkCount(detail.series_work_count ?? rawIllusts.length)
+        setWorkCount(detail.series_work_count ?? allRawIllusts.length)
 
-        const sorted = isAscending ? filtered : [...filtered].reverse()
+        const sorted = currentAsc ? filtered : [...filtered].reverse()
         const pub = sorted.slice(0, UI_BATCH_SIZE)
         const pend = sorted.slice(UI_BATCH_SIZE)
 
@@ -273,7 +305,6 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
         setPendingIllusts(pend)
         setPublishedNovels([])
         setPendingNovels([])
-        setNextURL(result.next_url ?? null)
 
         prefetchTaskRef.current?.cancel()
         prefetchTaskRef.current = prefetch([
@@ -302,12 +333,34 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
         )
         setCoverUrl(cover)
 
-        const rawNovels = Array.isArray(result.novels) ? result.novels : []
-        const filtered = filterSeriesNovels(rawNovels, isExempt)
-        allNovelsRef.current = filtered
-        setWorkCount(detail.content_count ?? rawNovels.length)
+        const allRawNovels: PixivNovel[] = Array.isArray(result.novels) ? [...result.novels] : []
+        let currentNextURL = result.next_url ?? null
 
-        const sorted = isAscending ? filtered : [...filtered].reverse()
+        // 循环拉取小说系列后续全部章节
+        while (currentNextURL && allRawNovels.length < 500) {
+          try {
+            const nextResult = await session.call((token) => nextNovelSeries(currentNextURL!, token))
+            if (Array.isArray(nextResult.novels) && nextResult.novels.length > 0) {
+              allRawNovels.push(...nextResult.novels)
+              currentNextURL = nextResult.next_url ?? null
+            } else {
+              break
+            }
+          } catch {
+            break
+          }
+        }
+
+        // Pixiv API 返回的小说章节列表官方为自然正序（[第 1 话, ..., 最新一话]），直接作为正序基准并固定标注 episode_number
+        const mappedNovels = allRawNovels.map((novel, idx) => ({
+          ...novel,
+          episode_number: idx + 1,
+        }))
+        const filtered = filterSeriesNovels(mappedNovels, isExempt)
+        allNovelsRef.current = filtered
+        setWorkCount(detail.content_count ?? allRawNovels.length)
+
+        const sorted = currentAsc ? filtered : [...filtered].reverse()
         const pub = sorted.slice(0, UI_BATCH_SIZE)
         const pend = sorted.slice(UI_BATCH_SIZE)
 
@@ -315,7 +368,6 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
         setPendingNovels(pend)
         setPublishedIllusts([])
         setPendingIllusts([])
-        setNextURL(result.next_url ?? null)
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "系列加载失败")
@@ -327,36 +379,18 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
   async function loadMore() {
     if (loadingMoreLockRef.current) return
     if (props.kind === "manga") {
-      if (pendingIllusts.length === 0 && !nextURL) return
+      if (pendingIllusts.length === 0) return
       loadingMoreLockRef.current = true
       setLoadingMore(true)
       try {
-        if (pendingIllusts.length > 0) {
-          // 缓冲 1300ms：确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
-          await new Promise((resolve) => setTimeout(() => resolve(undefined), 1300))
-          const nextBatch = pendingIllusts.slice(0, UI_BATCH_SIZE)
-          const remaining = pendingIllusts.slice(UI_BATCH_SIZE)
-          setPublishedIllusts((current) => [...current, ...nextBatch])
-          setPendingIllusts(remaining)
-          prefetchTaskRef.current?.cancel()
-          prefetchTaskRef.current = prefetch(remaining.slice(0, UI_BATCH_SIZE).map(cardThumbUrlOf))
-        } else if (nextURL) {
-          const [result] = await Promise.all([
-            session.call((token) => nextIllustrationSeries(nextURL, token)),
-            new Promise((resolve) => setTimeout(() => resolve(undefined), 1300)),
-          ])
-          const rawIllusts = Array.isArray(result.illusts) ? result.illusts : []
-          const mappedIllusts = rawIllusts.map((it) => seriesIllust(it, author))
-          const filtered = filterSeriesIllusts(mappedIllusts, isWatched)
-          allIllustsRef.current = [...allIllustsRef.current, ...filtered]
-          const nextBatch = filtered.slice(0, UI_BATCH_SIZE)
-          const remaining = filtered.slice(UI_BATCH_SIZE)
-          setPublishedIllusts((current) => [...current, ...nextBatch])
-          setPendingIllusts(remaining)
-          setNextURL(result.next_url ?? null)
-          prefetchTaskRef.current?.cancel()
-          prefetchTaskRef.current = prefetch(remaining.slice(0, UI_BATCH_SIZE).map(cardThumbUrlOf))
-        }
+        // 缓冲 1300ms：确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
+        await new Promise((resolve) => setTimeout(() => resolve(undefined), 1300))
+        const nextBatch = pendingIllusts.slice(0, UI_BATCH_SIZE)
+        const remaining = pendingIllusts.slice(UI_BATCH_SIZE)
+        setPublishedIllusts((current) => [...current, ...nextBatch])
+        setPendingIllusts(remaining)
+        prefetchTaskRef.current?.cancel()
+        prefetchTaskRef.current = prefetch(remaining.slice(0, UI_BATCH_SIZE).map(cardThumbUrlOf))
       } catch {
         // 出错静默，允许用户再次触底重试
       } finally {
@@ -364,30 +398,15 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
         setLoadingMore(false)
       }
     } else {
-      if (pendingNovels.length === 0 && !nextURL) return
+      if (pendingNovels.length === 0) return
       loadingMoreLockRef.current = true
       setLoadingMore(true)
       try {
-        if (pendingNovels.length > 0) {
-          await new Promise((resolve) => setTimeout(() => resolve(undefined), 1300))
-          const nextBatch = pendingNovels.slice(0, UI_BATCH_SIZE)
-          const remaining = pendingNovels.slice(UI_BATCH_SIZE)
-          setPublishedNovels((current) => [...current, ...nextBatch])
-          setPendingNovels(remaining)
-        } else if (nextURL) {
-          const [result] = await Promise.all([
-            session.call((token) => nextNovelSeries(nextURL, token)),
-            new Promise((resolve) => setTimeout(() => resolve(undefined), 1300)),
-          ])
-          const rawNovels = Array.isArray(result.novels) ? result.novels : []
-          const filtered = filterSeriesNovels(rawNovels, isWatched)
-          allNovelsRef.current = [...allNovelsRef.current, ...filtered]
-          const nextBatch = filtered.slice(0, UI_BATCH_SIZE)
-          const remaining = filtered.slice(UI_BATCH_SIZE)
-          setPublishedNovels((current) => [...current, ...nextBatch])
-          setPendingNovels(remaining)
-          setNextURL(result.next_url ?? null)
-        }
+        await new Promise((resolve) => setTimeout(() => resolve(undefined), 1300))
+        const nextBatch = pendingNovels.slice(0, UI_BATCH_SIZE)
+        const remaining = pendingNovels.slice(UI_BATCH_SIZE)
+        setPublishedNovels((current) => [...current, ...nextBatch])
+        setPendingNovels(remaining)
       } catch {
         // 出错静默
       } finally {
@@ -447,10 +466,33 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
 
   useEffect(() => {
     return onSettingsChanged(() => {
-      setAmbientEnabled(loadSettings().ambientImmersion)
-      void load()
+      const nextSettings = loadSettings()
+      setAmbientEnabled(nextSettings.ambientImmersion)
+      const targetAsc = nextSettings.watchlistSortOrder === "asc"
+      setIsAscending((currentAsc) => {
+        if (currentAsc !== targetAsc) {
+          if (props.kind === "manga") {
+            const sorted = targetAsc ? allIllustsRef.current : [...allIllustsRef.current].reverse()
+            const pub = sorted.slice(0, UI_BATCH_SIZE)
+            const pend = sorted.slice(UI_BATCH_SIZE)
+            setPublishedIllusts(pub)
+            setPendingIllusts(pend)
+            prefetchTaskRef.current?.cancel()
+            prefetchTaskRef.current = prefetch([
+              ...pub.map(cardThumbUrlOf),
+              ...pend.slice(0, UI_BATCH_SIZE).map(cardThumbUrlOf),
+            ])
+          } else {
+            const sorted = targetAsc ? allNovelsRef.current : [...allNovelsRef.current].reverse()
+            setPublishedNovels(sorted.slice(0, UI_BATCH_SIZE))
+            setPendingNovels(sorted.slice(UI_BATCH_SIZE))
+          }
+          return targetAsc
+        }
+        return currentAsc
+      })
     })
-  }, [])
+  }, [props.kind])
 
   if (loading) {
     return (
@@ -519,29 +561,45 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
             contentShape="rect"
             action={() => {
               void Haptics.transient()
-              setIsAscending((prev) => {
-                const nextAsc = !prev
-                if (props.kind === "manga") {
-                  const sorted = nextAsc ? allIllustsRef.current : [...allIllustsRef.current].reverse()
-                  const pub = sorted.slice(0, UI_BATCH_SIZE)
-                  const pend = sorted.slice(UI_BATCH_SIZE)
-                  setPublishedIllusts(pub)
-                  setPendingIllusts(pend)
-                  prefetchTaskRef.current?.cancel()
-                  prefetchTaskRef.current = prefetch([
-                    ...pub.map(cardThumbUrlOf),
-                    ...pend.slice(0, UI_BATCH_SIZE).map(cardThumbUrlOf),
-                  ])
-                } else {
-                  const sorted = nextAsc ? allNovelsRef.current : [...allNovelsRef.current].reverse()
-                  setPublishedNovels(sorted.slice(0, UI_BATCH_SIZE))
-                  setPendingNovels(sorted.slice(UI_BATCH_SIZE))
-                }
-                return nextAsc
-              })
+              const nextAsc = !isAscending
+              setIsAscending(nextAsc)
+              updateSettings({ watchlistSortOrder: nextAsc ? "asc" : "desc" })
+              if (props.kind === "manga") {
+                const sorted = nextAsc ? allIllustsRef.current : [...allIllustsRef.current].reverse()
+                const pub = sorted.slice(0, UI_BATCH_SIZE)
+                const pend = sorted.slice(UI_BATCH_SIZE)
+                setPublishedIllusts(pub)
+                setPendingIllusts(pend)
+                prefetchTaskRef.current?.cancel()
+                prefetchTaskRef.current = prefetch([
+                  ...pub.map(cardThumbUrlOf),
+                  ...pend.slice(0, UI_BATCH_SIZE).map(cardThumbUrlOf),
+                ])
+              } else {
+                const sorted = nextAsc ? allNovelsRef.current : [...allNovelsRef.current].reverse()
+                setPublishedNovels(sorted.slice(0, UI_BATCH_SIZE))
+                setPendingNovels(sorted.slice(UI_BATCH_SIZE))
+              }
             }}
           >
             <Image systemName={isAscending ? "arrow.up" : "arrow.down"} />
+          </Button>,
+          <Button
+            buttonStyle="glass"
+            frame={{ width: 30, height: 30 }}
+            clipShape={{ type: "rect", cornerRadius: 15 }}
+            contentShape="rect"
+            action={() => {
+              void Haptics.transient()
+              const shareUrl = props.kind === "novel"
+                ? `https://www.pixiv.net/novel/series/${props.seriesID}`
+                : (author?.id
+                    ? `https://www.pixiv.net/user/${author.id}/series/${props.seriesID}`
+                    : `https://www.pixiv.net/series/${props.seriesID}`)
+              void ShareSheet.present([shareUrl])
+            }}
+          >
+            <Image systemName="square.and.arrow.up" />
           </Button>,
           ...(author ? [
             <NavigationLink
@@ -655,7 +713,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
                 <LoadMoreTrigger
                   anchor={publishedNovels[publishedNovels.length - 1].id}
                   onLoadMore={loadMore}
-                  hasMore={pendingNovels.length > 0 || nextURL != null}
+                  hasMore={pendingNovels.length > 0}
                   isLoading={loadingMore}
                 />
               </>
@@ -672,14 +730,15 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
               <IllustFlowFeed
                 items={publishedIllusts}
                 onLoadMore={loadMore}
-                hasMore={pendingIllusts.length > 0 || nextURL != null}
+                hasMore={pendingIllusts.length > 0}
                 isLoading={loadingMore}
-                cornerBadgeOf={(_, index) => (
+                cornerBadgeOf={(illust, index) => (
                   <ImageNumberBadge
                     number={
-                      isAscending
+                      illust.episode_number ??
+                      (isAscending
                         ? index + 1
-                        : (workCount ?? allIllustsRef.current.length) - index
+                        : (workCount ?? allIllustsRef.current.length) - index)
                     }
                   />
                 )}

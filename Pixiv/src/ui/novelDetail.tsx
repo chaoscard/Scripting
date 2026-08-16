@@ -166,14 +166,20 @@ export function NovelDetailView(props: { novelID: number }) {
 
   if (loading) {
     return (
-      <ScrollView navigationTitle="小说" navigationBarTitleDisplayMode="inline">
+      <ScrollView
+        navigationTitle="小说"
+        navigationBarTitleDisplayMode="inline"
+      >
         <LoadingView />
       </ScrollView>
     )
   }
   if (error || !novel) {
     return (
-      <ScrollView navigationTitle="小说" navigationBarTitleDisplayMode="inline">
+      <ScrollView
+        navigationTitle="小说"
+        navigationBarTitleDisplayMode="inline"
+      >
         <ErrorView message={error ?? "小说不存在"} onRetry={load} />
       </ScrollView>
     )
@@ -183,7 +189,10 @@ export function NovelDetailView(props: { novelID: number }) {
   const avatarUrl = current.user.profile_image_urls?.medium ?? null
 
   return (
-    <ScrollView navigationTitle={current.title} navigationBarTitleDisplayMode="inline">
+    <ScrollView
+      navigationTitle={current.title}
+      navigationBarTitleDisplayMode="inline"
+    >
       <VStack alignment="leading" spacing={12} padding={{ horizontal: 16, top: 12 }}>
         <Text font="title3" fontWeight="bold">
           {current.title}

@@ -6,7 +6,6 @@ import {
   LazyVStack,
   Menu,
   Picker,
-  ScrollView,
   Text,
   useEffect,
   useRef,
@@ -37,7 +36,6 @@ import {
 } from "./components"
 
 type RankingKind = "illustration" | "manga" | "novel" | "advanced"
-type IllustRankingKind = Exclude<RankingKind, "novel" | "advanced">
 
 type IllustrationRankingMode =
   | "day"
@@ -45,12 +43,13 @@ type IllustrationRankingMode =
   | "month"
   | "week_original"
   | "week_rookie"
+
 type MangaRankingMode =
   | "day_manga"
   | "week_manga"
   | "month_manga"
   | "week_rookie_manga"
-type IllustRankingMode = IllustrationRankingMode | MangaRankingMode
+
 type NovelRankingMode = "day" | "week" | "week_rookie"
 
 const ILLUSTRATION_MODES: ReadonlyArray<{
@@ -124,24 +123,28 @@ export function RankingView(props: { onClose: () => void }) {
           />
         ) : null}
         {kind === "illustration" ? (
-          <IllustRankingFeed
-            key={`illustration:${illustrationMode}`}
-            kind="illustration"
+          <IllustrationRankingFeed
+            key="illustration"
             mode={illustrationMode}
-            onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
+            onRegisterRefresh={(fn) => {
+              refreshHandlerRef.current = fn
+            }}
           />
         ) : kind === "manga" ? (
-          <IllustRankingFeed
-            key={`manga:${mangaMode}`}
-            kind="manga"
+          <MangaRankingFeed
+            key="manga"
             mode={mangaMode}
-            onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
+            onRegisterRefresh={(fn) => {
+              refreshHandlerRef.current = fn
+            }}
           />
         ) : kind === "novel" ? (
           <NovelRankingFeed
-            key={`novel:${novelMode}`}
+            key="novel"
             mode={novelMode}
-            onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
+            onRegisterRefresh={(fn) => {
+              refreshHandlerRef.current = fn
+            }}
           />
         ) : (
           <AdvancedSearchPlaceholder />
@@ -208,33 +211,278 @@ function RankingModePicker(props: {
   )
 }
 
-function IllustRankingFeed(props: {
-  kind: IllustRankingKind
-  mode: IllustRankingMode
+function IllustrationRankingFeed(props: {
+  mode: IllustrationRankingMode
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { kind, mode, onRegisterRefresh } = props
-  const paged = usePagedList<PixivIllustration>({
-    first: (token) => ranking(mode, null, token),
+  const { mode, onRegisterRefresh } = props
+
+  // 1. 每日
+  const dayPaged = usePagedList<PixivIllustration>({
+    first: (token) => ranking("day", null, token),
     more: (nextURL, token) => nextIllustrations(nextURL, token),
-    filter: kind === "manga" ? filterMangaRankingItems : filterRankingItems,
-    deps: [kind, mode],
+    filter: filterRankingItems,
+    deps: ["illustration", "day"],
+    enabled: mode === "day",
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel
+      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel,
   })
 
-  useEffect(() => {
-    onRegisterRefresh?.(paged.refresh)
-  }, [paged.refresh, onRegisterRefresh])
+  // 2. 每周
+  const weekPaged = usePagedList<PixivIllustration>({
+    first: (token) => ranking("week", null, token),
+    more: (nextURL, token) => nextIllustrations(nextURL, token),
+    filter: filterRankingItems,
+    deps: ["illustration", "week"],
+    enabled: mode === "week",
+    onBatchPublished: (_, pendingItems) =>
+      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel,
+  })
 
-  const pagedRef = useLatest(paged)
+  // 3. 每月
+  const monthPaged = usePagedList<PixivIllustration>({
+    first: (token) => ranking("month", null, token),
+    more: (nextURL, token) => nextIllustrations(nextURL, token),
+    filter: filterRankingItems,
+    deps: ["illustration", "month"],
+    enabled: mode === "month",
+    onBatchPublished: (_, pendingItems) =>
+      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel,
+  })
+
+  // 4. 原创
+  const originalPaged = usePagedList<PixivIllustration>({
+    first: (token) => ranking("week_original", null, token),
+    more: (nextURL, token) => nextIllustrations(nextURL, token),
+    filter: filterRankingItems,
+    deps: ["illustration", "week_original"],
+    enabled: mode === "week_original",
+    onBatchPublished: (_, pendingItems) =>
+      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel,
+  })
+
+  // 5. 新人
+  const rookiePaged = usePagedList<PixivIllustration>({
+    first: (token) => ranking("week_rookie", null, token),
+    more: (nextURL, token) => nextIllustrations(nextURL, token),
+    filter: filterRankingItems,
+    deps: ["illustration", "week_rookie"],
+    enabled: mode === "week_rookie",
+    onBatchPublished: (_, pendingItems) =>
+      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel,
+  })
+
+  const dayPagedRef = useLatest(dayPaged)
+  const weekPagedRef = useLatest(weekPaged)
+  const monthPagedRef = useLatest(monthPaged)
+  const originalPagedRef = useLatest(originalPaged)
+  const rookiePagedRef = useLatest(rookiePaged)
+
   useEffect(() => {
     return onSettingsChanged(() => {
-      pagedRef.current.reapplyFilter()
-      pagedRef.current.refresh()
+      dayPagedRef.current.reapplyFilter()
+      weekPagedRef.current.reapplyFilter()
+      monthPagedRef.current.reapplyFilter()
+      originalPagedRef.current.reapplyFilter()
+      rookiePagedRef.current.reapplyFilter()
     })
   }, [])
 
+  const activePaged =
+    mode === "day"
+      ? dayPaged
+      : mode === "week"
+        ? weekPaged
+        : mode === "month"
+          ? monthPaged
+          : mode === "week_original"
+            ? originalPaged
+            : rookiePaged
+
+  useEffect(() => {
+    onRegisterRefresh?.(activePaged.refresh)
+  }, [activePaged.refresh, onRegisterRefresh])
+
+  return <IllustRankingFeedContent paged={activePaged} label="插画" />
+}
+
+function MangaRankingFeed(props: {
+  mode: MangaRankingMode
+  onRegisterRefresh?: (fn: () => Promise<void>) => void
+}) {
+  const { mode, onRegisterRefresh } = props
+
+  // 1. 每日
+  const dayPaged = usePagedList<PixivIllustration>({
+    first: (token) => ranking("day_manga", null, token),
+    more: (nextURL, token) => nextIllustrations(nextURL, token),
+    filter: filterMangaRankingItems,
+    deps: ["manga", "day_manga"],
+    enabled: mode === "day_manga",
+    onBatchPublished: (_, pendingItems) =>
+      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel,
+  })
+
+  // 2. 每周
+  const weekPaged = usePagedList<PixivIllustration>({
+    first: (token) => ranking("week_manga", null, token),
+    more: (nextURL, token) => nextIllustrations(nextURL, token),
+    filter: filterMangaRankingItems,
+    deps: ["manga", "week_manga"],
+    enabled: mode === "week_manga",
+    onBatchPublished: (_, pendingItems) =>
+      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel,
+  })
+
+  // 3. 每月
+  const monthPaged = usePagedList<PixivIllustration>({
+    first: (token) => ranking("month_manga", null, token),
+    more: (nextURL, token) => nextIllustrations(nextURL, token),
+    filter: filterMangaRankingItems,
+    deps: ["manga", "month_manga"],
+    enabled: mode === "month_manga",
+    onBatchPublished: (_, pendingItems) =>
+      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel,
+  })
+
+  // 4. 新人
+  const rookiePaged = usePagedList<PixivIllustration>({
+    first: (token) => ranking("week_rookie_manga", null, token),
+    more: (nextURL, token) => nextIllustrations(nextURL, token),
+    filter: filterMangaRankingItems,
+    deps: ["manga", "week_rookie_manga"],
+    enabled: mode === "week_rookie_manga",
+    onBatchPublished: (_, pendingItems) =>
+      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel,
+  })
+
+  const dayPagedRef = useLatest(dayPaged)
+  const weekPagedRef = useLatest(weekPaged)
+  const monthPagedRef = useLatest(monthPaged)
+  const rookiePagedRef = useLatest(rookiePaged)
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      dayPagedRef.current.reapplyFilter()
+      weekPagedRef.current.reapplyFilter()
+      monthPagedRef.current.reapplyFilter()
+      rookiePagedRef.current.reapplyFilter()
+    })
+  }, [])
+
+  const activePaged =
+    mode === "day_manga"
+      ? dayPaged
+      : mode === "week_manga"
+        ? weekPaged
+        : mode === "month_manga"
+          ? monthPaged
+          : rookiePaged
+
+  useEffect(() => {
+    onRegisterRefresh?.(activePaged.refresh)
+  }, [activePaged.refresh, onRegisterRefresh])
+
+  return <IllustRankingFeedContent paged={activePaged} label="漫画" />
+}
+
+function NovelRankingFeed(props: {
+  mode: NovelRankingMode
+  onRegisterRefresh?: (fn: () => Promise<void>) => void
+}) {
+  const { mode, onRegisterRefresh } = props
+
+  // 1. 每日
+  const dayPaged = usePagedList<PixivNovel>({
+    first: (token) => novelRanking("day", null, token),
+    more: (nextURL, token) => nextNovels(nextURL, token),
+    filter: filterNovelRankingItems,
+    deps: ["novel", "day"],
+    enabled: mode === "day",
+    onBatchPublished: (_, pendingItems) =>
+      prefetch(pendingItems.slice(0, 10).map(novelThumbUrlOf)).cancel,
+  })
+
+  // 2. 每周
+  const weekPaged = usePagedList<PixivNovel>({
+    first: (token) => novelRanking("week", null, token),
+    more: (nextURL, token) => nextNovels(nextURL, token),
+    filter: filterNovelRankingItems,
+    deps: ["novel", "week"],
+    enabled: mode === "week",
+    onBatchPublished: (_, pendingItems) =>
+      prefetch(pendingItems.slice(0, 10).map(novelThumbUrlOf)).cancel,
+  })
+
+  // 3. 新人
+  const rookiePaged = usePagedList<PixivNovel>({
+    first: (token) => novelRanking("week_rookie", null, token),
+    more: (nextURL, token) => nextNovels(nextURL, token),
+    filter: filterNovelRankingItems,
+    deps: ["novel", "week_rookie"],
+    enabled: mode === "week_rookie",
+    onBatchPublished: (_, pendingItems) =>
+      prefetch(pendingItems.slice(0, 10).map(novelThumbUrlOf)).cancel,
+  })
+
+  const dayPagedRef = useLatest(dayPaged)
+  const weekPagedRef = useLatest(weekPaged)
+  const rookiePagedRef = useLatest(rookiePaged)
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      dayPagedRef.current.reapplyFilter()
+      weekPagedRef.current.reapplyFilter()
+      rookiePagedRef.current.reapplyFilter()
+    })
+  }, [])
+
+  const activePaged =
+    mode === "day"
+      ? dayPaged
+      : mode === "week"
+        ? weekPaged
+        : rookiePaged
+
+  useEffect(() => {
+    onRegisterRefresh?.(activePaged.refresh)
+  }, [activePaged.refresh, onRegisterRefresh])
+
+  return (
+    <VStack alignment="leading" spacing={10}>
+      {activePaged.initialLoading ? (
+        <LoadingView />
+      ) : activePaged.error && activePaged.items.length === 0 ? (
+        <ErrorView message={activePaged.error} onRetry={activePaged.refresh} />
+      ) : activePaged.items.length === 0 ? (
+        <EmptyView text="暂无小说排行，下拉刷新试试" systemImage="book" />
+      ) : (
+        <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
+          {activePaged.items.map((novel, index) => (
+            <NovelCard
+              key={novel.id}
+              novel={novel}
+              priority={index}
+              footerText={index < 50 ? `第 ${index + 1} 名` : undefined}
+            />
+          ))}
+          <LoadMoreTrigger
+            anchor={activePaged.items[activePaged.items.length - 1]?.id}
+            onLoadMore={activePaged.loadMore}
+            hasMore={activePaged.hasMore}
+            isLoading={activePaged.loadingMore}
+          />
+        </LazyVStack>
+      )}
+    </VStack>
+  )
+}
+
+function IllustRankingFeedContent(props: {
+  paged: ReturnType<typeof usePagedList<PixivIllustration>>
+  label: string
+}) {
+  const { paged, label } = props
   return (
     <VStack alignment="leading" spacing={10}>
       {paged.initialLoading ? (
@@ -242,7 +490,7 @@ function IllustRankingFeed(props: {
       ) : paged.error && paged.items.length === 0 ? (
         <ErrorView message={paged.error} onRetry={paged.refresh} />
       ) : paged.items.length === 0 ? (
-        <EmptyView text="暂无排行数据，下拉刷新试试" />
+        <EmptyView text={`暂无${label}排行，下拉刷新试试`} />
       ) : (
         <IllustFlowFeed
           items={paged.items}
@@ -253,62 +501,6 @@ function IllustRankingFeed(props: {
             index < 50 ? <ImageNumberBadge number={index + 1} /> : undefined
           }
         />
-      )}
-    </VStack>
-  )
-}
-
-function NovelRankingFeed(props: {
-  mode: NovelRankingMode
-  onRegisterRefresh?: (fn: () => Promise<void>) => void
-}) {
-  const { mode, onRegisterRefresh } = props
-  const paged = usePagedList<PixivNovel>({
-    first: (token) => novelRanking(mode, null, token),
-    more: (nextURL, token) => nextNovels(nextURL, token),
-    filter: filterNovelRankingItems,
-    deps: [mode],
-    onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(novelThumbUrlOf)).cancel
-  })
-
-  useEffect(() => {
-    onRegisterRefresh?.(paged.refresh)
-  }, [paged.refresh, onRegisterRefresh])
-
-  const pagedRef = useLatest(paged)
-  useEffect(() => {
-    return onSettingsChanged(() => {
-      pagedRef.current.reapplyFilter()
-      pagedRef.current.refresh()
-    })
-  }, [])
-
-  return (
-    <VStack alignment="leading" spacing={10}>
-      {paged.initialLoading ? (
-        <LoadingView />
-      ) : paged.error && paged.items.length === 0 ? (
-        <ErrorView message={paged.error} onRetry={paged.refresh} />
-      ) : paged.items.length === 0 ? (
-        <EmptyView text="暂无小说排行，下拉刷新试试" systemImage="book" />
-      ) : (
-        <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
-          {paged.items.map((novel, index) => (
-            <NovelCard
-              key={novel.id}
-              novel={novel}
-              priority={index}
-              footerText={index < 50 ? `第 ${index + 1} 名` : undefined}
-            />
-          ))}
-          <LoadMoreTrigger
-            anchor={paged.items[paged.items.length - 1]?.id}
-            onLoadMore={paged.loadMore}
-            hasMore={paged.hasMore}
-            isLoading={paged.loadingMore}
-          />
-        </LazyVStack>
       )}
     </VStack>
   )

@@ -51,7 +51,6 @@ export function NovelLibraryView() {
   useEffect(() => {
     return onSettingsChanged(() => {
       pagedRef.current.reapplyFilter()
-      pagedRef.current.refresh()
     })
   }, [])
 

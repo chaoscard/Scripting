@@ -11,6 +11,7 @@ export type FeedImageQuality = "medium" | "large"
 export type DetailImageQuality = "medium" | "large" | "original"
 export type DownloadImageQuality = "large" | "original"
 export type CloseButtonAction = "minimize" | "exit"
+export type WatchlistSortOrder = "asc" | "desc"
 
 export interface AppSettings {
   showR18: boolean
@@ -20,6 +21,7 @@ export interface AppSettings {
   blockedTags: string[]
   blockedUsers: BlockedUser[]
   ambientImmersion: boolean
+  watchlistSortOrder: WatchlistSortOrder
   longPressBookmarkAction: "off" | "follow" | "detail"
   closeButtonAction: CloseButtonAction
   feedImageQuality: FeedImageQuality
@@ -38,6 +40,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   blockedTags: [],
   blockedUsers: [],
   ambientImmersion: true,
+  watchlistSortOrder: "asc",
   longPressBookmarkAction: "off",
   closeButtonAction: "minimize",
   feedImageQuality: "medium",
@@ -49,6 +52,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 }
 
 const KEY = "pixiv_settings_v1"
+const WATCHLIST_SORT_VALUES: readonly WatchlistSortOrder[] = ["asc", "desc"]
 const FEED_QUALITY_VALUES: readonly FeedImageQuality[] = ["medium", "large"]
 const DETAIL_QUALITY_VALUES: readonly DetailImageQuality[] = ["medium", "large", "original"]
 const DOWNLOAD_QUALITY_VALUES: readonly DownloadImageQuality[] = ["large", "original"]
@@ -171,6 +175,9 @@ export function loadSettings(): AppSettings {
           .filter((user) => user.id > 0 && user.name.length > 0)
       : DEFAULT_SETTINGS.blockedUsers,
     ambientImmersion: boolOr(stored?.ambientImmersion, DEFAULT_SETTINGS.ambientImmersion),
+    watchlistSortOrder: isOneOf(stored?.watchlistSortOrder, WATCHLIST_SORT_VALUES)
+      ? stored.watchlistSortOrder
+      : DEFAULT_SETTINGS.watchlistSortOrder,
     longPressBookmarkAction: isOneOf(stored?.longPressBookmarkAction, LONG_PRESS_ACTION_VALUES)
       ? stored.longPressBookmarkAction
       : DEFAULT_SETTINGS.longPressBookmarkAction,

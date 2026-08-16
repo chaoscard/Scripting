@@ -59,6 +59,7 @@ export interface PixivIllustration {
   height: number
   x_restrict: number
   series?: PixivSeries | null
+  episode_number?: number
   meta_single_page?: PixivMetaSinglePage
   meta_pages: PixivMetaPage[]
   total_view: number
@@ -324,6 +325,7 @@ export interface PixivNovel {
   text_length?: number
   visible: boolean
   series?: PixivSeries | null
+  episode_number?: number
   image_urls?: {
     square_medium?: string
     medium?: string

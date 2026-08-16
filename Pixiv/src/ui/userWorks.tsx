@@ -131,7 +131,6 @@ function UserWorksIllustFeed(props: {
   useEffect(() => {
     return onSettingsChanged(() => {
       pagedRef.current.reapplyFilter()
-      pagedRef.current.refresh()
     })
   }, [])
 
@@ -178,7 +177,6 @@ function UserWorksNovelFeed(props: {
   useEffect(() => {
     return onSettingsChanged(() => {
       pagedRef.current.reapplyFilter()
-      pagedRef.current.refresh()
     })
   }, [])
 

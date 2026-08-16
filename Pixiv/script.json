@@ -7,11 +7,11 @@
   },
   "remoteResource": {
     "url": "https://raw.githubusercontent.com/chaoscard/Scripting/main/Release/Pixiv.scripting",
-    "hash": "52b0ee34458e7c9560c00c1f80f7c803",
+    "hash": "37ddb1ab9573c7aa9b20fd8d43b439ac",
     "autoUpdateInterval": null
   },
   "contributors": [],
-  "version": "0.8.19",
+  "version": "0.8.20",
   "localizedDescriptions": {
     "zh": "液态玻璃风格 Pixiv 客户端"
   },

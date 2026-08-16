@@ -457,15 +457,17 @@ function formatWatchlistDate(dateStr?: string | null): string {
 // 1. 第一行文本：系列作品
 // 2. 第二行标题：与小说卡片一致
 // 3. 第三行作者：同小说卡片
-// 4. 第四行信息栏：共多少话、更新日期，右侧配置圆形液态玻璃包裹的阅读最新 SF Symbol
-export function MangaWatchlistCard(props: {
+// 追更列表标准卡片：漫画与小说统一采用液态玻璃规范
+export function WatchlistSeriesCard(props: {
   item: PixivWatchlistSeries
+  kind?: "manga" | "novel"
   onAppear?: () => void
 }) {
-  const { item, onAppear } = props
-  const seriesRoute = `mangaSeries:${item.id}`
+  const { item, kind = "manga", onAppear } = props
+  const isNovel = kind === "novel"
+  const seriesRoute = isNovel ? `novelSeries:${item.id}` : `mangaSeries:${item.id}`
   const targetRoute = item.latest_content_id != null
-    ? `illust:${item.latest_content_id}`
+    ? (isNovel ? `novel:${item.latest_content_id}` : `illust:${item.latest_content_id}`)
     : seriesRoute
   const formattedDate = formatWatchlistDate(item.last_published_content_datetime)
 
@@ -516,7 +518,7 @@ export function MangaWatchlistCard(props: {
             frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
           >
             <Text font="caption2" foregroundStyle="secondaryLabel">
-              系列作品
+              {isNovel ? "小说系列" : "系列作品"}
             </Text>
             <Text
               font="subheadline"
@@ -571,82 +573,11 @@ export function MangaWatchlistCard(props: {
   )
 }
 
-// 追更列表标准卡片：漫画走官方 APP 样式，小说保留卡片样式
-export function WatchlistSeriesCard(props: {
+export function MangaWatchlistCard(props: {
   item: PixivWatchlistSeries
-  kind: "manga" | "novel"
   onAppear?: () => void
 }) {
-  const { item, kind, onAppear } = props
-  if (kind === "manga") {
-    return <MangaWatchlistCard item={item} onAppear={onAppear} />
-  }
-
-  const latestRoute = item.latest_content_id == null
-    ? null
-    : `novel:${item.latest_content_id}`
-  const seriesRoute = `novelSeries:${item.id}`
-  const date = item.last_published_content_datetime?.slice(0, 10) ?? ""
-
-  if (item.mask_text) {
-    return (
-      <VStack alignment="leading" spacing={4} padding={14} frame={{ maxWidth: "infinity" }}>
-        <Text foregroundStyle="secondaryLabel">{item.mask_text}</Text>
-      </VStack>
-    )
-  }
-
-  return (
-    <HStack alignment="top" spacing={12} padding={10} onAppear={onAppear}
-      glassEffect={{ type: "rect", cornerRadius: 14 }}
-      shadow={{ color: "#0000000F", radius: 18, y: 8 }}
-      frame={{ maxWidth: "infinity" }}
-    >
-      <CachedImage
-        url={item.url ?? null}
-        cornerRadius={8}
-        contentMode="fit"
-        useIntrinsicAspectRatio={true}
-        frame={{ width: 118, maxHeight: 176 }}
-      />
-      <VStack alignment="leading" spacing={6} frame={{ maxWidth: "infinity" }}>
-        <NavigationLink value={seriesRoute}>
-          <Text
-            font="headline"
-            fontWeight="semibold"
-            multilineTextAlignment="leading"
-            frame={{ maxWidth: "infinity", alignment: "leading" }}
-          >
-            {item.title || "未命名系列"}
-          </Text>
-        </NavigationLink>
-        {item.user?.name ? (
-          <Text font="subheadline" foregroundStyle="secondaryLabel" lineLimit={1}>
-            {item.user.name}
-          </Text>
-        ) : null}
-        <HStack alignment="center" spacing={8}>
-          <Text font="subheadline" foregroundStyle="secondaryLabel">
-            {item.published_content_count} 话{date ? ` · ${date}` : ""}
-          </Text>
-          {latestRoute ? (
-            <NavigationLink value={latestRoute}>
-              <Text
-                font="subheadline"
-                fontWeight="semibold"
-                foregroundStyle="white"
-                padding={{ horizontal: 14, vertical: 8 }}
-                background="#000000"
-                clipShape={{ type: "rect", cornerRadius: 18 }}
-              >
-                阅读
-              </Text>
-            </NavigationLink>
-          ) : null}
-        </HStack>
-      </VStack>
-    </HStack>
-  )
+  return <WatchlistSeriesCard item={props.item} kind="manga" onAppear={props.onAppear} />
 }
 
 // 小说标准卡片：推荐页与收藏页共用，保持封面、标签和统计信息一致。
@@ -784,7 +715,7 @@ export function NovelCard(props: {
                 </Text>
                 <Spacer />
               </HStack>
-              <HStack frame={{ maxWidth: "infinity" }}>
+              <HStack spacing={8} frame={{ maxWidth: "infinity" }}>
                 <Text font="caption2" foregroundStyle="secondaryLabel">
                   ♥ {formatNumber(novel.total_bookmarks)}
                 </Text>
@@ -801,6 +732,11 @@ export function NovelCard(props: {
                       {novel.text_length}
                     </Text>
                   </HStack>
+                ) : null}
+                {novel.episode_number != null ? (
+                  <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={1}>
+                    {`第 ${novel.episode_number} 话`}
+                  </Text>
                 ) : null}
                 {markerPage != null ? (
                   <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={1}>

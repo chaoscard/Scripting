@@ -699,7 +699,6 @@ function RelatedIllustrationsSection(props: {
   useEffect(() => {
     return onSettingsChanged(() => {
       pagedRef.current.reapplyFilter()
-      pagedRef.current.refresh()
     })
   }, [])
 

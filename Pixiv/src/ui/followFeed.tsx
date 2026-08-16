@@ -307,7 +307,7 @@ function WatchlistFeed(props: {
   const pagedRef = useLatest(paged)
   useEffect(() => {
     return onSettingsChanged(() => {
-      pagedRef.current.refresh()
+      pagedRef.current.reapplyFilter()
     })
   }, [])
 
@@ -445,7 +445,6 @@ function useSettingsFilter(
     return onSettingsChanged(() => {
       if (!activeRef.current) return
       pagedRef.current.reapplyFilter()
-      pagedRef.current.refresh()
     })
   }, [])
 }

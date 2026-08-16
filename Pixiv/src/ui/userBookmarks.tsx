@@ -114,7 +114,6 @@ function UserIllustrationBookmarkFeed(props: {
   useEffect(() => {
     return onSettingsChanged(() => {
       pagedRef.current.reapplyFilter()
-      pagedRef.current.refresh()
     })
   }, [])
 
@@ -162,7 +161,6 @@ function UserNovelBookmarkFeed(props: {
   useEffect(() => {
     return onSettingsChanged(() => {
       pagedRef.current.reapplyFilter()
-      pagedRef.current.refresh()
     })
   }, [])
 
