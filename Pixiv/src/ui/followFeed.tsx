@@ -299,7 +299,7 @@ function WatchlistFeed(props: {
     first: (token) =>
       kind === "manga" ? watchlistManga(token) : watchlistNovels(token),
     more: (nextURL, token) => nextWatchlist(nextURL, token),
-    filter: (items) => items,
+    filter: (items) => filterWatchlistItems(items, kind),
     deps: [kind],
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, 10).map(watchlistThumbUrlOf)).cancel
@@ -480,6 +480,17 @@ function filterNovelItems(items: PixivNovel[]): PixivNovel[] {
       isR18ContentVisible(item.x_restrict, settings.showR18, settings.showR18G) &&
       (settings.showAI || item.novel_ai_type !== 2)
   )
+}
+
+function filterWatchlistItems(
+  items: PixivWatchlistSeries[],
+  kind: WatchKind
+): PixivWatchlistSeries[] {
+  return items.filter((item) => {
+    // 隐藏 Pixiv 返回的无权限阅读的作品（如带 mask_text 等限制的作品）
+    if (item.mask_text) return false
+    return true
+  })
 }
 
 function watchlistThumbUrlOf(item: PixivWatchlistSeries): string | null {

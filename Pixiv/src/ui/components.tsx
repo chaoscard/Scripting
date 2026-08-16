@@ -1,5 +1,6 @@
 import {
   Button,
+  Divider,
   FlowLayout,
   Group,
   HStack,
@@ -427,17 +428,166 @@ export function CachedImage(props: {
   )
 }
 
-// 追更列表标准卡片：左侧使用原始比例封面，右侧显示系列信息与操作。
+function formatWatchlistDate(dateStr?: string | null): string {
+  if (!dateStr) return ""
+  try {
+    const d = new Date(dateStr)
+    if (!isNaN(d.getTime())) {
+      const year = d.getFullYear()
+      const month = d.getMonth() + 1
+      const day = d.getDate()
+      return `${year}年${month}月${day}日`
+    }
+  } catch {
+    // ignore
+  }
+  const match = dateStr.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/)
+  if (match) {
+    const [, y, m, day] = match
+    return `${Number(y)}年${Number(m)}月${Number(day)}日`
+  }
+  return dateStr.slice(0, 10)
+}
+
+// 漫画追更卡片（复用小说标准卡片样式并定制）：
+// 1. 第一行文本：系列作品
+// 2. 第二行标题：与小说卡片一致
+// 3. 第三行作者：同小说卡片
+// 4. 第四行信息栏：共多少话、更新日期，右侧配置圆形液态玻璃包裹的阅读最新 SF Symbol
+export function MangaWatchlistCard(props: {
+  item: PixivWatchlistSeries
+  onAppear?: () => void
+}) {
+  const { item, onAppear } = props
+  const seriesRoute = `mangaSeries:${item.id}`
+  const targetRoute = item.latest_content_id != null
+    ? `illust:${item.latest_content_id}`
+    : seriesRoute
+  const formattedDate = formatWatchlistDate(item.last_published_content_datetime)
+
+  if (item.mask_text) {
+    return (
+      <VStack
+        alignment="leading"
+        spacing={4}
+        padding={14}
+        glassEffect={{ type: "rect", cornerRadius: 14 }}
+        shadow={{ color: "#0000000F", radius: 18, y: 8 }}
+        frame={{ maxWidth: "infinity" }}
+      >
+        <Text foregroundStyle="secondaryLabel">{item.mask_text}</Text>
+      </VStack>
+    )
+  }
+
+  return (
+    <ZStack alignment="bottomTrailing" frame={{ maxWidth: "infinity" }}>
+      <NavigationLink value={seriesRoute}>
+        <HStack
+          spacing={10}
+          padding={10}
+          onAppear={onAppear}
+          alignment="top"
+          glassEffect={{ type: "rect", cornerRadius: 14 }}
+          shadow={{ color: "#0000000F", radius: 18, y: 8 }}
+          frame={{ maxWidth: "infinity" }}
+        >
+          <ZStack
+            frame={{ width: 68, height: 96 }}
+            clipShape={{ type: "rect", cornerRadius: 8 }}
+            background="systemGray6"
+          >
+            <CachedImage
+              url={item.url ?? null}
+              aspectRatioValue={0.71}
+              centerCropAspect={0.71}
+              cornerRadius={0}
+              contentMode="fill"
+              frame={{ width: 68, height: 96 }}
+            />
+          </ZStack>
+          <VStack
+            alignment="leading"
+            spacing={4}
+            frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          >
+            <Text font="caption2" foregroundStyle="secondaryLabel">
+              系列作品
+            </Text>
+            <Text
+              font="subheadline"
+              fontWeight="semibold"
+              multilineTextAlignment="leading"
+              lineLimit={2}
+              frame={{ maxWidth: "infinity", alignment: "leading" }}
+              padding={{ trailing: 36 }}
+            >
+              {item.title || "未命名系列"}
+            </Text>
+            <Spacer />
+            {item.user?.name ? (
+              <HStack frame={{ maxWidth: "infinity" }}>
+                <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={1}>
+                  {item.user.name}
+                </Text>
+                <Spacer />
+              </HStack>
+            ) : null}
+            <HStack alignment="center" spacing={8} frame={{ maxWidth: "infinity" }}>
+              <Text font="caption2" foregroundStyle="secondaryLabel">
+                {`共 ${item.published_content_count} 话`}
+              </Text>
+              {formattedDate ? (
+                <Text font="caption2" foregroundStyle="secondaryLabel">
+                  {formattedDate}
+                </Text>
+              ) : null}
+              <Spacer />
+            </HStack>
+          </VStack>
+        </HStack>
+      </NavigationLink>
+      <NavigationLink value={targetRoute}>
+        <ZStack
+          alignment="center"
+          frame={{ width: 34, height: 34 }}
+          zIndex={2}
+          offset={{ x: -8, y: -8 }}
+        >
+          <Button
+            action={() => {}}
+            buttonStyle="glass"
+            buttonBorderShape="circle"
+            clipShape="circle"
+            contentShape="circle"
+            frame={{ width: 34, height: 34 }}
+          >
+            <Image
+              systemName="book"
+              font="subheadline"
+            />
+          </Button>
+        </ZStack>
+      </NavigationLink>
+    </ZStack>
+  )
+}
+
+// 追更列表标准卡片：漫画走官方 APP 样式，小说保留卡片样式
 export function WatchlistSeriesCard(props: {
   item: PixivWatchlistSeries
   kind: "manga" | "novel"
   onAppear?: () => void
 }) {
   const { item, kind, onAppear } = props
+  if (kind === "manga") {
+    return <MangaWatchlistCard item={item} onAppear={onAppear} />
+  }
+
   const latestRoute = item.latest_content_id == null
     ? null
-    : `${kind === "manga" ? "illust" : "novel"}:${item.latest_content_id}`
-  const seriesRoute = `${kind === "manga" ? "mangaSeries" : "novelSeries"}:${item.id}`
+    : `novel:${item.latest_content_id}`
+  const seriesRoute = `novelSeries:${item.id}`
   const date = item.last_published_content_datetime?.slice(0, 10) ?? ""
 
   if (item.mask_text) {
