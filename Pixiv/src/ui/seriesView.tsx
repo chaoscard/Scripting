@@ -24,6 +24,7 @@ import { session } from "../api/session"
 import {
   isIllustContentVisible,
   isR18ContentVisible,
+  isUserBlocked,
   loadSettings,
   onSettingsChanged,
 } from "../store/settings"
@@ -52,42 +53,58 @@ import { renderDestination } from "./routes"
 
 type SeriesKind = "manga" | "novel"
 
-function seriesIllust(item: PixivIllustrationSeriesItem): PixivIllustration {
+function seriesIllust(item: PixivIllustrationSeriesItem, authorFallback: PixivUser | null = null): PixivIllustration {
+  const raw = item as any
+  const illustType = item.illust_type ?? raw.type ?? (raw.illustType === 1 ? "manga" : raw.illustType === 2 ? "ugoira" : "illust")
   return {
-    id: item.id,
-    title: item.title,
-    type: item.illust_type === "ugoira" ? "ugoira" : item.illust_type === "manga" ? "manga" : "illust",
-    image_urls: item.image_urls ?? {},
-    caption: item.caption ?? "",
-    user: item.user ?? { id: 0, name: "", account: "" },
-    tags: item.tags ?? [],
-    create_date: item.create_date,
-    page_count: item.page_count,
-    width: item.width,
-    height: item.height,
-    x_restrict: item.x_restrict ?? 0,
-    meta_single_page: item.meta_single_page,
-    meta_pages: item.meta_pages ?? [],
-    total_view: item.total_view ?? 0,
-    total_bookmarks: item.total_bookmarks ?? 0,
-    is_bookmarked: item.is_bookmarked ?? false,
-    is_muted: item.is_muted ?? false,
-    illust_ai_type: item.illust_ai_type ?? 0,
-    total_comments: item.total_comments ?? 0,
-    comment_access_control: item.comment_access_control ?? 0,
+    id: Number(item.id),
+    title: item.title ?? raw.workTitle ?? "",
+    type: illustType === "ugoira" ? "ugoira" : illustType === "manga" ? "manga" : "illust",
+    image_urls: item.image_urls ?? (raw.urls ? {
+      square_medium: raw.urls["250x250"] ?? raw.url,
+      medium: raw.urls["540x540"] ?? raw.urls["360x360"] ?? raw.url,
+      large: raw.urls["1200x1200"] ?? raw.url,
+    } : { medium: raw.url }),
+    caption: item.caption ?? raw.description ?? "",
+    user: item.user ?? raw.user ?? (raw.userId ? {
+      id: Number(raw.userId),
+      name: raw.userName ?? "",
+      account: raw.userAccount ?? raw.userName ?? "",
+      profile_image_urls: raw.profileImageUrl ? { medium: raw.profileImageUrl } : undefined,
+    } : authorFallback ?? { id: 0, name: "", account: "" }),
+    tags: Array.isArray(item.tags)
+      ? item.tags.map((t: any) => typeof t === "string" ? { name: t } : { name: t.name ?? t.tag ?? "", translated_name: t.translated_name })
+      : [],
+    create_date: item.create_date ?? raw.createDate ?? "",
+    page_count: item.page_count ?? raw.pageCount ?? 1,
+    width: item.width ?? 0,
+    height: item.height ?? 0,
+    x_restrict: item.x_restrict ?? raw.x_restrict ?? raw.xRestrict ?? 0,
+    meta_single_page: item.meta_single_page ?? {},
+    meta_pages: item.meta_pages ?? (raw.meta_pages ? raw.meta_pages : []),
+    total_view: item.total_view ?? raw.total_view ?? raw.totalView ?? 0,
+    total_bookmarks: item.total_bookmarks ?? raw.total_bookmarks ?? raw.totalBookmarks ?? 0,
+    is_bookmarked: item.is_bookmarked ?? raw.is_bookmarked ?? false,
+    is_muted: item.is_muted ?? raw.is_muted ?? false,
+    illust_ai_type: item.illust_ai_type ?? raw.illust_ai_type ?? raw.aiType ?? raw.ai_type ?? 0,
+    total_comments: item.total_comments ?? raw.total_comments ?? raw.totalComments ?? 0,
+    comment_access_control: item.comment_access_control ?? raw.comment_access_control ?? 0,
   }
 }
 
-function filterSeriesIllusts(items: PixivIllustration[]): PixivIllustration[] {
+function filterSeriesIllusts(items: PixivIllustration[], isExempt = false): PixivIllustration[] {
   const settings = loadSettings()
-  return items.filter((item) => isIllustContentVisible(item, settings))
+  return items.filter((item) => isIllustContentVisible(item, settings, isExempt || settings.followFilterExempt))
 }
 
-function filterSeriesNovels(items: PixivNovel[]): PixivNovel[] {
+function filterSeriesNovels(items: PixivNovel[], isExempt = false): PixivNovel[] {
   const settings = loadSettings()
   return items.filter((item) =>
-    isR18ContentVisible(item.x_restrict, settings.showR18, settings.showR18G) &&
-    (settings.showAI || item.novel_ai_type !== 2)
+    (isExempt || settings.followFilterExempt || (
+      isR18ContentVisible(item.x_restrict, settings.showR18, settings.showR18G) &&
+      (settings.showAI || item.novel_ai_type !== 2)
+    )) &&
+    !isUserBlocked(item.user?.id ?? 0, settings.blockedUsers)
   )
 }
 
@@ -193,49 +210,56 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
         const detail = result.illust_series_detail
         setTitle(detail.title || "漫画系列")
         setCaption(detail.caption || "")
-        setWorkCount(detail.series_work_count ?? result.illusts.length)
-        setIsWatched(Boolean(detail.watchlist_added ?? (detail as any).is_watched))
-
-        const cover = extractCoverUrl(
-          detail.cover_image_urls ?? detail.url,
-          result.illust_series_first_illust?.image_urls,
-          result.illusts[0]?.image_urls
-        )
-        setCoverUrl(cover)
+        const isExempt = Boolean(detail.watchlist_added ?? (detail as any).is_watched)
+        setIsWatched(isExempt)
 
         const seriesAuthor =
           detail.user ??
           result.illust_series_first_illust?.user ??
-          result.illusts[0]?.user ??
+          result.illusts?.[0]?.user ??
           null
         setAuthor(seriesAuthor)
 
+        const cover = extractCoverUrl(
+          detail.cover_image_urls ?? detail.url,
+          result.illust_series_first_illust?.image_urls,
+          result.illusts?.[0]?.image_urls
+        )
+        setCoverUrl(cover)
+
+        const rawIllusts = Array.isArray(result.illusts) ? result.illusts : []
+        const mappedIllusts = rawIllusts.map((it) => seriesIllust(it, seriesAuthor))
+        setWorkCount(detail.series_work_count ?? rawIllusts.length)
+
         setNovels([])
         setNextURL(result.next_url ?? null)
-        setItems(filterSeriesIllusts(result.illusts.map(seriesIllust)))
+        setItems(filterSeriesIllusts(mappedIllusts, isExempt))
       } else {
         const result = await session.call((token) => novelSeries(props.seriesID, token))
         const detail = result.novel_series_detail
         setTitle(detail.title || "小说系列")
         setCaption(detail.caption || "")
-        setWorkCount(detail.content_count ?? result.novels.length)
-        setIsWatched(Boolean(detail.watchlist_added ?? (detail as any).is_watched))
-
-        const cover = extractCoverUrl(
-          detail.cover_image_urls ?? detail.url,
-          result.novel_series_first_novel?.image_urls,
-          result.novels[0]?.image_urls
-        )
-        setCoverUrl(cover)
+        const isExempt = Boolean(detail.watchlist_added ?? (detail as any).is_watched)
+        setIsWatched(isExempt)
 
         const seriesAuthor =
           detail.user ??
           result.novel_series_first_novel?.user ??
-          result.novels[0]?.user ??
+          result.novels?.[0]?.user ??
           null
         setAuthor(seriesAuthor)
 
-        setNovels(filterSeriesNovels(result.novels))
+        const cover = extractCoverUrl(
+          detail.cover_image_urls ?? detail.url,
+          result.novel_series_first_novel?.image_urls,
+          result.novels?.[0]?.image_urls
+        )
+        setCoverUrl(cover)
+
+        const rawNovels = Array.isArray(result.novels) ? result.novels : []
+        setWorkCount(detail.content_count ?? rawNovels.length)
+
+        setNovels(filterSeriesNovels(rawNovels, isExempt))
         setNextURL(result.next_url ?? null)
         setItems([])
       }
@@ -252,7 +276,8 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
     try {
       if (props.kind === "novel") {
         const result = await session.call((token) => nextNovelSeries(nextURL, token))
-        const filtered = filterSeriesNovels(result.novels)
+        const rawNovels = Array.isArray(result.novels) ? result.novels : []
+        const filtered = filterSeriesNovels(rawNovels, isWatched)
         setNovels((current) => {
           const seen = new Set(current.map((novel) => novel.id))
           return [...current, ...filtered.filter((novel) => !seen.has(novel.id))]
@@ -260,7 +285,9 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
         setNextURL(result.next_url ?? null)
       } else {
         const result = await session.call((token) => nextIllustrationSeries(nextURL, token))
-        const filtered = filterSeriesIllusts(result.illusts.map(seriesIllust))
+        const rawIllusts = Array.isArray(result.illusts) ? result.illusts : []
+        const mappedIllusts = rawIllusts.map((it) => seriesIllust(it, author))
+        const filtered = filterSeriesIllusts(mappedIllusts, isWatched)
         setItems((current) => {
           const seen = new Set(current.map((item) => item.id))
           return [...current, ...filtered.filter((item) => !seen.has(item.id))]
@@ -454,42 +481,49 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
         </VStack>
 
         {/* 章节列表 */}
-        <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10, top: 4 }}>
-          {props.kind === "novel" ? (
-            <>
-              {displayNovels.length === 0 ? (
-                <EmptyView
-                  text="暂无可显示的小说章节"
-                  systemImage="book"
+        {props.kind === "novel" ? (
+          <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10, top: 4 }}>
+            {displayNovels.length === 0 ? (
+              <EmptyView
+                text="暂无可显示的小说章节"
+                systemImage="book"
+              />
+            ) : (
+              <>
+                {displayNovels.map((novel, index) => (
+                  <NovelCard key={novel.id} novel={novel} priority={index} />
+                ))}
+                <LoadMoreTrigger
+                  anchor={novels[novels.length - 1].id}
+                  onLoadMore={loadMore}
+                  hasMore={nextURL != null}
+                  isLoading={loadingMore}
                 />
-              ) : (
-                <>
-                  {displayNovels.map((novel, index) => (
-                    <NovelCard key={novel.id} novel={novel} priority={index} />
-                  ))}
-                  <LoadMoreTrigger
-                    anchor={novels[novels.length - 1].id}
-                    onLoadMore={loadMore}
-                    hasMore={nextURL != null}
-                    isLoading={loadingMore}
+              </>
+            )}
+          </LazyVStack>
+        ) : (
+          <VStack alignment="leading" spacing={8} padding={{ top: 4 }} frame={{ maxWidth: "infinity" }}>
+            {displayItems.length === 0 ? (
+              <EmptyView
+                text="暂无可显示的漫画章节"
+                systemImage="photo.on.rectangle"
+              />
+            ) : (
+              <IllustFlowFeed
+                items={displayItems}
+                onLoadMore={loadMore}
+                hasMore={nextURL != null}
+                isLoading={loadingMore}
+                cornerBadgeOf={(_, index) => (
+                  <ImageNumberBadge
+                    number={isAscending ? index + 1 : items.length - index}
                   />
-                </>
-              )}
-            </>
-          ) : (
-            <IllustFlowFeed
-              items={displayItems}
-              onLoadMore={loadMore}
-              hasMore={nextURL != null}
-              isLoading={loadingMore}
-              cornerBadgeOf={(_, index) => (
-                <ImageNumberBadge
-                  number={isAscending ? index + 1 : items.length - index}
-                />
-              )}
-            />
-          )}
-        </LazyVStack>
+                )}
+              />
+            )}
+          </VStack>
+        )}
       </VStack>
     </RefreshableScrollView>
   )
