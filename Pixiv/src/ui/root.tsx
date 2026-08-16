@@ -20,6 +20,7 @@ import { SearchView } from "./search"
 import { MoreView } from "./more"
 import { LoginView } from "./login"
 import { FollowFeedView } from "./followFeed"
+import { setPixivRouteNavigator } from "./routeNavigation"
 
 function LaunchExperienceView() {
   return (
@@ -110,33 +111,55 @@ export function TabNavigationStack(props: { children: any }) {
 
 function MainTabView(props: { onClose: () => void }) {
   const selection = useObservable<string>("discovery")
+  const discoveryPath = useObservable<string[]>([])
+  const rankingPath = useObservable<string[]>([])
+  const followingPath = useObservable<string[]>([])
+  const searchPath = useObservable<string[]>([])
+  const morePath = useObservable<string[]>([])
+
+  useEffect(() => {
+    return setPixivRouteNavigator((route: string) => {
+      const activeTab = selection.value
+      if (activeTab === "ranking") {
+        rankingPath.setValue([...rankingPath.value, route])
+      } else if (activeTab === "following") {
+        followingPath.setValue([...followingPath.value, route])
+      } else if (activeTab === "search") {
+        searchPath.setValue([...searchPath.value, route])
+      } else if (activeTab === "more") {
+        morePath.setValue([...morePath.value, route])
+      } else {
+        discoveryPath.setValue([...discoveryPath.value, route])
+      }
+    })
+  }, [selection, discoveryPath, rankingPath, followingPath, searchPath, morePath])
 
   return (
     <TabView selection={selection} tabBarMinimizeBehavior="onScrollDown">
       <Tab title="探索" systemImage="photo.on.rectangle.angled" value="discovery">
-        <TabNavigationStack>
+        <NavigationStack path={discoveryPath}>
           <DiscoveryView onClose={props.onClose} />
-        </TabNavigationStack>
+        </NavigationStack>
       </Tab>
       <Tab title="排行" systemImage="trophy" value="ranking">
-        <TabNavigationStack>
+        <NavigationStack path={rankingPath}>
           <RankingView onClose={props.onClose} />
-        </TabNavigationStack>
+        </NavigationStack>
       </Tab>
       <Tab title="关注" systemImage="person.2.fill" value="following">
-        <TabNavigationStack>
+        <NavigationStack path={followingPath}>
           <FollowFeedView onClose={props.onClose} />
-        </TabNavigationStack>
+        </NavigationStack>
       </Tab>
       <Tab title="搜索" systemImage="magnifyingglass" value="search" role="search">
-        <TabNavigationStack>
+        <NavigationStack path={searchPath}>
           <SearchView onClose={props.onClose} />
-        </TabNavigationStack>
+        </NavigationStack>
       </Tab>
       <Tab title="我的" systemImage="person.crop.circle" value="more">
-        <TabNavigationStack>
+        <NavigationStack path={morePath}>
           <MoreView onClose={props.onClose} />
-        </TabNavigationStack>
+        </NavigationStack>
       </Tab>
     </TabView>
   )

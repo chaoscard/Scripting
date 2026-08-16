@@ -52,6 +52,7 @@ import {
 import { session } from "../api/session"
 import { blockTag, loadSettings } from "../store/settings"
 import { useLatest, useTimedFlag } from "./hooks"
+import { requestPixivRoute } from "./routeNavigation"
 import type {
   PixivIllustration,
   PixivBookmarkDetail,
@@ -1773,16 +1774,7 @@ export function LinkedDescription(props: {
             foregroundColor: "#007AFF",
             underlineStyle: "single",
             onTapGesture: () => {
-              if (props.routeDestination) {
-                const dest = props.routeDestination(target)
-                if (dest) {
-                  void Navigation.present(
-                    <NavigationStack>
-                      {dest}
-                    </NavigationStack>
-                  )
-                }
-              }
+              requestPixivRoute(target)
             },
           })
         }
