@@ -5,8 +5,8 @@ import { AvatarImage, presentExternalURL } from "./components"
 const GITHUB_AVATAR_URL = "https://avatars.githubusercontent.com/u/16934707?v=4"
 const HANA_IRO_AVATAR_URL = "https://github.com/youshen2.png?size=128"
 const NPM_ICON_URL = "https://static-production.npmjs.com/b0f1a8318363185cc2ea6a40ac23eeb2.png"
-const SCRIPTING_APP_CHAT_AVATAR_URL = "https://cdn5.telesco.pe/file/ElsERgk-N3nJ6rA-QoBaZefimbCb-IP1-Oenvu6nDNGopMo5iOahqtjuwoOITGtB6BlBQgkXuTq266GUszVyb-d9SDqbgAZR0STgteNeJwL8xjJniuwaGWJrBI4jZEVLxt2YAq7AbxyDqryBxgeaYvHDBZTnxfNMR4Nvwy79jE9nFvCQlPbjUmZVOsI3gDN1TyEtxpoVpovxmmFWxwHp3UFoyRmldGDaUH6jvF30MY5ticucfgKGbCM6eDertIkobdUFO8XbaRhYZtqGTqwy4QyhgP2T8VTbxuhluJQmD39zM-RVXzGvky_cDoiSDJ3EFrK1CUWPCfjiuDjJDKhsIg.jpg"
-const MINI_BILI_GROUP_AVATAR_URL = "https://cdn5.telesco.pe/file/q2bF57-_FcJxveeZHNNXJ5_Z-OWbm3AfSqHRDjmIbvSX6h4fbg8dK5BLxDHRRVZH9cewLol6WMvnt5BL-cmIkcrjwLtm4fz7Q29Zjr8rz5z6qMMIzsCJROnDsOaCD3-nTs72ONhHkEuND1FCMAI2bb7ifXJasMxVcHnBLhrr-Wd2KIysBN0iCq8_aK7WaUQQQ8KTJMuQ3lG-7Nv35NJW_SPzMDC-tj_UQlCHR81dr7u8krfCEu9gsSH1n6ubN4_r9r39pjI0BgZSlBKK4Amls0PD_ETsdWp6QsvB9TgCYzhVtA3c7d6RkAdtbvBY5Cg5G-eCegGo6cqtiBgRPAvOuA.jpg"
+const SCRIPTING_APP_ICON_URL = "https://www.scripting.fun/assets/imgs/Icon-App.png"
+const MINI_BILI_ICON_URL = "https://raw.githubusercontent.com/ResistanceTo/MiniBili-WEB/main/public/MiniBili.png"
 
 export function AboutView() {
   return (
@@ -41,12 +41,14 @@ export function AboutView() {
         <ExternalLinkRow
           title="Scripting App Chat"
           url="https://t.me/scriptingappchat"
-          avatarURL={SCRIPTING_APP_CHAT_AVATAR_URL}
+          avatarURL={SCRIPTING_APP_ICON_URL}
+          avatarCornerRadius={6}
         />
         <ExternalLinkRow
           title="MiniBili Group"
           url="https://t.me/MiniBiliGroup"
-          avatarURL={MINI_BILI_GROUP_AVATAR_URL}
+          avatarURL={MINI_BILI_ICON_URL}
+          avatarCornerRadius={6}
         />
       </Section>
     </List>
