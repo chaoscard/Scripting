@@ -1,5 +1,6 @@
 import {
   Button,
+  FlowLayout,
   HStack,
   LazyVStack,
   NavigationLink,
@@ -28,15 +29,13 @@ import {
 import {
   AvatarImage,
   ErrorView,
-  estimateChipWidth,
   formatDate,
   formatNumber,
   InfoCard,
   LoadingView,
-  wrapTags,
+  TagChip,
 } from "./components"
 
-const TAG_ROW_WIDTH = 320
 const RESTRICTED_CONTENT_MESSAGE = "该小说已被内容分级设置隐藏"
 const TEXT_CHUNK_SIZE = 2000
 
@@ -241,19 +240,21 @@ export function NovelDetailView(props: { novelID: number }) {
 
         {current.tags.length > 0 ? (
           <VStack alignment="leading" spacing={6}>
-            {wrapTags(
-              current.tags,
-              TAG_ROW_WIDTH,
-              (tag) => estimateChipWidth(`#${tag.name}`)
-            ).map((row, ri) => (
-              <HStack key={ri} spacing={6}>
-                {row.map((tag) => (
-                  <Text key={tag.name} font="caption2" foregroundStyle="#0096FA">
-                    #{tag.name}
-                  </Text>
-                ))}
-              </HStack>
-            ))}
+            <Text font="subheadline" fontWeight="semibold">
+              标签
+            </Text>
+            <FlowLayout spacing={6}>
+              {current.tags.map((tag) => (
+                <TagChip
+                  key={tag.name}
+                  name={tag.name}
+                  tagName={tag.name}
+                  translatedName={tag.translated_name ?? undefined}
+                  value={`tag:${encodeURIComponent(tag.name)}`}
+                  compact
+                />
+              ))}
+            </FlowLayout>
           </VStack>
         ) : null}
 

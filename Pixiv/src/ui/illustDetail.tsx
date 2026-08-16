@@ -1,6 +1,7 @@
 import {
   Button,
   Divider,
+  FlowLayout,
   Group,
   HStack,
   LongPressGesture,
@@ -53,14 +54,12 @@ import {
   CachedImage,
   ErrorView,
   IllustFlowFeed,
-  estimateChipWidth,
   formatDate,
   formatNumber,
   htmlToPlainText,
   LinkedDescription,
   LoadingView,
   TagChip,
-  wrapTags,
 } from "./components"
 import { CommentsSheet } from "./comments"
 import { UgoiraPlayerView } from "./ugoiraView"
@@ -618,35 +617,24 @@ export function IllustDetailView(props: { illustID: number }) {
             </VStack>
           ) : null}
 
-          {/* 标签：流式换行展示所有标签 */}
+          {/* 标签：原生流式换行展示所有标签 */}
           {current.tags.length > 0 ? (
             <VStack alignment="leading" spacing={6}>
               <Text font="subheadline" fontWeight="semibold">
                 标签
               </Text>
-              <VStack alignment="leading" spacing={6}>
-                {wrapTags(
-                  current.tags,
-                  280,
-                  (tag) =>
-                    estimateChipWidth(
-                      `#${tag.name}${tag.translated_name ? ` ${tag.translated_name}` : ""}`
-                    )
-                ).map((row, ri) => (
-                  <HStack key={ri} spacing={6}>
-                    {row.map((tag) => (
-                      <TagChip
-                        key={tag.name}
-                        name={tag.name}
-                        tagName={tag.name}
-                        translatedName={tag.translated_name ?? undefined}
-                        value={`tag:${encodeURIComponent(tag.name)}`}
-                        compact
-                      />
-                    ))}
-                  </HStack>
+              <FlowLayout spacing={6}>
+                {current.tags.map((tag) => (
+                  <TagChip
+                    key={tag.name}
+                    name={tag.name}
+                    tagName={tag.name}
+                    translatedName={tag.translated_name ?? undefined}
+                    value={`tag:${encodeURIComponent(tag.name)}`}
+                    compact
+                  />
                 ))}
-              </VStack>
+              </FlowLayout>
             </VStack>
           ) : null}
         </VStack>

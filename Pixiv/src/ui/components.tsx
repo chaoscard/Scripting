@@ -501,9 +501,6 @@ export function WatchlistSeriesCard(props: {
   )
 }
 
-// 标签行按可用宽度预先分组。
-const NOVEL_TAG_MAX_WIDTH = 260
-
 // 小说标准卡片：推荐页与收藏页共用，保持封面、标签和统计信息一致。
 export function NovelCard(props: {
   novel: PixivNovel
@@ -620,28 +617,18 @@ export function NovelCard(props: {
               >
                 {novel.title}
               </Text>
-              <VStack alignment="leading" spacing={2}>
-                {wrapTags(
-                  novel.tags,
-                  NOVEL_TAG_MAX_WIDTH,
-                  (tag) => estimateTextWidth(`${tag.name} `),
-                  0
-                ).map((row, ri) => (
-                  <HStack key={ri} spacing={0} frame={{ maxWidth: "infinity" }}>
-                    {row.map((tag) => (
-                      <Text
-                        key={tag.name}
-                        font="caption2"
-                        foregroundStyle="secondaryLabel"
-                        lineLimit={1}
-                      >
-                        {tag.name}{" "}
-                      </Text>
-                    ))}
-                    <Spacer />
-                  </HStack>
+              <FlowLayout horizontalSpacing={4} verticalSpacing={2}>
+                {novel.tags.map((tag) => (
+                  <Text
+                    key={tag.name}
+                    font="caption2"
+                    foregroundStyle="secondaryLabel"
+                    lineLimit={1}
+                  >
+                    #{tag.name}
+                  </Text>
                 ))}
-              </VStack>
+              </FlowLayout>
               <Spacer />
               <HStack frame={{ maxWidth: "infinity" }}>
                 <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={1}>
@@ -1307,29 +1294,20 @@ export function BookmarkDetailSheet(props: {
             暂无常用标签
           </Text>
         ) : (
-          <VStack alignment="leading" spacing={8}>
-            {wrapTags(
-              availableTags,
-              350,
-              (tag) => estimateChipWidth(`#${tag.name}`),
-              8
-            ).map((row, rowIndex) => (
-              <HStack key={rowIndex} spacing={8}>
-                {row.map((tag) => {
-                  const selected = selectedTags.includes(tag.name)
-                  return (
-                    <Button
-                      key={tag.name}
-                      title={`${selected ? "✓ " : ""}#${tag.name}`}
-                      buttonStyle={selected ? "glassProminent" : "glass"}
-                      controlSize="mini"
-                      action={() => toggleTag(tag.name)}
-                    />
-                  )
-                })}
-              </HStack>
-            ))}
-          </VStack>
+          <FlowLayout spacing={8}>
+            {availableTags.map((tag) => {
+              const selected = selectedTags.includes(tag.name)
+              return (
+                <Button
+                  key={tag.name}
+                  title={`${selected ? "✓ " : ""}#${tag.name}`}
+                  buttonStyle={selected ? "glassProminent" : "glass"}
+                  controlSize="mini"
+                  action={() => toggleTag(tag.name)}
+                />
+              )
+            })}
+          </FlowLayout>
         )}
       </ScrollView>
       <HStack spacing={8} frame={{ maxWidth: "infinity" }} padding={{ top: 10 }}>
