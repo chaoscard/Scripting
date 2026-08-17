@@ -716,13 +716,16 @@ export function NovelCard(props: {
                 <Spacer />
               </HStack>
               <HStack spacing={8} frame={{ maxWidth: "infinity" }}>
-                <Text font="caption2" foregroundStyle="secondaryLabel">
-                  ♥ {formatNumber(novel.total_bookmarks)}
-                </Text>
                 <HStack spacing={4}>
                   <Image systemName="eye" font="caption2" foregroundStyle="secondaryLabel" />
                   <Text font="caption2" foregroundStyle="secondaryLabel">
                     {formatNumber(novel.total_view)}
+                  </Text>
+                </HStack>
+                <HStack spacing={4}>
+                  <Image systemName="heart" font="caption2" foregroundStyle="secondaryLabel" />
+                  <Text font="caption2" foregroundStyle="secondaryLabel">
+                    {formatNumber(novel.total_bookmarks)}
                   </Text>
                 </HStack>
                 {novel.text_length != null ? (
@@ -1024,21 +1027,6 @@ export function IllustCard(props: {
           >
             <HStack spacing={2} fixedSize={{ horizontal: true, vertical: false }}>
               <Image
-                systemName="heart"
-                font="caption2"
-                foregroundStyle="label"
-              />
-              <Text
-                font="caption2"
-                foregroundStyle="secondaryLabel"
-                lineLimit={1}
-                fixedSize={{ horizontal: true, vertical: false }}
-              >
-                {formatNumber(illust.total_bookmarks)}
-              </Text>
-            </HStack>
-            <HStack spacing={2} fixedSize={{ horizontal: true, vertical: false }}>
-              <Image
                 systemName="eye"
                 font="caption2"
                 foregroundStyle="secondaryLabel"
@@ -1050,6 +1038,21 @@ export function IllustCard(props: {
                 fixedSize={{ horizontal: true, vertical: false }}
               >
                 {formatNumber(illust.total_view)}
+              </Text>
+            </HStack>
+            <HStack spacing={2} fixedSize={{ horizontal: true, vertical: false }}>
+              <Image
+                systemName="heart"
+                font="caption2"
+                foregroundStyle="secondaryLabel"
+              />
+              <Text
+                font="caption2"
+                foregroundStyle="secondaryLabel"
+                lineLimit={1}
+                fixedSize={{ horizontal: true, vertical: false }}
+              >
+                {formatNumber(illust.total_bookmarks)}
               </Text>
             </HStack>
           </HStack>
@@ -2141,7 +2144,7 @@ export function IllustStats(props: { illust: PixivIllustration }) {
   const { illust } = props
   return (
     <Text font="caption" foregroundStyle="secondaryLabel">
-      ♥ {formatNumber(illust.total_bookmarks)} · 👁 {formatNumber(illust.total_view)}
+      👁 {formatNumber(illust.total_view)} · ♥ {formatNumber(illust.total_bookmarks)}
     </Text>
   )
 }

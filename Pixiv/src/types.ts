@@ -350,6 +350,8 @@ export interface PixivNovelDetail {
   title: string
   user: PixivUser
   tags: PixivTag[]
+  caption?: string
+  text_length?: number
   create_date: string
   page_count: number
   x_restrict: number
@@ -358,6 +360,7 @@ export interface PixivNovelDetail {
   is_bookmarked: boolean
   total_comments: number
   cover?: { urls?: { "240mw"?: string; "480mw"?: string; "1200x1200"?: string } }
+  image_urls?: PixivImageUrls | null
   content: string
   series?: {
     id: number

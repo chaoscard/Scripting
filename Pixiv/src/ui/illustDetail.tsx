@@ -65,6 +65,7 @@ import { CommentsSheet } from "./comments"
 import { UgoiraPlayerView } from "./ugoiraView"
 import { buildUgoira } from "../ugoira/ugoira"
 import { renderDestination } from "./routes"
+import { requestPixivRoute } from "./routeNavigation"
 
 const RESTRICTED_CONTENT_MESSAGE = "该作品已被内容分级设置隐藏"
 
@@ -466,6 +467,13 @@ export function IllustDetailView(props: { illustID: number }) {
               systemImage="bubble.left"
               action={() => setShowComments(true)}
             />
+            {Boolean(current.series?.id) && (
+              <Button
+                title="系列"
+                systemImage="books.vertical"
+                action={() => requestPixivRoute(`mangaSeries:${current.series!.id}`)}
+              />
+            )}
             <Button
               title="下载"
               systemImage="square.and.arrow.down"
@@ -494,6 +502,18 @@ export function IllustDetailView(props: { illustID: number }) {
                 title={`PID：${current.id}`}
                 action={() => Pasteboard.setString(String(current.id))}
               />
+              {Boolean(current.series?.id) && (
+                <Button
+                  title={`系列：${current.series?.title ?? "未知系列"}`}
+                  action={() => Pasteboard.setString(current.series?.title ?? "")}
+                />
+              )}
+              {Boolean(current.series?.id) && (
+                <Button
+                  title={`SID：${current.series?.id}`}
+                  action={() => Pasteboard.setString(String(current.series?.id))}
+                />
+              )}
               {pageCount > 1 && (
                 <Button
                   title={`页数：${pageCount}页`}
@@ -567,10 +587,10 @@ export function IllustDetailView(props: { illustID: number }) {
         </VStack>
 
         <VStack alignment="leading" spacing={8} padding={{ horizontal: 14 }}>
-          {/* 数据 */}
+          {/* 信息 */}
           <VStack alignment="leading" spacing={6}>
             <Text font="subheadline" fontWeight="semibold">
-              数据
+              信息
             </Text>
             <HStack spacing={10}>
               <HStack spacing={3}>
@@ -591,6 +611,14 @@ export function IllustDetailView(props: { illustID: number }) {
                   {formatNumber(current.total_comments)}
                 </Text>
               </HStack>
+              {pageCount > 1 && (
+                <HStack spacing={3}>
+                  <Image systemName="rectangle.stack" font="footnote" foregroundStyle="secondaryLabel" />
+                  <Text font="footnote" foregroundStyle="secondaryLabel">
+                    {pageCount}P
+                  </Text>
+                </HStack>
+              )}
               <Text font="footnote" foregroundStyle="secondaryLabel">
                 {formatDate(current.create_date)}
               </Text>
@@ -599,9 +627,16 @@ export function IllustDetailView(props: { illustID: number }) {
 
           {/* 系列 */}
           {current.series ? (
-            <Text font="footnote" foregroundStyle="secondaryLabel">
-              系列：{current.series.title ?? "未知系列"}
-            </Text>
+            <VStack alignment="leading" spacing={4}>
+              <Text font="subheadline" fontWeight="semibold">
+                系列
+              </Text>
+              <NavigationLink value={`mangaSeries:${current.series.id}`}>
+                <Text font="footnote" foregroundStyle="#007AFF">
+                  {current.series.title ?? "未知系列"}
+                </Text>
+              </NavigationLink>
+            </VStack>
           ) : null}
 
           {/* 简介（Pixiv caption 为 HTML，转纯文本显示） */}

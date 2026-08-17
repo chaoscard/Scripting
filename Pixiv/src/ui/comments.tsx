@@ -11,7 +11,7 @@ import {
   useState,
   VStack,
 } from "scripting"
-import { comments, nextComments, postComment } from "../api/pixiv"
+import { comments, nextComments, postComment, novelComments, postNovelComment } from "../api/pixiv"
 import { session } from "../api/session"
 import { destinationElement } from "./routes"
 import { dedupeByID, mergeUniqueByID } from "./hooks"
@@ -25,8 +25,8 @@ import {
   LoadMoreTrigger,
 } from "./components"
 
-export function CommentsSheet(props: { illustID: number }) {
-  const { illustID } = props
+export function CommentsSheet(props: { illustID?: number; novelID?: number }) {
+  const { illustID, novelID } = props
   const [items, setItems] = useState<PixivComment[]>([])
   const [nextURL, setNextURL] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -45,7 +45,9 @@ export function CommentsSheet(props: { illustID: number }) {
     setLoading(true)
     setError(null)
     try {
-      const page = await session.call((token) => comments(illustID, token))
+      const page = await session.call((token) =>
+        novelID != null ? novelComments(novelID, token) : comments(illustID ?? 0, token)
+      )
       if (seq !== seqRef.current) return
       setItems(dedupeByID(page.items))
       setNextURL(page.nextURL)
@@ -59,7 +61,7 @@ export function CommentsSheet(props: { illustID: number }) {
   useEffect(() => {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [illustID])
+  }, [illustID, novelID])
 
   async function send() {
     const content = text.trim()
@@ -67,7 +69,11 @@ export function CommentsSheet(props: { illustID: number }) {
     setPosting(true)
     setPostError(null)
     try {
-      await session.call((token) => postComment(illustID, content, null, token))
+      if (novelID != null) {
+        await session.call((token) => postNovelComment(novelID, content, null, token))
+      } else {
+        await session.call((token) => postComment(illustID ?? 0, content, null, token))
+      }
       setText("")
       await load()
     } catch (err: any) {

@@ -1089,6 +1089,22 @@ export async function novelComments(
   return { items: json?.comments ?? [], nextURL: json?.next_url ?? null }
 }
 
+export async function postNovelComment(
+  novelID: number,
+  comment: string,
+  parentCommentID: number | null,
+  accessToken: string
+): Promise<void> {
+  const form: Record<string, string> = {
+    novel_id: String(novelID),
+    comment,
+  }
+  if (parentCommentID != null) {
+    form["parent_comment_id"] = String(parentCommentID)
+  }
+  await apiPost("/v1/novel/comment/add", form, accessToken)
+}
+
 export async function novelBookmarkTags(
   restrict: Visibility,
   accessToken: string
