@@ -70,6 +70,7 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number }) {
   const [replyTarget, setReplyTarget] = useState<{
     id: number
     name: string
+    seq: number
   } | null>(null)
 
   // 表情/贴图面板状态
@@ -291,7 +292,8 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number }) {
   }
 
   function handleReply(comment: PixivComment) {
-    setReplyTarget({ id: comment.id, name: comment.user.name })
+    setShowEmotePanel(false)
+    setReplyTarget({ id: comment.id, name: comment.user.name, seq: Date.now() })
   }
 
   function handleSelectEmoji(emojiCode: string) {
@@ -417,19 +419,21 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number }) {
             frame={{ maxWidth: "infinity" }}
           >
             <Button
-              title="表情"
+              title={showEmotePanel ? "键盘" : "表情"}
               systemImage={showEmotePanel ? "keyboard" : "face.smiling"}
               tint={showEmotePanel ? "#0096FA" : undefined}
               buttonStyle="glass"
               action={() => setShowEmotePanel((prev) => !prev)}
             />
             <TextField
+              key={replyTarget ? `reply-${replyTarget.seq}` : "comment-default"}
               title="评论"
               value={text}
               onChanged={setText}
               onSubmit={sendText}
               prompt={replyTarget ? `回复 @${replyTarget.name}…` : "写下你的评论…"}
               submitLabel="send"
+              autofocus={replyTarget != null}
               frame={{ maxWidth: "infinity" }}
             />
             <Button
@@ -801,11 +805,7 @@ function EmotePickerPanel(props: {
               />
             ))}
           </Menu>
-        ) : (
-          <Text font="caption2" foregroundStyle="secondaryLabel">
-            点击插入表情
-          </Text>
-        )}
+        ) : null}
       </HStack>
 
       {/* 内容区域：Emoji 列表 或 Stamp 列表 */}
