@@ -15,6 +15,7 @@ import {
   EmptyView,
   formatDate,
   IllustFlowFeed,
+  LoadMoreTrigger,
   NovelCard,
   RefreshableScrollView,
 } from "./components"
@@ -33,7 +34,10 @@ import {
   loadSettings,
   onSettingsChanged,
 } from "../store/settings"
+import { cardThumbUrlOf, novelThumbUrlOf, prefetch } from "../image/imageLoader"
 import type { PixivNovel } from "../types"
+
+const UI_BATCH_SIZE = 10
 
 type HistoryKind = HistoryContentKind
 
@@ -188,7 +192,44 @@ function HistoryFeed(props: {
 }
 
 function HistoryContent(props: { kind: HistoryKind; items: HistoryEntry[] }) {
-  const [visibleCount, setVisibleCount] = useState(10)
+  const [visibleCount, setVisibleCount] = useState(UI_BATCH_SIZE)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const loadingMoreLockRef = useRef(false)
+  const prevKindRef = useRef(props.kind)
+  const prefetchTaskRef = useRef<{ cancel: () => void } | null>(null)
+
+  useEffect(() => {
+    if (prevKindRef.current !== props.kind) {
+      prevKindRef.current = props.kind
+      setVisibleCount(UI_BATCH_SIZE)
+      loadingMoreLockRef.current = false
+      setLoadingMore(false)
+    }
+  }, [props.kind])
+
+  useEffect(() => {
+    prefetchTaskRef.current?.cancel()
+    if (props.kind === "novel") {
+      const novels = props.items.filter(
+        (entry): entry is Extract<HistoryEntry, { kind: "novel" }> =>
+          entry.kind === "novel"
+      )
+      const nextNovels = novels.slice(visibleCount, visibleCount + UI_BATCH_SIZE)
+      prefetchTaskRef.current = prefetch(
+        nextNovels.map((e) => novelThumbUrlOf(e.novel as PixivNovel))
+      )
+    } else {
+      const illustEntries = props.items.filter(
+        (entry): entry is Extract<HistoryEntry, { kind: "illust" }> =>
+          entry.kind === "illust"
+      )
+      const nextIllusts = illustEntries.slice(visibleCount, visibleCount + UI_BATCH_SIZE)
+      prefetchTaskRef.current = prefetch(
+        nextIllusts.map((e) => cardThumbUrlOf(e.illustration))
+      )
+    }
+    return () => prefetchTaskRef.current?.cancel()
+  }, [visibleCount, props.kind, props.items])
 
   if (props.items.length === 0) {
     const text =
@@ -205,6 +246,21 @@ function HistoryContent(props: { kind: HistoryKind; items: HistoryEntry[] }) {
     )
     const visibleNovels = novels.slice(0, visibleCount)
     const lastNovel = visibleNovels[visibleNovels.length - 1]
+
+    async function loadMoreNovels() {
+      if (loadingMoreLockRef.current || visibleCount >= novels.length) return
+      loadingMoreLockRef.current = true
+      setLoadingMore(true)
+      try {
+        // 缓冲 1300ms：确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
+        await new Promise((resolve) => setTimeout(() => resolve(undefined), 1300))
+        setVisibleCount((c) => Math.min(c + UI_BATCH_SIZE, novels.length))
+      } finally {
+        loadingMoreLockRef.current = false
+        setLoadingMore(false)
+      }
+    }
+
     return (
       <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
         {visibleNovels.map((entry, index) => (
@@ -220,13 +276,16 @@ function HistoryContent(props: { kind: HistoryKind; items: HistoryEntry[] }) {
               foregroundStyle: "systemRed",
               action: () => removeHistoryEntry("novel", entry.novel.id),
             }}
-            onAppear={
-              entry.novel.id === lastNovel?.novel.id && visibleCount < novels.length
-                ? () => setVisibleCount((c) => Math.min(c + 10, novels.length))
-                : undefined
-            }
           />
         ))}
+        {lastNovel ? (
+          <LoadMoreTrigger
+            anchor={lastNovel.novel.id}
+            onLoadMore={() => void loadMoreNovels()}
+            hasMore={visibleCount < novels.length}
+            isLoading={loadingMore}
+          />
+        ) : null}
       </LazyVStack>
     )
   }
@@ -237,11 +296,26 @@ function HistoryContent(props: { kind: HistoryKind; items: HistoryEntry[] }) {
   )
   const visibleIllusts = illustEntries.slice(0, visibleCount)
 
+  async function loadMoreIllusts() {
+    if (loadingMoreLockRef.current || visibleCount >= illustEntries.length) return
+    loadingMoreLockRef.current = true
+    setLoadingMore(true)
+    try {
+      // 缓冲 1300ms：确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
+      await new Promise((resolve) => setTimeout(() => resolve(undefined), 1300))
+      setVisibleCount((c) => Math.min(c + UI_BATCH_SIZE, illustEntries.length))
+    } finally {
+      loadingMoreLockRef.current = false
+      setLoadingMore(false)
+    }
+  }
+
   return (
     <IllustFlowFeed
       items={visibleIllusts.map((entry) => entry.illustration)}
-      onLoadMore={() => setVisibleCount((c) => Math.min(c + 10, illustEntries.length))}
+      onLoadMore={() => void loadMoreIllusts()}
       hasMore={visibleCount < illustEntries.length}
+      isLoading={loadingMore}
       footerTextOf={(_, index) =>
         formatDate(new Date(visibleIllusts[index].viewedAt).toISOString())
       }

@@ -84,7 +84,12 @@ type SearchResult =
       pendingItems: PixivNovel[]
       nextURL: string | null
     }
-  | { kind: "user"; items: PixivUserPreview[]; nextURL: string | null }
+  | {
+      kind: "user"
+      items: PixivUserPreview[]
+      pendingItems: PixivUserPreview[]
+      nextURL: string | null
+    }
 
 const UI_BATCH_SIZE = 10
 const AUTOCOMPLETE_DEBOUNCE_MS = 300
@@ -197,7 +202,12 @@ export function SearchView(props: { onClose: () => void }) {
         const page = await session.call((token) => searchUsers(trimmed, token))
         if (seq !== searchSeq.current) return
         const filtered = filterUserPreviews(page.items, settings)
-        setResult({ kind: "user", items: filtered, nextURL: page.nextURL })
+        setResult({
+          kind: "user",
+          items: filtered.slice(0, UI_BATCH_SIZE),
+          pendingItems: filtered.slice(UI_BATCH_SIZE),
+          nextURL: page.nextURL,
+        })
       }
     } catch (err: any) {
       if (seq === searchSeq.current && !keepOld) {
@@ -225,41 +235,70 @@ export function SearchView(props: { onClose: () => void }) {
     if (consumedTailRef.current === tailKey) return
     consumedTailRef.current = tailKey
 
-    if (current.kind !== "user" && current.pendingItems.length > 0) {
-      if (current.kind === "illust") {
-        const illustCurrent = current as Extract<SearchResult, { kind: "illust" }>
-        const batch = illustCurrent.pendingItems.slice(0, UI_BATCH_SIZE)
-        prefetchNextIllustBatch(illustCurrent.pendingItems.slice(UI_BATCH_SIZE))
-        setResult({
-          kind: "illust",
-          items: mergeUniqueByID<PixivIllustration>(illustCurrent.items, batch),
-          pendingItems: illustCurrent.pendingItems.slice(UI_BATCH_SIZE),
-          nextURL: illustCurrent.nextURL,
-        })
-      } else {
-        const novelCurrent = current as Extract<SearchResult, { kind: "novel" }>
-        const batch = novelCurrent.pendingItems.slice(0, UI_BATCH_SIZE)
-        prefetchNextNovelBatch(novelCurrent.pendingItems.slice(UI_BATCH_SIZE))
-        setResult({
-          kind: "novel",
-          items: mergeUniqueByID<PixivNovel>(novelCurrent.items, batch),
-          pendingItems: novelCurrent.pendingItems.slice(UI_BATCH_SIZE),
-          nextURL: novelCurrent.nextURL,
-        })
+    const seq = searchSeq.current
+
+    if (current.pendingItems.length > 0) {
+      loadingMoreRef.current = true
+      setLoadingMore(true)
+      try {
+        // 缓冲 1300ms：确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
+        await new Promise((resolve) => setTimeout(() => resolve(undefined), 1300))
+        if (seq !== searchSeq.current) return
+
+        if (current.kind === "illust") {
+          const illustCurrent = current as Extract<SearchResult, { kind: "illust" }>
+          const batch = illustCurrent.pendingItems.slice(0, UI_BATCH_SIZE)
+          const remaining = illustCurrent.pendingItems.slice(UI_BATCH_SIZE)
+          prefetchNextIllustBatch(remaining)
+          setResult({
+            kind: "illust",
+            items: mergeUniqueByID<PixivIllustration>(illustCurrent.items, batch),
+            pendingItems: remaining,
+            nextURL: illustCurrent.nextURL,
+          })
+        } else if (current.kind === "novel") {
+          const novelCurrent = current as Extract<SearchResult, { kind: "novel" }>
+          const batch = novelCurrent.pendingItems.slice(0, UI_BATCH_SIZE)
+          const remaining = novelCurrent.pendingItems.slice(UI_BATCH_SIZE)
+          prefetchNextNovelBatch(remaining)
+          setResult({
+            kind: "novel",
+            items: mergeUniqueByID<PixivNovel>(novelCurrent.items, batch),
+            pendingItems: remaining,
+            nextURL: novelCurrent.nextURL,
+          })
+        } else {
+          const userCurrent = current as Extract<SearchResult, { kind: "user" }>
+          const batch = userCurrent.pendingItems.slice(0, UI_BATCH_SIZE)
+          const remaining = userCurrent.pendingItems.slice(UI_BATCH_SIZE)
+          setResult({
+            kind: "user",
+            items: mergeUniqueByKey(userCurrent.items, batch, (preview) => preview.user.id),
+            pendingItems: remaining,
+            nextURL: userCurrent.nextURL,
+          })
+        }
+      } finally {
+        loadingMoreRef.current = false
+        if (seq === searchSeq.current) setLoadingMore(false)
       }
       return
     }
+
     if (!current.nextURL) return
 
     loadingMoreRef.current = true
     setLoadingMore(true)
-    const seq = searchSeq.current
     const url = current.nextURL
 
     try {
       const settings = loadSettings()
       if (current.kind === "illust") {
-        const page = await session.call((token) => nextIllustrations(url, token))
+        const [page] = await Promise.all([
+          session.call((token) => nextIllustrations(url, token)),
+          // 保证至少有 1300ms 的平滑转圈反馈时间
+          new Promise((resolve) => setTimeout(() => resolve(undefined), 1300)),
+        ])
         if (seq !== searchSeq.current) return
         const filtered = dedupeByID(
           page.items.filter(
@@ -278,7 +317,10 @@ export function SearchView(props: { onClose: () => void }) {
         })
         prefetchNextIllustBatch(pendingItems)
       } else if (current.kind === "novel") {
-        const page = await session.call((token) => nextNovels(url, token))
+        const [page] = await Promise.all([
+          session.call((token) => nextNovels(url, token)),
+          new Promise((resolve) => setTimeout(() => resolve(undefined), 1300)),
+        ])
         if (seq !== searchSeq.current) return
         const filtered = dedupeByID(
           page.items.filter(
@@ -301,12 +343,23 @@ export function SearchView(props: { onClose: () => void }) {
         })
         prefetchNextNovelBatch(pendingItems)
       } else {
-        const page = await session.call((token) => nextUsers(url, token))
+        const [page] = await Promise.all([
+          session.call((token) => nextUsers(url, token)),
+          new Promise((resolve) => setTimeout(() => resolve(undefined), 1300)),
+        ])
         if (seq !== searchSeq.current) return
         const filtered = filterUserPreviews(page.items, settings)
+        const unique = mergeUniqueByKey(
+          current.items,
+          filtered,
+          (preview) => preview.user.id
+        ).slice(current.items.length)
+        const batch = unique.slice(0, UI_BATCH_SIZE)
+        const pendingItems = unique.slice(UI_BATCH_SIZE)
         setResult({
           kind: "user",
-          items: mergeUniqueByKey(current.items, filtered, (preview) => preview.user.id),
+          items: mergeUniqueByKey(current.items, batch, (preview) => preview.user.id),
+          pendingItems,
           nextURL: page.nextURL,
         })
       }
@@ -468,7 +521,7 @@ export function SearchView(props: { onClose: () => void }) {
               <UserResults
                 items={result.items}
                 loadingMore={loadingMore}
-                hasMore={result.nextURL != null}
+                hasMore={result.pendingItems.length > 0 || result.nextURL != null}
                 onLoadMore={loadMore}
               />
             )
