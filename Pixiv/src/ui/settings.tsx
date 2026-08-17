@@ -105,6 +105,19 @@ export function SettingsView() {
 
       <Section header={<Text>功能</Text>}>
         <Toggle title="沉浸效果" value={settings.ambientImmersion} onChanged={(value) => update({ ambientImmersion: value })} />
+        {settings.ambientImmersion ? (
+          <Picker
+            title="效果强度"
+            value={settings.ambientIntensity}
+            onChanged={(value: string) =>
+              update({ ambientIntensity: value as "low" | "medium" | "high" })
+            }
+          >
+            <Text tag="low">低</Text>
+            <Text tag="medium">中</Text>
+            <Text tag="high">高</Text>
+          </Picker>
+        ) : null}
         <Picker title="追更顺序" value={settings.watchlistSortOrder} onChanged={(value: string) => update({ watchlistSortOrder: value as "asc" | "desc" })}>
           <Text tag="asc">从第一话开始</Text>
           <Text tag="desc">从最新话开始</Text>

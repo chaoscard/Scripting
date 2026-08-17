@@ -1,4 +1,5 @@
 import type { Color } from "scripting"
+import type { AmbientIntensity } from "../store/settings"
 import { cachedFilePath, loadImage } from "./imageLoader"
 
 export interface UserAmbientPalette {
@@ -7,20 +8,26 @@ export interface UserAmbientPalette {
   worksColor: Color
 }
 
-export interface UserAmbientResult {
-  light: UserAmbientPalette
-  dark: UserAmbientPalette
-}
-
 export interface IllustAmbientPalette {
   topColor: Color
   midColor: Color
   backgroundColor: Color
 }
 
+export type IntensityPaletteMap<T> = {
+  low: T
+  medium: T
+  high: T
+}
+
+export interface UserAmbientResult {
+  light: IntensityPaletteMap<UserAmbientPalette>
+  dark: IntensityPaletteMap<UserAmbientPalette>
+}
+
 export interface IllustAmbientResult {
-  light: IllustAmbientPalette
-  dark: IllustAmbientPalette
+  light: IntensityPaletteMap<IllustAmbientPalette>
+  dark: IntensityPaletteMap<IllustAmbientPalette>
 }
 
 // 内存缓存：URL -> UserAmbientResult
@@ -85,15 +92,31 @@ function boostVibrancy(
   red: number,
   green: number,
   blue: number,
-  isDark: boolean
+  isDark: boolean,
+  intensity: AmbientIntensity = "medium"
 ): [number, number, number] {
   const [h, s, l] = rgbToHsl(red, green, blue)
-  // 适度提升饱和度，保持色彩丰富与生动
-  const boostedS = Math.min(0.72, Math.max(0.15, s * 1.05))
-  // 约束明度在清爽舒适的区间
-  const targetL = isDark
-    ? Math.min(0.50, Math.max(0.26, l * 0.90))
-    : Math.min(0.80, Math.max(0.52, l * 1.04))
+  let boostedS: number
+  let targetL: number
+
+  if (intensity === "low") {
+    boostedS = Math.min(0.65, Math.max(0.15, s * 1.00))
+    targetL = isDark
+      ? Math.min(0.50, Math.max(0.26, l * 0.90))
+      : Math.min(0.80, Math.max(0.52, l * 1.04))
+  } else if (intensity === "high") {
+    boostedS = Math.min(0.82, Math.max(0.18, s * 1.15))
+    targetL = isDark
+      ? Math.min(0.52, Math.max(0.24, l * 0.88))
+      : Math.min(0.78, Math.max(0.48, l * 1.06))
+  } else {
+    // medium (标准)
+    boostedS = Math.min(0.72, Math.max(0.15, s * 1.05))
+    targetL = isDark
+      ? Math.min(0.50, Math.max(0.26, l * 0.90))
+      : Math.min(0.80, Math.max(0.52, l * 1.04))
+  }
+
   return hslToRgb(h, boostedS, targetL)
 }
 
@@ -102,16 +125,18 @@ function boostVibrancy(
  */
 export function getCachedUserAmbientPalette(
   url: string | null | undefined,
-  isDark: boolean
+  isDark: boolean,
+  intensity: AmbientIntensity = "medium"
 ): UserAmbientPalette | null {
   if (!url) return null
   const cached = paletteCache.get(url)
   if (!cached) return null
-  return isDark ? cached.dark : cached.light
+  const modeObj = isDark ? cached.dark : cached.light
+  return modeObj[intensity] ?? modeObj.medium
 }
 
 /**
- * 异步从用户背景图提取双色标氛围色（底边采样 + 核心主色），并生成适度柔和、适配深浅模式的渐变色阶
+ * 异步从用户背景图提取双色标氛围色（底边采样 + 核心主色），并生成适配深浅模式与强度的渐变色阶
  */
 export async function extractUserAmbientPalette(
   url: string | null | undefined
@@ -167,29 +192,44 @@ export async function extractUserAmbientPalette(
     const dRawG = bestDominant.green ?? 0
     const dRawB = bestDominant.blue ?? 0
 
-    // 浅色模式色彩调和（适度浓郁，氛围生动）
-    const [bLightR, bLightG, bLightB] = boostVibrancy(bRawR, bRawG, bRawB, false)
-    const [dLightR, dLightG, dLightB] = boostVibrancy(dRawR, dRawG, dRawB, false)
-
-    const lightPalette: UserAmbientPalette = {
-      topColor: `rgba(${bLightR},${bLightG},${bLightB},0.38)` as Color,
-      midColor: `rgba(${dLightR},${dLightG},${dLightB},0.18)` as Color,
-      worksColor: `rgba(${dLightR},${dLightG},${dLightB},0.06)` as Color,
-    }
-
-    // 深色模式色彩调和（暗夜微光，深邃通透）
-    const [bDarkR, bDarkG, bDarkB] = boostVibrancy(bRawR, bRawG, bRawB, true)
-    const [dDarkR, dDarkG, dDarkB] = boostVibrancy(dRawR, dRawG, dRawB, true)
-
-    const darkPalette: UserAmbientPalette = {
-      topColor: `rgba(${bDarkR},${bDarkG},${bDarkB},0.44)` as Color,
-      midColor: `rgba(${dDarkR},${dDarkG},${dDarkB},0.22)` as Color,
-      worksColor: `rgba(${dDarkR},${dDarkG},${dDarkB},0.08)` as Color,
+    const buildUserPalette = (
+      bRaw: [number, number, number],
+      dRaw: [number, number, number],
+      isDark: boolean,
+      intensity: AmbientIntensity
+    ): UserAmbientPalette => {
+      const [bR, bG, bB] = boostVibrancy(bRaw[0], bRaw[1], bRaw[2], isDark, intensity)
+      const [dR, dG, dB] = boostVibrancy(dRaw[0], dRaw[1], dRaw[2], isDark, intensity)
+      let topAlpha = 0.44
+      let midAlpha = 0.22
+      let worksAlpha = 0.08
+      if (intensity === "low") {
+        topAlpha = 0.38
+        midAlpha = 0.18
+        worksAlpha = 0.06
+      } else if (intensity === "high") {
+        topAlpha = isDark ? 0.54 : 0.52
+        midAlpha = 0.28
+        worksAlpha = 0.11
+      }
+      return {
+        topColor: `rgba(${bR},${bG},${bB},${topAlpha})` as Color,
+        midColor: `rgba(${dR},${dG},${dB},${midAlpha})` as Color,
+        worksColor: `rgba(${dR},${dG},${dB},${worksAlpha})` as Color,
+      }
     }
 
     const result: UserAmbientResult = {
-      light: lightPalette,
-      dark: darkPalette,
+      light: {
+        low: buildUserPalette([bRawR, bRawG, bRawB], [dRawR, dRawG, dRawB], false, "low"),
+        medium: buildUserPalette([bRawR, bRawG, bRawB], [dRawR, dRawG, dRawB], false, "medium"),
+        high: buildUserPalette([bRawR, bRawG, bRawB], [dRawR, dRawG, dRawB], false, "high"),
+      },
+      dark: {
+        low: buildUserPalette([bRawR, bRawG, bRawB], [dRawR, dRawG, dRawB], true, "low"),
+        medium: buildUserPalette([bRawR, bRawG, bRawB], [dRawR, dRawG, dRawB], true, "medium"),
+        high: buildUserPalette([bRawR, bRawG, bRawB], [dRawR, dRawG, dRawB], true, "high"),
+      },
     }
     paletteCache.set(url, result)
     return result
@@ -204,12 +244,14 @@ export async function extractUserAmbientPalette(
  */
 export function getCachedIllustAmbientPalette(
   url: string | null | undefined,
-  isDark: boolean
+  isDark: boolean,
+  intensity: AmbientIntensity = "medium"
 ): IllustAmbientPalette | null {
   if (!url) return null
   const cached = illustPaletteCache.get(url)
   if (!cached) return null
-  return isDark ? cached.dark : cached.light
+  const modeObj = isDark ? cached.dark : cached.light
+  return modeObj[intensity] ?? modeObj.medium
 }
 
 /**
@@ -268,29 +310,44 @@ export async function extractIllustAmbientPalette(
     const dRawG = bestDominant.green ?? 0
     const dRawB = bestDominant.blue ?? 0
 
-    // 浅色模式色彩调和（顶部适度浓郁，主体背景自然晕染）
-    const [tLightR, tLightG, tLightB] = boostVibrancy(tRawR, tRawG, tRawB, false)
-    const [dLightR, dLightG, dLightB] = boostVibrancy(dRawR, dRawG, dRawB, false)
-
-    const lightPalette: IllustAmbientPalette = {
-      topColor: `rgba(${tLightR},${tLightG},${tLightB},0.46)` as Color,
-      midColor: `rgba(${dLightR},${dLightG},${dLightB},0.24)` as Color,
-      backgroundColor: `rgba(${dLightR},${dLightG},${dLightB},0.08)` as Color,
-    }
-
-    // 深色模式色彩调和（暗夜微光，深邃通透）
-    const [tDarkR, tDarkG, tDarkB] = boostVibrancy(tRawR, tRawG, tRawB, true)
-    const [dDarkR, dDarkG, dDarkB] = boostVibrancy(dRawR, dRawG, dRawB, true)
-
-    const darkPalette: IllustAmbientPalette = {
-      topColor: `rgba(${tDarkR},${tDarkG},${tDarkB},0.54)` as Color,
-      midColor: `rgba(${dDarkR},${dDarkG},${dDarkB},0.28)` as Color,
-      backgroundColor: `rgba(${dDarkR},${dDarkG},${dDarkB},0.10)` as Color,
+    const buildIllustPalette = (
+      tRaw: [number, number, number],
+      dRaw: [number, number, number],
+      isDark: boolean,
+      intensity: AmbientIntensity
+    ): IllustAmbientPalette => {
+      const [tR, tG, tB] = boostVibrancy(tRaw[0], tRaw[1], tRaw[2], isDark, intensity)
+      const [dR, dG, dB] = boostVibrancy(dRaw[0], dRaw[1], dRaw[2], isDark, intensity)
+      let topAlpha = 0.54
+      let midAlpha = 0.28
+      let bgAlpha = 0.10
+      if (intensity === "low") {
+        topAlpha = 0.46
+        midAlpha = 0.24
+        bgAlpha = 0.08
+      } else if (intensity === "high") {
+        topAlpha = isDark ? 0.66 : 0.64
+        midAlpha = isDark ? 0.36 : 0.34
+        bgAlpha = 0.14
+      }
+      return {
+        topColor: `rgba(${tR},${tG},${tB},${topAlpha})` as Color,
+        midColor: `rgba(${dR},${dG},${dB},${midAlpha})` as Color,
+        backgroundColor: `rgba(${dR},${dG},${dB},${bgAlpha})` as Color,
+      }
     }
 
     const result: IllustAmbientResult = {
-      light: lightPalette,
-      dark: darkPalette,
+      light: {
+        low: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], false, "low"),
+        medium: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], false, "medium"),
+        high: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], false, "high"),
+      },
+      dark: {
+        low: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], true, "low"),
+        medium: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], true, "medium"),
+        high: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], true, "high"),
+      },
     }
     illustPaletteCache.set(url, result)
     return result

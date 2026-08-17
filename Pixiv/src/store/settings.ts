@@ -12,6 +12,7 @@ export type DetailImageQuality = "medium" | "large" | "original"
 export type DownloadImageQuality = "large" | "original"
 export type CloseButtonAction = "minimize" | "exit"
 export type WatchlistSortOrder = "asc" | "desc"
+export type AmbientIntensity = "low" | "medium" | "high"
 
 export interface AppSettings {
   showR18: boolean
@@ -21,6 +22,7 @@ export interface AppSettings {
   blockedTags: string[]
   blockedUsers: BlockedUser[]
   ambientImmersion: boolean
+  ambientIntensity: AmbientIntensity
   watchlistSortOrder: WatchlistSortOrder
   longPressBookmarkAction: "off" | "follow" | "detail"
   closeButtonAction: CloseButtonAction
@@ -40,6 +42,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   blockedTags: [],
   blockedUsers: [],
   ambientImmersion: true,
+  ambientIntensity: "medium",
   watchlistSortOrder: "asc",
   longPressBookmarkAction: "off",
   closeButtonAction: "minimize",
@@ -58,6 +61,7 @@ const DETAIL_QUALITY_VALUES: readonly DetailImageQuality[] = ["medium", "large",
 const DOWNLOAD_QUALITY_VALUES: readonly DownloadImageQuality[] = ["large", "original"]
 const LONG_PRESS_ACTION_VALUES: readonly AppSettings["longPressBookmarkAction"][] = ["off", "follow", "detail"]
 const CLOSE_BUTTON_ACTION_VALUES: readonly CloseButtonAction[] = ["minimize", "exit"]
+const AMBIENT_INTENSITY_VALUES: readonly AmbientIntensity[] = ["low", "medium", "high"]
 const CACHE_LIMIT_VALUES = [300, 500, 1000, 2000] as const
 
 function isOneOf<T extends string>(value: unknown, values: readonly T[]): value is T {
@@ -175,6 +179,9 @@ export function loadSettings(): AppSettings {
           .filter((user) => user.id > 0 && user.name.length > 0)
       : DEFAULT_SETTINGS.blockedUsers,
     ambientImmersion: boolOr(stored?.ambientImmersion, DEFAULT_SETTINGS.ambientImmersion),
+    ambientIntensity: isOneOf(stored?.ambientIntensity, AMBIENT_INTENSITY_VALUES)
+      ? stored.ambientIntensity
+      : DEFAULT_SETTINGS.ambientIntensity,
     watchlistSortOrder: isOneOf(stored?.watchlistSortOrder, WATCHLIST_SORT_VALUES)
       ? stored.watchlistSortOrder
       : DEFAULT_SETTINGS.watchlistSortOrder,

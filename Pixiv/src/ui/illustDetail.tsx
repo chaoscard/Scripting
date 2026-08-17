@@ -80,6 +80,9 @@ export function IllustDetailView(props: { illustID: number }) {
   const [ambientEnabled, setAmbientEnabled] = useState(
     () => loadSettings().ambientImmersion
   )
+  const [ambientIntensity, setAmbientIntensity] = useState(
+    () => loadSettings().ambientIntensity
+  )
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [bookmarked, setBookmarked] = useState(false)
@@ -187,18 +190,19 @@ export function IllustDetailView(props: { illustID: number }) {
       return
     }
     let active = true
-    const cached = getCachedIllustAmbientPalette(coverUrl, isDark)
+    const cached = getCachedIllustAmbientPalette(coverUrl, isDark, ambientIntensity)
     if (cached) {
       setAmbientPalette(cached)
     }
     void extractIllustAmbientPalette(coverUrl).then((result) => {
       if (!active || !result) return
-      setAmbientPalette(isDark ? result.dark : result.light)
+      const modeObj = isDark ? result.dark : result.light
+      setAmbientPalette(modeObj[ambientIntensity] ?? modeObj.medium)
     })
     return () => {
       active = false
     }
-  }, [illust?.id, quality, isDark, ambientEnabled])
+  }, [illust?.id, quality, isDark, ambientEnabled, ambientIntensity])
 
   // 设置变化时更新图片质量与沉浸式开关；关闭 R18 后立即撤下已打开的受限内容。
   useEffect(() => {
@@ -206,6 +210,7 @@ export function IllustDetailView(props: { illustID: number }) {
       const settings = loadSettings()
       setQuality(settings.detailImageQuality)
       setAmbientEnabled(settings.ambientImmersion)
+      setAmbientIntensity(settings.ambientIntensity)
       const current = illustRef.current
       if (
         current &&
@@ -376,6 +381,7 @@ export function IllustDetailView(props: { illustID: number }) {
     <ScrollView
       navigationTitle={current.title}
       navigationBarTitleDisplayMode="inline"
+      ignoresSafeArea={{ edges: "bottom" }}
       toolbarBackground={
         ambientEnabled && ambientPalette
           ? {

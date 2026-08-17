@@ -94,6 +94,9 @@ export function UserDetailView(props: { userID: number }) {
   const [ambientEnabled, setAmbientEnabled] = useState(
     () => loadSettings().ambientImmersion
   )
+  const [ambientIntensity, setAmbientIntensity] = useState(
+    () => loadSettings().ambientIntensity
+  )
 
   const guard = useAsyncGuard()
   const followStateVersionRef = useRef(0)
@@ -155,22 +158,25 @@ export function UserDetailView(props: { userID: number }) {
       return
     }
     let active = true
-    const cached = getCachedUserAmbientPalette(bgUrl, isDark)
+    const cached = getCachedUserAmbientPalette(bgUrl, isDark, ambientIntensity)
     if (cached) {
       setAmbientPalette(cached)
     }
     void extractUserAmbientPalette(bgUrl).then((result) => {
       if (!active || !result) return
-      setAmbientPalette(isDark ? result.dark : result.light)
+      const modeObj = isDark ? result.dark : result.light
+      setAmbientPalette(modeObj[ambientIntensity] ?? modeObj.medium)
     })
     return () => {
       active = false
     }
-  }, [detail?.profile.background_image_url, isDark, ambientEnabled])
+  }, [detail?.profile.background_image_url, isDark, ambientEnabled, ambientIntensity])
 
   useEffect(() => {
     return onSettingsChanged(() => {
-      setAmbientEnabled(loadSettings().ambientImmersion)
+      const nextSettings = loadSettings()
+      setAmbientEnabled(nextSettings.ambientImmersion)
+      setAmbientIntensity(nextSettings.ambientIntensity)
     })
   }, [])
 
@@ -253,7 +259,7 @@ export function UserDetailView(props: { userID: number }) {
       navigationTitle={detail.user.name}
       navigationBarTitleDisplayMode="inline"
       toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
-      ignoresSafeArea={{ edges: "top" }}
+      ignoresSafeArea={{ edges: ["top", "bottom"] }}
       refreshable={handleRefresh}
       background={
         ambientEnabled && ambientPalette

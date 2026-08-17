@@ -209,6 +209,9 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
   const [ambientEnabled, setAmbientEnabled] = useState(
     () => loadSettings().ambientImmersion
   )
+  const [ambientIntensity, setAmbientIntensity] = useState(
+    () => loadSettings().ambientIntensity
+  )
 
   const [title, setTitle] = useState("系列")
   const [caption, setCaption] = useState("")
@@ -451,23 +454,25 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
       return
     }
     let active = true
-    const cached = getCachedUserAmbientPalette(coverUrl, isDark)
+    const cached = getCachedUserAmbientPalette(coverUrl, isDark, ambientIntensity)
     if (cached) {
       setAmbientPalette(cached)
     }
     void extractUserAmbientPalette(coverUrl).then((result) => {
       if (!active || !result) return
-      setAmbientPalette(isDark ? result.dark : result.light)
+      const modeObj = isDark ? result.dark : result.light
+      setAmbientPalette(modeObj[ambientIntensity] ?? modeObj.medium)
     })
     return () => {
       active = false
     }
-  }, [coverUrl, isDark, ambientEnabled])
+  }, [coverUrl, isDark, ambientEnabled, ambientIntensity])
 
   useEffect(() => {
     return onSettingsChanged(() => {
       const nextSettings = loadSettings()
       setAmbientEnabled(nextSettings.ambientImmersion)
+      setAmbientIntensity(nextSettings.ambientIntensity)
       const targetAsc = nextSettings.watchlistSortOrder === "asc"
       setIsAscending((currentAsc) => {
         if (currentAsc !== targetAsc) {
@@ -523,7 +528,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
       navigationTitle={title}
       navigationBarTitleDisplayMode="inline"
       toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
-      ignoresSafeArea={{ edges: "top" }}
+      ignoresSafeArea={{ edges: ["top", "bottom"] }}
       refreshable={load}
       background={
         ambientEnabled && ambientPalette
