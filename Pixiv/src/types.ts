@@ -189,14 +189,26 @@ export interface PixivTrendingTag {
   illust: { id: number; image_urls: PixivImageUrls }
 }
 
+export interface PixivStamp {
+  stamp_id: number
+  stamp_url: string
+}
+
 export interface PixivComment {
   id: number
   comment: string
   date: string
   user: PixivUser
+  parent_comment?: {
+    id: number
+    user: PixivUser
+    comment?: string
+    stamp?: PixivStamp | null
+  } | null
   parent_comment_id?: number
   has_replies?: boolean
   reply_count?: number
+  stamp?: PixivStamp | null
 }
 
 export interface PixivBookmarkDetailTag {

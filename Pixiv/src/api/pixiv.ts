@@ -725,11 +725,17 @@ export async function postComment(
   illustID: number,
   comment: string,
   parentCommentID: number | null,
-  accessToken: string
+  accessToken: string,
+  stampID?: number | null
 ): Promise<void> {
   const form: Record<string, string> = {
     illust_id: String(illustID),
-    comment,
+  }
+  if (comment) {
+    form["comment"] = comment
+  }
+  if (stampID != null) {
+    form["stamp_id"] = String(stampID)
   }
   if (parentCommentID != null) {
     form["parent_comment_id"] = String(parentCommentID)
@@ -1093,16 +1099,34 @@ export async function postNovelComment(
   novelID: number,
   comment: string,
   parentCommentID: number | null,
-  accessToken: string
+  accessToken: string,
+  stampID?: number | null
 ): Promise<void> {
   const form: Record<string, string> = {
     novel_id: String(novelID),
-    comment,
+  }
+  if (comment) {
+    form["comment"] = comment
+  }
+  if (stampID != null) {
+    form["stamp_id"] = String(stampID)
   }
   if (parentCommentID != null) {
     form["parent_comment_id"] = String(parentCommentID)
   }
   await apiPost("/v1/novel/comment/add", form, accessToken)
+}
+
+export async function novelCommentReplies(
+  commentID: number,
+  accessToken: string
+): Promise<PixivPage<PixivComment>> {
+  const json = await apiGet(
+    "/v2/novel/comment/replies",
+    { comment_id: String(commentID) },
+    accessToken
+  )
+  return { items: json?.comments ?? [], nextURL: json?.next_url ?? null }
 }
 
 export async function novelBookmarkTags(
