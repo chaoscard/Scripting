@@ -175,6 +175,7 @@ export function NovelDetailView(props: { novelID: number }) {
 
   async function toggleBookmark() {
     if (!novel || bookmarkLoading) return
+    void Haptics.transient()
     setBookmarkLoading(true)
     try {
       if (bookmarked) {
@@ -225,6 +226,7 @@ export function NovelDetailView(props: { novelID: number }) {
 
   async function followWithVisibility(restrict: "public" | "private") {
     if (!novel || followLoading) return
+    void Haptics.transient()
     setFollowLoading(true)
     try {
       await session.call((token) => followUser(novel.user.id, restrict, token))
@@ -242,6 +244,7 @@ export function NovelDetailView(props: { novelID: number }) {
       await followWithVisibility("public")
       return
     }
+    void Haptics.transient()
     setFollowLoading(true)
     try {
       await session.call((token) => unfollowUser(novel.user.id, token))
@@ -255,6 +258,7 @@ export function NovelDetailView(props: { novelID: number }) {
 
   async function shareNovel() {
     if (!novel) return
+    void Haptics.transient()
     await ShareSheet.present([`https://www.pixiv.net/novel/show.php?id=${novel.id}`])
   }
 
@@ -288,10 +292,6 @@ export function NovelDetailView(props: { novelID: number }) {
       toolbar={{
         topBarTrailing: [
           <Button
-            buttonStyle="glass"
-            frame={{ width: 30, height: 30 }}
-            clipShape={{ type: "rect", cornerRadius: 15 }}
-            contentShape="rect"
             disabled={bookmarkLoading || bookmarkLongPressLocked}
             action={toggleBookmark}
             simultaneousGesture={
@@ -308,10 +308,6 @@ export function NovelDetailView(props: { novelID: number }) {
             />
           </Button>,
           <Button
-            buttonStyle="glass"
-            frame={{ width: 30, height: 30 }}
-            clipShape={{ type: "rect", cornerRadius: 15 }}
-            contentShape="rect"
             disabled={followLoading}
             action={toggleFollow}
             contextMenu={{
@@ -331,13 +327,7 @@ export function NovelDetailView(props: { novelID: number }) {
               systemName={followed ? "person.fill.checkmark" : "person.badge.plus"}
             />
           </Button>,
-          <Menu
-            label={<Image systemName="ellipsis.circle" />}
-            buttonStyle="glass"
-            frame={{ width: 30, height: 30 }}
-            clipShape={{ type: "rect", cornerRadius: 15 }}
-            contentShape="rect"
-          >
+          <Menu label={<Image systemName="ellipsis.circle" />}>
             <Button
               title="评论"
               systemImage="bubble.left"
@@ -399,13 +389,7 @@ export function NovelDetailView(props: { novelID: number }) {
               )}
             </Menu>
           </Menu>,
-          <NavigationLink
-            value={`user:${current.user.id}`}
-            buttonStyle="glass"
-            frame={{ width: 30, height: 30 }}
-            clipShape={{ type: "rect", cornerRadius: 15 }}
-            contentShape="rect"
-          >
+          <NavigationLink value={`user:${current.user.id}`}>
             <AvatarImage
               url={current.user.profile_image_urls?.medium ?? null}
               size={28}

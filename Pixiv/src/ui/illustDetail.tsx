@@ -263,6 +263,7 @@ export function IllustDetailView(props: { illustID: number }) {
 
   async function toggleBookmark() {
     if (bookmarkLoading) return
+    void Haptics.transient()
     setBookmarkLoading(true)
     try {
       if (bookmarked) {
@@ -313,6 +314,7 @@ export function IllustDetailView(props: { illustID: number }) {
   }
 
   async function savePages() {
+    void Haptics.transient()
     // 动图：保存合成后的 mp4
     if (current.type === "ugoira") {
       try {
@@ -345,6 +347,7 @@ export function IllustDetailView(props: { illustID: number }) {
 
   async function followWithVisibility(restrict: "public" | "private") {
     if (followLoading) return
+    void Haptics.transient()
     setFollowLoading(true)
     try {
       await session.call((token) => followUser(current.user.id, restrict, token))
@@ -362,6 +365,7 @@ export function IllustDetailView(props: { illustID: number }) {
       await followWithVisibility("public")
       return
     }
+    void Haptics.transient()
     setFollowLoading(true)
     try {
       await session.call((token) => unfollowUser(current.user.id, token))
@@ -374,6 +378,7 @@ export function IllustDetailView(props: { illustID: number }) {
   }
 
   async function shareIllust() {
+    void Haptics.transient()
     await ShareSheet.present([`https://www.pixiv.net/artworks/${current.id}`])
   }
 
@@ -418,10 +423,6 @@ export function IllustDetailView(props: { illustID: number }) {
       toolbar={{
         topBarTrailing: [
           <Button
-            buttonStyle="glass"
-            frame={{ width: 30, height: 30 }}
-            clipShape={{ type: "rect", cornerRadius: 15 }}
-            contentShape="rect"
             disabled={bookmarkLoading || bookmarkLongPressLocked}
             action={toggleBookmark}
             simultaneousGesture={
@@ -438,10 +439,6 @@ export function IllustDetailView(props: { illustID: number }) {
             />
           </Button>,
           <Button
-            buttonStyle="glass"
-            frame={{ width: 30, height: 30 }}
-            clipShape={{ type: "rect", cornerRadius: 15 }}
-            contentShape="rect"
             disabled={followLoading}
             action={toggleFollow}
             contextMenu={{
@@ -461,13 +458,7 @@ export function IllustDetailView(props: { illustID: number }) {
               systemName={followed ? "person.fill.checkmark" : "person.badge.plus"}
             />
           </Button>,
-          <Menu
-            label={<Image systemName="ellipsis.circle" />}
-            buttonStyle="glass"
-            frame={{ width: 30, height: 30 }}
-            clipShape={{ type: "rect", cornerRadius: 15 }}
-            contentShape="rect"
-          >
+          <Menu label={<Image systemName="ellipsis.circle" />}>
             <Button
               title="评论"
               systemImage="bubble.left"
@@ -534,13 +525,7 @@ export function IllustDetailView(props: { illustID: number }) {
               )}
             </Menu>
           </Menu>,
-          <NavigationLink
-            value={`user:${current.user.id}`}
-            buttonStyle="glass"
-            frame={{ width: 30, height: 30 }}
-            clipShape={{ type: "rect", cornerRadius: 15 }}
-            contentShape="rect"
-          >
+          <NavigationLink value={`user:${current.user.id}`}>
             <AvatarImage
               url={current.user.profile_image_urls?.medium ?? null}
               size={28}

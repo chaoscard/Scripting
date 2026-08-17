@@ -96,11 +96,7 @@ function historyToolbar(props: { kind: HistoryKind; onClear: () => void }) {
     ],
     topBarTrailing: [
       <Button
-        buttonStyle="glass"
         action={() => {}}
-        frame={{ width: 30, height: 30 }}
-        clipShape={{ type: "rect", cornerRadius: 15 }}
-        contentShape="rect"
         contextMenu={{
           menuItems: (
             <Group>

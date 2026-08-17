@@ -1329,6 +1329,7 @@ export function BookmarkDetailSheet(props: {
 
   async function save() {
     if (saving) return
+    void Haptics.transient()
     setSaving(true)
     setError(null)
     try {
@@ -1531,7 +1532,10 @@ export function BookmarkButton(props: {
       }
     >
       <Button
-        action={props.onTap}
+        action={() => {
+          void Haptics.transient()
+          props.onTap()
+        }}
         buttonStyle="glass"
         frame={{ width: CORNER_ICON_SIZE, height: CORNER_ICON_SIZE }}
         clipShape={{ type: "rect", cornerRadius: CORNER_ICON_SIZE / 2 }}

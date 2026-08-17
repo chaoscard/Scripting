@@ -421,17 +421,16 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
 
   async function toggleWatchlist() {
     if (watchLoading) return
+    void Haptics.transient()
     setWatchLoading(true)
     const nextState = !isWatched
     try {
       if (nextState) {
         await session.call((token) => addWatchlistSeries(props.seriesID, props.kind, token))
         setIsWatched(true)
-        void Haptics.transient()
       } else {
         await session.call((token) => deleteWatchlistSeries(props.seriesID, props.kind, token))
         setIsWatched(false)
-        void Haptics.transient()
       }
     } catch {
       // 保持当前状态
@@ -547,11 +546,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
       toolbar={{
         topBarTrailing: [
           <Button
-            buttonStyle="glass"
             disabled={watchLoading}
-            frame={{ width: 30, height: 30 }}
-            clipShape={{ type: "rect", cornerRadius: 15 }}
-            contentShape="rect"
             action={toggleWatchlist}
           >
             <Image
@@ -560,10 +555,6 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
             />
           </Button>,
           <Button
-            buttonStyle="glass"
-            frame={{ width: 30, height: 30 }}
-            clipShape={{ type: "rect", cornerRadius: 15 }}
-            contentShape="rect"
             action={() => {
               void Haptics.transient()
               const nextAsc = !isAscending
@@ -590,10 +581,6 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
             <Image systemName={isAscending ? "arrow.up" : "arrow.down"} />
           </Button>,
           <Button
-            buttonStyle="glass"
-            frame={{ width: 30, height: 30 }}
-            clipShape={{ type: "rect", cornerRadius: 15 }}
-            contentShape="rect"
             action={() => {
               void Haptics.transient()
               const shareUrl = props.kind === "novel"
@@ -610,10 +597,6 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
             <NavigationLink
               key="series-author"
               value={`user:${author.id}`}
-              buttonStyle="glass"
-              frame={{ width: 30, height: 30 }}
-              clipShape={{ type: "rect", cornerRadius: 15 }}
-              contentShape="rect"
             >
               <AvatarImage
                 url={author.profile_image_urls?.medium ?? null}

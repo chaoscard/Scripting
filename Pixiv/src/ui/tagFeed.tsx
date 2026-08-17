@@ -63,6 +63,7 @@ export function TagFeedView(props: { tag: string }) {
 
   async function toggleFollow() {
     if (followBusy) return
+    void Haptics.transient()
     setFollowBusy(true)
     setFollowError(null)
     try {

@@ -100,19 +100,11 @@ export function BlockedSettingsView() {
       toolbar={{
         topBarTrailing: [
           <Button
-            buttonStyle="glass"
-            frame={{ width: 30, height: 30 }}
-            clipShape={{ type: "rect", cornerRadius: 15 }}
-            contentShape="rect"
             action={openInput}
           >
             <Image systemName="plus" />
           </Button>,
           <Button
-            buttonStyle="glass"
-            frame={{ width: 30, height: 30 }}
-            clipShape={{ type: "rect", cornerRadius: 15 }}
-            contentShape="rect"
             action={() => {}}
             contextMenu={{
               menuItems: (

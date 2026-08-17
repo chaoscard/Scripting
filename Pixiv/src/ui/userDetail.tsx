@@ -195,6 +195,7 @@ export function UserDetailView(props: { userID: number }) {
 
   async function followWithVisibility(restrict: "public" | "private") {
     if (followBusy || isOwnProfile) return
+    void Haptics.transient()
     const followStateVersion = ++followStateVersionRef.current
     setFollowBusy(true)
     try {
@@ -218,6 +219,7 @@ export function UserDetailView(props: { userID: number }) {
       await followWithVisibility("public")
       return
     }
+    void Haptics.transient()
     const followStateVersion = ++followStateVersionRef.current
     setFollowBusy(true)
     try {
@@ -281,11 +283,7 @@ export function UserDetailView(props: { userID: number }) {
             <Button
               title={followed ? "已关注" : "关注"}
               systemImage={followed ? "person.fill.checkmark" : "person.badge.plus"}
-              buttonStyle="glass"
               disabled={followBusy}
-              frame={{ width: 32, height: 32 }}
-              clipShape={{ type: "rect", cornerRadius: 16 }}
-              contentShape="rect"
               action={toggleFollow}
               contextMenu={{
                 menuItems: (
@@ -304,11 +302,8 @@ export function UserDetailView(props: { userID: number }) {
           <Button
             title="分享"
             systemImage="square.and.arrow.up"
-            buttonStyle="glass"
-            frame={{ width: 32, height: 32 }}
-            clipShape={{ type: "rect", cornerRadius: 16 }}
-            contentShape="rect"
             action={() => {
+              void Haptics.transient()
               void ShareSheet.present([`https://www.pixiv.net/users/${userID}`])
             }}
           />,
