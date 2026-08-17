@@ -121,8 +121,10 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number }) {
         await session.call((token) => postComment(illustID ?? 0, content, parentID, token))
       }
       setText("")
-      setReplyTarget(null)
-      setShowEmotePanel(false)
+      withAnimation(() => {
+        setReplyTarget(null)
+        setShowEmotePanel(false)
+      })
       if (parentID != null) {
         await refreshRepliesFor(parentID)
       }
@@ -145,8 +147,10 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number }) {
       } else {
         await session.call((token) => postComment(illustID ?? 0, "", parentID, token, stampID))
       }
-      setReplyTarget(null)
-      setShowEmotePanel(false)
+      withAnimation(() => {
+        setReplyTarget(null)
+        setShowEmotePanel(false)
+      })
       if (parentID != null) {
         await refreshRepliesFor(parentID)
       }
@@ -292,7 +296,9 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number }) {
   }
 
   function handleReply(comment: PixivComment) {
-    setShowEmotePanel(false)
+    withAnimation(() => {
+      setShowEmotePanel(false)
+    })
     setReplyTarget({ id: comment.id, name: comment.user.name, seq: Date.now() })
   }
 
@@ -302,7 +308,7 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number }) {
 
   return (
     <NavigationStack
-      presentationDetents={["medium", "large"]}
+      presentationDetents={[0.65, "large"]}
       presentationDragIndicator="visible"
     >
       <VStack
@@ -421,9 +427,13 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number }) {
             <Button
               title={showEmotePanel ? "键盘" : "表情"}
               systemImage={showEmotePanel ? "keyboard" : "face.smiling"}
-              tint={showEmotePanel ? "#0096FA" : undefined}
+              tint="#0096FA"
               buttonStyle="glass"
-              action={() => setShowEmotePanel((prev) => !prev)}
+              action={() => {
+                withAnimation(() => {
+                  setShowEmotePanel((prev) => !prev)
+                })
+              }}
             />
             <TextField
               key={replyTarget ? `reply-${replyTarget.seq}` : "comment-default"}
@@ -757,6 +767,8 @@ function EmotePickerPanel(props: {
       spacing={8}
       padding={8}
       glassEffect={{ type: "rect", cornerRadius: 14 }}
+      glassEffectTransition="materialize"
+      transition={Transition.move("bottom").combined(Transition.opacity())}
       frame={{ maxWidth: "infinity", height: 220 }}
     >
       {/* 顶部菜单切换栏 */}
