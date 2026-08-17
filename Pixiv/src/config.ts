@@ -1,4 +1,6 @@
-export const SCRIPT_VERSION = "0.8.18"
+import { Script } from "scripting"
+
+export const SCRIPT_VERSION = Script.metadata?.version ?? "0.8.21"
 
 export const API_BASE_URL = "https://app-api.pixiv.net"
 export const OAUTH_BASE_URL = "https://oauth.secure.pixiv.net"
