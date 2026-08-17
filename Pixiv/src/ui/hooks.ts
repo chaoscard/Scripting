@@ -327,8 +327,8 @@ export function usePagedList<T extends { id: number | string }>(
       loadingMoreTaskRef.current = task
       setLoadingMore(true)
       try {
-        // 缓冲 1300ms：确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
-        await new Promise((resolve) => setTimeout(() => resolve(undefined), 1300))
+        // 缓冲 1500ms：确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
+        await new Promise((resolve) => setTimeout(() => resolve(undefined), 1500))
         if (loadingMoreTaskRef.current !== task || !enabledRef.current) return
         const nextBatch = pending.slice(0, UI_BATCH_SIZE)
         setItems((current) => mergeUniqueByID(current, nextBatch))
@@ -354,8 +354,8 @@ export function usePagedList<T extends { id: number | string }>(
     try {
       const [page] = await Promise.all([
         session.call((token) => moreFn(url, token)),
-        // 保证至少有 1300ms 的平滑转圈反馈时间
-        new Promise((resolve) => setTimeout(() => resolve(undefined), 1300)),
+        // 保证至少有 1500ms 的平滑转圈反馈时间
+        new Promise((resolve) => setTimeout(() => resolve(undefined), 1500)),
       ])
       if (
         seq !== seqRef.current ||

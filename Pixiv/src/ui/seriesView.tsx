@@ -383,8 +383,8 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
       loadingMoreLockRef.current = true
       setLoadingMore(true)
       try {
-        // 缓冲 1300ms：确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
-        await new Promise((resolve) => setTimeout(() => resolve(undefined), 1300))
+        // 缓冲 1500ms：确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
+        await new Promise((resolve) => setTimeout(() => resolve(undefined), 1500))
         const nextBatch = pendingIllusts.slice(0, UI_BATCH_SIZE)
         const remaining = pendingIllusts.slice(UI_BATCH_SIZE)
         setPublishedIllusts((current) => [...current, ...nextBatch])
@@ -402,7 +402,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
       loadingMoreLockRef.current = true
       setLoadingMore(true)
       try {
-        await new Promise((resolve) => setTimeout(() => resolve(undefined), 1300))
+        await new Promise((resolve) => setTimeout(() => resolve(undefined), 1500))
         const nextBatch = pendingNovels.slice(0, UI_BATCH_SIZE)
         const remaining = pendingNovels.slice(UI_BATCH_SIZE)
         setPublishedNovels((current) => [...current, ...nextBatch])

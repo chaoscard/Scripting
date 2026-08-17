@@ -252,8 +252,8 @@ function HistoryContent(props: { kind: HistoryKind; items: HistoryEntry[] }) {
       loadingMoreLockRef.current = true
       setLoadingMore(true)
       try {
-        // 缓冲 1300ms：确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
-        await new Promise((resolve) => setTimeout(() => resolve(undefined), 1300))
+        // 缓冲 1500ms：确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
+        await new Promise((resolve) => setTimeout(() => resolve(undefined), 1500))
         setVisibleCount((c) => Math.min(c + UI_BATCH_SIZE, novels.length))
       } finally {
         loadingMoreLockRef.current = false
@@ -301,8 +301,8 @@ function HistoryContent(props: { kind: HistoryKind; items: HistoryEntry[] }) {
     loadingMoreLockRef.current = true
     setLoadingMore(true)
     try {
-      // 缓冲 1300ms：确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
-      await new Promise((resolve) => setTimeout(() => resolve(undefined), 1300))
+      // 缓冲 1500ms：确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
+      await new Promise((resolve) => setTimeout(() => resolve(undefined), 1500))
       setVisibleCount((c) => Math.min(c + UI_BATCH_SIZE, illustEntries.length))
     } finally {
       loadingMoreLockRef.current = false

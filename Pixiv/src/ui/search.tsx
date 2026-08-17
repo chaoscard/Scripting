@@ -30,7 +30,6 @@ import {
   novelThumbUrlOf,
   prefetch,
   thumbUrlOf,
-  type PrefetchHandle,
 } from "../image/imageLoader"
 import {
   isIllustContentVisible,
@@ -42,11 +41,9 @@ import {
 import { destinationElement } from "./routes"
 import {
   dedupeByID,
-  dedupeByKey,
-  mergeUniqueByID,
-  mergeUniqueByKey,
   useDebouncedCallback,
   useLatest,
+  usePagedList,
 } from "./hooks"
 import type {
   PixivIllustration,
@@ -71,27 +68,10 @@ type SearchScope = "illust" | "novel" | "user"
 type SearchSort = "date_desc" | "popular_desc" | "date_asc"
 type SearchMode = "results" | "advanced"
 
-type SearchResult =
-  | {
-      kind: "illust"
-      items: PixivIllustration[]
-      pendingItems: PixivIllustration[]
-      nextURL: string | null
-    }
-  | {
-      kind: "novel"
-      items: PixivNovel[]
-      pendingItems: PixivNovel[]
-      nextURL: string | null
-    }
-  | {
-      kind: "user"
-      items: PixivUserPreview[]
-      pendingItems: PixivUserPreview[]
-      nextURL: string | null
-    }
+interface PixivUserSearchResultItem extends PixivUserPreview {
+  id: number
+}
 
-const UI_BATCH_SIZE = 10
 const AUTOCOMPLETE_DEBOUNCE_MS = 300
 
 export function SearchView(props: { onClose: () => void }) {
@@ -104,296 +84,110 @@ export function SearchView(props: { onClose: () => void }) {
   const [suggestions, setSuggestions] = useState<
     { name: string; translated_name?: string | null }[]
   >([])
-  const [result, setResult] = useState<SearchResult | null>(null)
-  const [searchLoading, setSearchLoading] = useState(false)
-  const [searchError, setSearchError] = useState<string | null>(null)
-  const [loadingMore, setLoadingMore] = useState(false)
 
-  const searchSeq = useRef(0)
-  const loadingMoreRef = useRef(false)
-  const consumedTailRef = useRef<string | null>(null)
-  const searchPrefetchRef = useRef<PrefetchHandle | null>(null)
-  const submittedRef = useLatest(submitted)
-  const modeRef = useLatest(mode)
+  const isResultsMode = mode === "results"
+  const isIllustActive = Boolean(submitted) && scope === "illust" && isResultsMode
+  const isNovelActive = Boolean(submitted) && scope === "novel" && isResultsMode
+  const isUserActive = Boolean(submitted) && scope === "user" && isResultsMode
 
-  function prefetchNextIllustBatch(items: PixivIllustration[]) {
-    searchPrefetchRef.current?.cancel()
-    searchPrefetchRef.current = prefetch(items.slice(0, UI_BATCH_SIZE).map(cardThumbUrlOf))
-  }
-
-  function prefetchNextNovelBatch(items: PixivNovel[]) {
-    searchPrefetchRef.current?.cancel()
-    searchPrefetchRef.current = prefetch(items.slice(0, UI_BATCH_SIZE).map(novelThumbUrlOf))
-  }
-
-  async function loadTrending() {
-    try {
-      const tags = await session.call((token) => trendingTags(token))
-      setTrending(tags)
-    } catch {
-      // 热门标签加载失败不影响正常搜索。
-    }
-  }
-
-  async function doSearch(word: string, keepOld = false) {
-    const trimmed = word.trim()
-    if (!trimmed) return
-    const seq = ++searchSeq.current
-    searchPrefetchRef.current?.cancel()
-    consumedTailRef.current = null
-    setMode("results")
-    setSubmitted(trimmed)
-    setSuggestions([])
-    if (!keepOld) {
-      setSearchLoading(true)
-      setSearchError(null)
-      setResult(null)
-    }
-
-    try {
+  // 1. 插画 / 漫画搜索流
+  const illustPaged = usePagedList<PixivIllustration>({
+    first: (token) => {
       const settings = loadSettings()
-      if (scope === "illust") {
-        const page = await session.call((token) =>
-          searchIllustrations(
-            {
-              word: trimmed,
-              target: "partial_match_for_tags",
-              sort,
-              aiFilter: settings.showAI ? 0 : 1,
-            },
-            token
-          )
-        )
-        if (seq !== searchSeq.current) return
-        const filtered = dedupeByID(
-          page.items.filter(
-            (item) =>
-              isIllustContentVisible(item, settings)
-          )
-        )
-        setResult({
-          kind: "illust",
-          items: filtered.slice(0, UI_BATCH_SIZE),
-          pendingItems: filtered.slice(UI_BATCH_SIZE),
-          nextURL: page.nextURL,
-        })
-        prefetchNextIllustBatch(filtered.slice(UI_BATCH_SIZE))
-      } else if (scope === "novel") {
-        const page = await session.call((token) => searchNovels(trimmed, sort, token))
-        if (seq !== searchSeq.current) return
-        const filtered = dedupeByID(
-          page.items.filter(
-            (novel) =>
-              isR18ContentVisible(
-                novel.x_restrict,
-                settings.showR18,
-                settings.showR18G
-              ) && (settings.showAI || novel.novel_ai_type !== 2)
-          )
-        )
-        setResult({
-          kind: "novel",
-          items: filtered.slice(0, UI_BATCH_SIZE),
-          pendingItems: filtered.slice(UI_BATCH_SIZE),
-          nextURL: page.nextURL,
-        })
-        prefetchNextNovelBatch(filtered.slice(UI_BATCH_SIZE))
-      } else {
-        const page = await session.call((token) => searchUsers(trimmed, token))
-        if (seq !== searchSeq.current) return
-        const filtered = filterUserPreviews(page.items, settings)
-        setResult({
-          kind: "user",
-          items: filtered.slice(0, UI_BATCH_SIZE),
-          pendingItems: filtered.slice(UI_BATCH_SIZE),
-          nextURL: page.nextURL,
-        })
-      }
-    } catch (err: any) {
-      if (seq === searchSeq.current && !keepOld) {
-        setSearchError(err?.message ?? "搜索失败")
-      }
-    } finally {
-      if (seq === searchSeq.current && !keepOld) {
-        setSearchLoading(false)
-        setLoadingMore(false)
-        loadingMoreRef.current = false
-      }
-    }
-  }
-
-  async function loadMore(anchor?: number | string) {
-    const current = result
-    if (!current || loadingMoreRef.current) return
-    const tailID =
-      current.kind === "user"
-        ? current.items[current.items.length - 1]?.user.id
-        : current.items[current.items.length - 1]?.id
-    if (tailID == null) return
-    const tailKey = String(anchor ?? tailID)
-    if (anchor != null && tailKey !== String(tailID)) return
-    if (consumedTailRef.current === tailKey) return
-    consumedTailRef.current = tailKey
-
-    const seq = searchSeq.current
-
-    if (current.pendingItems.length > 0) {
-      loadingMoreRef.current = true
-      setLoadingMore(true)
-      try {
-        // 缓冲 1300ms：确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
-        await new Promise((resolve) => setTimeout(() => resolve(undefined), 1300))
-        if (seq !== searchSeq.current) return
-
-        if (current.kind === "illust") {
-          const illustCurrent = current as Extract<SearchResult, { kind: "illust" }>
-          const batch = illustCurrent.pendingItems.slice(0, UI_BATCH_SIZE)
-          const remaining = illustCurrent.pendingItems.slice(UI_BATCH_SIZE)
-          prefetchNextIllustBatch(remaining)
-          setResult({
-            kind: "illust",
-            items: mergeUniqueByID<PixivIllustration>(illustCurrent.items, batch),
-            pendingItems: remaining,
-            nextURL: illustCurrent.nextURL,
-          })
-        } else if (current.kind === "novel") {
-          const novelCurrent = current as Extract<SearchResult, { kind: "novel" }>
-          const batch = novelCurrent.pendingItems.slice(0, UI_BATCH_SIZE)
-          const remaining = novelCurrent.pendingItems.slice(UI_BATCH_SIZE)
-          prefetchNextNovelBatch(remaining)
-          setResult({
-            kind: "novel",
-            items: mergeUniqueByID<PixivNovel>(novelCurrent.items, batch),
-            pendingItems: remaining,
-            nextURL: novelCurrent.nextURL,
-          })
-        } else {
-          const userCurrent = current as Extract<SearchResult, { kind: "user" }>
-          const batch = userCurrent.pendingItems.slice(0, UI_BATCH_SIZE)
-          const remaining = userCurrent.pendingItems.slice(UI_BATCH_SIZE)
-          setResult({
-            kind: "user",
-            items: mergeUniqueByKey(userCurrent.items, batch, (preview) => preview.user.id),
-            pendingItems: remaining,
-            nextURL: userCurrent.nextURL,
-          })
-        }
-      } finally {
-        loadingMoreRef.current = false
-        if (seq === searchSeq.current) setLoadingMore(false)
-      }
-      return
-    }
-
-    if (!current.nextURL) return
-
-    loadingMoreRef.current = true
-    setLoadingMore(true)
-    const url = current.nextURL
-
-    try {
+      return searchIllustrations(
+        {
+          word: submitted,
+          target: "partial_match_for_tags",
+          sort,
+          aiFilter: settings.showAI ? 0 : 1,
+        },
+        token
+      )
+    },
+    more: (nextURL, token) => nextIllustrations(nextURL, token),
+    filter: (items) => {
       const settings = loadSettings()
-      if (current.kind === "illust") {
-        const [page] = await Promise.all([
-          session.call((token) => nextIllustrations(url, token)),
-          // 保证至少有 1300ms 的平滑转圈反馈时间
-          new Promise((resolve) => setTimeout(() => resolve(undefined), 1300)),
-        ])
-        if (seq !== searchSeq.current) return
-        const filtered = dedupeByID(
-          page.items.filter(
-            (item) =>
-              isIllustContentVisible(item, settings)
-          )
+      return dedupeByID(
+        items.filter((item) => isIllustContentVisible(item, settings))
+      )
+    },
+    deps: [submitted, sort],
+    enabled: isIllustActive,
+    onBatchPublished: (_, pendingItems) =>
+      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel,
+  })
+
+  // 2. 小说搜索流
+  const novelPaged = usePagedList<PixivNovel>({
+    first: (token) => searchNovels(submitted, sort, token),
+    more: (nextURL, token) => nextNovels(nextURL, token),
+    filter: (items) => {
+      const settings = loadSettings()
+      return dedupeByID(
+        items.filter(
+          (novel) =>
+            isR18ContentVisible(
+              novel.x_restrict,
+              settings.showR18,
+              settings.showR18G
+            ) && (settings.showAI || novel.novel_ai_type !== 2)
         )
-        const unique = mergeUniqueByID(current.items, filtered).slice(current.items.length)
-        const batch = unique.slice(0, UI_BATCH_SIZE)
-        const pendingItems = unique.slice(UI_BATCH_SIZE)
-        setResult({
-          kind: "illust",
-          items: mergeUniqueByID(current.items, batch),
-          pendingItems,
-          nextURL: page.nextURL,
-        })
-        prefetchNextIllustBatch(pendingItems)
-      } else if (current.kind === "novel") {
-        const [page] = await Promise.all([
-          session.call((token) => nextNovels(url, token)),
-          new Promise((resolve) => setTimeout(() => resolve(undefined), 1300)),
-        ])
-        if (seq !== searchSeq.current) return
-        const filtered = dedupeByID(
-          page.items.filter(
-            (novel) =>
-              isR18ContentVisible(
-                novel.x_restrict,
-                settings.showR18,
-                settings.showR18G
-              ) && (settings.showAI || novel.novel_ai_type !== 2)
-          )
-        )
-        const unique = mergeUniqueByID(current.items, filtered).slice(current.items.length)
-        const batch = unique.slice(0, UI_BATCH_SIZE)
-        const pendingItems = unique.slice(UI_BATCH_SIZE)
-        setResult({
-          kind: "novel",
-          items: mergeUniqueByID(current.items, batch),
-          pendingItems,
-          nextURL: page.nextURL,
-        })
-        prefetchNextNovelBatch(pendingItems)
-      } else {
-        const [page] = await Promise.all([
-          session.call((token) => nextUsers(url, token)),
-          new Promise((resolve) => setTimeout(() => resolve(undefined), 1300)),
-        ])
-        if (seq !== searchSeq.current) return
-        const filtered = filterUserPreviews(page.items, settings)
-        const unique = mergeUniqueByKey(
-          current.items,
-          filtered,
-          (preview) => preview.user.id
-        ).slice(current.items.length)
-        const batch = unique.slice(0, UI_BATCH_SIZE)
-        const pendingItems = unique.slice(UI_BATCH_SIZE)
-        setResult({
-          kind: "user",
-          items: mergeUniqueByKey(current.items, batch, (preview) => preview.user.id),
-          pendingItems,
-          nextURL: page.nextURL,
-        })
+      )
+    },
+    deps: [submitted, sort],
+    enabled: isNovelActive,
+    onBatchPublished: (_, pendingItems) =>
+      prefetch(pendingItems.slice(0, 10).map(novelThumbUrlOf)).cancel,
+  })
+
+  // 3. 用户搜索流
+  const userPaged = usePagedList<PixivUserSearchResultItem>({
+    first: async (token) => {
+      const page = await searchUsers(submitted, token)
+      return {
+        items: page.items.map((preview) => ({ id: preview.user.id, ...preview })),
+        nextURL: page.nextURL,
       }
-    } catch {
-      consumedTailRef.current = null
-    } finally {
-      loadingMoreRef.current = false
-      if (seq === searchSeq.current) setLoadingMore(false)
-    }
-  }
+    },
+    more: async (nextURL, token) => {
+      const page = await nextUsers(nextURL, token)
+      return {
+        items: page.items.map((preview) => ({ id: preview.user.id, ...preview })),
+        nextURL: page.nextURL,
+      }
+    },
+    filter: (items) => {
+      const settings = loadSettings()
+      return items
+        .filter((preview) => !isUserBlocked(preview.user.id, settings.blockedUsers))
+        .map((preview) => ({
+          ...preview,
+          illusts: dedupeByID(
+            preview.illusts.filter((illust) => isIllustContentVisible(illust, settings))
+          ),
+        }))
+    },
+    deps: [submitted],
+    enabled: isUserActive,
+  })
 
-  useEffect(() => {
-    return () => {
-      searchPrefetchRef.current?.cancel()
-    }
-  }, [])
+  const illustPagedRef = useLatest(illustPaged)
+  const novelPagedRef = useLatest(novelPaged)
+  const userPagedRef = useLatest(userPaged)
 
-  useEffect(() => {
-    loadTrending()
-  }, [])
-
-  useEffect(() => {
-    if (submittedRef.current) void doSearch(submittedRef.current)
-    // scope 变化需要重新搜索；sort 仅在作品和小说请求中发送。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scope, sort])
-
-  const doSearchRef = useLatest(doSearch)
   useEffect(() => {
     return onSettingsChanged(() => {
-      if (submittedRef.current && modeRef.current === "results") {
-        void doSearchRef.current(submittedRef.current, true)
-      }
+      illustPagedRef.current.reapplyFilter()
+      novelPagedRef.current.reapplyFilter()
+      userPagedRef.current.reapplyFilter()
     })
+  }, [])
+
+  useEffect(() => {
+    session
+      .call((token) => trendingTags(token))
+      .then((tags) => setTrending(tags))
+      .catch(() => {})
   }, [])
 
   const autocompleteSeq = useRef(0)
@@ -424,12 +218,27 @@ export function SearchView(props: { onClose: () => void }) {
     setSort(value)
   }
 
+  function submitSearch(textToSearch: string) {
+    const trimmed = textToSearch.trim()
+    if (!trimmed) return
+    setMode("results")
+    setSubmitted(trimmed)
+    setSuggestions([])
+  }
+
+  const activePaged =
+    scope === "illust"
+      ? illustPaged
+      : scope === "novel"
+        ? novelPaged
+        : userPaged
+
   return (
     <RefreshableScrollView
       navigationBarTitleDisplayMode="inline"
       refreshable={async () => {
-        if (submittedRef.current && modeRef.current === "results") {
-          await doSearch(submittedRef.current, true)
+        if (submitted && isResultsMode) {
+          await activePaged.refresh()
         }
       }}
       navigationDestination={destinationElement}
@@ -460,7 +269,7 @@ export function SearchView(props: { onClose: () => void }) {
           </VStack>
         ) : undefined
       }
-      onSubmit={{ triggers: "search" as const, action: () => doSearch(query) }}
+      onSubmit={{ triggers: "search" as const, action: () => submitSearch(query) }}
       submitLabel="search"
     >
       {mode === "advanced" ? (
@@ -469,7 +278,7 @@ export function SearchView(props: { onClose: () => void }) {
         <VStack alignment="leading" spacing={8}>
           <SearchScopePicker scope={scope} onScopeChange={setScope} />
 
-            {!submitted ? (
+          {!submitted ? (
             <VStack alignment="leading" spacing={8} padding={{ horizontal: 14 }}>
               <Text font="footnote" fontWeight="semibold" foregroundStyle="secondaryLabel">
                 热门标签
@@ -484,7 +293,7 @@ export function SearchView(props: { onClose: () => void }) {
                       controlSize="small"
                       action={() => {
                         setQuery(tag.tag)
-                        void doSearch(tag.tag)
+                        submitSearch(tag.tag)
                       }}
                     />
                   ))}
@@ -494,35 +303,35 @@ export function SearchView(props: { onClose: () => void }) {
           ) : null}
 
           {submitted ? (
-            searchLoading ? (
+            activePaged.initialLoading ? (
               <LoadingView />
-            ) : searchError ? (
+            ) : activePaged.error ? (
               <ErrorView
-                message={searchError}
-                onRetry={() => void doSearch(submitted)}
+                message={activePaged.error}
+                onRetry={activePaged.refresh}
               />
-            ) : !result || result.items.length === 0 ? (
+            ) : activePaged.items.length === 0 ? (
               <EmptyView text="没有找到相关内容" systemImage="magnifyingglass" />
-            ) : result.kind === "illust" ? (
-              <SearchIllustrationResults
-                items={result.items}
-                loadingMore={loadingMore}
-                hasMore={result.pendingItems.length > 0 || result.nextURL != null}
-                onLoadMore={loadMore}
+            ) : scope === "illust" ? (
+              <IllustFlowFeed
+                items={illustPaged.items}
+                onLoadMore={illustPaged.loadMore}
+                hasMore={illustPaged.hasMore}
+                isLoading={illustPaged.loadingMore}
               />
-            ) : result.kind === "novel" ? (
+            ) : scope === "novel" ? (
               <NovelResults
-                items={result.items}
-                loadingMore={loadingMore}
-                hasMore={result.pendingItems.length > 0 || result.nextURL != null}
-                onLoadMore={loadMore}
+                items={novelPaged.items}
+                loadingMore={novelPaged.loadingMore}
+                hasMore={novelPaged.hasMore}
+                onLoadMore={novelPaged.loadMore}
               />
             ) : (
               <UserResults
-                items={result.items}
-                loadingMore={loadingMore}
-                hasMore={result.pendingItems.length > 0 || result.nextURL != null}
-                onLoadMore={loadMore}
+                items={userPaged.items}
+                loadingMore={userPaged.loadingMore}
+                hasMore={userPaged.hasMore}
+                onLoadMore={userPaged.loadMore}
               />
             )
           ) : null}
@@ -596,50 +405,35 @@ function AdvancedSearchPlaceholder() {
   )
 }
 
-function SearchIllustrationResults(props: {
-  items: PixivIllustration[]
-  loadingMore: boolean
-  hasMore: boolean
-  onLoadMore: (anchor: number | string) => void
-}) {
-  return (
-    <>
-      <IllustFlowFeed
-        items={props.items}
-        onLoadMore={props.onLoadMore}
-        hasMore={props.hasMore}
-        isLoading={props.loadingMore}
-      />
-    </>
-  )
-}
-
 function NovelResults(props: {
   items: PixivNovel[]
   loadingMore: boolean
   hasMore: boolean
-  onLoadMore: (anchor: number | string) => void
+  onLoadMore: (anchor?: number | string) => void
 }) {
+  const lastNovel = props.items[props.items.length - 1]
   return (
     <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
       {props.items.map((novel, index) => (
         <NovelCard key={novel.id} novel={novel} priority={index} />
       ))}
-      <LoadMoreTrigger
-        anchor={props.items[props.items.length - 1].id}
-        onLoadMore={props.onLoadMore}
-        hasMore={props.hasMore}
-        isLoading={props.loadingMore}
-      />
+      {lastNovel ? (
+        <LoadMoreTrigger
+          anchor={lastNovel.id}
+          onLoadMore={props.onLoadMore}
+          hasMore={props.hasMore}
+          isLoading={props.loadingMore}
+        />
+      ) : null}
     </LazyVStack>
   )
 }
 
 function UserResults(props: {
-  items: PixivUserPreview[]
+  items: PixivUserSearchResultItem[]
   loadingMore: boolean
   hasMore: boolean
-  onLoadMore: (anchor: number | string) => void
+  onLoadMore: (anchor?: number | string) => void
 }) {
   const tail = props.items[props.items.length - 1]
   return (
@@ -670,7 +464,7 @@ function UserResults(props: {
       ))}
       {tail ? (
         <LoadMoreTrigger
-          anchor={tail.user.id}
+          anchor={tail.id}
           onLoadMore={props.onLoadMore}
           hasMore={props.hasMore}
           isLoading={props.loadingMore}
@@ -679,21 +473,3 @@ function UserResults(props: {
     </VStack>
   )
 }
-
-function filterUserPreviews(
-  items: PixivUserPreview[],
-  settings: ReturnType<typeof loadSettings>
-): PixivUserPreview[] {
-  return dedupeByKey(
-    items
-      .filter((preview) => !isUserBlocked(preview.user.id, settings.blockedUsers))
-      .map((preview) => ({
-        ...preview,
-        illusts: dedupeByID(
-          preview.illusts.filter((illust) => isIllustContentVisible(illust, settings))
-        ),
-      })),
-    (preview) => preview.user.id
-  )
-}
-
