@@ -1227,15 +1227,26 @@ export function BookmarkDetailSheet(props: {
   const [availableTags, setAvailableTags] = useState<PixivBookmarkTag[]>([])
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [customTag, setCustomTag] = useState("")
+  const [showCustomTagInput, setShowCustomTagInput] = useState(false)
+  const [inputSeq, setInputSeq] = useState(0)
   const [restrict, setRestrict] = useState<"public" | "private">("public")
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [interactive, setInteractive] = useState(false)
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setInteractive(true)
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
     async function loadDetail() {
       setCustomTag("")
+      setShowCustomTagInput(false)
       const userID = session.userID
       if (!userID) {
         setLoading(false)
@@ -1277,6 +1288,7 @@ export function BookmarkDetailSheet(props: {
   }, [props.item.id])
 
   function toggleTag(name: string) {
+    if (!interactive) return
     setSelectedTags((current) =>
       current.includes(name)
         ? current.filter((tag) => tag !== name)
@@ -1284,6 +1296,14 @@ export function BookmarkDetailSheet(props: {
           ? current
           : [...current, name]
     )
+  }
+
+  function openCustomTagInput() {
+    if (!interactive) return
+    withAnimation(() => {
+      setShowCustomTagInput(true)
+      setInputSeq(Date.now())
+    })
   }
 
   function addCustomTag() {
@@ -1296,10 +1316,14 @@ export function BookmarkDetailSheet(props: {
     )
     setSelectedTags((current) => [...current, name])
     setCustomTag("")
+    withAnimation(() => {
+      setShowCustomTagInput(false)
+    })
   }
 
   function close() {
     setCustomTag("")
+    setShowCustomTagInput(false)
     props.onClose()
   }
 
@@ -1321,111 +1345,160 @@ export function BookmarkDetailSheet(props: {
   }
 
   return (
-    <VStack
-      alignment="leading"
-      spacing={0}
-      padding={{ horizontal: 14, top: 10, bottom: 40 }}
-      safeAreaPadding={{ bottom: true }}
-      presentationDetents={[0.48]}
+    <NavigationStack
+      presentationDetents={[0.65, "large"]}
       presentationDragIndicator="visible"
-      frame={{ maxWidth: "infinity" }}
     >
-      <HStack
-        frame={{ maxWidth: "infinity" }}
-        padding={{ horizontal: 4, top: 0, bottom: 8 }}
+      <VStack
+        alignment="leading"
+        spacing={0}
+        frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+        toolbar={{
+          topBarLeading: (
+            <Button
+              title="关闭"
+              systemImage="xmark"
+              action={close}
+            />
+          ),
+          topBarTrailing: (
+            <Button
+              title="收藏"
+              systemImage={props.bookmarked ? "heart.fill" : "heart"}
+              disabled={saving || loading}
+              tint={props.bookmarked && !saving ? "#FF375F" : undefined}
+              action={() => void save()}
+            />
+          ),
+        }}
       >
-        <Button
-          action={close}
-          buttonStyle="glass"
-          frame={{ width: 32, height: 32 }}
-          clipShape={{ type: "rect", cornerRadius: 16 }}
-          contentShape="rect"
-        >
-          <Image systemName="xmark" font="title3" />
-        </Button>
-        <Spacer />
-        <Button
-          action={() => void save()}
-          buttonStyle="glass"
-          disabled={saving}
-          frame={{ width: 32, height: 32 }}
-          clipShape={{ type: "rect", cornerRadius: 16 }}
-          contentShape="rect"
-        >
-          <Image
-            systemName={props.bookmarked ? "heart.fill" : "heart"}
-            font="title3"
-            foregroundStyle={props.bookmarked && !saving ? "#FF375F" : undefined}
-          />
-        </Button>
-      </HStack>
-      <Text
-        font="caption"
-        foregroundStyle="secondaryLabel"
-        lineLimit={1}
-        padding={{ bottom: 10 }}
-      >
-        {props.item.title}
-      </Text>
-      <Text font="subheadline" fontWeight="semibold" padding={{ bottom: 8 }}>
-        收藏的标签（{selectedTags.length} / 10）
-      </Text>
-      <ScrollView
-        scrollDismissesKeyboard="never"
-        frame={{ height: 96 }}
-      >
-        {loading ? (
-          <ProgressView frame={{ maxWidth: "infinity" }} />
-        ) : availableTags.length === 0 ? (
-          <Text font="caption" foregroundStyle="secondaryLabel">
-            暂无常用标签
+        {error ? (
+          <Text
+            font="footnote"
+            foregroundStyle="systemRed"
+            padding={{ horizontal: 16, top: 4, bottom: 6 }}
+          >
+            {error}
           </Text>
+        ) : null}
+
+        {/* 中间主体内容区 */}
+        {loading ? (
+          <LoadingView />
         ) : (
-          <FlowLayout spacing={8}>
-            {availableTags.map((tag) => {
-              const selected = selectedTags.includes(tag.name)
-              return (
-                <Button
-                  key={tag.name}
-                  title={`${selected ? "✓ " : ""}#${tag.name}`}
-                  buttonStyle={selected ? "glassProminent" : "glass"}
-                  controlSize="mini"
-                  action={() => toggleTag(tag.name)}
+          <ScrollView
+            frame={{ maxWidth: "infinity" }}
+            presentationContentInteraction="scrolls"
+          >
+            <VStack
+              alignment="leading"
+              spacing={14}
+              padding={{ horizontal: 16, vertical: 8 }}
+              frame={{ maxWidth: "infinity" }}
+            >
+              {/* 私密收藏设置卡片 */}
+              <HStack
+                spacing={10}
+                alignment="center"
+                padding={{ horizontal: 12, vertical: 10 }}
+                glassEffect={{ type: "rect", cornerRadius: 14 }}
+                frame={{ maxWidth: "infinity" }}
+              >
+                <Image
+                  systemName={restrict === "private" ? "lock.fill" : "lock.open"}
+                  font="body"
+                  foregroundStyle={restrict === "private" ? "#FF9500" : "secondaryLabel"}
                 />
-              )
-            })}
-          </FlowLayout>
+                <VStack alignment="leading" spacing={2}>
+                  <Text font="subheadline" fontWeight="medium">
+                    私密收藏
+                  </Text>
+                  <Text font="caption2" foregroundStyle="secondaryLabel">
+                    {restrict === "private" ? "仅自己可见，不公开展示" : "公开展示在个人主页收藏列表"}
+                  </Text>
+                </VStack>
+                <Spacer />
+                <Toggle
+                  title=""
+                  value={restrict === "private"}
+                  onChanged={(value) => setRestrict(value ? "private" : "public")}
+                />
+              </HStack>
+
+              {/* 标签选择区 */}
+              <VStack alignment="leading" spacing={8} frame={{ maxWidth: "infinity" }}>
+                <HStack alignment="center" frame={{ maxWidth: "infinity" }}>
+                  <Text font="subheadline" fontWeight="semibold">
+                    选择标签
+                  </Text>
+                  <Spacer />
+                  <Text font="caption" foregroundStyle="secondaryLabel">
+                    {selectedTags.length} / 10
+                  </Text>
+                </HStack>
+
+                <FlowLayout spacing={8}>
+                  {availableTags.map((tag) => {
+                    const selected = selectedTags.includes(tag.name)
+                    return (
+                      <Button
+                        key={tag.name}
+                        title={`${selected ? "✓ " : ""}#${tag.name}`}
+                        buttonStyle={selected ? "glassProminent" : "glass"}
+                        tint={selected ? "#0096FA" : undefined}
+                        controlSize="small"
+                        action={() => toggleTag(tag.name)}
+                      />
+                    )
+                  })}
+                  <Button
+                    title="自定义标签"
+                    systemImage="plus"
+                    buttonStyle="glass"
+                    tint="#0096FA"
+                    controlSize="small"
+                    disabled={selectedTags.length >= 10}
+                    action={openCustomTagInput}
+                  />
+                </FlowLayout>
+              </VStack>
+            </VStack>
+          </ScrollView>
         )}
-      </ScrollView>
-      <HStack spacing={8} frame={{ maxWidth: "infinity" }} padding={{ top: 10 }}>
-        <TextField
-          title="自定义收藏标签"
-          prompt="输入标签名称"
-          value={customTag}
-          onChanged={setCustomTag}
-          onSubmit={addCustomTag}
-          submitLabel="done"
-          frame={{ width: 280, height: 44 }}
-        />
-        <Spacer />
-        <Button
-          action={addCustomTag}
-          buttonStyle="glass"
-          disabled={!customTag.trim() || selectedTags.length >= 10}
-          frame={{ width: 28, height: 28 }}
-           clipShape={{ type: "rect", cornerRadius: 14 }}
-          contentShape="rect"
-        >
-          <Image systemName="plus" font="body" />
-        </Button>
-      </HStack>
-      <Toggle
-        title="私密收藏"
-        value={restrict === "private"}
-        onChanged={(value) => setRestrict(value ? "private" : "public")}
-      />
-      {error ? <Text foregroundStyle="systemRed">{error}</Text> : null}
-    </VStack>
+
+        {/* 底部自定义标签输入条（点击自定义标签后弹出） */}
+        {showCustomTagInput ? (
+          <HStack
+            spacing={8}
+            alignment="center"
+            padding={{ horizontal: 16, top: 8, bottom: 20 }}
+            glassEffectTransition="materialize"
+            transition={Transition.move("bottom").combined(Transition.opacity())}
+            frame={{ maxWidth: "infinity" }}
+          >
+            <TextField
+              key={`custom-tag-${inputSeq}`}
+              title="自定义标签"
+              prompt="输入自定义标签名称…"
+              value={customTag}
+              onChanged={setCustomTag}
+              onSubmit={addCustomTag}
+              submitLabel="done"
+              autofocus={true}
+              frame={{ maxWidth: "infinity" }}
+            />
+            <Button
+              buttonStyle="glassProminent"
+              tint="#0096FA"
+              disabled={!customTag.trim() || selectedTags.length >= 10}
+              action={addCustomTag}
+            >
+              <Image systemName="plus" font="body" />
+            </Button>
+          </HStack>
+        ) : null}
+      </VStack>
+    </NavigationStack>
   )
 }
 
@@ -1447,7 +1520,6 @@ export function BookmarkButton(props: {
       zIndex={2}
       offset={{ x: -4, y: -4 }}
       allowsHitTesting={!props.disabled && !longPressLocked}
-      presentationDetents={[0.48]}
       sheet={
         props.sheetContent && props.onSheetChanged
           ? {
