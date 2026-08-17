@@ -13,12 +13,15 @@ export type DownloadImageQuality = "large" | "original"
 export type CloseButtonAction = "minimize" | "exit"
 export type WatchlistSortOrder = "asc" | "desc"
 export type AmbientIntensity = "low" | "medium" | "high"
+export type LaunchPage = "discovery" | "ranking" | "following"
 
 export interface AppSettings {
+  launchPage: LaunchPage
   showR18: boolean
   showR18G: boolean
   showAI: boolean
   followFilterExempt: boolean
+  libraryFilterExempt: boolean
   blockedTags: string[]
   blockedUsers: BlockedUser[]
   ambientImmersion: boolean
@@ -35,10 +38,12 @@ export interface AppSettings {
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
+  launchPage: "discovery",
   showR18: false,
   showR18G: false,
   showAI: true,
   followFilterExempt: false,
+  libraryFilterExempt: false,
   blockedTags: [],
   blockedUsers: [],
   ambientImmersion: true,
@@ -55,6 +60,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 }
 
 const KEY = "pixiv_settings_v1"
+const LAUNCH_PAGE_VALUES: readonly LaunchPage[] = ["discovery", "ranking", "following"]
 const WATCHLIST_SORT_VALUES: readonly WatchlistSortOrder[] = ["asc", "desc"]
 const FEED_QUALITY_VALUES: readonly FeedImageQuality[] = ["medium", "large"]
 const DETAIL_QUALITY_VALUES: readonly DetailImageQuality[] = ["medium", "large", "original"]
@@ -140,6 +146,21 @@ export function isIllustContentVisible(
   )
 }
 
+export function isNovelContentVisible(
+  item: { x_restrict: number; novel_ai_type?: number; tags?: { name: string }[]; user?: { id: number } },
+  settings = loadSettings(),
+  bypassRatingAndAI = false
+): boolean {
+  return (
+    (bypassRatingAndAI || (
+      isR18ContentVisible(item.x_restrict, settings.showR18, settings.showR18G) &&
+      (settings.showAI || item.novel_ai_type !== 2)
+    )) &&
+    !isUserBlocked(item.user?.id ?? 0, settings.blockedUsers) &&
+    !(item.tags ?? []).some((tag) => isTagBlocked(tag.name, settings.blockedTags))
+  )
+}
+
 const listeners = new Set<() => void>()
 
 export function onSettingsChanged(fn: () => void): () => void {
@@ -160,10 +181,17 @@ export function loadSettings(): AppSettings {
     : DEFAULT_SETTINGS.detailImageQuality
   const merged: AppSettings = {
     ...DEFAULT_SETTINGS,
+    launchPage: isOneOf(stored?.launchPage, LAUNCH_PAGE_VALUES)
+      ? stored.launchPage
+      : DEFAULT_SETTINGS.launchPage,
     showR18: boolOr(stored?.showR18, DEFAULT_SETTINGS.showR18),
     showR18G: boolOr(stored?.showR18G, DEFAULT_SETTINGS.showR18G),
     showAI: boolOr(stored?.showAI, DEFAULT_SETTINGS.showAI),
     followFilterExempt: boolOr(stored?.followFilterExempt, DEFAULT_SETTINGS.followFilterExempt),
+    libraryFilterExempt: boolOr(
+      stored?.libraryFilterExempt ?? stored?.bookmarkFilterExempt ?? stored?.historyFilterExempt,
+      DEFAULT_SETTINGS.libraryFilterExempt
+    ),
     blockedTags: Array.isArray(stored?.blockedTags)
       ? stored.blockedTags.filter((tag): tag is string => typeof tag === "string" && tag.length > 0)
       : DEFAULT_SETTINGS.blockedTags,

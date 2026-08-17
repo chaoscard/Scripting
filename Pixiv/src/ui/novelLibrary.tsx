@@ -7,7 +7,7 @@ import {
 import { nextNovelMarkers, novelMarkers } from "../api/pixiv"
 import { novelThumbUrlOf, prefetch } from "../image/imageLoader"
 import {
-  isR18ContentVisible,
+  isNovelContentVisible,
   loadSettings,
   onSettingsChanged,
 } from "../store/settings"
@@ -31,13 +31,12 @@ export function NovelLibraryView() {
     more: (nextURL, token) => nextNovelMarkers(nextURL, token),
     filter: (items) => {
       const settings = loadSettings()
-      return items.filter(
-        (item) =>
-          isR18ContentVisible(
-            item.novel.x_restrict,
-            settings.showR18,
-            settings.showR18G
-          ) && (settings.showAI || item.novel.novel_ai_type !== 2)
+      return items.filter((item) =>
+        isNovelContentVisible(
+          item.novel,
+          settings,
+          settings.libraryFilterExempt
+        )
       )
     },
     deps: [],

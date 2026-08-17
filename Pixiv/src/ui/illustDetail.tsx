@@ -26,6 +26,7 @@ import {
   followDetail,
   followUser,
   illustrationDetail,
+  illustrationSeries,
   nextIllustrations,
   relatedIllustrations,
   removeBookmark,
@@ -43,9 +44,16 @@ import {
   isR18ContentVisible,
   loadSettings,
   onSettingsChanged,
+  type AppSettings,
 } from "../store/settings"
-import { recordHistory, updateHistoryBookmark } from "../store/history"
+import {
+  hasHistory,
+  onHistoryChanged,
+  recordHistory,
+  updateHistoryBookmark,
+} from "../store/history"
 import { onUserFollowChanged } from "../store/userFollow"
+import { isSeriesWatched, onWatchlistChanged, recordWatchedSeries } from "../store/watchlist"
 import { useAsyncGuard, useLatest, usePagedList } from "./hooks"
 import type { PixivIllustration } from "../types"
 import {
@@ -68,6 +76,23 @@ import { renderDestination } from "./routes"
 import { requestPixivRoute } from "./routeNavigation"
 
 const RESTRICTED_CONTENT_MESSAGE = "该作品已被内容分级设置隐藏"
+
+function isIllustExempt(
+  detail: PixivIllustration,
+  settings: AppSettings,
+  isBookmarked = false,
+  isFollowed = false
+): boolean {
+  if (settings.followFilterExempt) {
+    if (isFollowed || detail.user?.is_followed) return true
+    if (detail.series?.id != null && isSeriesWatched(detail.series.id)) return true
+  }
+  if (settings.libraryFilterExempt) {
+    if (isBookmarked || detail.is_bookmarked) return true
+    if (hasHistory(detail.id, "illust")) return true
+  }
+  return false
+}
 
 export function IllustDetailView(props: { illustID: number }) {
   const { illustID } = props
@@ -112,8 +137,24 @@ export function IllustDetailView(props: { illustID: number }) {
       )
       if (!g.isCurrent()) return
       const settings = loadSettings()
+      let isExempt = isIllustExempt(detail, settings, detail.is_bookmarked, detail.user.is_followed ?? false)
+      if (!isIllustContentVisible(detail, settings, isExempt)) {
+        if (settings.followFilterExempt && detail.series?.id != null && !isSeriesWatched(detail.series.id)) {
+          try {
+            const seriesData = await session.call((token) => illustrationSeries(detail.series!.id, token))
+            const seriesWatched = Boolean(
+              seriesData.illust_series_detail?.watchlist_added ??
+              (seriesData.illust_series_detail as any)?.is_watched
+            )
+            recordWatchedSeries(detail.series!.id, seriesWatched)
+            if (seriesWatched && isIllustContentVisible(detail, settings, true)) {
+              isExempt = true
+            }
+          } catch {}
+        }
+      }
       if (
-        !isIllustContentVisible(detail, settings)
+        !isIllustContentVisible(detail, settings, isExempt)
       ) {
         restrictedLevelRef.current = detail.x_restrict
         setIllust(null)
@@ -212,15 +253,17 @@ export function IllustDetailView(props: { illustID: number }) {
       setAmbientEnabled(settings.ambientImmersion)
       setAmbientIntensity(settings.ambientIntensity)
       const current = illustRef.current
-      if (
-        current &&
-        !isIllustContentVisible(current, settings)
-      ) {
-        restrictedLevelRef.current = current.x_restrict
-        guard()
-        setIllust(null)
-        setError(RESTRICTED_CONTENT_MESSAGE)
-        setLoading(false)
+      if (current) {
+        const isExempt = isIllustExempt(current, settings, bookmarked, followed)
+        if (
+          !isIllustContentVisible(current, settings, isExempt)
+        ) {
+          restrictedLevelRef.current = current.x_restrict
+          guard()
+          setIllust(null)
+          setError(RESTRICTED_CONTENT_MESSAGE)
+          setLoading(false)
+        }
       } else if (
         !current &&
         errorRef.current === RESTRICTED_CONTENT_MESSAGE &&
@@ -234,7 +277,37 @@ export function IllustDetailView(props: { illustID: number }) {
         load()
       }
     })
-  }, [])
+  }, [bookmarked, followed])
+
+  useEffect(() => {
+    return onWatchlistChanged((seriesID) => {
+      const current = illustRef.current
+      if (current?.series?.id === seriesID) {
+        const settings = loadSettings()
+        const isExempt = isIllustExempt(current, settings, bookmarked, followed)
+        if (!isIllustContentVisible(current, settings, isExempt)) {
+          restrictedLevelRef.current = current.x_restrict
+          guard()
+          setIllust(null)
+          setError(RESTRICTED_CONTENT_MESSAGE)
+          setLoading(false)
+        }
+      } else if (!current && errorRef.current === RESTRICTED_CONTENT_MESSAGE) {
+        load()
+      }
+    })
+  }, [bookmarked, followed])
+
+  useEffect(() => {
+    return onHistoryChanged(() => {
+      if (!illustRef.current && errorRef.current === RESTRICTED_CONTENT_MESSAGE) {
+        const settings = loadSettings()
+        if (settings.libraryFilterExempt && hasHistory(illustID, "illust")) {
+          load()
+        }
+      }
+    })
+  }, [illustID])
 
   if (loading) {
     return (
@@ -501,7 +574,7 @@ export function IllustDetailView(props: { illustID: number }) {
               />
               {Boolean(current.series?.id) && (
                 <Button
-                  title={`系列：${current.series?.title ?? "未知系列"}`}
+                  title={`系列：${current.series?.title || "未命名系列"}`}
                   action={() => Pasteboard.setString(current.series?.title ?? "")}
                 />
               )}
@@ -617,14 +690,14 @@ export function IllustDetailView(props: { illustID: number }) {
           </VStack>
 
           {/* 系列 */}
-          {current.series ? (
+          {Boolean(current.series?.id) && current.series ? (
             <VStack alignment="leading" spacing={4}>
               <Text font="subheadline" fontWeight="semibold">
                 系列
               </Text>
               <NavigationLink value={`mangaSeries:${current.series.id}`}>
                 <Text font="footnote" foregroundStyle="#007AFF">
-                  {current.series.title ?? "未知系列"}
+                  {current.series.title || "系列详情"}
                 </Text>
               </NavigationLink>
             </VStack>

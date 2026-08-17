@@ -31,12 +31,12 @@ import {
 import { session } from "../api/session"
 import {
   isIllustContentVisible,
-  isR18ContentVisible,
-  isUserBlocked,
+  isNovelContentVisible,
   loadSettings,
   onSettingsChanged,
   updateSettings,
 } from "../store/settings"
+import { onWatchlistChanged } from "../store/watchlist"
 import type {
   PixivIllustration,
   PixivIllustrationSeriesItem,
@@ -116,11 +116,7 @@ function filterSeriesIllusts(items: PixivIllustration[], isExempt = false): Pixi
 function filterSeriesNovels(items: PixivNovel[], isExempt = false): PixivNovel[] {
   const settings = loadSettings()
   return items.filter((item) =>
-    (isExempt || settings.followFilterExempt || (
-      isR18ContentVisible(item.x_restrict, settings.showR18, settings.showR18G) &&
-      (settings.showAI || item.novel_ai_type !== 2)
-    )) &&
-    !isUserBlocked(item.user?.id ?? 0, settings.blockedUsers)
+    isNovelContentVisible(item, settings, isExempt || settings.followFilterExempt)
   )
 }
 
@@ -224,9 +220,38 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
     () => loadSettings().watchlistSortOrder === "asc"
   )
 
+  // 全量已获取未过滤的原始数据映射池
+  const rawMappedIllustsRef = useRef<PixivIllustration[]>([])
+  const rawMappedNovelsRef = useRef<PixivNovel[]>([])
+
   // 全量已获取且过滤后的数据池（支持正序/倒序切换与分批派发）
   const allIllustsRef = useRef<PixivIllustration[]>([])
   const allNovelsRef = useRef<PixivNovel[]>([])
+  const isWatchedRef = useRef(isWatched)
+  isWatchedRef.current = isWatched
+
+  function applyFilterAndSort(targetAsc: boolean, isWatchedNow: boolean) {
+    if (props.kind === "manga") {
+      const filtered = filterSeriesIllusts(rawMappedIllustsRef.current, isWatchedNow)
+      allIllustsRef.current = filtered
+      const sorted = targetAsc ? filtered : [...filtered].reverse()
+      const pub = sorted.slice(0, UI_BATCH_SIZE)
+      const pend = sorted.slice(UI_BATCH_SIZE)
+      setPublishedIllusts(pub)
+      setPendingIllusts(pend)
+      prefetchTaskRef.current?.cancel()
+      prefetchTaskRef.current = prefetch([
+        ...pub.map(cardThumbUrlOf),
+        ...pend.slice(0, UI_BATCH_SIZE).map(cardThumbUrlOf),
+      ])
+    } else {
+      const filtered = filterSeriesNovels(rawMappedNovelsRef.current, isWatchedNow)
+      allNovelsRef.current = filtered
+      const sorted = targetAsc ? filtered : [...filtered].reverse()
+      setPublishedNovels(sorted.slice(0, UI_BATCH_SIZE))
+      setPendingNovels(sorted.slice(UI_BATCH_SIZE))
+    }
+  }
 
   // 当前已发布到 UI 的分批数据（初始严格为前 10 条）
   const [publishedIllusts, setPublishedIllusts] = useState<PixivIllustration[]>([])
@@ -296,6 +321,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
         const mappedIllusts = rawAscending.map((it, idx) =>
           seriesIllust(it, seriesAuthor, idx + 1)
         )
+        rawMappedIllustsRef.current = mappedIllusts
         const filtered = filterSeriesIllusts(mappedIllusts, isExempt)
         allIllustsRef.current = filtered
         setWorkCount(detail.series_work_count ?? allRawIllusts.length)
@@ -359,6 +385,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
           ...novel,
           episode_number: idx + 1,
         }))
+        rawMappedNovelsRef.current = mappedNovels
         const filtered = filterSeriesNovels(mappedNovels, isExempt)
         allNovelsRef.current = filtered
         setWorkCount(detail.content_count ?? allRawNovels.length)
@@ -428,9 +455,11 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
       if (nextState) {
         await session.call((token) => addWatchlistSeries(props.seriesID, props.kind, token))
         setIsWatched(true)
+        applyFilterAndSort(isAscending, true)
       } else {
         await session.call((token) => deleteWatchlistSeries(props.seriesID, props.kind, token))
         setIsWatched(false)
+        applyFilterAndSort(isAscending, false)
       }
     } catch {
       // 保持当前状态
@@ -442,6 +471,15 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
   useEffect(() => {
     load()
   }, [props.kind, props.seriesID])
+
+  useEffect(() => {
+    return onWatchlistChanged((changedID, watched) => {
+      if (changedID === props.seriesID) {
+        setIsWatched(watched)
+        applyFilterAndSort(isAscending, watched)
+      }
+    })
+  }, [props.seriesID, isAscending])
 
   useEffect(() => {
     if (!ambientEnabled) {
@@ -473,28 +511,8 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
       setAmbientEnabled(nextSettings.ambientImmersion)
       setAmbientIntensity(nextSettings.ambientIntensity)
       const targetAsc = nextSettings.watchlistSortOrder === "asc"
-      setIsAscending((currentAsc) => {
-        if (currentAsc !== targetAsc) {
-          if (props.kind === "manga") {
-            const sorted = targetAsc ? allIllustsRef.current : [...allIllustsRef.current].reverse()
-            const pub = sorted.slice(0, UI_BATCH_SIZE)
-            const pend = sorted.slice(UI_BATCH_SIZE)
-            setPublishedIllusts(pub)
-            setPendingIllusts(pend)
-            prefetchTaskRef.current?.cancel()
-            prefetchTaskRef.current = prefetch([
-              ...pub.map(cardThumbUrlOf),
-              ...pend.slice(0, UI_BATCH_SIZE).map(cardThumbUrlOf),
-            ])
-          } else {
-            const sorted = targetAsc ? allNovelsRef.current : [...allNovelsRef.current].reverse()
-            setPublishedNovels(sorted.slice(0, UI_BATCH_SIZE))
-            setPendingNovels(sorted.slice(UI_BATCH_SIZE))
-          }
-          return targetAsc
-        }
-        return currentAsc
-      })
+      setIsAscending(targetAsc)
+      applyFilterAndSort(targetAsc, isWatchedRef.current)
     })
   }, [props.kind])
 

@@ -11,9 +11,11 @@ import {
   ZStack,
   useEffect,
   useObservable,
+  useRef,
   useState,
 } from "scripting"
 import { session } from "../api/session"
+import { loadSettings } from "../store/settings"
 import { DiscoveryView } from "./discovery"
 import { RankingView } from "./ranking"
 import { SearchView } from "./search"
@@ -122,7 +124,8 @@ export function TabNavigationStack(props: { children: any }) {
 function MainTabView(props: {
   onClose: () => void
 }) {
-  const selection = useObservable<string>("discovery")
+  const initialTab = useRef(loadSettings().launchPage).current
+  const selection = useObservable<string>(initialTab)
   const discoveryPath = useObservable<string[]>([])
   const rankingPath = useObservable<string[]>([])
   const followingPath = useObservable<string[]>([])

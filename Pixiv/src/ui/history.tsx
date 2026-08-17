@@ -30,7 +30,7 @@ import {
 } from "../store/history"
 import {
   isIllustContentVisible,
-  isR18ContentVisible,
+  isNovelContentVisible,
   loadSettings,
   onSettingsChanged,
 } from "../store/settings"
@@ -47,8 +47,11 @@ function getVisibleHistory(kind: HistoryKind): HistoryEntry[] {
     if (entry.kind === "novel") {
       return (
         kind === "novel" &&
-        isR18ContentVisible(entry.novel.x_restrict, settings.showR18, settings.showR18G) &&
-        (settings.showAI || entry.novel.novel_ai_type !== 2)
+        isNovelContentVisible(
+          entry.novel,
+          settings,
+          settings.libraryFilterExempt
+        )
       )
     }
     const matchesKind =
@@ -57,7 +60,14 @@ function getVisibleHistory(kind: HistoryKind): HistoryEntry[] {
         : kind === "manga"
           ? entry.illustration.type === "manga"
           : false
-    return matchesKind && isIllustContentVisible(entry.illustration, settings)
+    return (
+      matchesKind &&
+      isIllustContentVisible(
+        entry.illustration,
+        settings,
+        settings.libraryFilterExempt
+      )
+    )
   })
 }
 

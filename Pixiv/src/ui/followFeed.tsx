@@ -26,7 +26,7 @@ import {
 import { cardThumbUrlOf, novelThumbUrlOf, prefetch } from "../image/imageLoader"
 import {
   isIllustContentVisible,
-  isR18ContentVisible,
+  isNovelContentVisible,
   loadSettings,
   onSettingsChanged,
 } from "../store/settings"
@@ -458,12 +458,8 @@ function filterFollowingIllustrationItems(items: PixivIllustration[]): PixivIllu
 
 function filterFollowingNovelItems(items: PixivNovel[]): PixivNovel[] {
   const settings = loadSettings()
-  return items.filter(
-    (novel) =>
-      settings.followFilterExempt || (
-        isR18ContentVisible(novel.x_restrict, settings.showR18, settings.showR18G) &&
-        (settings.showAI || novel.novel_ai_type !== 2)
-      )
+  return items.filter((novel) =>
+    isNovelContentVisible(novel, settings, settings.followFilterExempt)
   )
 }
 
@@ -474,11 +470,7 @@ function filterIllustrationItems(items: PixivIllustration[]): PixivIllustration[
 
 function filterNovelItems(items: PixivNovel[]): PixivNovel[] {
   const settings = loadSettings()
-  return items.filter(
-    (item) =>
-      isR18ContentVisible(item.x_restrict, settings.showR18, settings.showR18G) &&
-      (settings.showAI || item.novel_ai_type !== 2)
-  )
+  return items.filter((item) => isNovelContentVisible(item, settings))
 }
 
 function filterWatchlistItems(

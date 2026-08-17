@@ -16,7 +16,7 @@ import { nextIllustrations, nextNovels, novelRanking, ranking } from "../api/pix
 import { cardThumbUrlOf, novelThumbUrlOf, prefetch } from "../image/imageLoader"
 import {
   isIllustContentVisible,
-  isR18ContentVisible,
+  isNovelContentVisible,
   loadSettings,
   onSettingsChanged,
 } from "../store/settings"
@@ -532,9 +532,5 @@ function filterMangaRankingItems(items: PixivIllustration[]): PixivIllustration[
 
 function filterNovelRankingItems(items: PixivNovel[]): PixivNovel[] {
   const settings = loadSettings()
-  return items.filter(
-    (item) =>
-      isR18ContentVisible(item.x_restrict, settings.showR18, settings.showR18G) &&
-      (settings.showAI || item.novel_ai_type !== 2)
-  )
+  return items.filter((item) => isNovelContentVisible(item, settings))
 }

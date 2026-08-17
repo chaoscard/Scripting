@@ -19,7 +19,12 @@ import {
   enforceCacheLimit,
 } from "../image/imageLoader"
 import { clearHistory, historyCount, onHistoryChanged } from "../store/history"
-import { loadSettings, onSettingsChanged, updateSettings } from "../store/settings"
+import {
+  loadSettings,
+  onSettingsChanged,
+  updateSettings,
+  type LaunchPage,
+} from "../store/settings"
 import { clearUgoiraCache, ugoiraCacheUsageBytes } from "../ugoira/ugoira"
 import { useTimedFlag } from "./hooks"
 
@@ -91,7 +96,8 @@ export function SettingsView() {
         <Toggle title="显示 R18 作品" value={settings.showR18} onChanged={(value) => update({ showR18: value })} />
         <Toggle title="显示 R18G 作品" value={settings.showR18G} onChanged={(value) => update({ showR18G: value })} />
         <Toggle title="显示 AI 生成作品" value={settings.showAI} onChanged={(value) => update({ showAI: value })} />
-        <Toggle title="关注豁免" value={settings.followFilterExempt} onChanged={(value) => update({ followFilterExempt: value })} />
+        <Toggle title="豁免关注和追更" value={settings.followFilterExempt} onChanged={(value) => update({ followFilterExempt: value })} />
+        <Toggle title="豁免收藏和记录" value={settings.libraryFilterExempt} onChanged={(value) => update({ libraryFilterExempt: value })} />
         <NavigationLink value="blockedSettings">
           <HStack spacing={8}>
             <Text font="body">屏蔽设置</Text>
@@ -104,6 +110,17 @@ export function SettingsView() {
       </Section>
 
       <Section header={<Text>功能</Text>}>
+        <Picker
+          title="启动页面"
+          value={settings.launchPage}
+          onChanged={(value: string) =>
+            update({ launchPage: value as LaunchPage })
+          }
+        >
+          <Text tag="discovery">探索</Text>
+          <Text tag="ranking">排行</Text>
+          <Text tag="following">关注</Text>
+        </Picker>
         <Toggle title="沉浸效果" value={settings.ambientImmersion} onChanged={(value) => update({ ambientImmersion: value })} />
         {settings.ambientImmersion ? (
           <Picker

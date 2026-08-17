@@ -22,19 +22,28 @@ import {
   novelBookmarkDetail,
   novelBookmarkTags,
   novelDetail,
+  novelSeries,
   novelViewerData,
   removeNovelBookmark,
   unfollowUser,
 } from "../api/pixiv"
 import { session } from "../api/session"
 import { useAsyncGuard, useLatest } from "./hooks"
-import { recordNovelHistory, updateNovelHistoryBookmark } from "../store/history"
+import {
+  hasHistory,
+  onHistoryChanged,
+  recordNovelHistory,
+  updateNovelHistoryBookmark,
+} from "../store/history"
 import { onUserFollowChanged } from "../store/userFollow"
+import { isSeriesWatched, onWatchlistChanged, recordWatchedSeries } from "../store/watchlist"
 import type { PixivNovel, PixivNovelDetail } from "../types"
 import {
+  isNovelContentVisible,
   isR18ContentVisible,
   loadSettings,
   onSettingsChanged,
+  type AppSettings,
 } from "../store/settings"
 import {
   AvatarImage,
@@ -51,6 +60,23 @@ import { renderDestination } from "./routes"
 import { requestPixivRoute } from "./routeNavigation"
 
 const RESTRICTED_CONTENT_MESSAGE = "该小说已被内容分级设置隐藏"
+
+function isNovelExempt(
+  detail: PixivNovelDetail,
+  settings: AppSettings,
+  isBookmarked = false,
+  isFollowed = false
+): boolean {
+  if (settings.followFilterExempt) {
+    if (isFollowed || detail.user?.is_followed) return true
+    if (detail.series?.id != null && isSeriesWatched(detail.series.id)) return true
+  }
+  if (settings.libraryFilterExempt) {
+    if (isBookmarked || detail.is_bookmarked) return true
+    if (hasHistory(detail.id, "novel")) return true
+  }
+  return false
+}
 const TEXT_CHUNK_SIZE = 2000
 
 function chunkText(text: string, size = TEXT_CHUNK_SIZE): string[] {
@@ -94,12 +120,24 @@ export function NovelDetailView(props: { novelID: number }) {
       const detail = await session.call((token) => novelDetail(novelID, token))
       if (!g.isCurrent()) return
       const settings = loadSettings()
+      let isExempt = isNovelExempt(detail, settings, detail.is_bookmarked, detail.user?.is_followed ?? false)
+      if (!isNovelContentVisible(detail, settings, isExempt)) {
+        if (settings.followFilterExempt && detail.series?.id != null && !isSeriesWatched(detail.series.id)) {
+          try {
+            const seriesData = await session.call((token) => novelSeries(detail.series!.id, token))
+            const seriesWatched = Boolean(
+              seriesData.novel_series_detail?.watchlist_added ??
+              (seriesData.novel_series_detail as any)?.is_watched
+            )
+            recordWatchedSeries(detail.series!.id, seriesWatched)
+            if (seriesWatched && isNovelContentVisible(detail, settings, true)) {
+              isExempt = true
+            }
+          } catch {}
+        }
+      }
       if (
-        !isR18ContentVisible(
-          detail.x_restrict,
-          settings.showR18,
-          settings.showR18G
-        )
+        !isNovelContentVisible(detail, settings, isExempt)
       ) {
         restrictedLevelRef.current = detail.x_restrict
         setNovel(null)
@@ -144,20 +182,22 @@ export function NovelDetailView(props: { novelID: number }) {
     return onSettingsChanged(() => {
       const settings = loadSettings()
       const current = novelRef.current
-      if (
-        current &&
-        !isR18ContentVisible(
-          current.x_restrict,
-          settings.showR18,
-          settings.showR18G
-        )
-      ) {
-        restrictedLevelRef.current = current.x_restrict
-        guard()
-        setNovel(null)
-        setText("")
-        setError(RESTRICTED_CONTENT_MESSAGE)
-        setLoading(false)
+      if (current) {
+        const isExempt = isNovelExempt(current, settings, bookmarked, followed)
+        if (
+          !isNovelContentVisible(
+            current,
+            settings,
+            isExempt
+          )
+        ) {
+          restrictedLevelRef.current = current.x_restrict
+          guard()
+          setNovel(null)
+          setText("")
+          setError(RESTRICTED_CONTENT_MESSAGE)
+          setLoading(false)
+        }
       } else if (
         !current &&
         errorRef.current === RESTRICTED_CONTENT_MESSAGE &&
@@ -171,7 +211,38 @@ export function NovelDetailView(props: { novelID: number }) {
         load()
       }
     })
-  }, [])
+  }, [bookmarked, followed])
+
+  useEffect(() => {
+    return onWatchlistChanged((seriesID) => {
+      const current = novelRef.current
+      if (current?.series?.id === seriesID) {
+        const settings = loadSettings()
+        const isExempt = isNovelExempt(current, settings, bookmarked, followed)
+        if (!isNovelContentVisible(current, settings, isExempt)) {
+          restrictedLevelRef.current = current.x_restrict
+          guard()
+          setNovel(null)
+          setText("")
+          setError(RESTRICTED_CONTENT_MESSAGE)
+          setLoading(false)
+        }
+      } else if (!current && errorRef.current === RESTRICTED_CONTENT_MESSAGE) {
+        load()
+      }
+    })
+  }, [bookmarked, followed])
+
+  useEffect(() => {
+    return onHistoryChanged(() => {
+      if (!novelRef.current && errorRef.current === RESTRICTED_CONTENT_MESSAGE) {
+        const settings = loadSettings()
+        if (settings.libraryFilterExempt && hasHistory(novelID, "novel")) {
+          load()
+        }
+      }
+    })
+  }, [novelID])
 
   async function toggleBookmark() {
     if (!novel || bookmarkLoading) return
@@ -365,7 +436,7 @@ export function NovelDetailView(props: { novelID: number }) {
               />
               {Boolean(current.series?.id) && (
                 <Button
-                  title={`系列：${current.series?.title ?? "未知系列"}`}
+                  title={`系列：${current.series?.title || "未命名系列"}`}
                   action={() => Pasteboard.setString(current.series?.title ?? "")}
                 />
               )}
@@ -439,29 +510,29 @@ export function NovelDetailView(props: { novelID: number }) {
           </VStack>
 
           {/* 系列 */}
-          {current.series || current.series_prev || current.series_next ? (
+          {Boolean(current.series?.id) || Boolean(current.series_prev?.id) || Boolean(current.series_next?.id) ? (
             <VStack alignment="leading" spacing={4}>
               <Text font="subheadline" fontWeight="semibold">
                 系列
               </Text>
-              {current.series ? (
+              {Boolean(current.series?.id) && current.series ? (
                 <NavigationLink value={`novelSeries:${current.series.id}`}>
                   <Text font="footnote" foregroundStyle="#007AFF">
-                    {current.series.title ?? "未知系列"}
+                    {current.series.title || "系列详情"}
                   </Text>
                 </NavigationLink>
               ) : null}
-              {current.series_prev ? (
+              {Boolean(current.series_prev?.id) && current.series_prev ? (
                 <NavigationLink value={`novel:${current.series_prev.id}`}>
                   <Text font="footnote" foregroundStyle="#007AFF">
-                    ← 上一话：{current.series_prev.title ?? "上一话"}
+                    ← 上一话：{current.series_prev.title || "上一话"}
                   </Text>
                 </NavigationLink>
               ) : null}
-              {current.series_next ? (
+              {Boolean(current.series_next?.id) && current.series_next ? (
                 <NavigationLink value={`novel:${current.series_next.id}`}>
                   <Text font="footnote" foregroundStyle="#007AFF">
-                    下一话：{current.series_next.title ?? "下一话"} →
+                    下一话：{current.series_next.title || "下一话"} →
                   </Text>
                 </NavigationLink>
               ) : null}
