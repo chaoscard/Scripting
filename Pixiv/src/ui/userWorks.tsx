@@ -21,7 +21,7 @@ import {
   loadSettings,
   onSettingsChanged,
 } from "../store/settings"
-import { useLatest, usePagedList } from "./hooks"
+import { useLatest, usePagedList, currentBatchSize } from "./hooks"
 import type { PixivIllustration, PixivNovel } from "../types"
 import {
   EmptyView,
@@ -120,7 +120,7 @@ function UserWorksIllustFeed(props: {
     filter: filterIllustrations,
     deps: [userID, kind],
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel,
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
 
   useEffect(() => {
@@ -171,7 +171,7 @@ function UserWorksNovelFeed(props: {
     filter: filterNovels,
     deps: [userID],
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(novelThumbUrlOf)).cancel,
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
   })
 
   useEffect(() => {

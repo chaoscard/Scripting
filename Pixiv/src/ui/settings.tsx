@@ -1,9 +1,9 @@
 import {
   Button,
+  Group,
   HStack,
   Image,
   List,
-  LongPressGesture,
   NavigationLink,
   Picker,
   Section,
@@ -24,6 +24,7 @@ import {
   onSettingsChanged,
   updateSettings,
   type LaunchPage,
+  type ImageBatchConcurrency,
 } from "../store/settings"
 import { clearUgoiraCache, ugoiraCacheUsageBytes } from "../ugoira/ugoira"
 import { useTimedFlag } from "./hooks"
@@ -179,7 +180,18 @@ export function SettingsView() {
             frame={{ width: 30, height: 30 }}
             clipShape={{ type: "rect", cornerRadius: 15 }}
             contentShape="rect"
-            simultaneousGesture={LongPressGesture({ minDuration: 500 }).onEnded(clearAllHistory)}
+            contextMenu={{
+              menuItems: (
+                <Group>
+                  <Button
+                    title="清除全部浏览历史"
+                    systemImage="trash"
+                    role="destructive"
+                    action={clearAllHistory}
+                  />
+                </Group>
+              ),
+            }}
           >
             <Image systemName={historyCleared ? "checkmark" : "trash"} foregroundStyle={historyCleared ? "systemGreen" : "systemRed"} />
           </Button>
@@ -206,11 +218,36 @@ export function SettingsView() {
             frame={{ width: 30, height: 30 }}
             clipShape={{ type: "rect", cornerRadius: 15 }}
             contentShape="rect"
-            simultaneousGesture={LongPressGesture({ minDuration: 500 }).onEnded(clearAllCaches)}
+            contextMenu={{
+              menuItems: (
+                <Group>
+                  <Button
+                    title="清除全部图片缓存"
+                    systemImage="trash"
+                    role="destructive"
+                    action={clearAllCaches}
+                  />
+                </Group>
+              ),
+            }}
           >
             <Image systemName={cacheCleared ? "checkmark" : "trash"} foregroundStyle={cacheCleared ? "systemGreen" : "systemRed"} />
           </Button>
         </HStack>
+      </Section>
+
+      <Section header={<Text>实验箱</Text>}>
+        <Picker
+          title="图片并发数"
+          value={settings.imageBatchConcurrency}
+          onChanged={(value: string) =>
+            update({ imageBatchConcurrency: value as ImageBatchConcurrency })
+          }
+        >
+          <Text tag="low">低</Text>
+          <Text tag="medium">中</Text>
+          <Text tag="high">高</Text>
+        </Picker>
       </Section>
     </List>
   )

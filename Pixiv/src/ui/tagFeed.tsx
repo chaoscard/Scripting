@@ -19,7 +19,7 @@ import {
   loadSettings,
   onSettingsChanged,
 } from "../store/settings"
-import { useLatest, usePagedList } from "./hooks"
+import { useLatest, usePagedList, currentBatchSize } from "./hooks"
 import type { PixivIllustration } from "../types"
 import {
   EmptyView,
@@ -50,7 +50,7 @@ export function TagFeedView(props: { tag: string }) {
     filter: filterTagItems,
     deps: [tag],
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel
   })
 
   // 设置变更（R18/AI 开关）后立即重新加载过滤（与其他列表页一致）

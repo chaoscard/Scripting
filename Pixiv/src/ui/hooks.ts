@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "scripting"
 import { session } from "../api/session"
-import { loadSettings } from "../store/settings"
+import { getImageBatchSize, loadSettings } from "../store/settings"
 
 // ---------- 通用 hooks ----------
 
@@ -130,7 +130,9 @@ export function useRetainedKeys(currentKey: string, limit: number): ReadonlySet<
 
 // ---------- 分页列表 hook ----------
 
-const UI_BATCH_SIZE = 10
+export function currentBatchSize(): number {
+  return getImageBatchSize(loadSettings().imageBatchConcurrency)
+}
 
 export interface PageResult<T> {
   items: T[]
@@ -216,10 +218,11 @@ export function usePagedList<T extends { id: number | string }>(
   }
 
   const splitPage = (incoming: T[], existing: T[] = []) => {
+    const batchSize = currentBatchSize()
     const candidates = mergeUniqueByID(existing, applyFilter(incoming)).slice(existing.length)
     return {
-      published: candidates.slice(0, UI_BATCH_SIZE),
-      pending: candidates.slice(UI_BATCH_SIZE),
+      published: candidates.slice(0, batchSize),
+      pending: candidates.slice(batchSize),
     }
   }
 
@@ -248,16 +251,25 @@ export function usePagedList<T extends { id: number | string }>(
         !enabledRef.current
       ) return
 
-      // 首页可能全部被 R18/AI/屏蔽规则过滤。此时页面没有可作为
-      // onAppear 锚点的尾项，必须在状态机内继续消费服务端分页，直到
-      // 找到可展示内容或耗尽游标，不能把仍有 nextURL 的结果交给空态。
-      let sourceItems = page.items
-      let nextPageURL = page.nextURL
+      // 首页可能部分或全部被 R18/AI/屏蔽规则过滤。
+      // 若首屏有效条目不足一个批次且仍有 nextURL，向前多页探测收集满一个批次，
+      // 保证首屏卡片充实且有充足的滑动缓冲。
+      const batchSize = currentBatchSize()
+      let collected: T[] = []
+      let nextPageURL: string | null = page.nextURL
       const visitedURLs = new Set<string>()
-      let split = splitPage(sourceItems)
+      const existingSet = new Set<string>()
+
+      for (const item of applyFilter(page.items)) {
+        const idKey = String(item.id)
+        if (!existingSet.has(idKey)) {
+          existingSet.add(idKey)
+          collected.push(item)
+        }
+      }
+
       while (
-        split.published.length === 0 &&
-        split.pending.length === 0 &&
+        collected.length < batchSize &&
         nextPageURL &&
         moreRef.current &&
         !visitedURLs.has(nextPageURL)
@@ -270,12 +282,18 @@ export function usePagedList<T extends { id: number | string }>(
           activation !== activationRef.current ||
           !enabledRef.current
         ) return
-        sourceItems = mergeUniqueByID(sourceItems, page.items)
         nextPageURL = page.nextURL
-        split = splitPage(sourceItems)
+        for (const item of applyFilter(page.items)) {
+          const idKey = String(item.id)
+          if (!existingSet.has(idKey)) {
+            existingSet.add(idKey)
+            collected.push(item)
+          }
+        }
       }
 
-      const { published, pending } = split
+      const published = collected.slice(0, batchSize)
+      const pending = collected.slice(batchSize)
       setItems(published)
       setPendingItems(pending)
       setNextURL(nextPageURL)
@@ -311,7 +329,6 @@ export function usePagedList<T extends { id: number | string }>(
 
   // 触底时优先发布当前服务端页的本地缓冲；缓冲耗尽后才请求下一页。
   // anchor 为触发者的稳定尾项 ID，同一尾项只允许推进一次，避免多个 onAppear 跳批。
-  // 增加平滑加载缓冲时间，配合 iOS 橡皮筋阻尼回弹，确保展开新批次前视觉稳定。
   const loadMore = useCallback(async (anchor?: number | string) => {
     if (!enabledRef.current) return
     const tail = itemsRef.current[itemsRef.current.length - 1]
@@ -330,10 +347,11 @@ export function usePagedList<T extends { id: number | string }>(
         // 缓冲 1500ms：确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
         await new Promise((resolve) => setTimeout(() => resolve(undefined), 1500))
         if (loadingMoreTaskRef.current !== task || !enabledRef.current) return
-        const nextBatch = pending.slice(0, UI_BATCH_SIZE)
+        const batchSize = currentBatchSize()
+        const nextBatch = pending.slice(0, batchSize)
         setItems((current) => mergeUniqueByID(current, nextBatch))
-        setPendingItems(pending.slice(UI_BATCH_SIZE))
-        notifyBatchPublished(nextBatch, pending.slice(UI_BATCH_SIZE))
+        setPendingItems(pending.slice(batchSize))
+        notifyBatchPublished(nextBatch, pending.slice(batchSize))
       } finally {
         if (loadingMoreTaskRef.current === task) {
           loadingMoreTaskRef.current = null
@@ -352,19 +370,19 @@ export function usePagedList<T extends { id: number | string }>(
     loadingMoreTaskRef.current = task
     setLoadingMore(true)
     try {
-      let published: T[] = []
-      let pending: T[] = []
+      const batchSize = currentBatchSize()
+      const currentItems = itemsRef.current
+      const existingSet = new Set(currentItems.map((i) => String(i.id)))
+      const collectedNewItems: T[] = []
       let nextPageURL: string | null = url
       const visitedURLs = new Set<string>()
       let attempts = 0
-      const MAX_ATTEMPTS = 4
+      const MAX_ATTEMPTS = 6
 
-      // 若当前返回的页全部被过滤或与已有列表完全重复（如相关推荐高度重叠），
-      // 在单次加载任务内部向前自动探测后续游标（最多 4 次），避免将空批次交付给
-      // 未增加高度的 UI 触发器导致死循环自激请求。
+      // 若当前返回的页全部被过滤或与已有列表部分重复（如相关推荐高度重叠），
+      // 在单次加载任务内部向前自动探测并累积后续游标，直到凑满一个批次或游标耗尽。
       while (
-        published.length === 0 &&
-        pending.length === 0 &&
+        collectedNewItems.length < batchSize &&
         nextPageURL &&
         !visitedURLs.has(nextPageURL) &&
         attempts < MAX_ATTEMPTS
@@ -375,7 +393,7 @@ export function usePagedList<T extends { id: number | string }>(
         const [page]: [PageResult<T>, unknown] = await Promise.all([
           session.call((token) => moreFn(fetchUrl, token)),
           attempts === 1
-            ? new Promise((resolve) => setTimeout(() => resolve(undefined), 800))
+            ? new Promise((resolve) => setTimeout(() => resolve(undefined), 500))
             : Promise.resolve(),
         ])
         if (
@@ -386,15 +404,20 @@ export function usePagedList<T extends { id: number | string }>(
         ) return
 
         nextPageURL = page.nextURL
-        const current = itemsRef.current
-        const split = splitPage(page.items, current)
-        published = split.published
-        pending = split.pending
+        for (const item of applyFilter(page.items)) {
+          const idKey = String(item.id)
+          if (!existingSet.has(idKey)) {
+            existingSet.add(idKey)
+            collectedNewItems.push(item)
+          }
+        }
       }
 
+      const published = collectedNewItems.slice(0, batchSize)
+      const pending = collectedNewItems.slice(batchSize)
+
       if (published.length > 0) {
-        const current = itemsRef.current
-        setItems(mergeUniqueByID(current, published))
+        setItems((current) => mergeUniqueByID(current, published))
         setPendingItems(pending)
         notifyBatchPublished(published, pending)
       }

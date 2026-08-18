@@ -261,7 +261,7 @@ function useCachedImage(
               // 自动重试一次（对抗预取竞争、取消误杀或瞬时网络抖动）
               retryTimer = setTimeout(() => {
                 if (!cancelled) doLoad(true)
-              }, 400)
+              }, 500)
             } else {
               setLoaded({ url, path: null, revision: cacheRevision })
               setFailed(true)
@@ -274,7 +274,7 @@ function useCachedImage(
             if (!isRetry) {
               retryTimer = setTimeout(() => {
                 if (!cancelled) doLoad(true)
-              }, 400)
+              }, 500)
             } else {
               setLoaded({ url, path: null, revision: cacheRevision })
               setFailed(true)

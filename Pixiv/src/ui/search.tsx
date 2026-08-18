@@ -40,6 +40,7 @@ import {
 } from "../store/settings"
 import { destinationElement } from "./routes"
 import {
+  currentBatchSize,
   dedupeByID,
   useDebouncedCallback,
   useLatest,
@@ -114,7 +115,7 @@ export function SearchView(props: { onClose: () => void }) {
     deps: [submitted, sort],
     enabled: isIllustActive,
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel,
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
 
   // 2. 小说搜索流
@@ -130,7 +131,7 @@ export function SearchView(props: { onClose: () => void }) {
     deps: [submitted, sort],
     enabled: isNovelActive,
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(novelThumbUrlOf)).cancel,
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
   })
 
   // 3. 用户搜索流

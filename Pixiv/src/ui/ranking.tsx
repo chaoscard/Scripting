@@ -21,7 +21,7 @@ import {
   onSettingsChanged,
 } from "../store/settings"
 import { destinationElement } from "./routes"
-import { useLatest, usePagedList } from "./hooks"
+import { useLatest, usePagedList, currentBatchSize } from "./hooks"
 import type { PixivIllustration, PixivNovel } from "../types"
 import {
   appToolbar,
@@ -225,7 +225,7 @@ function IllustrationRankingFeed(props: {
     deps: ["illustration", "day"],
     enabled: mode === "day",
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel,
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
 
   // 2. 每周
@@ -236,7 +236,7 @@ function IllustrationRankingFeed(props: {
     deps: ["illustration", "week"],
     enabled: mode === "week",
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel,
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
 
   // 3. 每月
@@ -247,7 +247,7 @@ function IllustrationRankingFeed(props: {
     deps: ["illustration", "month"],
     enabled: mode === "month",
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel,
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
 
   // 4. 原创
@@ -258,7 +258,7 @@ function IllustrationRankingFeed(props: {
     deps: ["illustration", "week_original"],
     enabled: mode === "week_original",
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel,
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
 
   // 5. 新人
@@ -269,7 +269,7 @@ function IllustrationRankingFeed(props: {
     deps: ["illustration", "week_rookie"],
     enabled: mode === "week_rookie",
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel,
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
 
   const dayPagedRef = useLatest(dayPaged)
@@ -320,7 +320,7 @@ function MangaRankingFeed(props: {
     deps: ["manga", "day_manga"],
     enabled: mode === "day_manga",
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel,
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
 
   // 2. 每周
@@ -331,7 +331,7 @@ function MangaRankingFeed(props: {
     deps: ["manga", "week_manga"],
     enabled: mode === "week_manga",
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel,
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
 
   // 3. 每月
@@ -342,7 +342,7 @@ function MangaRankingFeed(props: {
     deps: ["manga", "month_manga"],
     enabled: mode === "month_manga",
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel,
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
 
   // 4. 新人
@@ -353,7 +353,7 @@ function MangaRankingFeed(props: {
     deps: ["manga", "week_rookie_manga"],
     enabled: mode === "week_rookie_manga",
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel,
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
 
   const dayPagedRef = useLatest(dayPaged)
@@ -400,7 +400,7 @@ function NovelRankingFeed(props: {
     deps: ["novel", "day"],
     enabled: mode === "day",
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(novelThumbUrlOf)).cancel,
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
   })
 
   // 2. 每周
@@ -411,7 +411,7 @@ function NovelRankingFeed(props: {
     deps: ["novel", "week"],
     enabled: mode === "week",
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(novelThumbUrlOf)).cancel,
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
   })
 
   // 3. 新人
@@ -422,7 +422,7 @@ function NovelRankingFeed(props: {
     deps: ["novel", "week_rookie"],
     enabled: mode === "week_rookie",
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(novelThumbUrlOf)).cancel,
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
   })
 
   const dayPagedRef = useLatest(dayPaged)

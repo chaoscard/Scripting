@@ -32,7 +32,7 @@ import {
 } from "../store/settings"
 import { refreshWatchlistFromCloud } from "../store/watchlist"
 import { destinationElement } from "./routes"
-import { useLatest, usePagedList } from "./hooks"
+import { useLatest, usePagedList, currentBatchSize } from "./hooks"
 import type {
   PixivIllustration,
   PixivNovel,
@@ -224,7 +224,7 @@ function FollowingIllustrationFeed(props: {
     filter: filterFollowingIllustrationItems,
     deps: [scope],
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel
   })
   useSettingsFilter(paged, true)
 
@@ -263,7 +263,7 @@ function FollowingNovelFeed(props: {
     filter: filterFollowingNovelItems,
     deps: [scope],
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(novelThumbUrlOf)).cancel
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel
   })
   useSettingsFilter(paged, true)
 
@@ -305,7 +305,7 @@ function WatchlistFeed(props: {
     filter: (items) => filterWatchlistItems(items, kind),
     deps: [kind],
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(watchlistThumbUrlOf)).cancel
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(watchlistThumbUrlOf)).cancel
   })
   const pagedRef = useLatest(paged)
   useEffect(() => {
@@ -352,7 +352,7 @@ function FriendIllustrationFeed(props: {
     filter: filterIllustrationItems,
     deps: [],
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel
   })
   useSettingsFilter(paged, true)
 
@@ -389,7 +389,7 @@ function FriendNovelFeed(props: {
     filter: filterNovelItems,
     deps: [],
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(novelThumbUrlOf)).cancel
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel
   })
   useSettingsFilter(paged, true)
 

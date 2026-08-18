@@ -16,6 +16,7 @@ export type CloseButtonAction = "minimize" | "exit"
 export type WatchlistSortOrder = "asc" | "desc"
 export type AmbientIntensity = "low" | "medium" | "high"
 export type LaunchPage = "discovery" | "ranking" | "following"
+export type ImageBatchConcurrency = "low" | "medium" | "high"
 
 export interface AppSettings {
   launchPage: LaunchPage
@@ -37,6 +38,7 @@ export interface AppSettings {
   prefetchEnabled: boolean
   cacheLimitMB: number | null
   recordHistory: boolean
+  imageBatchConcurrency: ImageBatchConcurrency
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -59,6 +61,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   prefetchEnabled: true,
   cacheLimitMB: 300,
   recordHistory: true,
+  imageBatchConcurrency: "low",
 }
 
 const KEY = "pixiv_settings_v1"
@@ -71,7 +74,21 @@ const DOWNLOAD_QUALITY_VALUES: readonly DownloadImageQuality[] = ["large", "orig
 const LONG_PRESS_ACTION_VALUES: readonly AppSettings["longPressBookmarkAction"][] = ["off", "follow", "detail"]
 const CLOSE_BUTTON_ACTION_VALUES: readonly CloseButtonAction[] = ["minimize", "exit"]
 const AMBIENT_INTENSITY_VALUES: readonly AmbientIntensity[] = ["low", "medium", "high"]
+const IMAGE_CONCURRENCY_VALUES: readonly ImageBatchConcurrency[] = ["low", "medium", "high"]
 const CACHE_LIMIT_VALUES = [300, 500, 1000, 2000] as const
+
+export function getImageBatchSize(level: ImageBatchConcurrency = "low"): number {
+  switch (level) {
+    case "low":
+      return 6
+    case "medium":
+      return 8
+    case "high":
+      return 10
+    default:
+      return 6
+  }
+}
 
 let cachedSettings: AppSettings | null = null
 const listeners = new Set<() => void>()
@@ -168,6 +185,9 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
     prefetchEnabled: boolOr(stored?.prefetchEnabled, DEFAULT_SETTINGS.prefetchEnabled),
     cacheLimitMB: cacheLimitOf(stored?.cacheLimitMB),
     recordHistory: boolOr(stored?.recordHistory, DEFAULT_SETTINGS.recordHistory),
+    imageBatchConcurrency: isOneOf(stored?.imageBatchConcurrency, IMAGE_CONCURRENCY_VALUES)
+      ? stored.imageBatchConcurrency
+      : DEFAULT_SETTINGS.imageBatchConcurrency,
   }
 }
 

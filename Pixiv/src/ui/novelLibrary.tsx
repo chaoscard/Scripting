@@ -11,7 +11,7 @@ import {
   loadSettings,
   onSettingsChanged,
 } from "../store/settings"
-import { useLatest, usePagedList } from "./hooks"
+import { useLatest, usePagedList, currentBatchSize } from "./hooks"
 import { destinationElement } from "./routes"
 import type { PixivNovelMarker } from "../types"
 import {
@@ -42,7 +42,7 @@ export function NovelLibraryView() {
     deps: [],
     onBatchPublished: (_, pendingItems) =>
       prefetch(
-        pendingItems.slice(0, 10).map((item) => novelThumbUrlOf(item.novel))
+        pendingItems.slice(0, currentBatchSize()).map((item) => novelThumbUrlOf(item.novel))
       ).cancel,
   })
 

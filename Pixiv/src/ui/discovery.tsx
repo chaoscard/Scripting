@@ -30,7 +30,7 @@ import {
   onSettingsChanged,
 } from "../store/settings"
 import { destinationElement } from "./routes"
-import { useLatest, usePagedList } from "./hooks"
+import { useLatest, usePagedList, currentBatchSize } from "./hooks"
 import type {
   PixivIllustration,
   PixivNovel,
@@ -112,7 +112,7 @@ function RecommendedExploreFeed(props: {
     deps: ["recommended", "illustration"],
     enabled: kind === "illustration",
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel,
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
 
   // 2. 推荐 - 漫画
@@ -123,7 +123,7 @@ function RecommendedExploreFeed(props: {
     deps: ["recommended", "manga"],
     enabled: kind === "manga",
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel,
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
 
   // 3. 推荐 - 小说
@@ -134,7 +134,7 @@ function RecommendedExploreFeed(props: {
     deps: ["recommended"],
     enabled: kind === "novel",
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(novelThumbUrlOf)).cancel,
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
   })
 
   const illustPagedRef = useLatest(illustPaged)
@@ -183,7 +183,7 @@ function LatestExploreFeed(props: {
     deps: ["latest", "illustration"],
     enabled: kind === "illustration",
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel,
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
 
   // 2. 最新 - 漫画
@@ -194,7 +194,7 @@ function LatestExploreFeed(props: {
     deps: ["latest", "manga"],
     enabled: kind === "manga",
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel,
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
 
   // 3. 最新 - 小说
@@ -205,7 +205,7 @@ function LatestExploreFeed(props: {
     deps: ["latest"],
     enabled: kind === "novel",
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(novelThumbUrlOf)).cancel,
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
   })
 
   const illustPagedRef = useLatest(illustPaged)
@@ -251,7 +251,7 @@ function VisionExploreFeed(props: {
     deps: [],
     enabled: true,
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map((item) => item.imageURL)).cancel,
+      prefetch(pendingItems.slice(0, currentBatchSize()).map((item) => item.imageURL)).cancel,
   })
 
   useEffect(() => {

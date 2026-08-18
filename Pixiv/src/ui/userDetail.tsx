@@ -56,7 +56,7 @@ import {
 } from "../store/settings"
 import { onUserFollowChanged } from "../store/userFollow"
 import { renderDestination } from "./routes"
-import { useAsyncGuard, useLatest, usePagedList } from "./hooks"
+import { useAsyncGuard, useLatest, usePagedList, currentBatchSize } from "./hooks"
 import type {
   PixivIllustration,
   PixivNovel,
@@ -120,7 +120,7 @@ export function UserDetailView(props: { userID: number }) {
       if (bgUrl && !cachedFileExists(bgUrl)) {
         await Promise.race([
           loadImage(bgUrl, 0),
-          new Promise((resolve) => setTimeout(() => resolve(null), 800)),
+          new Promise((resolve) => setTimeout(() => resolve(null), 1000)),
         ])
       }
 
@@ -433,7 +433,7 @@ function UserIllustFeed(props: {
     filter: filterIllustrations,
     deps: [userID, kind],
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel,
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
 
   useEffect(() => {
@@ -483,7 +483,7 @@ function UserNovelFeed(props: {
     filter: filterNovels,
     deps: [userID],
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(novelThumbUrlOf)).cancel,
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
   })
 
   useEffect(() => {

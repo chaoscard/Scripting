@@ -54,7 +54,7 @@ import {
 } from "../store/history"
 import { onUserFollowChanged } from "../store/userFollow"
 import { isSeriesWatched, onWatchlistChanged, recordWatchedSeries } from "../store/watchlist"
-import { useAsyncGuard, useLatest, usePagedList } from "./hooks"
+import { useAsyncGuard, useLatest, usePagedList, currentBatchSize } from "./hooks"
 import type { PixivIllustration } from "../types"
 import {
   AvatarImage,
@@ -224,7 +224,7 @@ export function IllustDetailView(props: { illustID: number }) {
       return
     }
     const coverUrl = illust
-      ? (cardThumbUrlOf(illust) ?? imageUrlOf(illust, 0, quality))
+      ? (illust.image_urls?.square_medium ?? cardThumbUrlOf(illust) ?? imageUrlOf(illust, 0, quality))
       : null
     if (!coverUrl) {
       setAmbientPalette(null)
@@ -623,7 +623,6 @@ export function IllustDetailView(props: { illustID: number }) {
                   key={idx}
                   url={url}
                   aspectRatioValue={pageAspect}
-                  useIntrinsicAspectRatio={true}
                   cornerRadius={6}
                   contentMode="fit"
                   priority={idx}
@@ -635,7 +634,6 @@ export function IllustDetailView(props: { illustID: number }) {
             <CachedImage
               url={pageURLs[0] ?? null}
               aspectRatioValue={pageAspect}
-              useIntrinsicAspectRatio={true}
               cornerRadius={8}
               contentMode="fit"
               priority={0}
@@ -785,7 +783,7 @@ function RelatedIllustrationsSection(props: {
     deps: [props.illustID],
     enabled,
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel,
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
   const pagedRef = useLatest(paged)
 

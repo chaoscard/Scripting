@@ -29,7 +29,7 @@ import {
   loadSettings,
   onSettingsChanged,
 } from "../store/settings"
-import { useAsyncGuard, useLatest, usePagedList } from "./hooks"
+import { useAsyncGuard, useLatest, usePagedList, currentBatchSize } from "./hooks"
 import type { PixivBookmarkTag, PixivIllustration, PixivNovel } from "../types"
 import {
   EmptyView,
@@ -182,7 +182,7 @@ function IllustrationLibraryFeed(props: {
     filter: filterIllustrationBookmarks,
     deps: [props.restrict, activeTag],
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(cardThumbUrlOf)).cancel,
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
 
   useEffect(() => {
@@ -251,7 +251,7 @@ function NovelLibraryFeed(props: {
     filter: filterNovelBookmarks,
     deps: [props.restrict, activeTag],
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).map(novelThumbUrlOf)).cancel,
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
   })
 
   useEffect(() => {

@@ -37,7 +37,7 @@ import {
 } from "./components"
 import { novelThumbUrlOf, prefetch, thumbUrlOf } from "../image/imageLoader"
 import { onUserFollowChanged } from "../store/userFollow"
-import { usePagedList } from "./hooks"
+import { usePagedList, currentBatchSize } from "./hooks"
 
 export type ConnectionRouteKind = "following" | "follower" | "mypixiv"
 type ConnectionVisibility = Extract<Visibility, "public" | "private">
@@ -80,7 +80,7 @@ export function UserConnectionsView(props: {
     more: async (nextURL, token) => normalizePage(await nextUsers(nextURL, token)),
     deps: [userID, props.kind, restrict],
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, 10).flatMap(connectionPreviewImageURLs)).cancel,
+      prefetch(pendingItems.slice(0, currentBatchSize()).flatMap(connectionPreviewImageURLs)).cancel,
   })
 
   return (
