@@ -62,7 +62,7 @@ import { renderDestination } from "./routes"
 
 type SeriesKind = "manga" | "novel"
 
-const UI_BATCH_SIZE = 10
+import { currentBatchSize, currentPaginationDelayMs, currentPrefetchWindowSize } from "./hooks"
 
 function seriesIllust(
   item: PixivIllustrationSeriesItem,
@@ -235,21 +235,23 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
       const filtered = filterSeriesIllusts(rawMappedIllustsRef.current, isWatchedNow)
       allIllustsRef.current = filtered
       const sorted = targetAsc ? filtered : [...filtered].reverse()
-      const pub = sorted.slice(0, UI_BATCH_SIZE)
-      const pend = sorted.slice(UI_BATCH_SIZE)
+      const batchSize = currentBatchSize()
+      const pub = sorted.slice(0, batchSize)
+      const pend = sorted.slice(batchSize)
       setPublishedIllusts(pub)
       setPendingIllusts(pend)
       prefetchTaskRef.current?.cancel()
       prefetchTaskRef.current = prefetch([
         ...pub.map(cardThumbUrlOf),
-        ...pend.slice(0, UI_BATCH_SIZE).map(cardThumbUrlOf),
+        ...pend.slice(0, currentPrefetchWindowSize()).map(cardThumbUrlOf),
       ])
     } else {
       const filtered = filterSeriesNovels(rawMappedNovelsRef.current, isWatchedNow)
       allNovelsRef.current = filtered
       const sorted = targetAsc ? filtered : [...filtered].reverse()
-      setPublishedNovels(sorted.slice(0, UI_BATCH_SIZE))
-      setPendingNovels(sorted.slice(UI_BATCH_SIZE))
+      const batchSize = currentBatchSize()
+      setPublishedNovels(sorted.slice(0, batchSize))
+      setPendingNovels(sorted.slice(batchSize))
     }
   }
 
@@ -327,8 +329,9 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
         setWorkCount(detail.series_work_count ?? allRawIllusts.length)
 
         const sorted = currentAsc ? filtered : [...filtered].reverse()
-        const pub = sorted.slice(0, UI_BATCH_SIZE)
-        const pend = sorted.slice(UI_BATCH_SIZE)
+        const batchSize = currentBatchSize()
+        const pub = sorted.slice(0, batchSize)
+        const pend = sorted.slice(batchSize)
 
         setPublishedIllusts(pub)
         setPendingIllusts(pend)
@@ -338,7 +341,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
         prefetchTaskRef.current?.cancel()
         prefetchTaskRef.current = prefetch([
           ...pub.map(cardThumbUrlOf),
-          ...pend.slice(0, UI_BATCH_SIZE).map(cardThumbUrlOf),
+          ...pend.slice(0, currentPrefetchWindowSize()).map(cardThumbUrlOf),
         ])
       } else {
         const result = await session.call((token) => novelSeries(props.seriesID, token))
@@ -391,8 +394,9 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
         setWorkCount(detail.content_count ?? allRawNovels.length)
 
         const sorted = currentAsc ? filtered : [...filtered].reverse()
-        const pub = sorted.slice(0, UI_BATCH_SIZE)
-        const pend = sorted.slice(UI_BATCH_SIZE)
+        const batchSize = currentBatchSize()
+        const pub = sorted.slice(0, batchSize)
+        const pend = sorted.slice(batchSize)
 
         setPublishedNovels(pub)
         setPendingNovels(pend)
@@ -413,14 +417,15 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
       loadingMoreLockRef.current = true
       setLoadingMore(true)
       try {
-        // 缓冲 1500ms：确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
-        await new Promise((resolve) => setTimeout(() => resolve(undefined), 1500))
-        const nextBatch = pendingIllusts.slice(0, UI_BATCH_SIZE)
-        const remaining = pendingIllusts.slice(UI_BATCH_SIZE)
+        // 缓冲：根据实验箱设置动态展示触底反馈，随后平滑展开新批次卡片
+        await new Promise((resolve) => setTimeout(() => resolve(undefined), currentPaginationDelayMs()))
+        const batchSize = currentBatchSize()
+        const nextBatch = pendingIllusts.slice(0, batchSize)
+        const remaining = pendingIllusts.slice(batchSize)
         setPublishedIllusts((current) => [...current, ...nextBatch])
         setPendingIllusts(remaining)
         prefetchTaskRef.current?.cancel()
-        prefetchTaskRef.current = prefetch(remaining.slice(0, UI_BATCH_SIZE).map(cardThumbUrlOf))
+        prefetchTaskRef.current = prefetch(remaining.slice(0, currentPrefetchWindowSize()).map(cardThumbUrlOf))
       } catch {
         // 出错静默，允许用户再次触底重试
       } finally {
@@ -432,9 +437,10 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
       loadingMoreLockRef.current = true
       setLoadingMore(true)
       try {
-        await new Promise((resolve) => setTimeout(() => resolve(undefined), 1500))
-        const nextBatch = pendingNovels.slice(0, UI_BATCH_SIZE)
-        const remaining = pendingNovels.slice(UI_BATCH_SIZE)
+        await new Promise((resolve) => setTimeout(() => resolve(undefined), currentPaginationDelayMs()))
+        const batchSize = currentBatchSize()
+        const nextBatch = pendingNovels.slice(0, batchSize)
+        const remaining = pendingNovels.slice(batchSize)
         setPublishedNovels((current) => [...current, ...nextBatch])
         setPendingNovels(remaining)
       } catch {
@@ -580,19 +586,21 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
               updateSettings({ watchlistSortOrder: nextAsc ? "asc" : "desc" })
               if (props.kind === "manga") {
                 const sorted = nextAsc ? allIllustsRef.current : [...allIllustsRef.current].reverse()
-                const pub = sorted.slice(0, UI_BATCH_SIZE)
-                const pend = sorted.slice(UI_BATCH_SIZE)
+                const batchSize = currentBatchSize()
+                const pub = sorted.slice(0, batchSize)
+                const pend = sorted.slice(batchSize)
                 setPublishedIllusts(pub)
                 setPendingIllusts(pend)
                 prefetchTaskRef.current?.cancel()
                 prefetchTaskRef.current = prefetch([
                   ...pub.map(cardThumbUrlOf),
-                  ...pend.slice(0, UI_BATCH_SIZE).map(cardThumbUrlOf),
+                  ...pend.slice(0, currentPrefetchWindowSize()).map(cardThumbUrlOf),
                 ])
               } else {
                 const sorted = nextAsc ? allNovelsRef.current : [...allNovelsRef.current].reverse()
-                setPublishedNovels(sorted.slice(0, UI_BATCH_SIZE))
-                setPendingNovels(sorted.slice(UI_BATCH_SIZE))
+                const batchSize = currentBatchSize()
+                setPublishedNovels(sorted.slice(0, batchSize))
+                setPendingNovels(sorted.slice(batchSize))
               }
             }}
           >

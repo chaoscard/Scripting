@@ -37,7 +37,7 @@ import {
 import { cardThumbUrlOf, novelThumbUrlOf, prefetch } from "../image/imageLoader"
 import type { PixivNovel } from "../types"
 
-const UI_BATCH_SIZE = 10
+import { currentBatchSize, currentPaginationDelayMs, currentPrefetchWindowSize } from "./hooks"
 
 type HistoryKind = HistoryContentKind
 
@@ -198,7 +198,7 @@ function HistoryFeed(props: {
 }
 
 function HistoryContent(props: { kind: HistoryKind; items: HistoryEntry[] }) {
-  const [visibleCount, setVisibleCount] = useState(UI_BATCH_SIZE)
+  const [visibleCount, setVisibleCount] = useState<number>(currentBatchSize())
   const [loadingMore, setLoadingMore] = useState(false)
   const loadingMoreLockRef = useRef(false)
   const prevKindRef = useRef(props.kind)
@@ -207,7 +207,7 @@ function HistoryContent(props: { kind: HistoryKind; items: HistoryEntry[] }) {
   useEffect(() => {
     if (prevKindRef.current !== props.kind) {
       prevKindRef.current = props.kind
-      setVisibleCount(UI_BATCH_SIZE)
+      setVisibleCount(currentBatchSize())
       loadingMoreLockRef.current = false
       setLoadingMore(false)
     }
@@ -220,7 +220,7 @@ function HistoryContent(props: { kind: HistoryKind; items: HistoryEntry[] }) {
         (entry): entry is Extract<HistoryEntry, { kind: "novel" }> =>
           entry.kind === "novel"
       )
-      const nextNovels = novels.slice(visibleCount, visibleCount + UI_BATCH_SIZE)
+      const nextNovels = novels.slice(visibleCount, visibleCount + currentPrefetchWindowSize())
       prefetchTaskRef.current = prefetch(
         nextNovels.map((e) => novelThumbUrlOf(e.novel as PixivNovel))
       )
@@ -229,7 +229,7 @@ function HistoryContent(props: { kind: HistoryKind; items: HistoryEntry[] }) {
         (entry): entry is Extract<HistoryEntry, { kind: "illust" }> =>
           entry.kind === "illust"
       )
-      const nextIllusts = illustEntries.slice(visibleCount, visibleCount + UI_BATCH_SIZE)
+      const nextIllusts = illustEntries.slice(visibleCount, visibleCount + currentPrefetchWindowSize())
       prefetchTaskRef.current = prefetch(
         nextIllusts.map((e) => cardThumbUrlOf(e.illustration))
       )
@@ -258,9 +258,9 @@ function HistoryContent(props: { kind: HistoryKind; items: HistoryEntry[] }) {
       loadingMoreLockRef.current = true
       setLoadingMore(true)
       try {
-        // 缓冲 1500ms：确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
-        await new Promise((resolve) => setTimeout(() => resolve(undefined), 1500))
-        setVisibleCount((c) => Math.min(c + UI_BATCH_SIZE, novels.length))
+        // 缓冲：根据实验箱设置动态展示触底反馈，随后平滑展开新批次卡片
+        await new Promise((resolve) => setTimeout(() => resolve(undefined), currentPaginationDelayMs()))
+        setVisibleCount((c: number) => Math.min(c + currentBatchSize(), novels.length))
       } finally {
         loadingMoreLockRef.current = false
         setLoadingMore(false)
@@ -307,9 +307,9 @@ function HistoryContent(props: { kind: HistoryKind; items: HistoryEntry[] }) {
     loadingMoreLockRef.current = true
     setLoadingMore(true)
     try {
-      // 缓冲 1500ms：确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
-      await new Promise((resolve) => setTimeout(() => resolve(undefined), 1500))
-      setVisibleCount((c) => Math.min(c + UI_BATCH_SIZE, illustEntries.length))
+      // 缓冲：根据实验箱设置动态展示触底反馈，随后平滑展开新批次卡片
+      await new Promise((resolve) => setTimeout(() => resolve(undefined), currentPaginationDelayMs()))
+      setVisibleCount((c: number) => Math.min(c + currentBatchSize(), illustEntries.length))
     } finally {
       loadingMoreLockRef.current = false
       setLoadingMore(false)
