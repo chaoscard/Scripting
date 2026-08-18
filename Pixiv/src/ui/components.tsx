@@ -2056,7 +2056,6 @@ export function InfoCard(props: {
 }) {
   const { title = "信息", fields } = props
   const [copied, setCopiedOn] = useTimedFlag(2000)
-
   function copyField(f: { label: string; value: string | number }) {
     Pasteboard.setString(`${f.label}：${f.value}`)
     setCopiedOn()
