@@ -200,13 +200,7 @@ export function NovelDetailView(props: { novelID: number }) {
         }
       } else if (
         !current &&
-        errorRef.current === RESTRICTED_CONTENT_MESSAGE &&
-        restrictedLevelRef.current != null &&
-        isR18ContentVisible(
-          restrictedLevelRef.current,
-          settings.showR18,
-          settings.showR18G
-        )
+        errorRef.current === RESTRICTED_CONTENT_MESSAGE
       ) {
         load()
       }

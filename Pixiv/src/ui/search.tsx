@@ -33,7 +33,7 @@ import {
 } from "../image/imageLoader"
 import {
   isIllustContentVisible,
-  isR18ContentVisible,
+  isNovelContentVisible,
   isUserBlocked,
   loadSettings,
   onSettingsChanged,
@@ -124,14 +124,7 @@ export function SearchView(props: { onClose: () => void }) {
     filter: (items) => {
       const settings = loadSettings()
       return dedupeByID(
-        items.filter(
-          (novel) =>
-            isR18ContentVisible(
-              novel.x_restrict,
-              settings.showR18,
-              settings.showR18G
-            ) && (settings.showAI || novel.novel_ai_type !== 2)
-        )
+        items.filter((novel) => isNovelContentVisible(novel, settings))
       )
     },
     deps: [submitted, sort],
