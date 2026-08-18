@@ -352,27 +352,58 @@ export function usePagedList<T extends { id: number | string }>(
     loadingMoreTaskRef.current = task
     setLoadingMore(true)
     try {
-      const [page] = await Promise.all([
-        session.call((token) => moreFn(url, token)),
-        // 保证至少有 1500ms 的平滑转圈反馈时间
-        new Promise((resolve) => setTimeout(() => resolve(undefined), 1500)),
-      ])
-      if (
-        seq !== seqRef.current ||
-        activation !== activationRef.current ||
-        !enabledRef.current ||
-        loadingMoreTaskRef.current !== task
-      ) return
-      const current = itemsRef.current
-      const { published, pending } = splitPage(page.items, current)
+      let published: T[] = []
+      let pending: T[] = []
+      let nextPageURL: string | null = url
+      const visitedURLs = new Set<string>()
+      let attempts = 0
+      const MAX_ATTEMPTS = 4
+
+      // 若当前返回的页全部被过滤或与已有列表完全重复（如相关推荐高度重叠），
+      // 在单次加载任务内部向前自动探测后续游标（最多 4 次），避免将空批次交付给
+      // 未增加高度的 UI 触发器导致死循环自激请求。
+      while (
+        published.length === 0 &&
+        pending.length === 0 &&
+        nextPageURL &&
+        !visitedURLs.has(nextPageURL) &&
+        attempts < MAX_ATTEMPTS
+      ) {
+        attempts++
+        const fetchUrl: string = nextPageURL
+        visitedURLs.add(fetchUrl)
+        const [page]: [PageResult<T>, unknown] = await Promise.all([
+          session.call((token) => moreFn(fetchUrl, token)),
+          attempts === 1
+            ? new Promise((resolve) => setTimeout(() => resolve(undefined), 800))
+            : Promise.resolve(),
+        ])
+        if (
+          seq !== seqRef.current ||
+          activation !== activationRef.current ||
+          !enabledRef.current ||
+          loadingMoreTaskRef.current !== task
+        ) return
+
+        nextPageURL = page.nextURL
+        const current = itemsRef.current
+        const split = splitPage(page.items, current)
+        published = split.published
+        pending = split.pending
+      }
+
       if (published.length > 0) {
+        const current = itemsRef.current
         setItems(mergeUniqueByID(current, published))
         setPendingItems(pending)
         notifyBatchPublished(published, pending)
       }
-      setNextURL(page.nextURL)
-      // 空页不会消耗尾项；允许用户再次触底后尝试下一服务端游标。
-      if (published.length === 0) consumedTailRef.current = null
+      setNextURL(nextPageURL)
+      // 若经过多页探测后依然没有产出新卡片且后续游标已耗尽，保持 consumedTailRef 避免重复自激；
+      // 若还有后续游标但达到本轮批次尝试上限，重置 consumedTailRef 允许下次触底再尝试。
+      if (published.length === 0 && nextPageURL && attempts >= MAX_ATTEMPTS) {
+        consumedTailRef.current = null
+      }
     } catch {
       // 加载更多失败静默，允许同一尾项再次触发。
       consumedTailRef.current = null

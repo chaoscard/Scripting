@@ -95,7 +95,10 @@ function saveMetaDeferred(meta: CacheMeta): void {
   if (metaSaveTimer != null) return
   metaSaveTimer = setTimeout(() => {
     metaSaveTimer = null
-    if (cachedMeta) saveMeta(cachedMeta)
+    if (cachedMeta) {
+      saveMeta(cachedMeta)
+      enforceCacheLimit()
+    }
   }, 1000)
 }
 
@@ -342,10 +345,8 @@ function requestImage(
         }
         const meta = loadMeta()
         touch(meta, cacheKey(url), url, data.size)
-        saveMeta(meta)
-        enforceCacheLimit()
-        // 当前下载项也可能因单文件超配额被 LRU 立即淘汰；不能把失效路径
-        // 交给 Image.filePath，否则会表现为下载成功后仍加载失败。
+        saveMetaDeferred(meta)
+        // 当前下载项有效即可交给 Image.filePath 显示
         return isUsableCacheFile(path) ? path : null
       })()
         .then(resolve, reject)

@@ -781,7 +781,7 @@ function RelatedIllustrationsSection(props: {
   const paged = usePagedList<PixivIllustration>({
     first: (token) => relatedIllustrations(props.illustID, token),
     more: (nextURL, token) => nextIllustrations(nextURL, token),
-    filter: filterRelatedIllustrations,
+    filter: (items) => filterRelatedIllustrations(items, props.illustID),
     deps: [props.illustID],
     enabled,
     onBatchPublished: (_, pendingItems) =>
@@ -840,11 +840,13 @@ function RelatedIllustrationsSection(props: {
 }
 
 function filterRelatedIllustrations(
-  items: PixivIllustration[]
+  items: PixivIllustration[],
+  currentIllustID?: number
 ): PixivIllustration[] {
   const settings = loadSettings()
   return items.filter(
     (item) =>
+      item.id !== currentIllustID &&
       isIllustContentVisible(item, settings)
   )
 }

@@ -1169,27 +1169,19 @@ export function IllustFlowFeed(props: {
       >
         <LazyVStack alignment="leading" spacing={10} frame={{ minWidth: 0, maxWidth: "infinity" }}>
           {leading.map(renderItem)}
-          {props.hasMore && triggerAnchor ? (
-            <VStack
-              key={`trigger-l:${triggerAnchor}`}
-              spacing={0}
-              frame={{ height: 20, maxWidth: "infinity" }}
-              onAppear={() => props.onLoadMore(triggerAnchor)}
-            />
-          ) : null}
         </LazyVStack>
         <LazyVStack alignment="leading" spacing={10} frame={{ minWidth: 0, maxWidth: "infinity" }}>
           {trailing.map(renderItem)}
-          {props.hasMore && triggerAnchor ? (
-            <VStack
-              key={`trigger-r:${triggerAnchor}`}
-              spacing={0}
-              frame={{ height: 20, maxWidth: "infinity" }}
-              onAppear={() => props.onLoadMore(triggerAnchor)}
-            />
-          ) : null}
         </LazyVStack>
       </HStack>
+      {props.hasMore && triggerAnchor ? (
+        <VStack
+          key={`trigger:${triggerAnchor}`}
+          spacing={0}
+          frame={{ height: 20, maxWidth: "infinity" }}
+          onAppear={() => props.onLoadMore(triggerAnchor)}
+        />
+      ) : null}
       {props.isLoading ? (
         <HStack spacing={0} frame={{ maxWidth: "infinity", height: 44 }}>
           <Spacer />
