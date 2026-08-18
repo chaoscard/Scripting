@@ -18,15 +18,29 @@ export function pixivDataPath(...parts: string[]): string {
 
 // 浏览记录单独保存在 iCloud Documents，以便同一脚本在多设备间同步。
 // iCloud 不可用时回退到设备本地目录，避免历史功能失效。
-export function pixivHistoryDirectory(): string {
+function pixivCloudDirectory(subDir: string): string {
   if (FileManager.isiCloudEnabled) {
     try {
       return ensureDirectory(
-        `${FileManager.iCloudDocumentsDirectory}/${PIXIV_DATA_DIR_NAME}/History`
+        `${FileManager.iCloudDocumentsDirectory}/${PIXIV_DATA_DIR_NAME}/${subDir}`
       )
     } catch {
       // iCloud 初始化失败时使用本地回退目录。
     }
   }
-  return pixivDataPath("History")
+  return pixivDataPath(subDir)
+}
+
+export function pixivHistoryDirectory(): string {
+  return pixivCloudDirectory("History")
+}
+
+// 应用设置保存在 iCloud Documents，以便多设备间同步配置。
+export function pixivSettingsDirectory(): string {
+  return pixivCloudDirectory("Settings")
+}
+
+// 追更列表 ID 保存在 iCloud Documents，以便多设备间同步追更状态。
+export function pixivWatchlistDirectory(): string {
+  return pixivCloudDirectory("Watchlist")
 }

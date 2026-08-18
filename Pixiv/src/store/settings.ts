@@ -1,4 +1,6 @@
 import type { PixivUser } from "../types"
+import { pixivSettingsDirectory } from "./dataDirectory"
+import { recoverFile, writeTextSafely } from "./safeFile"
 
 export interface BlockedUser {
   id: number
@@ -41,7 +43,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   launchPage: "discovery",
   showR18: false,
   showR18G: false,
-  showAI: true,
+  showAI: false,
   followFilterExempt: false,
   libraryFilterExempt: false,
   blockedTags: [],
@@ -60,6 +62,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 }
 
 const KEY = "pixiv_settings_v1"
+const SETTINGS_FILE_NAME = "settings.json"
 const LAUNCH_PAGE_VALUES: readonly LaunchPage[] = ["discovery", "ranking", "following"]
 const WATCHLIST_SORT_VALUES: readonly WatchlistSortOrder[] = ["asc", "desc"]
 const FEED_QUALITY_VALUES: readonly FeedImageQuality[] = ["medium", "large"]
@@ -69,6 +72,30 @@ const LONG_PRESS_ACTION_VALUES: readonly AppSettings["longPressBookmarkAction"][
 const CLOSE_BUTTON_ACTION_VALUES: readonly CloseButtonAction[] = ["minimize", "exit"]
 const AMBIENT_INTENSITY_VALUES: readonly AmbientIntensity[] = ["low", "medium", "high"]
 const CACHE_LIMIT_VALUES = [300, 500, 1000, 2000] as const
+
+let cachedSettings: AppSettings | null = null
+const listeners = new Set<() => void>()
+
+function settingsFilePath(): string {
+  return `${pixivSettingsDirectory()}/${SETTINGS_FILE_NAME}`
+}
+
+export async function prepareSettingsStorage(): Promise<void> {
+  if (!FileManager.isiCloudEnabled) return
+  const path = settingsFilePath()
+  if (
+    !FileManager.existsSync(path) ||
+    !FileManager.isFileStoredIniCloud(path) ||
+    FileManager.isiCloudFileDownloaded(path)
+  ) {
+    return
+  }
+  try {
+    await FileManager.downloadFileFromiCloud(path)
+  } catch {
+    // 云端文件暂不可下载时在下次启动或刷新时重试。
+  }
+}
 
 function isOneOf<T extends string>(value: unknown, values: readonly T[]): value is T {
   return typeof value === "string" && values.includes(value as T)
@@ -83,6 +110,78 @@ function cacheLimitOf(value: unknown): number | null {
   return typeof value === "number" && CACHE_LIMIT_VALUES.includes(value as typeof CACHE_LIMIT_VALUES[number])
     ? value
     : DEFAULT_SETTINGS.cacheLimitMB
+}
+
+function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): AppSettings {
+  const legacyDetailQuality = isOneOf(stored?.imageQuality, DETAIL_QUALITY_VALUES)
+    ? stored.imageQuality
+    : DEFAULT_SETTINGS.detailImageQuality
+  return {
+    ...DEFAULT_SETTINGS,
+    launchPage: isOneOf(stored?.launchPage, LAUNCH_PAGE_VALUES)
+      ? stored.launchPage
+      : DEFAULT_SETTINGS.launchPage,
+    showR18: boolOr(stored?.showR18, DEFAULT_SETTINGS.showR18),
+    showR18G: boolOr(stored?.showR18G, DEFAULT_SETTINGS.showR18G),
+    showAI: boolOr(stored?.showAI, DEFAULT_SETTINGS.showAI),
+    followFilterExempt: boolOr(stored?.followFilterExempt, DEFAULT_SETTINGS.followFilterExempt),
+    libraryFilterExempt: boolOr(
+      stored?.libraryFilterExempt ?? stored?.bookmarkFilterExempt ?? stored?.historyFilterExempt,
+      DEFAULT_SETTINGS.libraryFilterExempt
+    ),
+    blockedTags: Array.isArray(stored?.blockedTags)
+      ? stored.blockedTags.filter((tag): tag is string => typeof tag === "string" && tag.length > 0)
+      : DEFAULT_SETTINGS.blockedTags,
+    blockedUsers: Array.isArray(stored?.blockedUsers)
+      ? (stored.blockedUsers as unknown[])
+          .filter((user): user is Record<string, unknown> => typeof user === "object" && user != null)
+          .map((user): BlockedUser => ({
+            id: typeof user.id === "number" ? user.id : 0,
+            name: typeof user.name === "string" ? user.name : "",
+            account: typeof user.account === "string" ? user.account : "",
+            avatarURL: typeof user.avatarURL === "string" ? user.avatarURL : undefined,
+          }))
+          .filter((user) => user.id > 0 && user.name.length > 0)
+      : DEFAULT_SETTINGS.blockedUsers,
+    ambientImmersion: boolOr(stored?.ambientImmersion, DEFAULT_SETTINGS.ambientImmersion),
+    ambientIntensity: isOneOf(stored?.ambientIntensity, AMBIENT_INTENSITY_VALUES)
+      ? stored.ambientIntensity
+      : DEFAULT_SETTINGS.ambientIntensity,
+    watchlistSortOrder: isOneOf(stored?.watchlistSortOrder, WATCHLIST_SORT_VALUES)
+      ? stored.watchlistSortOrder
+      : DEFAULT_SETTINGS.watchlistSortOrder,
+    longPressBookmarkAction: isOneOf(stored?.longPressBookmarkAction, LONG_PRESS_ACTION_VALUES)
+      ? stored.longPressBookmarkAction
+      : DEFAULT_SETTINGS.longPressBookmarkAction,
+    closeButtonAction: isOneOf(stored?.closeButtonAction, CLOSE_BUTTON_ACTION_VALUES)
+      ? stored.closeButtonAction
+      : DEFAULT_SETTINGS.closeButtonAction,
+    feedImageQuality: isOneOf(stored?.feedImageQuality, FEED_QUALITY_VALUES)
+      ? stored.feedImageQuality
+      : DEFAULT_SETTINGS.feedImageQuality,
+    detailImageQuality: isOneOf(stored?.detailImageQuality, DETAIL_QUALITY_VALUES)
+      ? stored.detailImageQuality
+      : legacyDetailQuality,
+    downloadImageQuality: isOneOf(stored?.downloadImageQuality, DOWNLOAD_QUALITY_VALUES)
+      ? stored.downloadImageQuality
+      : DEFAULT_SETTINGS.downloadImageQuality,
+    prefetchEnabled: boolOr(stored?.prefetchEnabled, DEFAULT_SETTINGS.prefetchEnabled),
+    cacheLimitMB: cacheLimitOf(stored?.cacheLimitMB),
+    recordHistory: boolOr(stored?.recordHistory, DEFAULT_SETTINGS.recordHistory),
+  }
+}
+
+function persistSettings(settings: AppSettings): boolean {
+  try {
+    writeTextSafely(settingsFilePath(), JSON.stringify(settings, null, 2), (raw) => {
+      const parsed = JSON.parse(raw)
+      if (typeof parsed !== "object" || parsed === null) throw new Error("设置格式错误")
+    })
+  } catch (error: any) {
+    console.log("settings persist error:", error?.message ?? error)
+  }
+  Storage.set(KEY, settings)
+  return true
 }
 
 export function isR18ContentVisible(xRestrict: number, showR18: boolean, showR18G: boolean): boolean {
@@ -161,8 +260,6 @@ export function isNovelContentVisible(
   )
 }
 
-const listeners = new Set<() => void>()
-
 export function onSettingsChanged(fn: () => void): () => void {
   listeners.add(fn)
   return () => listeners.delete(fn)
@@ -175,74 +272,54 @@ function emitChanged(): void {
 }
 
 export function loadSettings(): AppSettings {
-  const stored = Storage.get<Partial<AppSettings> & Record<string, unknown>>(KEY)
-  const legacyDetailQuality = isOneOf(stored?.imageQuality, DETAIL_QUALITY_VALUES)
-    ? stored.imageQuality
-    : DEFAULT_SETTINGS.detailImageQuality
-  const merged: AppSettings = {
-    ...DEFAULT_SETTINGS,
-    launchPage: isOneOf(stored?.launchPage, LAUNCH_PAGE_VALUES)
-      ? stored.launchPage
-      : DEFAULT_SETTINGS.launchPage,
-    showR18: boolOr(stored?.showR18, DEFAULT_SETTINGS.showR18),
-    showR18G: boolOr(stored?.showR18G, DEFAULT_SETTINGS.showR18G),
-    showAI: boolOr(stored?.showAI, DEFAULT_SETTINGS.showAI),
-    followFilterExempt: boolOr(stored?.followFilterExempt, DEFAULT_SETTINGS.followFilterExempt),
-    libraryFilterExempt: boolOr(
-      stored?.libraryFilterExempt ?? stored?.bookmarkFilterExempt ?? stored?.historyFilterExempt,
-      DEFAULT_SETTINGS.libraryFilterExempt
-    ),
-    blockedTags: Array.isArray(stored?.blockedTags)
-      ? stored.blockedTags.filter((tag): tag is string => typeof tag === "string" && tag.length > 0)
-      : DEFAULT_SETTINGS.blockedTags,
-    blockedUsers: Array.isArray(stored?.blockedUsers)
-      ? (stored.blockedUsers as unknown[])
-          .filter((user): user is Record<string, unknown> => typeof user === "object" && user != null)
-          .map((user): BlockedUser => ({
-            id: typeof user.id === "number" ? user.id : 0,
-            name: typeof user.name === "string" ? user.name : "",
-            account: typeof user.account === "string" ? user.account : "",
-            avatarURL: typeof user.avatarURL === "string" ? user.avatarURL : undefined,
-          }))
-          .filter((user) => user.id > 0 && user.name.length > 0)
-      : DEFAULT_SETTINGS.blockedUsers,
-    ambientImmersion: boolOr(stored?.ambientImmersion, DEFAULT_SETTINGS.ambientImmersion),
-    ambientIntensity: isOneOf(stored?.ambientIntensity, AMBIENT_INTENSITY_VALUES)
-      ? stored.ambientIntensity
-      : DEFAULT_SETTINGS.ambientIntensity,
-    watchlistSortOrder: isOneOf(stored?.watchlistSortOrder, WATCHLIST_SORT_VALUES)
-      ? stored.watchlistSortOrder
-      : DEFAULT_SETTINGS.watchlistSortOrder,
-    longPressBookmarkAction: isOneOf(stored?.longPressBookmarkAction, LONG_PRESS_ACTION_VALUES)
-      ? stored.longPressBookmarkAction
-      : DEFAULT_SETTINGS.longPressBookmarkAction,
-    closeButtonAction: isOneOf(stored?.closeButtonAction, CLOSE_BUTTON_ACTION_VALUES)
-      ? stored.closeButtonAction
-      : DEFAULT_SETTINGS.closeButtonAction,
-    feedImageQuality: isOneOf(stored?.feedImageQuality, FEED_QUALITY_VALUES)
-      ? stored.feedImageQuality
-      : DEFAULT_SETTINGS.feedImageQuality,
-    detailImageQuality: isOneOf(stored?.detailImageQuality, DETAIL_QUALITY_VALUES)
-      ? stored.detailImageQuality
-      : legacyDetailQuality,
-    downloadImageQuality: isOneOf(stored?.downloadImageQuality, DOWNLOAD_QUALITY_VALUES)
-      ? stored.downloadImageQuality
-      : DEFAULT_SETTINGS.downloadImageQuality,
-    prefetchEnabled: boolOr(stored?.prefetchEnabled, DEFAULT_SETTINGS.prefetchEnabled),
-    cacheLimitMB: cacheLimitOf(stored?.cacheLimitMB),
-    recordHistory: boolOr(stored?.recordHistory, DEFAULT_SETTINGS.recordHistory),
+  if (cachedSettings) return cachedSettings
+
+  const path = settingsFilePath()
+  let stored: (Partial<AppSettings> & Record<string, unknown>) | null = null
+
+  try {
+    recoverFile(path)
+    if (FileManager.existsSync(path)) {
+      const raw = FileManager.readAsStringSync(path, "utf-8")
+      const decoded = JSON.parse(raw)
+      if (typeof decoded === "object" && decoded !== null) {
+        stored = decoded as Partial<AppSettings> & Record<string, unknown>
+      }
+    }
+  } catch {
+    // 读取文件异常
   }
-  if (JSON.stringify(stored) !== JSON.stringify(merged)) Storage.set(KEY, merged)
+
+  let needPersist = false
+  if (!stored) {
+    stored = Storage.get<Partial<AppSettings> & Record<string, unknown>>(KEY) ?? null
+    needPersist = true
+  }
+
+  const merged = parseSettings(stored ?? {})
+  cachedSettings = merged
+  if (needPersist || !FileManager.existsSync(path)) {
+    persistSettings(merged)
+  }
   return merged
 }
 
 export function saveSettings(settings: AppSettings): void {
-  Storage.set(KEY, settings)
+  cachedSettings = settings
+  persistSettings(settings)
 }
 
 export function updateSettings(patch: Partial<AppSettings>): AppSettings {
   const next = { ...loadSettings(), ...patch }
-  saveSettings(next)
+  cachedSettings = next
+  persistSettings(next)
   emitChanged()
   return next
+}
+
+export async function refreshSettingsFromCloud(): Promise<void> {
+  await prepareSettingsStorage()
+  cachedSettings = null
+  loadSettings()
+  emitChanged()
 }

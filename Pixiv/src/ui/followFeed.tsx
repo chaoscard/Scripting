@@ -30,6 +30,7 @@ import {
   loadSettings,
   onSettingsChanged,
 } from "../store/settings"
+import { refreshWatchlistFromCloud } from "../store/watchlist"
 import { destinationElement } from "./routes"
 import { useLatest, usePagedList } from "./hooks"
 import type {
@@ -296,8 +297,10 @@ function WatchlistFeed(props: {
 }) {
   const { kind, onRegisterRefresh } = props
   const paged = usePagedList<PixivWatchlistSeries>({
-    first: (token) =>
-      kind === "manga" ? watchlistManga(token) : watchlistNovels(token),
+    first: async (token) => {
+      await refreshWatchlistFromCloud()
+      return kind === "manga" ? watchlistManga(token) : watchlistNovels(token)
+    },
     more: (nextURL, token) => nextWatchlist(nextURL, token),
     filter: (items) => filterWatchlistItems(items, kind),
     deps: [kind],

@@ -49,6 +49,7 @@ export function SettingsView() {
     refreshCacheSize()
     refreshHistoryTotal()
     const unsubscribeSettings = onSettingsChanged(() => {
+      setSettings(loadSettings())
       refreshCacheSize()
     })
     const unsubscribeHistory = onHistoryChanged(() => {

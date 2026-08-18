@@ -1357,19 +1357,21 @@ export function BookmarkDetailSheet(props: {
         toolbar={{
           topBarLeading: (
             <Button
-              title="关闭"
-              systemImage="xmark"
               action={close}
-            />
+            >
+              <Image systemName="xmark" />
+            </Button>
           ),
           topBarTrailing: (
             <Button
-              title="收藏"
-              systemImage={props.bookmarked ? "heart.fill" : "heart"}
               disabled={saving || loading}
-              tint={props.bookmarked && !saving ? "#FF375F" : undefined}
               action={() => void save()}
-            />
+            >
+              <Image
+                systemName={props.bookmarked ? "heart.fill" : "heart"}
+                foregroundStyle={props.bookmarked && !saving ? "#FF375F" : undefined}
+              />
+            </Button>
           ),
         }}
       >
