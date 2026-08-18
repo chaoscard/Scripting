@@ -17,7 +17,6 @@ export type WatchlistSortOrder = "asc" | "desc"
 export type AmbientIntensity = "low" | "medium" | "high"
 export type LaunchPage = "discovery" | "ranking" | "following"
 export type ImageBatchConcurrency = "low" | "medium" | "high"
-export type PaginationDelayLevel = "low" | "medium" | "high"
 
 export interface AppSettings {
   launchPage: LaunchPage
@@ -40,7 +39,6 @@ export interface AppSettings {
   cacheLimitMB: number | null
   recordHistory: boolean
   imageBatchConcurrency: ImageBatchConcurrency
-  paginationDelayLevel: PaginationDelayLevel
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -64,7 +62,6 @@ const DEFAULT_SETTINGS: AppSettings = {
   cacheLimitMB: 300,
   recordHistory: true,
   imageBatchConcurrency: "low",
-  paginationDelayLevel: "medium",
 }
 
 const KEY = "pixiv_settings_v1"
@@ -78,7 +75,6 @@ const LONG_PRESS_ACTION_VALUES: readonly AppSettings["longPressBookmarkAction"][
 const CLOSE_BUTTON_ACTION_VALUES: readonly CloseButtonAction[] = ["minimize", "exit"]
 const AMBIENT_INTENSITY_VALUES: readonly AmbientIntensity[] = ["low", "medium", "high"]
 const IMAGE_CONCURRENCY_VALUES: readonly ImageBatchConcurrency[] = ["low", "medium", "high"]
-const PAGINATION_DELAY_VALUES: readonly PaginationDelayLevel[] = ["low", "medium", "high"]
 const CACHE_LIMIT_VALUES = [300, 500, 1000, 2000] as const
 
 export function getImageBatchSize(level: ImageBatchConcurrency = "low"): number {
@@ -91,23 +87,6 @@ export function getImageBatchSize(level: ImageBatchConcurrency = "low"): number 
       return 10
     default:
       return 6
-  }
-}
-
-export function getPrefetchWindowSize(level: ImageBatchConcurrency = "low"): number {
-  return getImageBatchSize(level) * 2
-}
-
-export function getPaginationDelayMs(level: PaginationDelayLevel = "medium"): number {
-  switch (level) {
-    case "low":
-      return 1200
-    case "medium":
-      return 1350
-    case "high":
-      return 1500
-    default:
-      return 1350
   }
 }
 
@@ -209,9 +188,6 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
     imageBatchConcurrency: isOneOf(stored?.imageBatchConcurrency, IMAGE_CONCURRENCY_VALUES)
       ? stored.imageBatchConcurrency
       : DEFAULT_SETTINGS.imageBatchConcurrency,
-    paginationDelayLevel: isOneOf(stored?.paginationDelayLevel, PAGINATION_DELAY_VALUES)
-      ? stored.paginationDelayLevel
-      : DEFAULT_SETTINGS.paginationDelayLevel,
   }
 }
 

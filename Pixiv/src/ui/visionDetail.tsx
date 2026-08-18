@@ -20,6 +20,7 @@ import {
 } from "./components"
 
 const VISION_ARTWORK_RATIO = 768 / 1200
+const VISION_DETAIL_WIDTH = Device.screen.width - 28
 
 export function VisionDetailView(props: { articleID: number }) {
   const { articleID } = props
@@ -113,6 +114,10 @@ export function VisionDetailView(props: { articleID: number }) {
                   aspectRatioValue={VISION_ARTWORK_RATIO}
                   cornerRadius={10}
                   contentMode="fit"
+                  frame={{
+                    width: VISION_DETAIL_WIDTH,
+                    height: VISION_DETAIL_WIDTH / VISION_ARTWORK_RATIO,
+                  }}
                 />
               </NavigationLink>
               <Text

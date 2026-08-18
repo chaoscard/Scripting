@@ -917,7 +917,7 @@ function UserProfileHeader(props: {
             contentMode="fill"
             cornerRadius={0}
             priority={0}
-            frame={{ maxWidth: "infinity" }}
+            frame={{ width: Device.screen.width, height: Device.screen.width / 2.4 }}
           />
         ) : (
           <VStack

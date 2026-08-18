@@ -114,7 +114,7 @@ export function RankingView(props: { onClose: () => void }) {
       toolbar={rankingToolbar({ kind, onKindChange: setKind, onClose: props.onClose })}
       refreshable={() => refreshHandlerRef.current()}
     >
-      <VStack alignment="leading" spacing={8}>
+      <VStack alignment="leading" spacing={8} frame={{ maxWidth: "infinity" }}>
         {rootModes && rootSelectedMode ? (
           <RankingModePicker
             modes={rootModes}
@@ -449,7 +449,7 @@ function NovelRankingFeed(props: {
   }, [activePaged.refresh, onRegisterRefresh])
 
   return (
-    <VStack alignment="leading" spacing={10}>
+    <VStack alignment="leading" spacing={10} frame={{ maxWidth: "infinity" }}>
       {activePaged.initialLoading ? (
         <LoadingView text="加载小说…" />
       ) : activePaged.error && activePaged.items.length === 0 ? (
@@ -484,7 +484,7 @@ function IllustRankingFeedContent(props: {
 }) {
   const { paged, label } = props
   return (
-    <VStack alignment="leading" spacing={10}>
+    <VStack alignment="leading" spacing={10} frame={{ maxWidth: "infinity" }}>
       {paged.initialLoading ? (
         <LoadingView text={`加载${label}…`} />
       ) : paged.error && paged.items.length === 0 ? (

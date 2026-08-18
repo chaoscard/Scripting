@@ -26,7 +26,6 @@ import {
   useState,
   VStack,
   ZStack,
-  type GridItem,
   type ScrollViewProxy,
   type StyledText,
 } from "scripting"
@@ -65,10 +64,11 @@ import type {
 } from "../types"
 
 export const CORNER_ICON_SIZE = 26
-export const GRID_COLUMNS: GridItem[] = [
-  { size: { type: "flexible", min: 120, max: "infinity" } },
-  { size: { type: "flexible", min: 120, max: "infinity" } },
-]
+const FLOW_HORIZONTAL_PADDING = 10
+const FLOW_COLUMN_SPACING = 10
+const FLOW_CARD_WIDTH = Math.floor(
+  (Device.screen.width - FLOW_HORIZONTAL_PADDING * 2 - FLOW_COLUMN_SPACING) / 2
+)
 // 流式布局允许最长 1:4 的竖图保留原始比例；更极端的图片仍受此下限保护。
 const MIN_FLOW_IMAGE_RATIO = 1 / 4
 const MAX_FLOW_IMAGE_RATIO = 2.5
@@ -386,39 +386,36 @@ export function CachedImage(props: {
     return null
   }, [path, useIntrinsicAspectRatio])
 
-  const effectiveRatio = croppedImage ? (centerCropAspect ?? 1) : (intrinsicAspect ?? aspectRatioValue)
-
-  if (path) {
-    if (croppedImage) {
-      return (
-        <Image
-          image={croppedImage}
-          resizable={true}
-          aspectRatio={{ value: effectiveRatio, contentMode: "fill" }}
-          clipShape={{ type: "rect", cornerRadius }}
-          frame={frame ?? { maxWidth: "infinity" }}
-        />
-      )
-    }
-    return (
-      <Image
-        filePath={path}
-        resizable={true}
-        aspectRatio={{ value: effectiveRatio, contentMode }}
-        clipShape={{ type: "rect", cornerRadius }}
-        frame={frame ?? { maxWidth: "infinity" }}
-      />
-    )
-  }
+  const effectiveRatio = croppedImage
+    ? (centerCropAspect ?? 1)
+    : (intrinsicAspect ?? aspectRatioValue)
+  const containerFrame = frame ?? { maxWidth: "infinity" }
 
   return (
     <ZStack
-      aspectRatio={{ value: aspectRatioValue, contentMode }}
+      aspectRatio={{ value: aspectRatioValue, contentMode: "fit" }}
       background="systemGray6"
       clipShape={{ type: "rect", cornerRadius }}
-      frame={frame ?? { maxWidth: "infinity" }}
+      clipped={true}
+      frame={containerFrame}
     >
-      {!url || failed ? (
+      {path ? (
+        croppedImage ? (
+          <Image
+            image={croppedImage}
+            resizable={true}
+            aspectRatio={{ value: effectiveRatio, contentMode: "fill" }}
+            frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          />
+        ) : (
+          <Image
+            filePath={path}
+            resizable={true}
+            aspectRatio={{ value: effectiveRatio, contentMode }}
+            frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          />
+        )
+      ) : !url || failed ? (
         // 无 URL / 加载失败：显示占位图标（避免空 URL 无限转圈）
         <Image
           systemName="photo"
@@ -883,6 +880,12 @@ export function IllustCard(props: {
   const [showBookmarkDetail, setShowBookmarkDetail] = useState(false)
   const rawRatio = illust.width > 0 && illust.height > 0 ? illust.width / illust.height : 0.75
   const imageRatio = Math.min(Math.max(rawRatio, MIN_FLOW_IMAGE_RATIO), MAX_FLOW_IMAGE_RATIO)
+  const flowImageFrame = flow
+    ? { width: FLOW_CARD_WIDTH, height: FLOW_CARD_WIDTH / imageRatio }
+    : undefined
+  const flowCardFrame = flow
+    ? { width: FLOW_CARD_WIDTH }
+    : { maxWidth: "infinity" }
 
   async function toggleBookmark() {
     if (bookmarkBusy) return
@@ -932,27 +935,27 @@ export function IllustCard(props: {
   return (
     <ZStack
       alignment="topTrailing"
-      frame={{ maxWidth: "infinity" }}
+      frame={flowCardFrame}
     >
       <VStack
         alignment="leading"
         spacing={2}
-        frame={{ minWidth: 0, maxWidth: "infinity" }}
+        frame={flowCardFrame}
         onAppear={onAppear}
         padding={4}
         glassEffect={{ type: "rect", cornerRadius: 14 }}
         shadow={{ color: "#0000000F", radius: 18, y: 8 }}
       >
-        <ZStack alignment="bottomTrailing" frame={{ maxWidth: "infinity" }}>
+        <ZStack alignment="bottomTrailing" frame={flowCardFrame}>
           <NavigationLink
             value={`illust:${illust.id}`}
-            frame={{ maxWidth: "infinity" }}
+            frame={flowCardFrame}
           >
-            <ZStack alignment="topLeading" frame={{ maxWidth: "infinity" }}>
+            <ZStack alignment="topLeading" frame={flowCardFrame}>
               <ZStack
                 alignment="bottomLeading"
-                aspectRatio={{ value: flow ? imageRatio : 1, contentMode: flow ? "fit" : "fill" }}
-                frame={{ maxWidth: "infinity" }}
+                aspectRatio={flow ? undefined : { value: 1, contentMode: "fill" }}
+                frame={flowImageFrame ?? { maxWidth: "infinity" }}
                 clipShape={{ type: "rect", cornerRadius: 10 }}
                 clipped={true}
               >
@@ -962,6 +965,7 @@ export function IllustCard(props: {
                   contentMode={flow ? "fit" : "fill"}
                   centerCropSquare={!flow}
                   cornerRadius={10}
+                  frame={flowImageFrame}
                   priority={priority}
                 />
                 {illust.page_count > 1 ? (
@@ -1093,8 +1097,7 @@ export function IllustCard(props: {
 }
 
 
-// 双列流式作品信息流：按作品比例估算高度，将作品持续分配到较短列。
-// 卡片本身统一使用 IllustCard。
+// Two explicit-width columns keep image geometry stable before decoding.
 type IllustFlowItem = {
   illust: PixivIllustration
   index: number
@@ -1163,14 +1166,22 @@ export function IllustFlowFeed(props: {
     <VStack spacing={12} frame={{ maxWidth: "infinity" }}>
       <HStack
         alignment="top"
-        spacing={10}
-        padding={{ horizontal: 10 }}
-        frame={{ maxWidth: "infinity" }}
+        spacing={FLOW_COLUMN_SPACING}
+        padding={{ horizontal: FLOW_HORIZONTAL_PADDING }}
+        frame={{ width: Device.screen.width }}
       >
-        <LazyVStack alignment="leading" spacing={10} frame={{ minWidth: 0, maxWidth: "infinity" }}>
+        <LazyVStack
+          alignment="leading"
+          spacing={10}
+          frame={{ width: FLOW_CARD_WIDTH }}
+        >
           {leading.map(renderItem)}
         </LazyVStack>
-        <LazyVStack alignment="leading" spacing={10} frame={{ minWidth: 0, maxWidth: "infinity" }}>
+        <LazyVStack
+          alignment="leading"
+          spacing={10}
+          frame={{ width: FLOW_CARD_WIDTH }}
+        >
           {trailing.map(renderItem)}
         </LazyVStack>
       </HStack>
@@ -1199,12 +1210,16 @@ function distributeFlowItems(
   const columns: [IllustFlowItem[], IllustFlowItem[]] = [[], []]
   const heights = [0, 0]
   for (const [index, illust] of items.entries()) {
-    const rawRatio = illust.width > 0 && illust.height > 0 ? illust.width / illust.height : 0.75
+    const rawRatio = illust.width > 0 && illust.height > 0
+      ? illust.width / illust.height
+      : 0.75
     const ratio = Math.min(Math.max(rawRatio, MIN_FLOW_IMAGE_RATIO), MAX_FLOW_IMAGE_RATIO)
-    const estimatedHeight = 1 / ratio + 0.34
+    const imageHeight = FLOW_CARD_WIDTH / ratio
+    const textHeight = 62
+    const footerHeight = 10
     const column = heights[0] <= heights[1] ? 0 : 1
     columns[column].push({ illust, index })
-    heights[column] += estimatedHeight
+    heights[column] += imageHeight + textHeight + footerHeight
   }
   return columns
 }
@@ -1577,6 +1592,7 @@ function PageCountBadge(props: { count: number }) {
 
 
 const VISION_IMAGE_RATIO = 1200 / 630
+const VISION_IMAGE_WIDTH = Device.screen.width - 28
 
 export function VisionCard(props: {
   article: PixivVisionArticle
@@ -1606,6 +1622,7 @@ export function VisionCard(props: {
             useIntrinsicAspectRatio={false}
             cornerRadius={12}
             contentMode="fill"
+            frame={{ width: VISION_IMAGE_WIDTH, height: VISION_IMAGE_WIDTH / VISION_IMAGE_RATIO }}
             priority={priority}
           />
           <VStack
@@ -2056,6 +2073,7 @@ export function InfoCard(props: {
 }) {
   const { title = "信息", fields } = props
   const [copied, setCopiedOn] = useTimedFlag(2000)
+
   function copyField(f: { label: string; value: string | number }) {
     Pasteboard.setString(`${f.label}：${f.value}`)
     setCopiedOn()

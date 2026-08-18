@@ -25,7 +25,6 @@ import {
   updateSettings,
   type LaunchPage,
   type ImageBatchConcurrency,
-  type PaginationDelayLevel,
 } from "../store/settings"
 import { clearUgoiraCache, ugoiraCacheUsageBytes } from "../ugoira/ugoira"
 import { useTimedFlag } from "./hooks"
@@ -243,17 +242,6 @@ export function SettingsView() {
           value={settings.imageBatchConcurrency}
           onChanged={(value: string) =>
             update({ imageBatchConcurrency: value as ImageBatchConcurrency })
-          }
-        >
-          <Text tag="low">低</Text>
-          <Text tag="medium">中</Text>
-          <Text tag="high">高</Text>
-        </Picker>
-        <Picker
-          title="加载时长"
-          value={settings.paginationDelayLevel}
-          onChanged={(value: string) =>
-            update({ paginationDelayLevel: value as PaginationDelayLevel })
           }
         >
           <Text tag="low">低</Text>

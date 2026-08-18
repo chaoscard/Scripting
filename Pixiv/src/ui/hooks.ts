@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "scripting"
 import { session } from "../api/session"
-import { getImageBatchSize, getPaginationDelayMs, getPrefetchWindowSize, loadSettings } from "../store/settings"
+import { getImageBatchSize, loadSettings } from "../store/settings"
 
 // ---------- 通用 hooks ----------
 
@@ -134,14 +134,6 @@ export function currentBatchSize(): number {
   return getImageBatchSize(loadSettings().imageBatchConcurrency)
 }
 
-export function currentPrefetchWindowSize(): number {
-  return getPrefetchWindowSize(loadSettings().imageBatchConcurrency)
-}
-
-export function currentPaginationDelayMs(): number {
-  return getPaginationDelayMs(loadSettings().paginationDelayLevel)
-}
-
 export interface PageResult<T> {
   items: T[]
   nextURL: string | null
@@ -259,10 +251,10 @@ export function usePagedList<T extends { id: number | string }>(
         !enabledRef.current
       ) return
 
-      // 若有效条目不足“1组展示 + 2组画面外预取缓冲”且仍有 nextURL，
-      // 向前多页探测收集满目标容量，保证首屏充实且画面外始终有整整两组预热数据。
+      // 首页可能部分或全部被 R18/AI/屏蔽规则过滤。
+      // 若首屏有效条目不足一个批次且仍有 nextURL，向前多页探测收集满一个批次，
+      // 保证首屏卡片充实且有充足的滑动缓冲。
       const batchSize = currentBatchSize()
-      const targetCount = batchSize + currentPrefetchWindowSize()
       let collected: T[] = []
       let nextPageURL: string | null = page.nextURL
       const visitedURLs = new Set<string>()
@@ -277,7 +269,7 @@ export function usePagedList<T extends { id: number | string }>(
       }
 
       while (
-        collected.length < targetCount &&
+        collected.length < batchSize &&
         nextPageURL &&
         moreRef.current &&
         !visitedURLs.has(nextPageURL)
@@ -352,8 +344,8 @@ export function usePagedList<T extends { id: number | string }>(
       loadingMoreTaskRef.current = task
       setLoadingMore(true)
       try {
-        // 缓冲：根据实验箱设置动态展示触底反馈，随后平滑展开新批次卡片
-        await new Promise((resolve) => setTimeout(() => resolve(undefined), currentPaginationDelayMs()))
+        // 缓冲 1500ms：确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
+        await new Promise((resolve) => setTimeout(() => resolve(undefined), 1500))
         if (loadingMoreTaskRef.current !== task || !enabledRef.current) return
         const batchSize = currentBatchSize()
         const nextBatch = pending.slice(0, batchSize)
@@ -379,7 +371,6 @@ export function usePagedList<T extends { id: number | string }>(
     setLoadingMore(true)
     try {
       const batchSize = currentBatchSize()
-      const targetCount = batchSize + currentPrefetchWindowSize()
       const currentItems = itemsRef.current
       const existingSet = new Set(currentItems.map((i) => String(i.id)))
       const collectedNewItems: T[] = []
@@ -389,9 +380,9 @@ export function usePagedList<T extends { id: number | string }>(
       const MAX_ATTEMPTS = 6
 
       // 若当前返回的页全部被过滤或与已有列表部分重复（如相关推荐高度重叠），
-      // 在单次加载任务内部向前自动探测并累积后续游标，直到凑满“1组发布 + 2组画面外预取”或游标耗尽。
+      // 在单次加载任务内部向前自动探测并累积后续游标，直到凑满一个批次或游标耗尽。
       while (
-        collectedNewItems.length < targetCount &&
+        collectedNewItems.length < batchSize &&
         nextPageURL &&
         !visitedURLs.has(nextPageURL) &&
         attempts < MAX_ATTEMPTS
@@ -402,7 +393,7 @@ export function usePagedList<T extends { id: number | string }>(
         const [page]: [PageResult<T>, unknown] = await Promise.all([
           session.call((token) => moreFn(fetchUrl, token)),
           attempts === 1
-            ? new Promise((resolve) => setTimeout(() => resolve(undefined), currentPaginationDelayMs()))
+            ? new Promise((resolve) => setTimeout(() => resolve(undefined), 1500))
             : Promise.resolve(),
         ])
         if (

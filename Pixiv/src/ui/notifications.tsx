@@ -125,7 +125,7 @@ function NotificationRow(props: { notification: PixivNotification }) {
           contentMode={isNovel ? "fit" : "fill"}
           useIntrinsicAspectRatio={isNovel}
           cornerRadius={6}
-          frame={isNovel ? { maxWidth: 42, maxHeight: 42 } : { width: 42, height: 42 }}
+          frame={{ width: 42, height: 42 }}
         />
       ) : (
         <Image
@@ -170,7 +170,7 @@ function NotificationRow(props: { notification: PixivNotification }) {
           contentMode={isNovel ? "fit" : "fill"}
           useIntrinsicAspectRatio={isNovel}
           cornerRadius={6}
-          frame={isNovel ? { maxWidth: 56, maxHeight: 56 } : { width: 56, height: 56 }}
+          frame={{ width: 56, height: 56 }}
         />
       ) : n.view_more ? (
         <Image

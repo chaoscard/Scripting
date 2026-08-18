@@ -75,7 +75,10 @@ export function UgoiraPlayerView(props: {
       alignment="center"
       spacing={0}
       aspectRatio={{ value: aspectRatioValue, contentMode: "fit" }}
-      frame={{ maxWidth: "infinity" }}
+      frame={{
+        width: Device.screen.width,
+        height: Device.screen.width / aspectRatioValue,
+      }}
       padding={40}
     >
       {loading ? <ProgressView /> : error ? (
@@ -134,35 +137,45 @@ function UgoiraVideo(props: {
     }
   }, [mp4Path, retry])
 
-  if (!player) {
-    return (
-      <VStack spacing={8} padding={20}>
-        {failed ? (
-          <>
-            <Text font="footnote" foregroundStyle="systemRed">
-              动图播放器加载失败
-            </Text>
-            <Button
-              title="重试"
-              buttonStyle="glass"
-              action={() => {
-                setFailed(false)
-                setRetry((v) => v + 1)
-              }}
-            />
-          </>
-        ) : (
-          <ProgressView />
-        )}
-      </VStack>
-    )
-  }
-
   return (
-    <VideoPlayer
-      player={player}
+    <VStack
+      alignment="center"
+      spacing={0}
       aspectRatio={{ value: aspectRatioValue, contentMode: "fit" }}
-      frame={{ maxWidth: "infinity" }}
-    />
+      background="systemGray6"
+      clipShape={{ type: "rect", cornerRadius: 8 }}
+      frame={{
+        width: Device.screen.width,
+        height: Device.screen.width / aspectRatioValue,
+      }}
+    >
+      {!player ? (
+        <VStack spacing={8} padding={20}>
+          {failed ? (
+            <>
+              <Text font="footnote" foregroundStyle="systemRed">
+                动图播放器加载失败
+              </Text>
+              <Button
+                title="重试"
+                buttonStyle="glass"
+                action={() => {
+                  setFailed(false)
+                  setRetry((v) => v + 1)
+                }}
+              />
+            </>
+          ) : (
+            <ProgressView />
+          )}
+        </VStack>
+      ) : (
+        <VideoPlayer
+          player={player}
+          aspectRatio={{ value: aspectRatioValue, contentMode: "fit" }}
+          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+        />
+      )}
+    </VStack>
   )
 }

@@ -430,6 +430,7 @@ function UserResults(props: {
   onLoadMore: (anchor?: number | string) => void
 }) {
   const tail = props.items[props.items.length - 1]
+  const previewSide = Math.floor((Device.screen.width - 56) / 3)
   return (
     <VStack alignment="leading" spacing={8} padding={{ horizontal: 8 }}>
       {props.items.map((preview) => (
@@ -450,6 +451,7 @@ function UserResults(props: {
                   url={thumbUrlOf(illustration)}
                   aspectRatioValue={1}
                   cornerRadius={6}
+                  frame={{ width: previewSide, height: previewSide }}
                 />
               ))}
             </HStack>

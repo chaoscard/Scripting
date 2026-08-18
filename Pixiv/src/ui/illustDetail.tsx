@@ -625,6 +625,7 @@ export function IllustDetailView(props: { illustID: number }) {
                   aspectRatioValue={pageAspect}
                   cornerRadius={6}
                   contentMode="fit"
+                  frame={{ width: Device.screen.width, height: Device.screen.width / pageAspect }}
                   priority={idx}
                   onLoaded={idx === 0 ? () => setMediaReady(true) : undefined}
                 />
@@ -636,6 +637,7 @@ export function IllustDetailView(props: { illustID: number }) {
               aspectRatioValue={pageAspect}
               cornerRadius={8}
               contentMode="fit"
+              frame={{ width: Device.screen.width, height: Device.screen.width / pageAspect }}
               priority={0}
               onLoaded={() => setMediaReady(true)}
             />
@@ -798,7 +800,12 @@ function RelatedIllustrationsSection(props: {
   }
 
   return (
-    <VStack alignment="leading" spacing={8} padding={{ top: 4 }}>
+    <VStack
+      alignment="leading"
+      spacing={8}
+      padding={{ top: 4 }}
+      frame={{ maxWidth: "infinity" }}
+    >
       <Text font="subheadline" fontWeight="semibold" padding={{ horizontal: 14 }}>
         相关作品
       </Text>
