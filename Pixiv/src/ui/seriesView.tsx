@@ -523,7 +523,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
         navigationBarTitleDisplayMode="inline"
         toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
       >
-        <LoadingView />
+        <LoadingView text={props.kind === "novel" ? "加载小说系列…" : "加载漫画系列…"} />
       </ScrollView>
     )
   }
@@ -569,7 +569,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
           >
             <Image
               systemName={isWatched ? "bookmark.fill" : "bookmark"}
-              foregroundStyle={isWatched ? "#FF9500" : undefined}
+              foregroundStyle={isWatched ? "#0096FA" : undefined}
             />
           </Button>,
           <Button

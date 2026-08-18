@@ -135,13 +135,18 @@ function UserWorksIllustFeed(props: {
   }, [])
 
   if (paged.initialLoading) {
-    return <LoadingView />
+    return <LoadingView text={kind === "manga" ? "加载漫画…" : "加载插画…"} />
   }
   if (paged.error && paged.items.length === 0) {
     return <ErrorView message={paged.error} onRetry={paged.refresh} />
   }
   if (paged.items.length === 0) {
-    return <EmptyView text={emptyText} systemImage="photo.on.rectangle" />
+    return (
+      <EmptyView
+        text={emptyText}
+        systemImage={kind === "manga" ? "photo.on.rectangle" : "photo"}
+      />
+    )
   }
   return (
     <IllustFlowFeed
@@ -181,7 +186,7 @@ function UserWorksNovelFeed(props: {
   }, [])
 
   if (paged.initialLoading) {
-    return <LoadingView />
+    return <LoadingView text="加载小说…" />
   }
   if (paged.error && paged.items.length === 0) {
     return <ErrorView message={paged.error} onRetry={paged.refresh} />

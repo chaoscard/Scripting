@@ -557,15 +557,17 @@ export function WatchlistSeriesCard(props: {
         <ZStack
           alignment="center"
           frame={{ width: 34, height: 34 }}
-          glassEffect="circle"
+          background="#0096FA"
+          clipShape="circle"
           contentShape="circle"
           offset={{ x: -8, y: -8 }}
           zIndex={2}
+          shadow={{ color: "#0096FA40", radius: 6, y: 2 }}
         >
           <Image
-            systemName="book"
+            systemName={isNovel ? "book" : "photo.on.rectangle"}
             font="subheadline"
-            foregroundStyle="label"
+            foregroundStyle="#FFFFFF"
           />
         </ZStack>
       </NavigationLink>
@@ -2148,8 +2150,25 @@ export function TagChip(props: {
   )
 }
 
-// 全局加载视图：所有加载场景统一为居中的圆形指示器。
-export function LoadingView() {
+// 全局加载视图：居中圆形指示器，可附带上下文加载提示文本（如加载插画/漫画/小说）。
+export function LoadingView(props?: { text?: string }) {
+  if (props?.text) {
+    return (
+      <VStack
+        alignment="center"
+        spacing={12}
+        frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+        padding={40}
+      >
+        <Spacer />
+        <ProgressView progressViewStyle="circular" />
+        <Text font="footnote" foregroundStyle="secondaryLabel">
+          {props.text}
+        </Text>
+        <Spacer />
+      </VStack>
+    )
+  }
   return (
     <HStack
       spacing={0}

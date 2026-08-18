@@ -320,11 +320,11 @@ function IllustFeedContent(props: {
   return (
     <VStack alignment="leading" spacing={10}>
       {paged.initialLoading ? (
-        <LoadingView />
+        <LoadingView text="加载插画…" />
       ) : paged.error && paged.items.length === 0 ? (
         <ErrorView message={paged.error} onRetry={paged.refresh} />
       ) : paged.items.length === 0 ? (
-        <EmptyView text={`暂无${label}，下拉刷新试试`} />
+        <EmptyView text={`暂无${label}，下拉刷新试试`} systemImage="photo" />
       ) : (
         <IllustFlowFeed
           items={paged.items}
@@ -345,7 +345,7 @@ function NovelFeedContent(props: {
   return (
     <VStack alignment="leading" spacing={10}>
       {paged.initialLoading ? (
-        <LoadingView />
+        <LoadingView text="加载小说…" />
       ) : paged.error && paged.items.length === 0 ? (
         <ErrorView message={paged.error} onRetry={paged.refresh} />
       ) : paged.items.length === 0 ? (
@@ -374,7 +374,7 @@ function VisionFeedContent(props: {
   return (
     <VStack alignment="leading" spacing={12} padding={{ top: 4, bottom: 24 }}>
       {paged.initialLoading ? (
-        <LoadingView />
+        <LoadingView text="加载专辑…" />
       ) : paged.error && paged.items.length === 0 ? (
         <ErrorView message={paged.error} onRetry={paged.refresh} />
       ) : paged.items.length === 0 ? (

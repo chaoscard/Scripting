@@ -64,7 +64,7 @@ export function MoreView(props: { onClose: () => void }) {
         </NavigationLink>
         <NavigationLink value="novelBookmarks">
           <HStack spacing={8}>
-            <Image systemName="bookmark.fill" foregroundStyle="#AF52DE" />
+            <Image systemName="bookmark.fill" foregroundStyle="#0096FA" />
             <Text font="body">阅读书签</Text>
           </HStack>
         </NavigationLink>

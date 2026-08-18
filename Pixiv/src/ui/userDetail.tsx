@@ -282,8 +282,6 @@ export function UserDetailView(props: { userID: number }) {
         topBarTrailing: [
           ...(!isOwnProfile ? [
             <Button
-              title={followed ? "已关注" : "关注"}
-              systemImage={followed ? "person.fill.checkmark" : "person.badge.plus"}
               disabled={followBusy}
               action={toggleFollow}
               contextMenu={{
@@ -298,16 +296,20 @@ export function UserDetailView(props: { userID: number }) {
                   </Group>
                 ),
               }}
-            />,
+            >
+              <Image
+                systemName={followed ? "person.fill.checkmark" : "person.badge.plus"}
+              />
+            </Button>,
           ] : []),
           <Button
-            title="分享"
-            systemImage="square.and.arrow.up"
             action={() => {
               void Haptics.transient()
               void ShareSheet.present([`https://www.pixiv.net/users/${userID}`])
             }}
-          />,
+          >
+            <Image systemName="square.and.arrow.up" />
+          </Button>,
           <Menu label={<Image systemName="ellipsis.circle" />}>
             <NavigationLink value={`userConnections:following:${userID}`}>
               <Label title="查看关注" systemImage="person.2" />
@@ -338,6 +340,12 @@ export function UserDetailView(props: { userID: number }) {
             {!isOwnProfile ? (
               <Group>
                 <Divider />
+                <Button
+                  title={followed ? "设为私密关注" : "私密关注"}
+                  systemImage="lock"
+                  disabled={followBusy}
+                  action={() => void followWithVisibility("private")}
+                />
                 <Button
                   title={isUserBlocked(detail.user.id) ? "解除屏蔽用户" : "屏蔽用户"}
                   systemImage={
@@ -440,13 +448,18 @@ function UserIllustFeed(props: {
   }, [])
 
   if (paged.initialLoading) {
-    return <LoadingView />
+    return <LoadingView text={kind === "manga" ? "加载漫画…" : "加载插画…"} />
   }
   if (paged.error && paged.items.length === 0) {
     return <ErrorView message={paged.error} onRetry={paged.refresh} />
   }
   if (paged.items.length === 0) {
-    return <EmptyView text={emptyText} />
+    return (
+      <EmptyView
+        text={emptyText}
+        systemImage={kind === "manga" ? "photo.on.rectangle" : "photo"}
+      />
+    )
   }
   return (
     <IllustFlowFeed
@@ -485,7 +498,7 @@ function UserNovelFeed(props: {
   }, [])
 
   if (paged.initialLoading) {
-    return <LoadingView />
+    return <LoadingView text="加载小说…" />
   }
   if (paged.error && paged.items.length === 0) {
     return <ErrorView message={paged.error} onRetry={paged.refresh} />

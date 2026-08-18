@@ -177,8 +177,8 @@ function rankingToolbar(props: {
         onChanged={(value: string) => props.onKindChange(value as RankingKind)}
       >
         <Label tag="illustration" title="插画" systemImage="photo" />
-        <Label tag="manga" title="漫画" systemImage="book.closed" />
-        <Label tag="novel" title="小说" systemImage="text.book.closed" />
+        <Label tag="manga" title="漫画" systemImage="photo.on.rectangle" />
+        <Label tag="novel" title="小说" systemImage="book" />
         <Label
           tag="advanced"
           title="高级"
@@ -451,7 +451,7 @@ function NovelRankingFeed(props: {
   return (
     <VStack alignment="leading" spacing={10}>
       {activePaged.initialLoading ? (
-        <LoadingView />
+        <LoadingView text="加载小说…" />
       ) : activePaged.error && activePaged.items.length === 0 ? (
         <ErrorView message={activePaged.error} onRetry={activePaged.refresh} />
       ) : activePaged.items.length === 0 ? (
@@ -486,11 +486,14 @@ function IllustRankingFeedContent(props: {
   return (
     <VStack alignment="leading" spacing={10}>
       {paged.initialLoading ? (
-        <LoadingView />
+        <LoadingView text={`加载${label}…`} />
       ) : paged.error && paged.items.length === 0 ? (
         <ErrorView message={paged.error} onRetry={paged.refresh} />
       ) : paged.items.length === 0 ? (
-        <EmptyView text={`暂无${label}排行，下拉刷新试试`} />
+        <EmptyView
+          text={`暂无${label}排行，下拉刷新试试`}
+          systemImage={label.includes("漫画") ? "photo.on.rectangle" : "photo"}
+        />
       ) : (
         <IllustFlowFeed
           items={paged.items}

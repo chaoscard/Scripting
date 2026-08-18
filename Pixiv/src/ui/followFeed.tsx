@@ -156,7 +156,7 @@ function followToolbar(props: {
       <Menu title="关注" systemImage="person.2">
         <Button
           title="公开"
-          systemImage="person.2"
+          systemImage="globe"
           action={() => {
             props.onModeChange("following")
             props.onScopeChange("all")
@@ -235,7 +235,7 @@ function FollowingIllustrationFeed(props: {
   return (
     <VStack alignment="leading" spacing={10}>
       {paged.initialLoading ? (
-        <LoadingView />
+        <LoadingView text="加载插画…" />
       ) : paged.error && paged.items.length === 0 ? (
         <ErrorView message={paged.error} onRetry={paged.refresh} />
       ) : paged.items.length === 0 ? (
@@ -274,7 +274,7 @@ function FollowingNovelFeed(props: {
   return (
     <VStack alignment="leading" spacing={10}>
       {paged.initialLoading ? (
-        <LoadingView />
+        <LoadingView text="加载小说…" />
       ) : paged.error && paged.items.length === 0 ? (
         <ErrorView message={paged.error} onRetry={paged.refresh} />
       ) : paged.items.length === 0 ? (
@@ -321,7 +321,7 @@ function WatchlistFeed(props: {
   return (
     <VStack alignment="leading" spacing={10}>
       {paged.initialLoading ? (
-        <LoadingView />
+        <LoadingView text={kind === "manga" ? "加载漫画…" : "加载小说…"} />
       ) : paged.error && paged.items.length === 0 ? (
         <ErrorView message={paged.error} onRetry={paged.refresh} />
       ) : paged.items.length === 0 ? (
@@ -363,7 +363,7 @@ function FriendIllustrationFeed(props: {
   return (
     <VStack alignment="leading" spacing={10}>
       {paged.initialLoading ? (
-        <LoadingView />
+        <LoadingView text="加载插画…" />
       ) : paged.error && paged.items.length === 0 ? (
         <ErrorView message={paged.error} onRetry={paged.refresh} />
       ) : paged.items.length === 0 ? (
@@ -400,7 +400,7 @@ function FriendNovelFeed(props: {
   return (
     <VStack alignment="leading" spacing={10}>
       {paged.initialLoading ? (
-        <LoadingView />
+        <LoadingView text="加载小说…" />
       ) : paged.error && paged.items.length === 0 ? (
         <ErrorView message={paged.error} onRetry={paged.refresh} />
       ) : paged.items.length === 0 ? (

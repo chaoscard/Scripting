@@ -121,7 +121,7 @@ function UserIllustrationBookmarkFeed(props: {
     <VStack alignment="leading" spacing={10}>
       <BookmarkTags tags={tags} activeTag={activeTag} onTagChange={setActiveTag} />
       {paged.initialLoading ? (
-        <LoadingView />
+        <LoadingView text="加载插画…" />
       ) : paged.error && paged.items.length === 0 ? (
         <ErrorView message={paged.error} onRetry={paged.refresh} />
       ) : paged.items.length === 0 ? (
@@ -167,7 +167,7 @@ function UserNovelBookmarkFeed(props: {
   return (
     <VStack alignment="leading" spacing={10}>
       {paged.initialLoading ? (
-        <LoadingView />
+        <LoadingView text="加载小说…" />
       ) : paged.error && paged.items.length === 0 ? (
         <ErrorView message={paged.error} onRetry={paged.refresh} />
       ) : paged.items.length === 0 ? (
