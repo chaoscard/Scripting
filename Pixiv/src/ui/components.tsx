@@ -2181,25 +2181,8 @@ export function TagChip(props: {
   )
 }
 
-// 全局加载视图：居中圆形指示器，可附带上下文加载提示文本（如加载插画/漫画/小说）。
-export function LoadingView(props?: { text?: string }) {
-  if (props?.text) {
-    return (
-      <VStack
-        alignment="center"
-        spacing={12}
-        frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-        padding={40}
-      >
-        <Spacer />
-        <ProgressView progressViewStyle="circular" />
-        <Text font="footnote" foregroundStyle="secondaryLabel">
-          {props.text}
-        </Text>
-        <Spacer />
-      </VStack>
-    )
-  }
+// 全局加载视图：居中圆形指示器，只留下加载转圈动画。
+export function LoadingView() {
   return (
     <HStack
       spacing={0}

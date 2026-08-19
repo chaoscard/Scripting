@@ -519,7 +519,7 @@ function NovelRankingFeedContent(props: {
   return (
     <VStack alignment="leading" spacing={10} frame={{ maxWidth: "infinity" }}>
       {paged.initialLoading ? (
-        <LoadingView text="加载小说…" />
+        <LoadingView />
       ) : paged.error && paged.items.length === 0 ? (
         <ErrorView message={paged.error} onRetry={paged.refresh} />
       ) : paged.items.length === 0 ? (
@@ -559,7 +559,7 @@ function IllustRankingFeedContent(props: {
   return (
     <VStack alignment="leading" spacing={10} frame={{ maxWidth: "infinity" }}>
       {paged.initialLoading ? (
-        <LoadingView text={`加载${label}…`} />
+        <LoadingView />
       ) : paged.error && paged.items.length === 0 ? (
         <ErrorView message={paged.error} onRetry={paged.refresh} />
       ) : paged.items.length === 0 ? (

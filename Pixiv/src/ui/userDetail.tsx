@@ -448,7 +448,7 @@ function UserIllustFeed(props: {
   }, [])
 
   if (paged.initialLoading) {
-    return <LoadingView text={kind === "manga" ? "加载漫画…" : "加载插画…"} />
+    return <LoadingView />
   }
   if (paged.error && paged.items.length === 0) {
     return <ErrorView message={paged.error} onRetry={paged.refresh} />
@@ -498,7 +498,7 @@ function UserNovelFeed(props: {
   }, [])
 
   if (paged.initialLoading) {
-    return <LoadingView text="加载小说…" />
+    return <LoadingView />
   }
   if (paged.error && paged.items.length === 0) {
     return <ErrorView message={paged.error} onRetry={paged.refresh} />

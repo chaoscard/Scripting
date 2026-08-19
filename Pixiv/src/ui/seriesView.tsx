@@ -524,7 +524,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
         navigationBarTitleDisplayMode="inline"
         toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
       >
-        <LoadingView text={props.kind === "novel" ? "加载小说系列…" : "加载漫画系列…"} />
+        <LoadingView />
       </ScrollView>
     )
   }

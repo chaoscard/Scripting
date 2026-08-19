@@ -206,7 +206,7 @@ function IllustrationLibraryFeed(props: {
     <VStack alignment="leading" spacing={10}>
       <BookmarkTags tags={tags} activeTag={activeTag} onTagChange={setActiveTag} />
       {paged.initialLoading ? (
-        <LoadingView text="加载插画…" />
+        <LoadingView />
       ) : paged.error && paged.items.length === 0 ? (
         <ErrorView message={paged.error} onRetry={paged.refresh} />
       ) : paged.items.length === 0 ? (
@@ -275,7 +275,7 @@ function NovelLibraryFeed(props: {
     <VStack alignment="leading" spacing={10}>
       <BookmarkTags tags={tags} activeTag={activeTag} onTagChange={setActiveTag} />
       {paged.initialLoading ? (
-        <LoadingView text="加载小说…" />
+        <LoadingView />
       ) : paged.error && paged.items.length === 0 ? (
         <ErrorView message={paged.error} onRetry={paged.refresh} />
       ) : paged.items.length === 0 ? (

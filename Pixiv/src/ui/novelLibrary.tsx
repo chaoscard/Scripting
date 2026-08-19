@@ -61,7 +61,7 @@ export function NovelLibraryView() {
       navigationDestination={destinationElement}
     >
       {paged.initialLoading ? (
-        <LoadingView text="加载小说…" />
+        <LoadingView />
       ) : paged.error && paged.items.length === 0 ? (
         <ErrorView message={paged.error} onRetry={paged.refresh} />
       ) : paged.items.length === 0 ? (

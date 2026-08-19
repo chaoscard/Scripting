@@ -212,6 +212,7 @@ export function usePagedList<T extends { id: number | string }>(
     seqRef.current++
     loadingMoreTaskRef.current = null
     setLoadingMore(false)
+    consumedTailRef.current = null
     clearBatchPublishedEffects()
     // 首次加载尚未完成就离开时，下次激活必须重新请求，不能停在加载中。
     if (itemsRef.current.length === 0 && initialLoadingRef.current) {
@@ -353,7 +354,10 @@ export function usePagedList<T extends { id: number | string }>(
       try {
         // 缓冲 1500ms：确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
         await waitForPaginationFeedback()
-        if (loadingMoreTaskRef.current !== task || !enabledRef.current) return
+        if (loadingMoreTaskRef.current !== task || !enabledRef.current) {
+          consumedTailRef.current = null
+          return
+        }
         const batchSize = currentBatchSize()
         const nextBatch = pending.slice(0, batchSize)
         setItems((current) => mergeUniqueByID(current, nextBatch))
@@ -408,7 +412,10 @@ export function usePagedList<T extends { id: number | string }>(
           activation !== activationRef.current ||
           !enabledRef.current ||
           loadingMoreTaskRef.current !== task
-        ) return
+        ) {
+          consumedTailRef.current = null
+          return
+        }
 
         nextPageURL = page.nextURL
         for (const item of applyFilter(page.items)) {
@@ -454,6 +461,7 @@ export function usePagedList<T extends { id: number | string }>(
       return
     }
     activationRef.current++
+    consumedTailRef.current = null
     const prev = prevDepsRef.current
     prevDepsRef.current = deps
     const changed =
