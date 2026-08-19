@@ -8,6 +8,7 @@ import {
   Picker,
   ScrollView,
   Text,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -59,19 +60,11 @@ export function LibraryView() {
     >
       <VStack alignment="leading" spacing={8}>
         <LibraryKindPicker kind={kind} onKindChange={setKind} />
-        {kind === "illustration" ? (
-          <IllustrationLibraryFeed
-            key={`illustration:${restrict}`}
-            restrict={restrict}
-            onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
-          />
-        ) : (
-          <NovelLibraryFeed
-            key={`novel:${restrict}`}
-            restrict={restrict}
-            onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
-          />
-        )}
+        <LibraryFeed
+          kind={kind}
+          restrict={restrict}
+          onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
+        />
       </VStack>
     </RefreshableScrollView>
   )
@@ -152,144 +145,146 @@ export function BookmarkTags(props: {
   )
 }
 
-function IllustrationLibraryFeed(props: {
+
+
+function LibraryFeed(props: {
+  kind: LibraryKind
   restrict: Visibility
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const [tags, setTags] = useState<PixivBookmarkTag[]>([])
-  const [activeTag, setActiveTag] = useState<string | null>(null)
-  const guard = useAsyncGuard()
+  const { kind, restrict, onRegisterRefresh } = props
 
-  async function loadTags() {
+  const [illustTags, setIllustTags] = useState<PixivBookmarkTag[]>([])
+  const [illustActiveTag, setIllustActiveTag] = useState<string | null>(null)
+  const illustGuard = useAsyncGuard()
+
+  const [novelTags, setNovelTags] = useState<PixivBookmarkTag[]>([])
+  const [novelActiveTag, setNovelActiveTag] = useState<string | null>(null)
+  const novelGuard = useAsyncGuard()
+
+  async function loadIllustTags(curRestrict: Visibility) {
     const userID = session.userID
     if (!userID) return
-    const g = guard()
+    const g = illustGuard()
     try {
-      const page = await session.call((token) => bookmarkTags(userID, props.restrict, token))
-      if (g.isCurrent()) setTags(page.items)
+      const page = await session.call((token) => bookmarkTags(userID, curRestrict, token))
+      if (g.isCurrent()) setIllustTags(page.items)
     } catch {
-      if (g.isCurrent()) setTags([])
+      if (g.isCurrent()) setIllustTags([])
     }
   }
 
-  const paged = usePagedList<PixivIllustration>({
+  async function loadNovelTags(curRestrict: Visibility) {
+    const userID = session.userID
+    if (!userID) return
+    const g = novelGuard()
+    try {
+      const page = await session.call((token) => novelBookmarkTags(curRestrict, token))
+      if (g.isCurrent()) setNovelTags(page.items)
+    } catch {
+      if (g.isCurrent()) setNovelTags([])
+    }
+  }
+
+  const illustPaged = usePagedList<PixivIllustration>({
     first: (token) => {
       const userID = session.userID
       if (!userID) throw new Error("未登录")
-      return bookmarks(userID, props.restrict, activeTag, token)
+      return bookmarks(userID, restrict, illustActiveTag, token)
     },
     more: (nextURL, token) => nextIllustrations(nextURL, token),
     filter: filterIllustrationBookmarks,
-    deps: [props.restrict, activeTag],
+    deps: [restrict, illustActiveTag],
+    enabled: kind === "illustration",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
 
-  useEffect(() => {
-    props.onRegisterRefresh?.(async () => {
-      await Promise.all([paged.refresh(), loadTags()])
-    })
-  }, [paged.refresh, props.onRegisterRefresh])
-
-  const pagedRef = useLatest(paged)
-  useEffect(() => {
-    return onSettingsChanged(() => {
-      pagedRef.current.reapplyFilter()
-    })
-  }, [])
-  useEffect(() => {
-    loadTags()
-    pagedRef.current.reapplyFilter()
-  }, [props.restrict])
-
-  return (
-    <VStack alignment="leading" spacing={10}>
-      <BookmarkTags tags={tags} activeTag={activeTag} onTagChange={setActiveTag} />
-      {paged.initialLoading ? (
-        <LoadingView />
-      ) : paged.error && paged.items.length === 0 ? (
-        <ErrorView message={paged.error} onRetry={paged.refresh} />
-      ) : paged.items.length === 0 ? (
-        <EmptyView text="暂无收藏作品" systemImage="heart" />
-      ) : (
-        <IllustFlowFeed
-          items={paged.items}
-          onLoadMore={paged.loadMore}
-          hasMore={paged.hasMore}
-          isLoading={paged.loadingMore}
-        />
-      )}
-    </VStack>
-  )
-}
-
-function NovelLibraryFeed(props: {
-  restrict: Visibility
-  onRegisterRefresh?: (fn: () => Promise<void>) => void
-}) {
-  const [tags, setTags] = useState<PixivBookmarkTag[]>([])
-  const [activeTag, setActiveTag] = useState<string | null>(null)
-  const guard = useAsyncGuard()
-
-  async function loadTags() {
-    const g = guard()
-    try {
-      const page = await session.call((token) => novelBookmarkTags(props.restrict, token))
-      if (g.isCurrent()) setTags(page.items)
-    } catch {
-      if (g.isCurrent()) setTags([])
-    }
-  }
-
-  const paged = usePagedList<PixivNovel>({
+  const novelPaged = usePagedList<PixivNovel>({
     first: (token) => {
       const userID = session.userID
       if (!userID) throw new Error("未登录")
-      return userNovelBookmarks(userID, props.restrict, activeTag, token)
+      return userNovelBookmarks(userID, restrict, novelActiveTag, token)
     },
     more: (nextURL, token) => nextNovels(nextURL, token),
     filter: filterNovelBookmarks,
-    deps: [props.restrict, activeTag],
+    deps: [restrict, novelActiveTag],
+    enabled: kind === "novel",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
   })
 
-  useEffect(() => {
-    props.onRegisterRefresh?.(async () => {
-      await Promise.all([paged.refresh(), loadTags()])
-    })
-  }, [paged.refresh, props.onRegisterRefresh])
+  const illustPagedRef = useLatest(illustPaged)
+  const novelPagedRef = useLatest(novelPaged)
 
-  const pagedRef = useLatest(paged)
   useEffect(() => {
     return onSettingsChanged(() => {
-      pagedRef.current.reapplyFilter()
+      illustPagedRef.current.reapplyFilter()
+      novelPagedRef.current.reapplyFilter()
     })
   }, [])
+
   useEffect(() => {
-    loadTags()
-    pagedRef.current.reapplyFilter()
-  }, [props.restrict])
+    if (kind === "illustration") {
+      void loadIllustTags(restrict)
+    } else {
+      void loadNovelTags(restrict)
+    }
+  }, [kind, restrict])
+
+  const activeRefresh = useCallback(async () => {
+    if (kind === "illustration") {
+      await Promise.all([illustPaged.refresh(), loadIllustTags(restrict)])
+    } else {
+      await Promise.all([novelPaged.refresh(), loadNovelTags(restrict)])
+    }
+  }, [kind, restrict, illustPaged.refresh, novelPaged.refresh])
+
+  useEffect(() => {
+    onRegisterRefresh?.(activeRefresh)
+  }, [activeRefresh, onRegisterRefresh])
+
+  if (kind === "illustration") {
+    return (
+      <VStack alignment="leading" spacing={10}>
+        <BookmarkTags tags={illustTags} activeTag={illustActiveTag} onTagChange={setIllustActiveTag} />
+        {illustPaged.initialLoading ? (
+          <LoadingView />
+        ) : illustPaged.error && illustPaged.items.length === 0 ? (
+          <ErrorView message={illustPaged.error} onRetry={illustPaged.refresh} />
+        ) : illustPaged.items.length === 0 ? (
+          <EmptyView text="暂无收藏作品" systemImage="heart" />
+        ) : (
+          <IllustFlowFeed
+            items={illustPaged.items}
+            onLoadMore={illustPaged.loadMore}
+            hasMore={illustPaged.hasMore}
+            isLoading={illustPaged.loadingMore}
+          />
+        )}
+      </VStack>
+    )
+  }
 
   return (
     <VStack alignment="leading" spacing={10}>
-      <BookmarkTags tags={tags} activeTag={activeTag} onTagChange={setActiveTag} />
-      {paged.initialLoading ? (
+      <BookmarkTags tags={novelTags} activeTag={novelActiveTag} onTagChange={setNovelActiveTag} />
+      {novelPaged.initialLoading ? (
         <LoadingView />
-      ) : paged.error && paged.items.length === 0 ? (
-        <ErrorView message={paged.error} onRetry={paged.refresh} />
-      ) : paged.items.length === 0 ? (
+      ) : novelPaged.error && novelPaged.items.length === 0 ? (
+        <ErrorView message={novelPaged.error} onRetry={novelPaged.refresh} />
+      ) : novelPaged.items.length === 0 ? (
         <EmptyView text="还没有收藏小说" systemImage="book" />
       ) : (
         <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
-          {paged.items.map((novel, index) => (
+          {novelPaged.items.map((novel, index) => (
             <NovelCard key={novel.id} novel={novel} priority={index} />
           ))}
           <LoadMoreTrigger
-            anchor={paged.items[paged.items.length - 1].id}
-            onLoadMore={paged.loadMore}
-            hasMore={paged.hasMore}
-            isLoading={paged.loadingMore}
+            anchor={novelPaged.items[novelPaged.items.length - 1]?.id}
+            onLoadMore={novelPaged.loadMore}
+            hasMore={novelPaged.hasMore}
+            isLoading={novelPaged.loadingMore}
           />
         </LazyVStack>
       )}

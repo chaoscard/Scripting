@@ -101,39 +101,29 @@ export function FollowFeedView(props: {
           value={segmentedValue}
           onChanged={selectSegmentedKind}
         />
-        {props.active ? (
-          mode === "following" ? (
-            followingKind === "illust" ? (
-              <FollowingIllustrationFeed
-                key={`following:illust:${scope}`}
-                scope={scope}
-                onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
-              />
-            ) : (
-              <FollowingNovelFeed
-                key={`following:novel:${scope}`}
-                scope={scope}
-                onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
-              />
-            )
-          ) : mode === "watchlist" ? (
-            <WatchlistFeed
-              key={`watchlist:${watchKind}`}
-              kind={watchKind}
-              onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
-            />
-          ) : friendKind === "illust" ? (
-            <FriendIllustrationFeed
-              key="friends:illust"
-              onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
-            />
-          ) : (
-            <FriendNovelFeed
-              key="friends:novel"
-              onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
-            />
-          )
-        ) : null}
+        {mode === "following" ? (
+          <FollowingFeed
+            key={`following:${scope}`}
+            active={props.active}
+            kind={followingKind}
+            scope={scope}
+            onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
+          />
+        ) : mode === "watchlist" ? (
+          <WatchlistFeed
+            key="watchlist"
+            active={props.active}
+            kind={watchKind}
+            onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
+          />
+        ) : (
+          <FriendsFeed
+            key="friends"
+            active={props.active}
+            kind={friendKind}
+            onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
+          />
+        )}
       </VStack>
     </RefreshableScrollView>
   )
@@ -216,78 +206,77 @@ function FollowKindPicker(props: {
   )
 }
 
-function FollowingIllustrationFeed(props: {
+function FollowingFeed(props: {
+  active: boolean
+  kind: WorkKind
   scope: FollowScope
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { scope, onRegisterRefresh } = props
-  const paged = usePagedList<PixivIllustration>({
+  const { active, kind, scope, onRegisterRefresh } = props
+
+  const illustPaged = usePagedList<PixivIllustration>({
     first: (token) => followingFeed(scope, token),
     more: (nextURL, token) => nextIllustrations(nextURL, token),
     filter: filterFollowingIllustrationItems,
-    deps: [scope],
+    deps: ["following", "illust", scope],
+    enabled: active && kind === "illust",
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
-  useSettingsFilter(paged, true)
 
-  useEffect(() => {
-    onRegisterRefresh?.(paged.refresh)
-  }, [paged.refresh, onRegisterRefresh])
-
-  return (
-    <VStack alignment="leading" spacing={10}>
-      {paged.initialLoading ? (
-        <LoadingView />
-      ) : paged.error && paged.items.length === 0 ? (
-        <ErrorView message={paged.error} onRetry={paged.refresh} />
-      ) : paged.items.length === 0 ? (
-        <EmptyView text="关注的人还没有新作品" systemImage="person.2" />
-      ) : (
-        <IllustFlowFeed
-          items={paged.items}
-          onLoadMore={paged.loadMore}
-          hasMore={paged.hasMore}
-          isLoading={paged.loadingMore}
-        />
-      )}
-    </VStack>
-  )
-}
-
-function FollowingNovelFeed(props: {
-  scope: FollowScope
-  onRegisterRefresh?: (fn: () => Promise<void>) => void
-}) {
-  const { scope, onRegisterRefresh } = props
-  const paged = usePagedList<PixivNovel>({
+  const novelPaged = usePagedList<PixivNovel>({
     first: (token) => followingNovels(scope, token),
     more: (nextURL, token) => nextNovels(nextURL, token),
     filter: filterFollowingNovelItems,
-    deps: [scope],
+    deps: ["following", "novel", scope],
+    enabled: active && kind === "novel",
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
   })
-  useSettingsFilter(paged, true)
 
+  useSettingsFilter(illustPaged, active && kind === "illust")
+  useSettingsFilter(novelPaged, active && kind === "novel")
+
+  const activeRefresh = kind === "illust" ? illustPaged.refresh : novelPaged.refresh
   useEffect(() => {
-    onRegisterRefresh?.(paged.refresh)
-  }, [paged.refresh, onRegisterRefresh])
+    onRegisterRefresh?.(activeRefresh)
+  }, [activeRefresh, onRegisterRefresh])
+
+  if (kind === "illust") {
+    return (
+      <VStack alignment="leading" spacing={10}>
+        {illustPaged.initialLoading ? (
+          <LoadingView />
+        ) : illustPaged.error && illustPaged.items.length === 0 ? (
+          <ErrorView message={illustPaged.error} onRetry={illustPaged.refresh} />
+        ) : illustPaged.items.length === 0 ? (
+          <EmptyView text="关注的人还没有新作品" systemImage="person.2" />
+        ) : (
+          <IllustFlowFeed
+            items={illustPaged.items}
+            onLoadMore={illustPaged.loadMore}
+            hasMore={illustPaged.hasMore}
+            isLoading={illustPaged.loadingMore}
+          />
+        )}
+      </VStack>
+    )
+  }
 
   return (
     <VStack alignment="leading" spacing={10}>
-      {paged.initialLoading ? (
+      {novelPaged.initialLoading ? (
         <LoadingView />
-      ) : paged.error && paged.items.length === 0 ? (
-        <ErrorView message={paged.error} onRetry={paged.refresh} />
-      ) : paged.items.length === 0 ? (
+      ) : novelPaged.error && novelPaged.items.length === 0 ? (
+        <ErrorView message={novelPaged.error} onRetry={novelPaged.refresh} />
+      ) : novelPaged.items.length === 0 ? (
         <EmptyView text="关注的人还没有新小说" systemImage="book" />
       ) : (
         <NovelFeedItems
-          items={paged.items}
-          onLoadMore={paged.loadMore}
-          hasMore={paged.hasMore}
-          isLoading={paged.loadingMore}
+          items={novelPaged.items}
+          onLoadMore={novelPaged.loadMore}
+          hasMore={novelPaged.hasMore}
+          isLoading={novelPaged.loadingMore}
         />
       )}
     </VStack>
@@ -295,50 +284,70 @@ function FollowingNovelFeed(props: {
 }
 
 function WatchlistFeed(props: {
+  active: boolean
   kind: WatchKind
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { kind, onRegisterRefresh } = props
-  const paged = usePagedList<PixivWatchlistSeries>({
+  const { active, kind, onRegisterRefresh } = props
+
+  const mangaPaged = usePagedList<PixivWatchlistSeries>({
     first: async (token) => {
       await refreshWatchlistFromCloud()
-      return kind === "manga" ? watchlistManga(token) : watchlistNovels(token)
+      return watchlistManga(token)
     },
     more: (nextURL, token) => nextWatchlist(nextURL, token),
-    filter: (items) => filterWatchlistItems(items, kind),
-    deps: [kind],
+    filter: (items) => filterWatchlistItems(items, "manga"),
+    deps: ["watchlist", "manga"],
+    enabled: active && kind === "manga",
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, currentBatchSize()).map(watchlistThumbUrlOf)).cancel
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(watchlistThumbUrlOf)).cancel,
   })
-  const pagedRef = useLatest(paged)
+
+  const novelPaged = usePagedList<PixivWatchlistSeries>({
+    first: async (token) => {
+      await refreshWatchlistFromCloud()
+      return watchlistNovels(token)
+    },
+    more: (nextURL, token) => nextWatchlist(nextURL, token),
+    filter: (items) => filterWatchlistItems(items, "novel"),
+    deps: ["watchlist", "novel"],
+    enabled: active && kind === "novel",
+    onBatchPublished: (_, pendingItems) =>
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(watchlistThumbUrlOf)).cancel,
+  })
+
+  const mangaPagedRef = useLatest(mangaPaged)
+  const novelPagedRef = useLatest(novelPaged)
   useEffect(() => {
     return onSettingsChanged(() => {
-      pagedRef.current.reapplyFilter()
+      mangaPagedRef.current.reapplyFilter()
+      novelPagedRef.current.reapplyFilter()
     })
   }, [])
 
+  const currentPaged = kind === "manga" ? mangaPaged : novelPaged
   useEffect(() => {
-    onRegisterRefresh?.(paged.refresh)
-  }, [paged.refresh, onRegisterRefresh])
+    onRegisterRefresh?.(currentPaged.refresh)
+  }, [currentPaged.refresh, onRegisterRefresh])
 
   return (
     <VStack alignment="leading" spacing={10}>
-      {paged.initialLoading ? (
+      {currentPaged.initialLoading ? (
         <LoadingView />
-      ) : paged.error && paged.items.length === 0 ? (
-        <ErrorView message={paged.error} onRetry={paged.refresh} />
-      ) : paged.items.length === 0 ? (
+      ) : currentPaged.error && currentPaged.items.length === 0 ? (
+        <ErrorView message={currentPaged.error} onRetry={currentPaged.refresh} />
+      ) : currentPaged.items.length === 0 ? (
         <EmptyView text={`暂无追更${kind === "manga" ? "漫画" : "小说"}`} systemImage="bookmark" />
       ) : (
         <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
-          {paged.items.map((item) => (
+          {currentPaged.items.map((item) => (
             <WatchlistSeriesCard key={item.id} item={item} kind={kind} />
           ))}
           <LoadMoreTrigger
-            anchor={paged.items[paged.items.length - 1].id}
-            onLoadMore={paged.loadMore}
-            hasMore={paged.hasMore}
-            isLoading={paged.loadingMore}
+            anchor={currentPaged.items[currentPaged.items.length - 1].id}
+            onLoadMore={currentPaged.loadMore}
+            hasMore={currentPaged.hasMore}
+            isLoading={currentPaged.loadingMore}
           />
         </LazyVStack>
       )}
@@ -346,74 +355,76 @@ function WatchlistFeed(props: {
   )
 }
 
-function FriendIllustrationFeed(props: {
+function FriendsFeed(props: {
+  active: boolean
+  kind: WorkKind
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const paged = usePagedList<PixivIllustration>({
+  const { active, kind, onRegisterRefresh } = props
+
+  const illustPaged = usePagedList<PixivIllustration>({
     first: myPixivFeed,
     more: (nextURL, token) => nextIllustrations(nextURL, token),
     filter: filterIllustrationItems,
-    deps: [],
+    deps: ["friends", "illust"],
+    enabled: active && kind === "illust",
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
-  useSettingsFilter(paged, true)
 
-  useEffect(() => {
-    props.onRegisterRefresh?.(paged.refresh)
-  }, [paged.refresh, props.onRegisterRefresh])
-
-  return (
-    <VStack alignment="leading" spacing={10}>
-      {paged.initialLoading ? (
-        <LoadingView />
-      ) : paged.error && paged.items.length === 0 ? (
-        <ErrorView message={paged.error} onRetry={paged.refresh} />
-      ) : paged.items.length === 0 ? (
-        <EmptyView text="好友还没有新作品" systemImage="person.2" />
-      ) : (
-        <IllustFlowFeed
-          items={paged.items}
-          onLoadMore={paged.loadMore}
-          hasMore={paged.hasMore}
-          isLoading={paged.loadingMore}
-        />
-      )}
-    </VStack>
-  )
-}
-
-function FriendNovelFeed(props: {
-  onRegisterRefresh?: (fn: () => Promise<void>) => void
-}) {
-  const paged = usePagedList<PixivNovel>({
+  const novelPaged = usePagedList<PixivNovel>({
     first: myPixivNovels,
     more: (nextURL, token) => nextNovels(nextURL, token),
     filter: filterNovelItems,
-    deps: [],
+    deps: ["friends", "novel"],
+    enabled: active && kind === "novel",
     onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
   })
-  useSettingsFilter(paged, true)
 
+  useSettingsFilter(illustPaged, active && kind === "illust")
+  useSettingsFilter(novelPaged, active && kind === "novel")
+
+  const activeRefresh = kind === "illust" ? illustPaged.refresh : novelPaged.refresh
   useEffect(() => {
-    props.onRegisterRefresh?.(paged.refresh)
-  }, [paged.refresh, props.onRegisterRefresh])
+    onRegisterRefresh?.(activeRefresh)
+  }, [activeRefresh, onRegisterRefresh])
+
+  if (kind === "illust") {
+    return (
+      <VStack alignment="leading" spacing={10}>
+        {illustPaged.initialLoading ? (
+          <LoadingView />
+        ) : illustPaged.error && illustPaged.items.length === 0 ? (
+          <ErrorView message={illustPaged.error} onRetry={illustPaged.refresh} />
+        ) : illustPaged.items.length === 0 ? (
+          <EmptyView text="好友还没有新作品" systemImage="person.2" />
+        ) : (
+          <IllustFlowFeed
+            items={illustPaged.items}
+            onLoadMore={illustPaged.loadMore}
+            hasMore={illustPaged.hasMore}
+            isLoading={illustPaged.loadingMore}
+          />
+        )}
+      </VStack>
+    )
+  }
 
   return (
     <VStack alignment="leading" spacing={10}>
-      {paged.initialLoading ? (
+      {novelPaged.initialLoading ? (
         <LoadingView />
-      ) : paged.error && paged.items.length === 0 ? (
-        <ErrorView message={paged.error} onRetry={paged.refresh} />
-      ) : paged.items.length === 0 ? (
+      ) : novelPaged.error && novelPaged.items.length === 0 ? (
+        <ErrorView message={novelPaged.error} onRetry={novelPaged.refresh} />
+      ) : novelPaged.items.length === 0 ? (
         <EmptyView text="好友还没有新小说" systemImage="book" />
       ) : (
         <NovelFeedItems
-          items={paged.items}
-          onLoadMore={paged.loadMore}
-          hasMore={paged.hasMore}
-          isLoading={paged.loadingMore}
+          items={novelPaged.items}
+          onLoadMore={novelPaged.loadMore}
+          hasMore={novelPaged.hasMore}
+          isLoading={novelPaged.loadingMore}
         />
       )}
     </VStack>

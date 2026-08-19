@@ -71,139 +71,134 @@ export function UserWorksView(props: { userID?: number; title?: string }) {
           <Text tag="novel">小说</Text>
         </Picker>
 
-        {tab === "illust" ? (
-          <UserWorksIllustFeed
-            key={`illust:${currentUserID}`}
-            userID={currentUserID}
-            kind="illust"
-            emptyText="暂无插画投稿"
-            onRegisterRefresh={(fn) => {
-              refreshHandlerRef.current = fn
-            }}
-          />
-        ) : tab === "manga" ? (
-          <UserWorksIllustFeed
-            key={`manga:${currentUserID}`}
-            userID={currentUserID}
-            kind="manga"
-            emptyText="暂无漫画投稿"
-            onRegisterRefresh={(fn) => {
-              refreshHandlerRef.current = fn
-            }}
-          />
-        ) : (
-          <UserWorksNovelFeed
-            key={`novel:${currentUserID}`}
-            userID={currentUserID}
-            emptyText="暂无小说投稿"
-            onRegisterRefresh={(fn) => {
-              refreshHandlerRef.current = fn
-            }}
-          />
-        )}
+        <UserWorksFeed
+          userID={currentUserID}
+          tab={tab}
+          onRegisterRefresh={(fn) => {
+            refreshHandlerRef.current = fn
+          }}
+        />
       </VStack>
     </RefreshableScrollView>
   )
 }
 
-function UserWorksIllustFeed(props: {
+function UserWorksFeed(props: {
   userID: number
-  kind: "illust" | "manga"
-  emptyText: string
+  tab: WorkTab
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { userID, kind, emptyText, onRegisterRefresh } = props
+  const { userID, tab, onRegisterRefresh } = props
 
-  const paged = usePagedList<PixivIllustration>({
-    first: (token) => userWorks(userID, kind, token),
+  // 1. 插画
+  const illustPaged = usePagedList<PixivIllustration>({
+    first: (token) => userWorks(userID, "illust", token),
     more: (nextURL, token) => nextIllustrations(nextURL, token),
     filter: filterIllustrations,
-    deps: [userID, kind],
+    deps: [userID, "illust"],
+    enabled: tab === "illust",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
 
-  useEffect(() => {
-    onRegisterRefresh?.(paged.refresh)
-  }, [paged.refresh, onRegisterRefresh])
+  // 2. 漫画
+  const mangaPaged = usePagedList<PixivIllustration>({
+    first: (token) => userWorks(userID, "manga", token),
+    more: (nextURL, token) => nextIllustrations(nextURL, token),
+    filter: filterIllustrations,
+    deps: [userID, "manga"],
+    enabled: tab === "manga",
+    onBatchPublished: (_, pendingItems) =>
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
+  })
 
-  const pagedRef = useLatest(paged)
-  useEffect(() => {
-    return onSettingsChanged(() => {
-      pagedRef.current.reapplyFilter()
-    })
-  }, [])
-
-  if (paged.initialLoading) {
-    return <LoadingView />
-  }
-  if (paged.error && paged.items.length === 0) {
-    return <ErrorView message={paged.error} onRetry={paged.refresh} />
-  }
-  if (paged.items.length === 0) {
-    return (
-      <EmptyView
-        text={emptyText}
-        systemImage={kind === "manga" ? "photo.on.rectangle" : "photo"}
-      />
-    )
-  }
-  return (
-    <IllustFlowFeed
-      items={paged.items}
-      onLoadMore={paged.loadMore}
-      hasMore={paged.hasMore}
-      isLoading={paged.loadingMore}
-    />
-  )
-}
-
-function UserWorksNovelFeed(props: {
-  userID: number
-  emptyText: string
-  onRegisterRefresh?: (fn: () => Promise<void>) => void
-}) {
-  const { userID, emptyText, onRegisterRefresh } = props
-
-  const paged = usePagedList<PixivNovel>({
+  // 3. 小说
+  const novelPaged = usePagedList<PixivNovel>({
     first: (token) => userNovels(userID, token),
     more: (nextURL, token) => nextNovels(nextURL, token),
     filter: filterNovels,
     deps: [userID],
+    enabled: tab === "novel",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
   })
 
-  useEffect(() => {
-    onRegisterRefresh?.(paged.refresh)
-  }, [paged.refresh, onRegisterRefresh])
+  const illustPagedRef = useLatest(illustPaged)
+  const mangaPagedRef = useLatest(mangaPaged)
+  const novelPagedRef = useLatest(novelPaged)
 
-  const pagedRef = useLatest(paged)
   useEffect(() => {
     return onSettingsChanged(() => {
-      pagedRef.current.reapplyFilter()
+      illustPagedRef.current.reapplyFilter()
+      mangaPagedRef.current.reapplyFilter()
+      novelPagedRef.current.reapplyFilter()
     })
   }, [])
 
-  if (paged.initialLoading) {
-    return <LoadingView />
+  const activeRefresh =
+    tab === "illust"
+      ? illustPaged.refresh
+      : tab === "manga"
+        ? mangaPaged.refresh
+        : novelPaged.refresh
+
+  useEffect(() => {
+    onRegisterRefresh?.(activeRefresh)
+  }, [activeRefresh, onRegisterRefresh])
+
+  if (tab === "illust") {
+    if (illustPaged.initialLoading) return <LoadingView />
+    if (illustPaged.error && illustPaged.items.length === 0) {
+      return <ErrorView message={illustPaged.error} onRetry={illustPaged.refresh} />
+    }
+    if (illustPaged.items.length === 0) {
+      return <EmptyView text="暂无插画投稿" systemImage="photo" />
+    }
+    return (
+      <IllustFlowFeed
+        items={illustPaged.items}
+        onLoadMore={illustPaged.loadMore}
+        hasMore={illustPaged.hasMore}
+        isLoading={illustPaged.loadingMore}
+      />
+    )
   }
-  if (paged.error && paged.items.length === 0) {
-    return <ErrorView message={paged.error} onRetry={paged.refresh} />
+
+  if (tab === "manga") {
+    if (mangaPaged.initialLoading) return <LoadingView />
+    if (mangaPaged.error && mangaPaged.items.length === 0) {
+      return <ErrorView message={mangaPaged.error} onRetry={mangaPaged.refresh} />
+    }
+    if (mangaPaged.items.length === 0) {
+      return <EmptyView text="暂无漫画投稿" systemImage="photo.on.rectangle" />
+    }
+    return (
+      <IllustFlowFeed
+        items={mangaPaged.items}
+        onLoadMore={mangaPaged.loadMore}
+        hasMore={mangaPaged.hasMore}
+        isLoading={mangaPaged.loadingMore}
+      />
+    )
   }
-  if (paged.items.length === 0) {
-    return <EmptyView text={emptyText} systemImage="book" />
+
+  if (novelPaged.initialLoading) return <LoadingView />
+  if (novelPaged.error && novelPaged.items.length === 0) {
+    return <ErrorView message={novelPaged.error} onRetry={novelPaged.refresh} />
+  }
+  if (novelPaged.items.length === 0) {
+    return <EmptyView text="暂无小说投稿" systemImage="book" />
   }
   return (
     <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
-      {paged.items.map((novel, index) => (
+      {novelPaged.items.map((novel, index) => (
         <NovelCard key={novel.id} novel={novel} priority={index} />
       ))}
       <LoadMoreTrigger
-        anchor={paged.items[paged.items.length - 1].id}
-        onLoadMore={paged.loadMore}
-        hasMore={paged.hasMore}
-        isLoading={paged.loadingMore}
+        anchor={novelPaged.items[novelPaged.items.length - 1]?.id}
+        onLoadMore={novelPaged.loadMore}
+        hasMore={novelPaged.hasMore}
+        isLoading={novelPaged.loadingMore}
       />
     </LazyVStack>
   )

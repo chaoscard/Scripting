@@ -6,6 +6,7 @@ import {
   LazyVStack,
   Picker,
   Text,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -88,7 +89,6 @@ export function HistoryView() {
       <VStack alignment="leading" spacing={8}>
         <HistoryKindPicker kind={kind} onKindChange={setKind} />
         <HistoryFeed
-          key={kind}
           kind={kind}
           onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
         />
@@ -161,29 +161,38 @@ function HistoryFeed(props: {
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
   const { kind, onRegisterRefresh } = props
-  const [items, setItems] = useState(() => getVisibleHistory(kind))
+  const [itemsMap, setItemsMap] = useState<Record<HistoryKind, HistoryEntry[]>>(() => ({
+    illustration: getVisibleHistory("illustration"),
+    manga: getVisibleHistory("manga"),
+    novel: getVisibleHistory("novel"),
+  }))
+
+  const reloadAll = useCallback(() => {
+    setItemsMap({
+      illustration: getVisibleHistory("illustration"),
+      manga: getVisibleHistory("manga"),
+      novel: getVisibleHistory("novel"),
+    })
+  }, [])
 
   useEffect(() => {
-    const reload = () => setItems(getVisibleHistory(kind))
-    reload()
-    const unsubscribeHistory = onHistoryChanged(reload)
-    const unsubscribeSettings = onSettingsChanged(reload)
+    reloadAll()
+    const unsubscribeHistory = onHistoryChanged(reloadAll)
+    const unsubscribeSettings = onSettingsChanged(reloadAll)
     return () => {
       unsubscribeHistory()
       unsubscribeSettings()
     }
-  }, [kind])
-
-  function reload() {
-    setItems(getVisibleHistory(kind))
-  }
+  }, [reloadAll])
 
   useEffect(() => {
     onRegisterRefresh?.(async () => {
       await refreshHistoryFromCloud()
-      reload()
+      reloadAll()
     })
-  }, [onRegisterRefresh])
+  }, [onRegisterRefresh, reloadAll])
+
+  const items = itemsMap[kind]
 
   return (
     <VStack alignment="leading" spacing={10}>
@@ -198,20 +207,16 @@ function HistoryFeed(props: {
 }
 
 function HistoryContent(props: { kind: HistoryKind; items: HistoryEntry[] }) {
-  const [visibleCount, setVisibleCount] = useState(UI_BATCH_SIZE)
+  const [visibleCounts, setVisibleCounts] = useState<Record<HistoryKind, number>>({
+    illustration: UI_BATCH_SIZE,
+    manga: UI_BATCH_SIZE,
+    novel: UI_BATCH_SIZE,
+  })
   const [loadingMore, setLoadingMore] = useState(false)
   const loadingMoreLockRef = useRef(false)
-  const prevKindRef = useRef(props.kind)
   const prefetchTaskRef = useRef<{ cancel: () => void } | null>(null)
 
-  useEffect(() => {
-    if (prevKindRef.current !== props.kind) {
-      prevKindRef.current = props.kind
-      setVisibleCount(UI_BATCH_SIZE)
-      loadingMoreLockRef.current = false
-      setLoadingMore(false)
-    }
-  }, [props.kind])
+  const visibleCount = visibleCounts[props.kind] ?? UI_BATCH_SIZE
 
   useEffect(() => {
     prefetchTaskRef.current?.cancel()
@@ -260,7 +265,10 @@ function HistoryContent(props: { kind: HistoryKind; items: HistoryEntry[] }) {
       try {
         // 缓冲 1500ms：确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
         await waitForPaginationFeedback()
-        setVisibleCount((c) => Math.min(c + UI_BATCH_SIZE, novels.length))
+        setVisibleCounts((prev) => ({
+          ...prev,
+          novel: Math.min((prev.novel ?? UI_BATCH_SIZE) + UI_BATCH_SIZE, novels.length),
+        }))
       } finally {
         loadingMoreLockRef.current = false
         setLoadingMore(false)
@@ -307,9 +315,15 @@ function HistoryContent(props: { kind: HistoryKind; items: HistoryEntry[] }) {
     loadingMoreLockRef.current = true
     setLoadingMore(true)
     try {
-        // 缓冲 1500ms：确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
-        await waitForPaginationFeedback()
-      setVisibleCount((c) => Math.min(c + UI_BATCH_SIZE, illustEntries.length))
+      // 缓冲 1500ms：确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
+      await waitForPaginationFeedback()
+      setVisibleCounts((prev) => ({
+        ...prev,
+        [props.kind]: Math.min(
+          (prev[props.kind] ?? UI_BATCH_SIZE) + UI_BATCH_SIZE,
+          illustEntries.length
+        ),
+      }))
     } finally {
       loadingMoreLockRef.current = false
       setLoadingMore(false)

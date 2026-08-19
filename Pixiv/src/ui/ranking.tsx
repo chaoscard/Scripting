@@ -81,14 +81,8 @@ export function RankingView(props: { onClose: () => void; active: boolean }) {
   const [kind, setKind] = useState<RankingKind>("illustration")
   const [illustrationMode, setIllustrationMode] =
     useState<IllustrationRankingMode>("day")
-  const [displayedIllustrationMode, setDisplayedIllustrationMode] =
-    useState<IllustrationRankingMode>("day")
   const [mangaMode, setMangaMode] = useState<MangaRankingMode>("day_manga")
-  const [displayedMangaMode, setDisplayedMangaMode] =
-    useState<MangaRankingMode>("day_manga")
   const [novelMode, setNovelMode] = useState<NovelRankingMode>("day")
-  const [displayedNovelMode, setDisplayedNovelMode] =
-    useState<NovelRankingMode>("day")
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
   const rootModes =
@@ -101,11 +95,11 @@ export function RankingView(props: { onClose: () => void; active: boolean }) {
           : null
   const rootSelectedMode =
     kind === "illustration"
-      ? displayedIllustrationMode
+      ? illustrationMode
       : kind === "manga"
-        ? displayedMangaMode
+        ? mangaMode
         : kind === "novel"
-          ? displayedNovelMode
+          ? novelMode
           : null
 
   function selectRootMode(value: string) {
@@ -134,8 +128,6 @@ export function RankingView(props: { onClose: () => void; active: boolean }) {
             key="illustration"
             mode={illustrationMode}
             active={props.active}
-            displayedMode={displayedIllustrationMode}
-            onDisplayedModeChange={setDisplayedIllustrationMode}
             onRegisterRefresh={(fn) => {
               refreshHandlerRef.current = fn
             }}
@@ -145,8 +137,6 @@ export function RankingView(props: { onClose: () => void; active: boolean }) {
             key="manga"
             mode={mangaMode}
             active={props.active}
-            displayedMode={displayedMangaMode}
-            onDisplayedModeChange={setDisplayedMangaMode}
             onRegisterRefresh={(fn) => {
               refreshHandlerRef.current = fn
             }}
@@ -156,8 +146,6 @@ export function RankingView(props: { onClose: () => void; active: boolean }) {
             key="novel"
             mode={novelMode}
             active={props.active}
-            displayedMode={displayedNovelMode}
-            onDisplayedModeChange={setDisplayedNovelMode}
             onRegisterRefresh={(fn) => {
               refreshHandlerRef.current = fn
             }}
@@ -230,11 +218,9 @@ function RankingModePicker(props: {
 function IllustrationRankingFeed(props: {
   mode: IllustrationRankingMode
   active: boolean
-  displayedMode: IllustrationRankingMode
-  onDisplayedModeChange: (mode: IllustrationRankingMode) => void
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { mode, active, displayedMode, onDisplayedModeChange, onRegisterRefresh } = props
+  const { mode, active, onRegisterRefresh } = props
 
   // 1. 每日
   const dayPaged = usePagedList<PixivIllustration>({
@@ -307,7 +293,7 @@ function IllustrationRankingFeed(props: {
     })
   }, [])
 
-  const requestedPaged =
+  const currentPaged =
     mode === "day"
       ? dayPaged
       : mode === "week"
@@ -317,36 +303,20 @@ function IllustrationRankingFeed(props: {
           : mode === "week_original"
             ? originalPaged
             : rookiePaged
-  const displayedPaged =
-    displayedMode === "day"
-      ? dayPaged
-      : displayedMode === "week"
-        ? weekPaged
-        : displayedMode === "month"
-          ? monthPaged
-          : displayedMode === "week_original"
-            ? originalPaged
-            : rookiePaged
 
   useEffect(() => {
-    if (!requestedPaged.initialLoading) onDisplayedModeChange(mode)
-  }, [mode, requestedPaged.initialLoading, onDisplayedModeChange])
+    onRegisterRefresh?.(currentPaged.refresh)
+  }, [currentPaged.refresh, onRegisterRefresh])
 
-  useEffect(() => {
-    onRegisterRefresh?.(requestedPaged.refresh)
-  }, [requestedPaged.refresh, onRegisterRefresh])
-
-  return <IllustRankingFeedContent paged={displayedPaged} label="插画" />
+  return <IllustRankingFeedContent paged={currentPaged} label="插画" />
 }
 
 function MangaRankingFeed(props: {
   mode: MangaRankingMode
   active: boolean
-  displayedMode: MangaRankingMode
-  onDisplayedModeChange: (mode: MangaRankingMode) => void
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { mode, active, displayedMode, onDisplayedModeChange, onRegisterRefresh } = props
+  const { mode, active, onRegisterRefresh } = props
 
   // 1. 每日
   const dayPaged = usePagedList<PixivIllustration>({
@@ -406,7 +376,7 @@ function MangaRankingFeed(props: {
     })
   }, [])
 
-  const requestedPaged =
+  const currentPaged =
     mode === "day_manga"
       ? dayPaged
       : mode === "week_manga"
@@ -414,34 +384,20 @@ function MangaRankingFeed(props: {
         : mode === "month_manga"
           ? monthPaged
           : rookiePaged
-  const displayedPaged =
-    displayedMode === "day_manga"
-      ? dayPaged
-      : displayedMode === "week_manga"
-        ? weekPaged
-        : displayedMode === "month_manga"
-          ? monthPaged
-          : rookiePaged
 
   useEffect(() => {
-    if (!requestedPaged.initialLoading) onDisplayedModeChange(mode)
-  }, [mode, requestedPaged.initialLoading, onDisplayedModeChange])
+    onRegisterRefresh?.(currentPaged.refresh)
+  }, [currentPaged.refresh, onRegisterRefresh])
 
-  useEffect(() => {
-    onRegisterRefresh?.(requestedPaged.refresh)
-  }, [requestedPaged.refresh, onRegisterRefresh])
-
-  return <IllustRankingFeedContent paged={displayedPaged} label="漫画" />
+  return <IllustRankingFeedContent paged={currentPaged} label="漫画" />
 }
 
 function NovelRankingFeed(props: {
   mode: NovelRankingMode
   active: boolean
-  displayedMode: NovelRankingMode
-  onDisplayedModeChange: (mode: NovelRankingMode) => void
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { mode, active, displayedMode, onDisplayedModeChange, onRegisterRefresh } = props
+  const { mode, active, onRegisterRefresh } = props
 
   // 1. 每日
   const dayPaged = usePagedList<PixivNovel>({
@@ -488,28 +444,18 @@ function NovelRankingFeed(props: {
     })
   }, [])
 
-  const requestedPaged =
+  const currentPaged =
     mode === "day"
       ? dayPaged
       : mode === "week"
         ? weekPaged
         : rookiePaged
-  const displayedPaged =
-    displayedMode === "day"
-      ? dayPaged
-      : displayedMode === "week"
-        ? weekPaged
-        : rookiePaged
 
   useEffect(() => {
-    if (!requestedPaged.initialLoading) onDisplayedModeChange(mode)
-  }, [mode, requestedPaged.initialLoading, onDisplayedModeChange])
+    onRegisterRefresh?.(currentPaged.refresh)
+  }, [currentPaged.refresh, onRegisterRefresh])
 
-  useEffect(() => {
-    onRegisterRefresh?.(requestedPaged.refresh)
-  }, [requestedPaged.refresh, onRegisterRefresh])
-
-  return <NovelRankingFeedContent paged={displayedPaged} />
+  return <NovelRankingFeedContent paged={currentPaged} />
 }
 
 function NovelRankingFeedContent(props: {
