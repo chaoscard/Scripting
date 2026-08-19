@@ -61,6 +61,7 @@ export function LibraryView() {
       <VStack alignment="leading" spacing={8}>
         <LibraryKindPicker kind={kind} onKindChange={setKind} />
         <LibraryFeed
+          key={restrict}
           kind={kind}
           restrict={restrict}
           onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
