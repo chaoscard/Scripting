@@ -258,7 +258,7 @@ function HistoryContent(props: { kind: HistoryKind; items: HistoryEntry[] }) {
       loadingMoreLockRef.current = true
       setLoadingMore(true)
       try {
-        // 短暂保留触底回弹反馈，随后平滑展开新批次卡片
+        // 缓冲 1500ms：确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
         await waitForPaginationFeedback()
         setVisibleCount((c) => Math.min(c + UI_BATCH_SIZE, novels.length))
       } finally {
@@ -307,7 +307,7 @@ function HistoryContent(props: { kind: HistoryKind; items: HistoryEntry[] }) {
     loadingMoreLockRef.current = true
     setLoadingMore(true)
     try {
-        // 短暂保留触底回弹反馈，随后平滑展开新批次卡片
+        // 缓冲 1500ms：确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
         await waitForPaginationFeedback()
       setVisibleCount((c) => Math.min(c + UI_BATCH_SIZE, illustEntries.length))
     } finally {

@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "scripting"
 import { session } from "../api/session"
 import { getImageBatchSize, loadSettings } from "../store/settings"
 
-// 固定尺寸图片骨架后，触底只需要保留短暂的回弹反馈，不再人为阻塞网络结果。
-export const PAGINATION_FEEDBACK_MS = 300
+// 缓冲 1500ms：确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
+export const PAGINATION_FEEDBACK_MS = 1500
 
 export function waitForPaginationFeedback(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, PAGINATION_FEEDBACK_MS))
@@ -351,7 +351,7 @@ export function usePagedList<T extends { id: number | string }>(
       loadingMoreTaskRef.current = task
       setLoadingMore(true)
       try {
-        // 短暂保留触底回弹反馈，避免新批次与触发器在同一帧切换。
+        // 缓冲 1500ms：确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
         await waitForPaginationFeedback()
         if (loadingMoreTaskRef.current !== task || !enabledRef.current) return
         const batchSize = currentBatchSize()

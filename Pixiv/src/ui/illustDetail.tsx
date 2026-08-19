@@ -224,7 +224,7 @@ export function IllustDetailView(props: { illustID: number }) {
       return
     }
     const coverUrl = illust
-      ? (illust.image_urls?.square_medium ?? cardThumbUrlOf(illust) ?? imageUrlOf(illust, 0, quality))
+      ? (cardThumbUrlOf(illust) ?? imageUrlOf(illust, 0, quality))
       : null
     if (!coverUrl) {
       setAmbientPalette(null)

@@ -1119,15 +1119,20 @@ export function LoadMoreTrigger(props: {
 }) {
   if (!props.hasMore) return null
   return (
-    <Button
+    <VStack
       key={`load-more:${props.anchor}`}
-      title={props.isLoading ? "加载中" : "加载更多"}
-      systemImage={props.isLoading ? "hourglass" : "arrow.down.circle"}
-      buttonStyle="plain"
-      disabled={props.isLoading}
-      action={() => props.onLoadMore(props.anchor)}
-      frame={{ height: 44, maxWidth: "infinity" }}
-    />
+      spacing={0}
+      frame={{ height: props.isLoading ? 44 : 1, maxWidth: "infinity" }}
+      onAppear={() => props.onLoadMore(props.anchor)}
+    >
+      {props.isLoading ? (
+        <HStack spacing={0} frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
+          <Spacer />
+          <ProgressView progressViewStyle="circular" />
+          <Spacer />
+        </HStack>
+      ) : null}
+    </VStack>
   )
 }
 
@@ -1203,12 +1208,19 @@ export function IllustFlowFeed(props: {
         {columnViews}
       </HStack>
       {props.hasMore && triggerAnchor ? (
-        <LoadMoreTrigger
-          anchor={triggerAnchor}
-          onLoadMore={props.onLoadMore}
-          hasMore={props.hasMore}
-          isLoading={props.isLoading}
+        <VStack
+          key={`trigger:${triggerAnchor}`}
+          spacing={0}
+          frame={{ height: 20, maxWidth: "infinity" }}
+          onAppear={() => props.onLoadMore(triggerAnchor)}
         />
+      ) : null}
+      {props.isLoading ? (
+        <HStack spacing={0} frame={{ maxWidth: "infinity", height: 44 }}>
+          <Spacer />
+          <ProgressView progressViewStyle="circular" />
+          <Spacer />
+        </HStack>
       ) : null}
     </VStack>
   )

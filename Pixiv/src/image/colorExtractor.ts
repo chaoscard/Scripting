@@ -285,25 +285,18 @@ export async function extractIllustAmbientPalette(
     const topAvg = topCrop?.averageColor() ?? uiImage.averageColor()
 
     // 2. 全局多主色采样：在主色列表中优先选取鲜活度适中的颜色
-    // 若原图尺寸过大，仅通过轻量 averageColor 避免主线程全图聚类计算卡顿
+    const dominants = uiImage.dominantColors(6)
     let bestDominant = uiImage.averageColor()
-    if (uiImage.width * uiImage.height <= 500000) {
-      try {
-        const dominants = uiImage.dominantColors(4)
-        if (dominants && dominants.length > 0) {
-          let maxScore = -1
-          for (const d of dominants) {
-            const c = d.color
-            const [, s] = rgbToHsl(c.red ?? 0, c.green ?? 0, c.blue ?? 0)
-            const score = s * 1.6 + d.fraction
-            if (score > maxScore) {
-              maxScore = score
-              bestDominant = c
-            }
-          }
+    if (dominants && dominants.length > 0) {
+      let maxScore = -1
+      for (const d of dominants) {
+        const c = d.color
+        const [, s] = rgbToHsl(c.red ?? 0, c.green ?? 0, c.blue ?? 0)
+        const score = s * 1.6 + d.fraction
+        if (score > maxScore) {
+          maxScore = score
+          bestDominant = c
         }
-      } catch {
-        // fallback to averageColor
       }
     }
 

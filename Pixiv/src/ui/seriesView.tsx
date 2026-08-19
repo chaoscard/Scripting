@@ -414,7 +414,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
       loadingMoreLockRef.current = true
       setLoadingMore(true)
       try {
-        // 短暂保留触底回弹反馈，随后平滑展开新批次卡片
+        // 缓冲 1500ms：确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
         await waitForPaginationFeedback()
         const nextBatch = pendingIllusts.slice(0, UI_BATCH_SIZE)
         const remaining = pendingIllusts.slice(UI_BATCH_SIZE)
