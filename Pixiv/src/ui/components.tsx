@@ -64,8 +64,8 @@ import type {
 } from "../types"
 
 export const CORNER_ICON_SIZE = 26
-const FLOW_HORIZONTAL_PADDING = 10
-const FLOW_COLUMN_SPACING = 10
+const FLOW_HORIZONTAL_PADDING = 12
+const FLOW_COLUMN_SPACING = 12
 const FLOW_ROW_SPACING = 4
 const FLOW_CARD_WIDTH = Math.floor(
   (Device.screen.width - FLOW_HORIZONTAL_PADDING * 2 - FLOW_COLUMN_SPACING) / 2
@@ -1198,7 +1198,7 @@ export function IllustFlowFeed(props: {
   )
 
   return (
-    <VStack spacing={12} frame={{ maxWidth: "infinity" }}>
+    <VStack spacing={10} frame={{ maxWidth: "infinity" }}>
       <HStack
         alignment="top"
         spacing={FLOW_COLUMN_SPACING}
