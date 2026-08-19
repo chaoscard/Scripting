@@ -19,7 +19,12 @@ import {
   getCachedUserAmbientPalette,
   type UserAmbientPalette,
 } from "../image/colorExtractor"
-import { cardThumbUrlOf, prefetch } from "../image/imageLoader"
+import {
+  cachedFileExists,
+  cardThumbUrlOf,
+  loadImage,
+  prefetch,
+} from "../image/imageLoader"
 import {
   addWatchlistSeries,
   deleteWatchlistSeries,
@@ -296,6 +301,12 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
           result.illust_series_first_illust?.image_urls,
           result.illusts?.[0]?.image_urls
         )
+        if (cover && !cachedFileExists(cover)) {
+          await Promise.race([
+            loadImage(cover, 0),
+            new Promise((resolve) => setTimeout(() => resolve(null), 1000)),
+          ])
+        }
         setCoverUrl(cover)
 
         const allRawIllusts: PixivIllustrationSeriesItem[] = Array.isArray(result.illusts) ? [...result.illusts] : []
@@ -361,6 +372,12 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
           result.novel_series_first_novel?.image_urls,
           result.novels?.[0]?.image_urls
         )
+        if (cover && !cachedFileExists(cover)) {
+          await Promise.race([
+            loadImage(cover, 0),
+            new Promise((resolve) => setTimeout(() => resolve(null), 1000)),
+          ])
+        }
         setCoverUrl(cover)
 
         const allRawNovels: PixivNovel[] = Array.isArray(result.novels) ? [...result.novels] : []
@@ -637,7 +654,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
               contentMode="fill"
               cornerRadius={0}
               priority={0}
-              frame={{ width: Device.screen.width, height: Device.screen.width / 2.4 }}
+              frame={{ maxWidth: "infinity" }}
             />
           ) : (
             <VStack

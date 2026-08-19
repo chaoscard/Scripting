@@ -142,7 +142,6 @@ function UgoiraVideo(props: {
       alignment="center"
       spacing={0}
       aspectRatio={{ value: aspectRatioValue, contentMode: "fit" }}
-      background="systemGray6"
       clipShape={{ type: "rect", cornerRadius: 8 }}
       frame={{
         width: Device.screen.width,

@@ -395,7 +395,6 @@ export function CachedImage(props: {
   return (
     <ZStack
       aspectRatio={{ value: effectiveRatio, contentMode: "fit" }}
-      background="systemGray6"
       clipShape={{ type: "rect", cornerRadius }}
       clipped={true}
       frame={containerFrame}
@@ -499,7 +498,6 @@ export function WatchlistSeriesCard(props: {
           <ZStack
             frame={{ width: 68, height: 96 }}
             clipShape={{ type: "rect", cornerRadius: 8 }}
-            background="systemGray6"
           >
             <CachedImage
               url={item.url ?? null}
@@ -551,21 +549,20 @@ export function WatchlistSeriesCard(props: {
           </VStack>
         </HStack>
       </NavigationLink>
-      <NavigationLink value={targetRoute}>
+      <NavigationLink value={targetRoute} buttonStyle="plain">
         <ZStack
           alignment="center"
           frame={{ width: 34, height: 34 }}
-          background="#0096FA"
-          clipShape="circle"
+          glassEffect="circle"
           contentShape="circle"
           offset={{ x: -8, y: -8 }}
           zIndex={2}
-          shadow={{ color: "#0096FA40", radius: 6, y: 2 }}
+          shadow={{ color: "#0000000F", radius: 6, y: 2 }}
         >
           <Image
             systemName={isNovel ? "book" : "photo.on.rectangle"}
             font="subheadline"
-            foregroundStyle="#FFFFFF"
+            foregroundStyle="label"
           />
         </ZStack>
       </NavigationLink>
@@ -670,7 +667,6 @@ export function NovelCard(props: {
             <ZStack
               frame={{ width: 68, height: 96 }}
               clipShape={{ type: "rect", cornerRadius: 8 }}
-              background="systemGray6"
             >
               <CachedImage
                 url={coverURL}
