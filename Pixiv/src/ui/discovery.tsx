@@ -53,7 +53,9 @@ type FeedMode = Exclude<ExploreMode, "vision">
 type FeedKind = "illustration" | "manga" | "novel"
 type IllustrationKind = Exclude<FeedKind, "novel">
 
-export function DiscoveryView(props: { onClose: () => void; active: boolean }) {
+export function DiscoveryView(props: { onClose: () => void }) {
+  const isLaunchTab = useRef(loadSettings().launchPage === "discovery").current
+  const [activated, setActivated] = useState(isLaunchTab)
   const [mode, setMode] = useState<ExploreMode>("recommended")
   const [kind, setKind] = useState<FeedKind>("illustration")
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
@@ -65,14 +67,20 @@ export function DiscoveryView(props: { onClose: () => void; active: boolean }) {
       toolbar={exploreToolbar({ mode, onModeChange: setMode, onClose: props.onClose })}
       refreshable={() => refreshHandlerRef.current()}
     >
-      <VStack alignment="leading" spacing={8}>
+      <VStack
+        alignment="leading"
+        spacing={8}
+        onAppear={() => {
+          if (!activated) setActivated(true)
+        }}
+      >
         {mode === "vision" ? null : (
           <FeedKindPicker kind={kind} onKindChange={setKind} />
         )}
         {mode === "vision" ? (
           <VisionExploreFeed
             key="vision"
-            active={props.active}
+            enabled={activated}
             onRegisterRefresh={(fn) => {
               refreshHandlerRef.current = fn
             }}
@@ -81,7 +89,7 @@ export function DiscoveryView(props: { onClose: () => void; active: boolean }) {
           <RecommendedExploreFeed
             key="recommended"
             kind={kind}
-            active={props.active}
+            enabled={activated}
             onRegisterRefresh={(fn) => {
               refreshHandlerRef.current = fn
             }}
@@ -90,7 +98,7 @@ export function DiscoveryView(props: { onClose: () => void; active: boolean }) {
           <LatestExploreFeed
             key="latest"
             kind={kind}
-            active={props.active}
+            enabled={activated}
             onRegisterRefresh={(fn) => {
               refreshHandlerRef.current = fn
             }}
@@ -103,10 +111,10 @@ export function DiscoveryView(props: { onClose: () => void; active: boolean }) {
 
 function RecommendedExploreFeed(props: {
   kind: FeedKind
-  active: boolean
+  enabled?: boolean
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { kind, active, onRegisterRefresh } = props
+  const { kind, enabled = true, onRegisterRefresh } = props
 
   // 1. 推荐 - 插画
   const illustPaged = usePagedList<PixivIllustration>({
@@ -114,7 +122,7 @@ function RecommendedExploreFeed(props: {
     more: (nextURL, token) => nextIllustrations(nextURL, token),
     filter: filterIllustItems,
     deps: ["recommended", "illustration"],
-    enabled: active && kind === "illustration",
+    enabled: enabled && kind === "illustration",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
@@ -125,7 +133,7 @@ function RecommendedExploreFeed(props: {
     more: (nextURL, token) => nextIllustrations(nextURL, token),
     filter: filterIllustItems,
     deps: ["recommended", "manga"],
-    enabled: active && kind === "manga",
+    enabled: enabled && kind === "manga",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
@@ -136,7 +144,7 @@ function RecommendedExploreFeed(props: {
     more: (nextURL, token) => nextNovels(nextURL, token),
     filter: filterNovelItems,
     deps: ["recommended"],
-    enabled: active && kind === "novel",
+    enabled: enabled && kind === "novel",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
   })
@@ -175,10 +183,10 @@ function RecommendedExploreFeed(props: {
 
 function LatestExploreFeed(props: {
   kind: FeedKind
-  active: boolean
+  enabled?: boolean
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { kind, active, onRegisterRefresh } = props
+  const { kind, enabled = true, onRegisterRefresh } = props
 
   // 1. 最新 - 插画
   const illustPaged = usePagedList<PixivIllustration>({
@@ -186,7 +194,7 @@ function LatestExploreFeed(props: {
     more: (nextURL, token) => nextIllustrations(nextURL, token),
     filter: filterIllustItems,
     deps: ["latest", "illustration"],
-    enabled: active && kind === "illustration",
+    enabled: enabled && kind === "illustration",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
@@ -197,7 +205,7 @@ function LatestExploreFeed(props: {
     more: (nextURL, token) => nextIllustrations(nextURL, token),
     filter: filterIllustItems,
     deps: ["latest", "manga"],
-    enabled: active && kind === "manga",
+    enabled: enabled && kind === "manga",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
@@ -208,7 +216,7 @@ function LatestExploreFeed(props: {
     more: (nextURL, token) => nextNovels(nextURL, token),
     filter: filterNovelItems,
     deps: ["latest"],
-    enabled: active && kind === "novel",
+    enabled: enabled && kind === "novel",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
   })
@@ -246,16 +254,16 @@ function LatestExploreFeed(props: {
 }
 
 function VisionExploreFeed(props: {
-  active: boolean
+  enabled?: boolean
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { onRegisterRefresh } = props
+  const { enabled = true, onRegisterRefresh } = props
 
   const visionPaged = usePagedList<PixivVisionArticle>({
     first: (token) => visionHome(token),
     more: (nextURL, token) => nextVision(nextURL, token),
     deps: [],
-    enabled: props.active,
+    enabled,
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map((item) => item.imageURL)).cancel,
   })

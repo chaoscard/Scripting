@@ -2,11 +2,13 @@ import { useCallback, useEffect, useRef, useState } from "scripting"
 import { session } from "../api/session"
 import { getImageBatchSize, loadSettings } from "../store/settings"
 
-// 缓冲 1500ms：确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
-export const PAGINATION_FEEDBACK_MS = 1500
+// 触底回弹缓冲：由高级设置配置（默认 1000ms），确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
+export function paginationFeedbackDuration(): number {
+  return loadSettings().loadingAnimationDuration ?? 1000
+}
 
 export function waitForPaginationFeedback(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, PAGINATION_FEEDBACK_MS))
+  return new Promise((resolve) => setTimeout(resolve, paginationFeedbackDuration()))
 }
 
 // ---------- 通用 hooks ----------

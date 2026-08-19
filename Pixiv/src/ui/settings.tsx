@@ -25,6 +25,8 @@ import {
   updateSettings,
   type LaunchPage,
   type ImageBatchConcurrency,
+  type LoadingAnimationDuration,
+  type LaunchAnimationDuration,
 } from "../store/settings"
 import { clearUgoiraCache, ugoiraCacheUsageBytes } from "../ugoira/ugoira"
 import { useTimedFlag } from "./hooks"
@@ -236,19 +238,43 @@ export function SettingsView() {
         </HStack>
       </Section>
 
-      <Section header={<Text>实验箱</Text>}>
-        <Picker
-          title="图片并发数"
-          value={settings.imageBatchConcurrency}
-          onChanged={(value: string) =>
-            update({ imageBatchConcurrency: value as ImageBatchConcurrency })
-          }
-        >
-          <Text tag="low">低</Text>
-          <Text tag="medium">中</Text>
-          <Text tag="high">高</Text>
-        </Picker>
-      </Section>
+      {settings.advancedSettingsUnlocked ? (
+        <Section header={<Text>高级设置</Text>}>
+          <Picker
+            title="图片并发数"
+            value={String(settings.imageBatchConcurrency)}
+            onChanged={(value: string) =>
+              update({ imageBatchConcurrency: Number(value) as ImageBatchConcurrency })
+            }
+          >
+            <Text tag="10">10</Text>
+            <Text tag="15">15</Text>
+            <Text tag="20">20</Text>
+          </Picker>
+          <Picker
+            title="加载动画时长"
+            value={String(settings.loadingAnimationDuration)}
+            onChanged={(value: string) =>
+              update({ loadingAnimationDuration: Number(value) as LoadingAnimationDuration })
+            }
+          >
+            <Text tag="500">500ms</Text>
+            <Text tag="1000">1000ms</Text>
+            <Text tag="1500">1500ms</Text>
+          </Picker>
+          <Picker
+            title="启动动画时长"
+            value={String(settings.launchAnimationDuration)}
+            onChanged={(value: string) =>
+              update({ launchAnimationDuration: Number(value) as LaunchAnimationDuration })
+            }
+          >
+            <Text tag="1000">1000ms</Text>
+            <Text tag="1500">1500ms</Text>
+            <Text tag="2000">2000ms</Text>
+          </Picker>
+        </Section>
+      ) : null}
     </List>
   )
 }

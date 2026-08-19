@@ -16,7 +16,9 @@ export type CloseButtonAction = "minimize" | "exit"
 export type WatchlistSortOrder = "asc" | "desc"
 export type AmbientIntensity = "low" | "medium" | "high"
 export type LaunchPage = "discovery" | "ranking" | "following"
-export type ImageBatchConcurrency = "low" | "medium" | "high"
+export type ImageBatchConcurrency = 10 | 15 | 20
+export type LoadingAnimationDuration = 500 | 1000 | 1500
+export type LaunchAnimationDuration = 1000 | 1500 | 2000
 
 export interface AppSettings {
   launchPage: LaunchPage
@@ -39,6 +41,9 @@ export interface AppSettings {
   cacheLimitMB: number | null
   recordHistory: boolean
   imageBatchConcurrency: ImageBatchConcurrency
+  loadingAnimationDuration: LoadingAnimationDuration
+  launchAnimationDuration: LaunchAnimationDuration
+  advancedSettingsUnlocked: boolean
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -61,7 +66,10 @@ const DEFAULT_SETTINGS: AppSettings = {
   prefetchEnabled: true,
   cacheLimitMB: 300,
   recordHistory: true,
-  imageBatchConcurrency: "low",
+  imageBatchConcurrency: 15,
+  loadingAnimationDuration: 1000,
+  launchAnimationDuration: 1500,
+  advancedSettingsUnlocked: false,
 }
 
 const KEY = "pixiv_settings_v1"
@@ -74,20 +82,15 @@ const DOWNLOAD_QUALITY_VALUES: readonly DownloadImageQuality[] = ["large", "orig
 const LONG_PRESS_ACTION_VALUES: readonly AppSettings["longPressBookmarkAction"][] = ["off", "follow", "detail"]
 const CLOSE_BUTTON_ACTION_VALUES: readonly CloseButtonAction[] = ["minimize", "exit"]
 const AMBIENT_INTENSITY_VALUES: readonly AmbientIntensity[] = ["low", "medium", "high"]
-const IMAGE_CONCURRENCY_VALUES: readonly ImageBatchConcurrency[] = ["low", "medium", "high"]
+const IMAGE_CONCURRENCY_VALUES: readonly ImageBatchConcurrency[] = [10, 15, 20]
+const LOADING_DURATION_VALUES: readonly LoadingAnimationDuration[] = [500, 1000, 1500]
+const LAUNCH_DURATION_VALUES: readonly LaunchAnimationDuration[] = [1000, 1500, 2000]
 const CACHE_LIMIT_VALUES = [300, 500, 1000, 2000] as const
 
-export function getImageBatchSize(level: ImageBatchConcurrency = "low"): number {
-  switch (level) {
-    case "low":
-      return 6
-    case "medium":
-      return 8
-    case "high":
-      return 10
-    default:
-      return 6
-  }
+export function getImageBatchSize(level: ImageBatchConcurrency = 15): number {
+  if (level === 10) return 10
+  if (level === 20) return 20
+  return 15
 }
 
 let cachedSettings: AppSettings | null = null
@@ -127,6 +130,39 @@ function cacheLimitOf(value: unknown): number | null {
   return typeof value === "number" && CACHE_LIMIT_VALUES.includes(value as typeof CACHE_LIMIT_VALUES[number])
     ? value
     : DEFAULT_SETTINGS.cacheLimitMB
+}
+
+function parseImageConcurrency(value: unknown): ImageBatchConcurrency {
+  if (value === 10 || value === "10" || value === "low") return 10
+  if (value === 15 || value === "15" || value === "medium") return 15
+  if (value === 20 || value === "20" || value === "high") return 20
+  return DEFAULT_SETTINGS.imageBatchConcurrency
+}
+
+function parseLoadingDuration(value: unknown): LoadingAnimationDuration {
+  if (typeof value === "number" && (LOADING_DURATION_VALUES as readonly number[]).includes(value)) {
+    return value as LoadingAnimationDuration
+  }
+  if (typeof value === "string") {
+    const num = Number(value)
+    if ((LOADING_DURATION_VALUES as readonly number[]).includes(num)) {
+      return num as LoadingAnimationDuration
+    }
+  }
+  return DEFAULT_SETTINGS.loadingAnimationDuration
+}
+
+function parseLaunchDuration(value: unknown): LaunchAnimationDuration {
+  if (typeof value === "number" && (LAUNCH_DURATION_VALUES as readonly number[]).includes(value)) {
+    return value as LaunchAnimationDuration
+  }
+  if (typeof value === "string") {
+    const num = Number(value)
+    if ((LAUNCH_DURATION_VALUES as readonly number[]).includes(num)) {
+      return num as LaunchAnimationDuration
+    }
+  }
+  return DEFAULT_SETTINGS.launchAnimationDuration
 }
 
 function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): AppSettings {
@@ -185,9 +221,10 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
     prefetchEnabled: boolOr(stored?.prefetchEnabled, DEFAULT_SETTINGS.prefetchEnabled),
     cacheLimitMB: cacheLimitOf(stored?.cacheLimitMB),
     recordHistory: boolOr(stored?.recordHistory, DEFAULT_SETTINGS.recordHistory),
-    imageBatchConcurrency: isOneOf(stored?.imageBatchConcurrency, IMAGE_CONCURRENCY_VALUES)
-      ? stored.imageBatchConcurrency
-      : DEFAULT_SETTINGS.imageBatchConcurrency,
+    imageBatchConcurrency: parseImageConcurrency(stored?.imageBatchConcurrency),
+    loadingAnimationDuration: parseLoadingDuration(stored?.loadingAnimationDuration),
+    launchAnimationDuration: parseLaunchDuration(stored?.launchAnimationDuration),
+    advancedSettingsUnlocked: boolOr(stored?.advancedSettingsUnlocked, DEFAULT_SETTINGS.advancedSettingsUnlocked),
   }
 }
 

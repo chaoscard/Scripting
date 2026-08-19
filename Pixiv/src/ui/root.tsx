@@ -66,13 +66,14 @@ export function RootView() {
 
   useEffect(() => {
     let cancelled = false
-    // 冷启动过渡体验：启动就绪缓冲（2000ms），给首屏网络请求与首批图片解码留出充分时间，
+    const duration = loadSettings().launchAnimationDuration ?? 1500
+    // 冷启动过渡体验：启动就绪缓冲，给首屏网络请求与首批图片解码留出充分时间，
     // 确保过渡后首屏卡片与图片完全就绪、无空白闪烁。
     const timer = setTimeout(() => {
       if (!cancelled) {
         setIsReady(true)
       }
-    }, 2000)
+    }, duration)
     return () => {
       cancelled = true
       clearTimeout(timer)
@@ -156,34 +157,22 @@ function MainTabView(props: {
     >
       <Tab title="探索" systemImage="photo.on.rectangle.angled" value="discovery">
         <NavigationStack path={discoveryPath}>
-          <DiscoveryView
-            onClose={props.onClose}
-            active={selection.value === "discovery"}
-          />
+          <DiscoveryView onClose={props.onClose} />
         </NavigationStack>
       </Tab>
       <Tab title="排行" systemImage="trophy" value="ranking">
         <NavigationStack path={rankingPath}>
-          <RankingView
-            onClose={props.onClose}
-            active={selection.value === "ranking"}
-          />
+          <RankingView onClose={props.onClose} />
         </NavigationStack>
       </Tab>
       <Tab title="关注" systemImage="person.2.fill" value="following">
         <NavigationStack path={followingPath}>
-          <FollowFeedView
-            onClose={props.onClose}
-            active={selection.value === "following"}
-          />
+          <FollowFeedView onClose={props.onClose} />
         </NavigationStack>
       </Tab>
       <Tab title="搜索" systemImage="magnifyingglass" value="search" role="search">
         <NavigationStack path={searchPath}>
-          <SearchView
-            onClose={props.onClose}
-            active={selection.value === "search"}
-          />
+          <SearchView onClose={props.onClose} />
         </NavigationStack>
       </Tab>
       <Tab title="我的" systemImage="person.crop.circle" value="more">

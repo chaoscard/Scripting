@@ -77,7 +77,9 @@ const NOVEL_MODES: ReadonlyArray<{ value: NovelRankingMode; title: string }> = [
   { value: "week_rookie", title: "新人" },
 ]
 
-export function RankingView(props: { onClose: () => void; active: boolean }) {
+export function RankingView(props: { onClose: () => void }) {
+  const isLaunchTab = useRef(loadSettings().launchPage === "ranking").current
+  const [activated, setActivated] = useState(isLaunchTab)
   const [kind, setKind] = useState<RankingKind>("illustration")
   const [illustrationMode, setIllustrationMode] =
     useState<IllustrationRankingMode>("day")
@@ -115,7 +117,14 @@ export function RankingView(props: { onClose: () => void; active: boolean }) {
       toolbar={rankingToolbar({ kind, onKindChange: setKind, onClose: props.onClose })}
       refreshable={() => refreshHandlerRef.current()}
     >
-      <VStack alignment="leading" spacing={8} frame={{ maxWidth: "infinity" }}>
+      <VStack
+        alignment="leading"
+        spacing={8}
+        frame={{ maxWidth: "infinity" }}
+        onAppear={() => {
+          if (!activated) setActivated(true)
+        }}
+      >
         {rootModes && rootSelectedMode ? (
           <RankingModePicker
             modes={rootModes}
@@ -127,7 +136,7 @@ export function RankingView(props: { onClose: () => void; active: boolean }) {
           <IllustrationRankingFeed
             key="illustration"
             mode={illustrationMode}
-            active={props.active}
+            enabled={activated}
             onRegisterRefresh={(fn) => {
               refreshHandlerRef.current = fn
             }}
@@ -136,7 +145,7 @@ export function RankingView(props: { onClose: () => void; active: boolean }) {
           <MangaRankingFeed
             key="manga"
             mode={mangaMode}
-            active={props.active}
+            enabled={activated}
             onRegisterRefresh={(fn) => {
               refreshHandlerRef.current = fn
             }}
@@ -145,7 +154,7 @@ export function RankingView(props: { onClose: () => void; active: boolean }) {
           <NovelRankingFeed
             key="novel"
             mode={novelMode}
-            active={props.active}
+            enabled={activated}
             onRegisterRefresh={(fn) => {
               refreshHandlerRef.current = fn
             }}
@@ -217,10 +226,10 @@ function RankingModePicker(props: {
 
 function IllustrationRankingFeed(props: {
   mode: IllustrationRankingMode
-  active: boolean
+  enabled?: boolean
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { mode, active, onRegisterRefresh } = props
+  const { mode, enabled = true, onRegisterRefresh } = props
 
   // 1. 每日
   const dayPaged = usePagedList<PixivIllustration>({
@@ -228,7 +237,7 @@ function IllustrationRankingFeed(props: {
     more: (nextURL, token) => nextIllustrations(nextURL, token),
     filter: filterRankingItems,
     deps: ["illustration", "day"],
-    enabled: active && mode === "day",
+    enabled: enabled && mode === "day",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
@@ -239,7 +248,7 @@ function IllustrationRankingFeed(props: {
     more: (nextURL, token) => nextIllustrations(nextURL, token),
     filter: filterRankingItems,
     deps: ["illustration", "week"],
-    enabled: active && mode === "week",
+    enabled: enabled && mode === "week",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
@@ -250,7 +259,7 @@ function IllustrationRankingFeed(props: {
     more: (nextURL, token) => nextIllustrations(nextURL, token),
     filter: filterRankingItems,
     deps: ["illustration", "month"],
-    enabled: active && mode === "month",
+    enabled: enabled && mode === "month",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
@@ -261,7 +270,7 @@ function IllustrationRankingFeed(props: {
     more: (nextURL, token) => nextIllustrations(nextURL, token),
     filter: filterRankingItems,
     deps: ["illustration", "week_original"],
-    enabled: active && mode === "week_original",
+    enabled: enabled && mode === "week_original",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
@@ -272,7 +281,7 @@ function IllustrationRankingFeed(props: {
     more: (nextURL, token) => nextIllustrations(nextURL, token),
     filter: filterRankingItems,
     deps: ["illustration", "week_rookie"],
-    enabled: active && mode === "week_rookie",
+    enabled: enabled && mode === "week_rookie",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
@@ -313,10 +322,10 @@ function IllustrationRankingFeed(props: {
 
 function MangaRankingFeed(props: {
   mode: MangaRankingMode
-  active: boolean
+  enabled?: boolean
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { mode, active, onRegisterRefresh } = props
+  const { mode, enabled = true, onRegisterRefresh } = props
 
   // 1. 每日
   const dayPaged = usePagedList<PixivIllustration>({
@@ -324,7 +333,7 @@ function MangaRankingFeed(props: {
     more: (nextURL, token) => nextIllustrations(nextURL, token),
     filter: filterMangaRankingItems,
     deps: ["manga", "day_manga"],
-    enabled: active && mode === "day_manga",
+    enabled: enabled && mode === "day_manga",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
@@ -335,7 +344,7 @@ function MangaRankingFeed(props: {
     more: (nextURL, token) => nextIllustrations(nextURL, token),
     filter: filterMangaRankingItems,
     deps: ["manga", "week_manga"],
-    enabled: active && mode === "week_manga",
+    enabled: enabled && mode === "week_manga",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
@@ -346,7 +355,7 @@ function MangaRankingFeed(props: {
     more: (nextURL, token) => nextIllustrations(nextURL, token),
     filter: filterMangaRankingItems,
     deps: ["manga", "month_manga"],
-    enabled: active && mode === "month_manga",
+    enabled: enabled && mode === "month_manga",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
@@ -357,7 +366,7 @@ function MangaRankingFeed(props: {
     more: (nextURL, token) => nextIllustrations(nextURL, token),
     filter: filterMangaRankingItems,
     deps: ["manga", "week_rookie_manga"],
-    enabled: active && mode === "week_rookie_manga",
+    enabled: enabled && mode === "week_rookie_manga",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
@@ -394,10 +403,10 @@ function MangaRankingFeed(props: {
 
 function NovelRankingFeed(props: {
   mode: NovelRankingMode
-  active: boolean
+  enabled?: boolean
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { mode, active, onRegisterRefresh } = props
+  const { mode, enabled = true, onRegisterRefresh } = props
 
   // 1. 每日
   const dayPaged = usePagedList<PixivNovel>({
@@ -405,7 +414,7 @@ function NovelRankingFeed(props: {
     more: (nextURL, token) => nextNovels(nextURL, token),
     filter: filterNovelRankingItems,
     deps: ["novel", "day"],
-    enabled: active && mode === "day",
+    enabled: enabled && mode === "day",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
   })
@@ -416,7 +425,7 @@ function NovelRankingFeed(props: {
     more: (nextURL, token) => nextNovels(nextURL, token),
     filter: filterNovelRankingItems,
     deps: ["novel", "week"],
-    enabled: active && mode === "week",
+    enabled: enabled && mode === "week",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
   })
@@ -427,7 +436,7 @@ function NovelRankingFeed(props: {
     more: (nextURL, token) => nextNovels(nextURL, token),
     filter: filterNovelRankingItems,
     deps: ["novel", "week_rookie"],
-    enabled: active && mode === "week_rookie",
+    enabled: enabled && mode === "week_rookie",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
   })

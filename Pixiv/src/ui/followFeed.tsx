@@ -61,8 +61,9 @@ const WORK_KINDS: WorkKind[] = ["illust", "novel"]
 export function FollowFeedView(props: {
   initialMode?: FollowMode
   onClose: () => void
-  active: boolean
 }) {
+  const isLaunchTab = useRef(loadSettings().launchPage === "following").current
+  const [activated, setActivated] = useState(isLaunchTab)
   const [mode, setMode] = useState<FollowMode>(props.initialMode ?? "following")
   const [scope, setScope] = useState<FollowScope>("all")
   const [followingKind, setFollowingKind] = useState<WorkKind>("illust")
@@ -95,7 +96,13 @@ export function FollowFeedView(props: {
       })}
       refreshable={() => refreshHandlerRef.current()}
     >
-      <VStack alignment="leading" spacing={8}>
+      <VStack
+        alignment="leading"
+        spacing={8}
+        onAppear={() => {
+          if (!activated) setActivated(true)
+        }}
+      >
         <FollowKindPicker
           mode={mode}
           value={segmentedValue}
@@ -104,7 +111,7 @@ export function FollowFeedView(props: {
         {mode === "following" ? (
           <FollowingFeed
             key={`following:${scope}`}
-            active={props.active}
+            enabled={activated}
             kind={followingKind}
             scope={scope}
             onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
@@ -112,14 +119,14 @@ export function FollowFeedView(props: {
         ) : mode === "watchlist" ? (
           <WatchlistFeed
             key="watchlist"
-            active={props.active}
+            enabled={activated}
             kind={watchKind}
             onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
           />
         ) : (
           <FriendsFeed
             key="friends"
-            active={props.active}
+            enabled={activated}
             kind={friendKind}
             onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
           />
@@ -207,19 +214,19 @@ function FollowKindPicker(props: {
 }
 
 function FollowingFeed(props: {
-  active: boolean
+  enabled?: boolean
   kind: WorkKind
   scope: FollowScope
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { active, kind, scope, onRegisterRefresh } = props
+  const { enabled = true, kind, scope, onRegisterRefresh } = props
 
   const illustPaged = usePagedList<PixivIllustration>({
     first: (token) => followingFeed(scope, token),
     more: (nextURL, token) => nextIllustrations(nextURL, token),
     filter: filterFollowingIllustrationItems,
     deps: ["following", "illust", scope],
-    enabled: active && kind === "illust",
+    enabled: enabled && kind === "illust",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
@@ -229,13 +236,13 @@ function FollowingFeed(props: {
     more: (nextURL, token) => nextNovels(nextURL, token),
     filter: filterFollowingNovelItems,
     deps: ["following", "novel", scope],
-    enabled: active && kind === "novel",
+    enabled: enabled && kind === "novel",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
   })
 
-  useSettingsFilter(illustPaged, active && kind === "illust")
-  useSettingsFilter(novelPaged, active && kind === "novel")
+  useSettingsFilter(illustPaged)
+  useSettingsFilter(novelPaged)
 
   const activeRefresh = kind === "illust" ? illustPaged.refresh : novelPaged.refresh
   useEffect(() => {
@@ -284,11 +291,11 @@ function FollowingFeed(props: {
 }
 
 function WatchlistFeed(props: {
-  active: boolean
+  enabled?: boolean
   kind: WatchKind
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { active, kind, onRegisterRefresh } = props
+  const { enabled = true, kind, onRegisterRefresh } = props
 
   const mangaPaged = usePagedList<PixivWatchlistSeries>({
     first: async (token) => {
@@ -298,7 +305,7 @@ function WatchlistFeed(props: {
     more: (nextURL, token) => nextWatchlist(nextURL, token),
     filter: (items) => filterWatchlistItems(items, "manga"),
     deps: ["watchlist", "manga"],
-    enabled: active && kind === "manga",
+    enabled: enabled && kind === "manga",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(watchlistThumbUrlOf)).cancel,
   })
@@ -311,7 +318,7 @@ function WatchlistFeed(props: {
     more: (nextURL, token) => nextWatchlist(nextURL, token),
     filter: (items) => filterWatchlistItems(items, "novel"),
     deps: ["watchlist", "novel"],
-    enabled: active && kind === "novel",
+    enabled: enabled && kind === "novel",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(watchlistThumbUrlOf)).cancel,
   })
@@ -356,18 +363,18 @@ function WatchlistFeed(props: {
 }
 
 function FriendsFeed(props: {
-  active: boolean
+  enabled?: boolean
   kind: WorkKind
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { active, kind, onRegisterRefresh } = props
+  const { enabled = true, kind, onRegisterRefresh } = props
 
   const illustPaged = usePagedList<PixivIllustration>({
     first: myPixivFeed,
     more: (nextURL, token) => nextIllustrations(nextURL, token),
     filter: filterIllustrationItems,
     deps: ["friends", "illust"],
-    enabled: active && kind === "illust",
+    enabled: enabled && kind === "illust",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
@@ -377,13 +384,13 @@ function FriendsFeed(props: {
     more: (nextURL, token) => nextNovels(nextURL, token),
     filter: filterNovelItems,
     deps: ["friends", "novel"],
-    enabled: active && kind === "novel",
+    enabled: enabled && kind === "novel",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
   })
 
-  useSettingsFilter(illustPaged, active && kind === "illust")
-  useSettingsFilter(novelPaged, active && kind === "novel")
+  useSettingsFilter(illustPaged)
+  useSettingsFilter(novelPaged)
 
   const activeRefresh = kind === "illust" ? illustPaged.refresh : novelPaged.refresh
   useEffect(() => {
@@ -453,14 +460,11 @@ function NovelFeedItems(props: {
 }
 
 function useSettingsFilter(
-  paged: ReturnType<typeof usePagedList<PixivIllustration>> | ReturnType<typeof usePagedList<PixivNovel>>,
-  active: boolean
+  paged: ReturnType<typeof usePagedList<PixivIllustration>> | ReturnType<typeof usePagedList<PixivNovel>>
 ) {
   const pagedRef = useLatest(paged)
-  const activeRef = useLatest(active)
   useEffect(() => {
     return onSettingsChanged(() => {
-      if (!activeRef.current) return
       pagedRef.current.reapplyFilter()
     })
   }, [])

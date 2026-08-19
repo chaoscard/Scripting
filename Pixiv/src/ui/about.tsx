@@ -1,5 +1,18 @@
-import { Button, HStack, Image, List, Section, Spacer, Text, ZStack } from "scripting"
+import {
+  Button,
+  HStack,
+  Image,
+  List,
+  Section,
+  Spacer,
+  Text,
+  ZStack,
+  useEffect,
+  useRef,
+  useState,
+} from "scripting"
 import { SCRIPT_VERSION } from "../config"
+import { loadSettings, onSettingsChanged, updateSettings } from "../store/settings"
 import { AvatarImage, presentExternalURL } from "./components"
 
 const GITHUB_AVATAR_URL = "https://avatars.githubusercontent.com/u/16934707?v=4"
@@ -9,12 +22,26 @@ const SCRIPTING_APP_ICON_URL = "https://www.scripting.fun/assets/imgs/Icon-App.p
 const MINI_BILI_ICON_URL = "https://raw.githubusercontent.com/ResistanceTo/MiniBili-WEB/main/public/MiniBili.png"
 
 export function AboutView() {
+  const [settings, setSettings] = useState(loadSettings)
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      setSettings(loadSettings())
+    })
+  }, [])
+
   return (
     <List navigationTitle="关于" navigationBarTitleDisplayMode="inline">
       <Section header={<Text>关于</Text>}>
         <InfoRow title="作者" value="chaoscard" />
         <HomeLinkRow />
-        <InfoRow title="版本" value={SCRIPT_VERSION} />
+        <VersionRow
+          version={SCRIPT_VERSION}
+          unlocked={settings.advancedSettingsUnlocked}
+          onUnlock={() => {
+            updateSettings({ advancedSettingsUnlocked: true })
+          }}
+        />
       </Section>
 
       <Section header={<Text>项目参考</Text>}>
@@ -54,6 +81,59 @@ export function AboutView() {
         />
       </Section>
     </List>
+  )
+}
+
+function VersionRow(props: {
+  version: string
+  unlocked: boolean
+  onUnlock: () => void
+}) {
+  const clickCountRef = useRef(0)
+  const timerRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current != null) clearTimeout(timerRef.current)
+    }
+  }, [])
+
+  const handleClick = () => {
+    if (timerRef.current != null) {
+      clearTimeout(timerRef.current)
+    }
+    clickCountRef.current++
+    if (clickCountRef.current >= 5) {
+      clickCountRef.current = 0
+      props.onUnlock()
+      void Haptics.transient(1.0, 1.0)
+    } else {
+      void Haptics.transient(0.4, 0.4)
+      timerRef.current = setTimeout(() => {
+        clickCountRef.current = 0
+      }, 2000)
+    }
+  }
+
+  return (
+    <HStack spacing={8} frame={{ maxWidth: "infinity" }}>
+      <Text font="body">版本</Text>
+      <Spacer />
+      <Button buttonStyle="plain" action={handleClick}>
+        <HStack spacing={4}>
+          <Text font="body" foregroundStyle="secondaryLabel">
+            {props.version}
+          </Text>
+          {props.unlocked ? (
+            <Image
+              systemName="lock.open.fill"
+              font="caption2"
+              foregroundStyle="systemGreen"
+            />
+          ) : null}
+        </HStack>
+      </Button>
+    </HStack>
   )
 }
 
