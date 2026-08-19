@@ -61,6 +61,7 @@ const WORK_KINDS: WorkKind[] = ["illust", "novel"]
 export function FollowFeedView(props: {
   initialMode?: FollowMode
   onClose: () => void
+  active: boolean
 }) {
   const [mode, setMode] = useState<FollowMode>(props.initialMode ?? "following")
   const [scope, setScope] = useState<FollowScope>("all")
@@ -100,37 +101,39 @@ export function FollowFeedView(props: {
           value={segmentedValue}
           onChanged={selectSegmentedKind}
         />
-        {mode === "following" ? (
-          followingKind === "illust" ? (
-            <FollowingIllustrationFeed
-              key={`following:illust:${scope}`}
-              scope={scope}
+        {props.active ? (
+          mode === "following" ? (
+            followingKind === "illust" ? (
+              <FollowingIllustrationFeed
+                key={`following:illust:${scope}`}
+                scope={scope}
+                onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
+              />
+            ) : (
+              <FollowingNovelFeed
+                key={`following:novel:${scope}`}
+                scope={scope}
+                onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
+              />
+            )
+          ) : mode === "watchlist" ? (
+            <WatchlistFeed
+              key={`watchlist:${watchKind}`}
+              kind={watchKind}
+              onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
+            />
+          ) : friendKind === "illust" ? (
+            <FriendIllustrationFeed
+              key="friends:illust"
               onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
             />
           ) : (
-            <FollowingNovelFeed
-              key={`following:novel:${scope}`}
-              scope={scope}
+            <FriendNovelFeed
+              key="friends:novel"
               onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
             />
           )
-        ) : mode === "watchlist" ? (
-          <WatchlistFeed
-            key={`watchlist:${watchKind}`}
-            kind={watchKind}
-            onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
-          />
-        ) : friendKind === "illust" ? (
-          <FriendIllustrationFeed
-            key="friends:illust"
-            onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
-          />
-        ) : (
-          <FriendNovelFeed
-            key="friends:novel"
-            onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
-          />
-        )}
+        ) : null}
       </VStack>
     </RefreshableScrollView>
   )

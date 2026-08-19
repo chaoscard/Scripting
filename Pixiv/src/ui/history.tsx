@@ -36,7 +36,7 @@ import {
 } from "../store/settings"
 import { cardThumbUrlOf, novelThumbUrlOf, prefetch } from "../image/imageLoader"
 import type { PixivNovel } from "../types"
-
+import { waitForPaginationFeedback } from "./hooks"
 const UI_BATCH_SIZE = 10
 
 type HistoryKind = HistoryContentKind
@@ -258,8 +258,8 @@ function HistoryContent(props: { kind: HistoryKind; items: HistoryEntry[] }) {
       loadingMoreLockRef.current = true
       setLoadingMore(true)
       try {
-        // 缓冲 1500ms：确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
-        await new Promise((resolve) => setTimeout(() => resolve(undefined), 1500))
+        // 短暂保留触底回弹反馈，随后平滑展开新批次卡片
+        await waitForPaginationFeedback()
         setVisibleCount((c) => Math.min(c + UI_BATCH_SIZE, novels.length))
       } finally {
         loadingMoreLockRef.current = false
@@ -307,8 +307,8 @@ function HistoryContent(props: { kind: HistoryKind; items: HistoryEntry[] }) {
     loadingMoreLockRef.current = true
     setLoadingMore(true)
     try {
-      // 缓冲 1500ms：确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
-      await new Promise((resolve) => setTimeout(() => resolve(undefined), 1500))
+        // 短暂保留触底回弹反馈，随后平滑展开新批次卡片
+        await waitForPaginationFeedback()
       setVisibleCount((c) => Math.min(c + UI_BATCH_SIZE, illustEntries.length))
     } finally {
       loadingMoreLockRef.current = false

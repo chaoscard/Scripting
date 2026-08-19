@@ -156,22 +156,34 @@ function MainTabView(props: {
     >
       <Tab title="探索" systemImage="photo.on.rectangle.angled" value="discovery">
         <NavigationStack path={discoveryPath}>
-          <DiscoveryView onClose={props.onClose} />
+          <DiscoveryView
+            onClose={props.onClose}
+            active={selection.value === "discovery"}
+          />
         </NavigationStack>
       </Tab>
       <Tab title="排行" systemImage="trophy" value="ranking">
         <NavigationStack path={rankingPath}>
-          <RankingView onClose={props.onClose} />
+          <RankingView
+            onClose={props.onClose}
+            active={selection.value === "ranking"}
+          />
         </NavigationStack>
       </Tab>
       <Tab title="关注" systemImage="person.2.fill" value="following">
         <NavigationStack path={followingPath}>
-          <FollowFeedView onClose={props.onClose} />
+          <FollowFeedView
+            onClose={props.onClose}
+            active={selection.value === "following"}
+          />
         </NavigationStack>
       </Tab>
       <Tab title="搜索" systemImage="magnifyingglass" value="search" role="search">
         <NavigationStack path={searchPath}>
-          <SearchView onClose={props.onClose} />
+          <SearchView
+            onClose={props.onClose}
+            active={selection.value === "search"}
+          />
         </NavigationStack>
       </Tab>
       <Tab title="我的" systemImage="person.crop.circle" value="more">

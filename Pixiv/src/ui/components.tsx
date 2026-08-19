@@ -66,6 +66,7 @@ import type {
 export const CORNER_ICON_SIZE = 26
 const FLOW_HORIZONTAL_PADDING = 10
 const FLOW_COLUMN_SPACING = 10
+const FLOW_ROW_SPACING = 4
 const FLOW_CARD_WIDTH = Math.floor(
   (Device.screen.width - FLOW_HORIZONTAL_PADDING * 2 - FLOW_COLUMN_SPACING) / 2
 )
@@ -878,6 +879,8 @@ export function IllustCard(props: {
   const [bookmarked, setBookmarked] = useState(illust.is_bookmarked)
   const [bookmarkBusy, setBookmarkBusy] = useState(false)
   const [showBookmarkDetail, setShowBookmarkDetail] = useState(false)
+  // 流式卡片只在进入原生可见区后请求图片；骨架尺寸仍由作品元数据提前固定。
+  const [imageVisible, setImageVisible] = useState(!flow)
   const rawRatio = illust.width > 0 && illust.height > 0 ? illust.width / illust.height : 0.75
   const imageRatio = Math.min(Math.max(rawRatio, MIN_FLOW_IMAGE_RATIO), MAX_FLOW_IMAGE_RATIO)
   const flowImageFrame = flow
@@ -886,6 +889,11 @@ export function IllustCard(props: {
   const flowCardFrame = flow
     ? { width: FLOW_CARD_WIDTH }
     : { maxWidth: "infinity" }
+
+  function handleAppear() {
+    if (!imageVisible) setImageVisible(true)
+    onAppear?.()
+  }
 
   async function toggleBookmark() {
     if (bookmarkBusy) return
@@ -941,7 +949,7 @@ export function IllustCard(props: {
         alignment="leading"
         spacing={2}
         frame={flowCardFrame}
-        onAppear={onAppear}
+        onAppear={handleAppear}
         padding={4}
         glassEffect={{ type: "rect", cornerRadius: 14 }}
         shadow={{ color: "#0000000F", radius: 18, y: 8 }}
@@ -960,7 +968,7 @@ export function IllustCard(props: {
                 clipped={true}
               >
                 <CachedImage
-                  url={cardThumbUrlOf(illust)}
+                  url={imageVisible ? cardThumbUrlOf(illust) : null}
                   aspectRatioValue={flow ? imageRatio : 1}
                   contentMode={flow ? "fit" : "fill"}
                   centerCropSquare={!flow}
@@ -1111,20 +1119,15 @@ export function LoadMoreTrigger(props: {
 }) {
   if (!props.hasMore) return null
   return (
-    <VStack
+    <Button
       key={`load-more:${props.anchor}`}
-      spacing={0}
-      frame={{ height: props.isLoading ? 44 : 1, maxWidth: "infinity" }}
-      onAppear={() => props.onLoadMore(props.anchor)}
-    >
-      {props.isLoading ? (
-        <HStack spacing={0} frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
-          <Spacer />
-          <ProgressView progressViewStyle="circular" />
-          <Spacer />
-        </HStack>
-      ) : null}
-    </VStack>
+      title={props.isLoading ? "加载中" : "加载更多"}
+      systemImage={props.isLoading ? "hourglass" : "arrow.down.circle"}
+      buttonStyle="plain"
+      disabled={props.isLoading}
+      action={() => props.onLoadMore(props.anchor)}
+      frame={{ height: 44, maxWidth: "infinity" }}
+    />
   )
 }
 
@@ -1148,19 +1151,46 @@ export function IllustFlowFeed(props: {
   const lastId = lastItem ? lastItem.id : null
   const triggerAnchor = lastId != null ? String(lastId) : ""
 
-  function renderItem({ illust, index }: IllustFlowItem) {
-    return (
-      <IllustCard
-        key={illust.id}
-        illust={illust}
-        flow={true}
-        priority={index}
-        cornerBadge={props.cornerBadgeOf?.(illust, index)}
-        footerText={props.footerTextOf?.(illust, index)}
-        topTrailingAction={props.topTrailingActionOf?.(illust, index)}
-      />
-    )
-  }
+  const columnViews = useMemo(
+    () => {
+      const renderItem = ({ illust, index }: IllustFlowItem) => (
+        <IllustCard
+          key={illust.id}
+          illust={illust}
+          flow={true}
+          priority={index}
+          cornerBadge={props.cornerBadgeOf?.(illust, index)}
+          footerText={props.footerTextOf?.(illust, index)}
+          topTrailingAction={props.topTrailingActionOf?.(illust, index)}
+        />
+      )
+      return [
+        <LazyVStack
+          key="leading"
+          alignment="leading"
+          spacing={FLOW_ROW_SPACING}
+          frame={{ width: FLOW_CARD_WIDTH }}
+        >
+          {leading.map(renderItem)}
+        </LazyVStack>,
+        <LazyVStack
+          key="trailing"
+          alignment="leading"
+          spacing={FLOW_ROW_SPACING}
+          frame={{ width: FLOW_CARD_WIDTH }}
+        >
+          {trailing.map(renderItem)}
+        </LazyVStack>,
+      ]
+    },
+    [
+      leading,
+      trailing,
+      props.cornerBadgeOf,
+      props.footerTextOf,
+      props.topTrailingActionOf,
+    ]
+  )
 
   return (
     <VStack spacing={12} frame={{ maxWidth: "infinity" }}>
@@ -1170,35 +1200,15 @@ export function IllustFlowFeed(props: {
         padding={{ horizontal: FLOW_HORIZONTAL_PADDING }}
         frame={{ width: Device.screen.width }}
       >
-        <LazyVStack
-          alignment="leading"
-          spacing={10}
-          frame={{ width: FLOW_CARD_WIDTH }}
-        >
-          {leading.map(renderItem)}
-        </LazyVStack>
-        <LazyVStack
-          alignment="leading"
-          spacing={10}
-          frame={{ width: FLOW_CARD_WIDTH }}
-        >
-          {trailing.map(renderItem)}
-        </LazyVStack>
+        {columnViews}
       </HStack>
       {props.hasMore && triggerAnchor ? (
-        <VStack
-          key={`trigger:${triggerAnchor}`}
-          spacing={0}
-          frame={{ height: 20, maxWidth: "infinity" }}
-          onAppear={() => props.onLoadMore(triggerAnchor)}
+        <LoadMoreTrigger
+          anchor={triggerAnchor}
+          onLoadMore={props.onLoadMore}
+          hasMore={props.hasMore}
+          isLoading={props.isLoading}
         />
-      ) : null}
-      {props.isLoading ? (
-        <HStack spacing={0} frame={{ maxWidth: "infinity", height: 44 }}>
-          <Spacer />
-          <ProgressView progressViewStyle="circular" />
-          <Spacer />
-        </HStack>
       ) : null}
     </VStack>
   )

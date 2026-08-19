@@ -53,7 +53,7 @@ type FeedMode = Exclude<ExploreMode, "vision">
 type FeedKind = "illustration" | "manga" | "novel"
 type IllustrationKind = Exclude<FeedKind, "novel">
 
-export function DiscoveryView(props: { onClose: () => void }) {
+export function DiscoveryView(props: { onClose: () => void; active: boolean }) {
   const [mode, setMode] = useState<ExploreMode>("recommended")
   const [kind, setKind] = useState<FeedKind>("illustration")
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
@@ -72,6 +72,7 @@ export function DiscoveryView(props: { onClose: () => void }) {
         {mode === "vision" ? (
           <VisionExploreFeed
             key="vision"
+            active={props.active}
             onRegisterRefresh={(fn) => {
               refreshHandlerRef.current = fn
             }}
@@ -80,6 +81,7 @@ export function DiscoveryView(props: { onClose: () => void }) {
           <RecommendedExploreFeed
             key="recommended"
             kind={kind}
+            active={props.active}
             onRegisterRefresh={(fn) => {
               refreshHandlerRef.current = fn
             }}
@@ -88,6 +90,7 @@ export function DiscoveryView(props: { onClose: () => void }) {
           <LatestExploreFeed
             key="latest"
             kind={kind}
+            active={props.active}
             onRegisterRefresh={(fn) => {
               refreshHandlerRef.current = fn
             }}
@@ -100,9 +103,10 @@ export function DiscoveryView(props: { onClose: () => void }) {
 
 function RecommendedExploreFeed(props: {
   kind: FeedKind
+  active: boolean
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { kind, onRegisterRefresh } = props
+  const { kind, active, onRegisterRefresh } = props
 
   // 1. 推荐 - 插画
   const illustPaged = usePagedList<PixivIllustration>({
@@ -110,7 +114,7 @@ function RecommendedExploreFeed(props: {
     more: (nextURL, token) => nextIllustrations(nextURL, token),
     filter: filterIllustItems,
     deps: ["recommended", "illustration"],
-    enabled: kind === "illustration",
+    enabled: active && kind === "illustration",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
@@ -121,7 +125,7 @@ function RecommendedExploreFeed(props: {
     more: (nextURL, token) => nextIllustrations(nextURL, token),
     filter: filterIllustItems,
     deps: ["recommended", "manga"],
-    enabled: kind === "manga",
+    enabled: active && kind === "manga",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
@@ -132,7 +136,7 @@ function RecommendedExploreFeed(props: {
     more: (nextURL, token) => nextNovels(nextURL, token),
     filter: filterNovelItems,
     deps: ["recommended"],
-    enabled: kind === "novel",
+    enabled: active && kind === "novel",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
   })
@@ -171,9 +175,10 @@ function RecommendedExploreFeed(props: {
 
 function LatestExploreFeed(props: {
   kind: FeedKind
+  active: boolean
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { kind, onRegisterRefresh } = props
+  const { kind, active, onRegisterRefresh } = props
 
   // 1. 最新 - 插画
   const illustPaged = usePagedList<PixivIllustration>({
@@ -181,7 +186,7 @@ function LatestExploreFeed(props: {
     more: (nextURL, token) => nextIllustrations(nextURL, token),
     filter: filterIllustItems,
     deps: ["latest", "illustration"],
-    enabled: kind === "illustration",
+    enabled: active && kind === "illustration",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
@@ -192,7 +197,7 @@ function LatestExploreFeed(props: {
     more: (nextURL, token) => nextIllustrations(nextURL, token),
     filter: filterIllustItems,
     deps: ["latest", "manga"],
-    enabled: kind === "manga",
+    enabled: active && kind === "manga",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
@@ -203,7 +208,7 @@ function LatestExploreFeed(props: {
     more: (nextURL, token) => nextNovels(nextURL, token),
     filter: filterNovelItems,
     deps: ["latest"],
-    enabled: kind === "novel",
+    enabled: active && kind === "novel",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
   })
@@ -241,6 +246,7 @@ function LatestExploreFeed(props: {
 }
 
 function VisionExploreFeed(props: {
+  active: boolean
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
   const { onRegisterRefresh } = props
@@ -249,7 +255,7 @@ function VisionExploreFeed(props: {
     first: (token) => visionHome(token),
     more: (nextURL, token) => nextVision(nextURL, token),
     deps: [],
-    enabled: true,
+    enabled: props.active,
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map((item) => item.imageURL)).cancel,
   })

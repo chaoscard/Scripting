@@ -18,6 +18,7 @@ let cacheGeneration = 0
 let cacheRevision = 0
 let cachedMeta: CacheMeta | null = null
 let metaSaveTimer: number | null = null
+const META_IDLE_SAVE_MS = 3000
 const cacheChangeListeners = new Set<() => void>()
 
 export function onImageCacheChanged(listener: () => void): () => void {
@@ -92,6 +93,8 @@ function saveMeta(meta: CacheMeta): void {
 
 function saveMetaDeferred(meta: CacheMeta): void {
   cachedMeta = meta
+  // 缓存命中和下载完成会密集更新 lastAccess；最多每 3 秒合并提交一次，
+  // 降低同步 JSON 与 LRU 扫描频率，同时保证持续滚动时元数据仍会定期落盘。
   if (metaSaveTimer != null) return
   metaSaveTimer = setTimeout(() => {
     metaSaveTimer = null
@@ -99,7 +102,7 @@ function saveMetaDeferred(meta: CacheMeta): void {
       saveMeta(cachedMeta)
       enforceCacheLimit()
     }
-  }, 1000)
+  }, META_IDLE_SAVE_MS)
 }
 
 export function cacheKey(url: string): string {
@@ -174,10 +177,10 @@ export function enforceCacheLimit(): void {
   saveMeta(meta)
 }
 
-// 图片下载并发控制：同一 URL 在途去重 + 全局最多 4 个并发。
+// 图片下载并发控制：同一 URL 在途去重 + 全局最多 2 个并发。
 // 引入优先级调度：前台视图根据卡片在信息流中的自然次序传入 priority（值越小越优先），
 // 保证自顶向下优先加载最上方的卡片，消除左右列分发造成的挂载先后偏差。
-// 预取可在出队前取消；可见卡片随后请求同一 URL 时会提升为前台任务并更新优先级。
+// 预取可在出队前取消且每次最多保留后续 2 张；可见卡片随后请求同一 URL 时会提升为前台任务。
 interface PrefetchState {
   cancelled: boolean
 }
@@ -192,24 +195,42 @@ interface DownloadTask {
   prefetchOwners: Set<PrefetchState>
   priority: number
   queue: "foreground" | "prefetch" | null
+  activeLane: "foreground" | "prefetch" | null
   run: () => void
 }
 
 const inflightDownloads = new Map<string, DownloadTask>()
-const MAX_CONCURRENT_DOWNLOADS = 4
-const MAX_PREFETCH_WORKERS = 2
+const MAX_CONCURRENT_DOWNLOADS = 2
+const MAX_PREFETCH_WORKERS = 1
+const MAX_PREFETCH_URLS = 2
 let activeDownloads = 0
+let activePrefetchDownloads = 0
 const foregroundQueue: DownloadTask[] = []
 const prefetchQueue: DownloadTask[] = []
 
 function pumpDownloads(): void {
   while (activeDownloads < MAX_CONCURRENT_DOWNLOADS) {
-    const task = foregroundQueue.shift() ?? prefetchQueue.shift()
+    let task = foregroundQueue.shift()
+    let lane: "foreground" | "prefetch" = "foreground"
+    if (!task) {
+      if (activePrefetchDownloads >= MAX_PREFETCH_WORKERS) return
+      task = prefetchQueue.shift()
+      lane = "prefetch"
+    }
     if (!task) return
     task.queue = null
+    task.activeLane = lane
     activeDownloads++
+    if (lane === "prefetch") activePrefetchDownloads++
     task.run()
   }
+}
+
+function releaseDownloadSlot(task: DownloadTask): void {
+  activeDownloads--
+  if (task.activeLane === "prefetch") activePrefetchDownloads--
+  task.activeLane = null
+  pumpDownloads()
 }
 
 function insertForegroundTask(task: DownloadTask): void {
@@ -295,6 +316,7 @@ function requestImage(
     prefetchOwners: new Set(prefetchOwner ? [prefetchOwner] : []),
     priority: prefetchOwner ? DEFAULT_IMAGE_PRIORITY : priority,
     queue: null,
+    activeLane: null,
     run: () => {},
   }
   record.promise = new Promise<string | null>((resolve, reject) => {
@@ -302,8 +324,7 @@ function requestImage(
       record.started = true
       if (record.generation !== cacheGeneration) {
         resolve(null)
-        activeDownloads--
-        pumpDownloads()
+        releaseDownloadSlot(record)
         return
       }
       if (
@@ -314,8 +335,7 @@ function requestImage(
           inflightDownloads.delete(url)
         }
         resolve(null)
-        activeDownloads--
-        pumpDownloads()
+        releaseDownloadSlot(record)
         return
       }
       const generation = record.generation
@@ -351,8 +371,7 @@ function requestImage(
       })()
         .then(resolve, reject)
         .finally(() => {
-          activeDownloads--
-          pumpDownloads()
+          releaseDownloadSlot(record)
         })
     }
   })
@@ -386,6 +405,7 @@ const NOOP_PREFETCH_HANDLE: PrefetchHandle = { cancel: () => {} }
 export function prefetch(urls: (string | null | undefined)[]): PrefetchHandle {
   if (!loadSettings().prefetchEnabled) return NOOP_PREFETCH_HANDLE
   const unique = [...new Set(urls.filter((u): u is string => !!u))]
+    .slice(0, MAX_PREFETCH_URLS)
   const state: PrefetchState = { cancelled: false }
   let index = 0
   const worker = async () => {

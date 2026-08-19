@@ -75,7 +75,7 @@ interface PixivUserSearchResultItem extends PixivUserPreview {
 
 const AUTOCOMPLETE_DEBOUNCE_MS = 300
 
-export function SearchView(props: { onClose: () => void }) {
+export function SearchView(props: { onClose: () => void; active: boolean }) {
   const [query, setQuery] = useState("")
   const [submitted, setSubmitted] = useState("")
   const [scope, setScope] = useState<SearchScope>("illust")
@@ -87,9 +87,9 @@ export function SearchView(props: { onClose: () => void }) {
   >([])
 
   const isResultsMode = mode === "results"
-  const isIllustActive = Boolean(submitted) && scope === "illust" && isResultsMode
-  const isNovelActive = Boolean(submitted) && scope === "novel" && isResultsMode
-  const isUserActive = Boolean(submitted) && scope === "user" && isResultsMode
+  const isIllustActive = props.active && Boolean(submitted) && scope === "illust" && isResultsMode
+  const isNovelActive = props.active && Boolean(submitted) && scope === "novel" && isResultsMode
+  const isUserActive = props.active && Boolean(submitted) && scope === "user" && isResultsMode
 
   // 1. 插画 / 漫画搜索流
   const illustPaged = usePagedList<PixivIllustration>({
