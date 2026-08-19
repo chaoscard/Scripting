@@ -394,7 +394,7 @@ export function CachedImage(props: {
 
   return (
     <ZStack
-      aspectRatio={{ value: aspectRatioValue, contentMode: "fit" }}
+      aspectRatio={{ value: effectiveRatio, contentMode: "fit" }}
       background="systemGray6"
       clipShape={{ type: "rect", cornerRadius }}
       clipped={true}
@@ -1122,7 +1122,7 @@ export function LoadMoreTrigger(props: {
     <VStack
       key={`load-more:${props.anchor}`}
       spacing={0}
-      frame={{ height: props.isLoading ? 44 : 1, maxWidth: "infinity" }}
+      frame={{ height: 44, maxWidth: "infinity" }}
       onAppear={() => props.onLoadMore(props.anchor)}
     >
       {props.isLoading ? (
@@ -1211,16 +1211,17 @@ export function IllustFlowFeed(props: {
         <VStack
           key={`trigger:${triggerAnchor}`}
           spacing={0}
-          frame={{ height: 20, maxWidth: "infinity" }}
+          frame={{ height: 44, maxWidth: "infinity" }}
           onAppear={() => props.onLoadMore(triggerAnchor)}
-        />
-      ) : null}
-      {props.isLoading ? (
-        <HStack spacing={0} frame={{ maxWidth: "infinity", height: 44 }}>
-          <Spacer />
-          <ProgressView progressViewStyle="circular" />
-          <Spacer />
-        </HStack>
+        >
+          {props.isLoading ? (
+            <HStack spacing={0} frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
+              <Spacer />
+              <ProgressView progressViewStyle="circular" />
+              <Spacer />
+            </HStack>
+          ) : null}
+        </VStack>
       ) : null}
     </VStack>
   )

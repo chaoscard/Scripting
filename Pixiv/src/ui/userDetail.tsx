@@ -99,6 +99,25 @@ export function UserDetailView(props: { userID: number }) {
     () => loadSettings().ambientIntensity
   )
 
+  const availableKinds = useMemo<UserWorkKind[]>(() => {
+    if (!detail) return ["illust"]
+    const kinds: UserWorkKind[] = []
+    if ((detail.profile.total_illusts ?? 0) > 0) kinds.push("illust")
+    if ((detail.profile.total_manga ?? 0) > 0) kinds.push("manga")
+    if ((detail.profile.total_novels ?? 0) > 0) kinds.push("novel")
+    return kinds.length > 0 ? kinds : ["illust"]
+  }, [
+    detail?.profile.total_illusts,
+    detail?.profile.total_manga,
+    detail?.profile.total_novels,
+  ])
+
+  useEffect(() => {
+    if (detail && !availableKinds.includes(kind)) {
+      setKind(availableKinds[0])
+    }
+  }, [detail, availableKinds, kind])
+
   const guard = useAsyncGuard()
   const followStateVersionRef = useRef(0)
   const isOwnProfile = session.userID === userID
@@ -120,7 +139,7 @@ export function UserDetailView(props: { userID: number }) {
       if (bgUrl && !cachedFileExists(bgUrl)) {
         await Promise.race([
           loadImage(bgUrl, 0),
-          new Promise((resolve) => setTimeout(() => resolve(null), 1000)),
+          new Promise((resolve) => setTimeout(() => resolve(null), 800)),
         ])
       }
 
@@ -381,8 +400,12 @@ export function UserDetailView(props: { userID: number }) {
           ambientPalette={ambientPalette}
         />
 
-        {/* 位于个人资料和作品列表之间的分段选择器 */}
-        <UserWorkPicker kind={kind} onChanged={setKind} />
+        {/* 位于个人资料和作品列表之间的分段选择器（仅显示有投稿项，<=1 项时自动隐藏） */}
+        <UserWorkPicker
+          availableKinds={availableKinds}
+          kind={kind}
+          onChanged={setKind}
+        />
 
         <UserWorksFeedSection
           userID={userID}
@@ -913,7 +936,7 @@ function UserProfileHeader(props: {
             contentMode="fill"
             cornerRadius={0}
             priority={0}
-            frame={{ width: Device.screen.width, height: Device.screen.width / 2.4 }}
+            frame={{ maxWidth: "infinity" }}
           />
         ) : (
           <VStack
@@ -1002,20 +1025,26 @@ function UserProfileHeader(props: {
 }
 
 function UserWorkPicker(props: {
+  availableKinds: UserWorkKind[]
   kind: UserWorkKind
   onChanged: (kind: UserWorkKind) => void
 }) {
+  const { availableKinds, kind, onChanged } = props
+  if (availableKinds.length <= 1) return null
+
   return (
     <Picker
       title="投稿类型"
-      value={props.kind}
-      onChanged={(value: string) => props.onChanged(value as UserWorkKind)}
+      value={kind}
+      onChanged={(value: string) => onChanged(value as UserWorkKind)}
       pickerStyle="segmented"
       padding={{ horizontal: 14 }}
     >
-      <Text tag="illust">插画</Text>
-      <Text tag="manga">漫画</Text>
-      <Text tag="novel">小说</Text>
+      {availableKinds.map((k) => (
+        <Text key={k} tag={k}>
+          {k === "illust" ? "插画" : k === "manga" ? "漫画" : "小说"}
+        </Text>
+      ))}
     </Picker>
   )
 }
