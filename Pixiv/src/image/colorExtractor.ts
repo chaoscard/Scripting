@@ -121,7 +121,108 @@ function boostVibrancy(
 }
 
 /**
- * 同步尝试从内存缓存中获取已计算的氛围色盘
+ * 同步尝试从已缓存到本地的图片提取氛围色
+ */
+export function extractUserAmbientPaletteSync(
+  url: string | null | undefined
+): UserAmbientResult | null {
+  if (!url) return null
+  const cached = paletteCache.get(url)
+  if (cached) return cached
+
+  try {
+    const filePath = cachedFilePath(url)
+    if (!filePath) return null
+
+    const uiImage = UIImage.fromFile(filePath)
+    if (!uiImage || uiImage.width <= 0 || uiImage.height <= 0) return null
+
+    // 1. 底边 20% 区域采样（无缝承接背景图底部）
+    const cropH = Math.max(2, Math.round(uiImage.height * 0.2))
+    const cropY = Math.max(0, uiImage.height - cropH)
+    const bottomCrop = uiImage.croppedTo({
+      x: 0,
+      y: cropY,
+      width: uiImage.width,
+      height: cropH,
+    })
+    const bottomAvg = bottomCrop?.averageColor() ?? uiImage.averageColor()
+
+    // 2. 全局主色采样：在主色列表中优先选取鲜活度适中的颜色
+    const dominants = uiImage.dominantColors(6)
+    let bestDominant = uiImage.averageColor()
+    if (dominants && dominants.length > 0) {
+      let maxScore = -1
+      for (const d of dominants) {
+        const c = d.color
+        const [, s] = rgbToHsl(c.red ?? 0, c.green ?? 0, c.blue ?? 0)
+        const score = s * 1.5 + d.fraction
+        if (score > maxScore) {
+          maxScore = score
+          bestDominant = c
+        }
+      }
+    }
+
+    if (!bottomAvg || !bestDominant) return null
+
+    const bRawR = bottomAvg.red ?? 0
+    const bRawG = bottomAvg.green ?? 0
+    const bRawB = bottomAvg.blue ?? 0
+
+    const dRawR = bestDominant.red ?? 0
+    const dRawG = bestDominant.green ?? 0
+    const dRawB = bestDominant.blue ?? 0
+
+    const buildUserPalette = (
+      bRaw: [number, number, number],
+      dRaw: [number, number, number],
+      isDark: boolean,
+      intensity: AmbientIntensity
+    ): UserAmbientPalette => {
+      const [bR, bG, bB] = boostVibrancy(bRaw[0], bRaw[1], bRaw[2], isDark, intensity)
+      const [dR, dG, dB] = boostVibrancy(dRaw[0], dRaw[1], dRaw[2], isDark, intensity)
+      let topAlpha = 0.44
+      let midAlpha = 0.22
+      let worksAlpha = 0.08
+      if (intensity === "low") {
+        topAlpha = 0.38
+        midAlpha = 0.18
+        worksAlpha = 0.06
+      } else if (intensity === "high") {
+        topAlpha = isDark ? 0.54 : 0.52
+        midAlpha = 0.28
+        worksAlpha = 0.11
+      }
+      return {
+        topColor: `rgba(${bR},${bG},${bB},${topAlpha})` as Color,
+        midColor: `rgba(${dR},${dG},${dB},${midAlpha})` as Color,
+        worksColor: `rgba(${dR},${dG},${dB},${worksAlpha})` as Color,
+      }
+    }
+
+    const result: UserAmbientResult = {
+      light: {
+        low: buildUserPalette([bRawR, bRawG, bRawB], [dRawR, dRawG, dRawB], false, "low"),
+        medium: buildUserPalette([bRawR, bRawG, bRawB], [dRawR, dRawG, dRawB], false, "medium"),
+        high: buildUserPalette([bRawR, bRawG, bRawB], [dRawR, dRawG, dRawB], false, "high"),
+      },
+      dark: {
+        low: buildUserPalette([bRawR, bRawG, bRawB], [dRawR, dRawG, dRawB], true, "low"),
+        medium: buildUserPalette([bRawR, bRawG, bRawB], [dRawR, dRawG, dRawB], true, "medium"),
+        high: buildUserPalette([bRawR, bRawG, bRawB], [dRawR, dRawG, dRawB], true, "high"),
+      },
+    }
+    paletteCache.set(url, result)
+    return result
+  } catch (err) {
+    console.log("extractUserAmbientPaletteSync error:", err)
+    return null
+  }
+}
+
+/**
+ * 同步尝试从内存缓存中获取已计算的氛围色盘（未缓存时自动同步尝试从本地文件解析）
  */
 export function getCachedUserAmbientPalette(
   url: string | null | undefined,
@@ -129,7 +230,10 @@ export function getCachedUserAmbientPalette(
   intensity: AmbientIntensity = "medium"
 ): UserAmbientPalette | null {
   if (!url) return null
-  const cached = paletteCache.get(url)
+  let cached = paletteCache.get(url)
+  if (!cached) {
+    cached = extractUserAmbientPaletteSync(url) ?? undefined
+  }
   if (!cached) return null
   const modeObj = isDark ? cached.dark : cached.light
   return modeObj[intensity] ?? modeObj.medium
@@ -240,7 +344,107 @@ export async function extractUserAmbientPalette(
 }
 
 /**
- * 同步尝试从内存缓存中获取已计算的插画/漫画氛围色盘
+ * 同步尝试从已缓存到本地的插画封面提取氛围色
+ */
+export function extractIllustAmbientPaletteSync(
+  url: string | null | undefined
+): IllustAmbientResult | null {
+  if (!url) return null
+  const cached = illustPaletteCache.get(url)
+  if (cached) return cached
+
+  try {
+    const filePath = cachedFilePath(url)
+    if (!filePath) return null
+
+    const uiImage = UIImage.fromFile(filePath)
+    if (!uiImage || uiImage.width <= 0 || uiImage.height <= 0) return null
+
+    // 1. 顶部 30% 区域采样（无缝衔接顶部导航区）
+    const cropH = Math.max(2, Math.round(uiImage.height * 0.3))
+    const topCrop = uiImage.croppedTo({
+      x: 0,
+      y: 0,
+      width: uiImage.width,
+      height: cropH,
+    })
+    const topAvg = topCrop?.averageColor() ?? uiImage.averageColor()
+
+    // 2. 全局多主色采样：在主色列表中优先选取鲜活度适中的颜色
+    const dominants = uiImage.dominantColors(6)
+    let bestDominant = uiImage.averageColor()
+    if (dominants && dominants.length > 0) {
+      let maxScore = -1
+      for (const d of dominants) {
+        const c = d.color
+        const [, s] = rgbToHsl(c.red ?? 0, c.green ?? 0, c.blue ?? 0)
+        const score = s * 1.6 + d.fraction
+        if (score > maxScore) {
+          maxScore = score
+          bestDominant = c
+        }
+      }
+    }
+
+    if (!topAvg || !bestDominant) return null
+
+    const tRawR = topAvg.red ?? 0
+    const tRawG = topAvg.green ?? 0
+    const tRawB = topAvg.blue ?? 0
+
+    const dRawR = bestDominant.red ?? 0
+    const dRawG = bestDominant.green ?? 0
+    const dRawB = bestDominant.blue ?? 0
+
+    const buildIllustPalette = (
+      tRaw: [number, number, number],
+      dRaw: [number, number, number],
+      isDark: boolean,
+      intensity: AmbientIntensity
+    ): IllustAmbientPalette => {
+      const [tR, tG, tB] = boostVibrancy(tRaw[0], tRaw[1], tRaw[2], isDark, intensity)
+      const [dR, dG, dB] = boostVibrancy(dRaw[0], dRaw[1], dRaw[2], isDark, intensity)
+      let topAlpha = 0.54
+      let midAlpha = 0.28
+      let bgAlpha = 0.10
+      if (intensity === "low") {
+        topAlpha = 0.46
+        midAlpha = 0.24
+        bgAlpha = 0.08
+      } else if (intensity === "high") {
+        topAlpha = isDark ? 0.66 : 0.64
+        midAlpha = isDark ? 0.36 : 0.34
+        bgAlpha = 0.14
+      }
+      return {
+        topColor: `rgba(${tR},${tG},${tB},${topAlpha})` as Color,
+        midColor: `rgba(${dR},${dG},${dB},${midAlpha})` as Color,
+        backgroundColor: `rgba(${dR},${dG},${dB},${bgAlpha})` as Color,
+      }
+    }
+
+    const result: IllustAmbientResult = {
+      light: {
+        low: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], false, "low"),
+        medium: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], false, "medium"),
+        high: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], false, "high"),
+      },
+      dark: {
+        low: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], true, "low"),
+        medium: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], true, "medium"),
+        high: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], true, "high"),
+      },
+    }
+    illustPaletteCache.set(url, result)
+    return result
+  } catch (err) {
+    console.log("extractIllustAmbientPaletteSync error:", err)
+    return null
+  }
+}
+
+/**
+ * 同步尝试从内存缓存中获取已计算的插画/漫画氛围色盘（未缓存时自动同步尝试从本地文件解析）
  */
 export function getCachedIllustAmbientPalette(
   url: string | null | undefined,
@@ -248,7 +452,10 @@ export function getCachedIllustAmbientPalette(
   intensity: AmbientIntensity = "medium"
 ): IllustAmbientPalette | null {
   if (!url) return null
-  const cached = illustPaletteCache.get(url)
+  let cached = illustPaletteCache.get(url)
+  if (!cached) {
+    cached = extractIllustAmbientPaletteSync(url) ?? undefined
+  }
   if (!cached) return null
   const modeObj = isDark ? cached.dark : cached.light
   return modeObj[intensity] ?? modeObj.medium

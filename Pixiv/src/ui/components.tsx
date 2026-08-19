@@ -50,6 +50,7 @@ import {
 } from "../api/pixiv"
 import { session } from "../api/session"
 import { blockTag, loadSettings } from "../store/settings"
+import { cacheIllust, cacheIllusts } from "../store/illustCache"
 import { useLatest, useTimedFlag } from "./hooks"
 import { requestPixivRoute } from "./routeNavigation"
 import type {
@@ -872,6 +873,7 @@ export function IllustCard(props: {
     footerText,
     topTrailingAction,
   } = props
+  cacheIllust(illust)
   const [bookmarked, setBookmarked] = useState(illust.is_bookmarked)
   const [bookmarkBusy, setBookmarkBusy] = useState(false)
   const [showBookmarkDetail, setShowBookmarkDetail] = useState(false)
@@ -1144,6 +1146,7 @@ export function IllustFlowFeed(props: {
     index: number,
   ) => IllustCardAction | undefined
 }) {
+  cacheIllusts(props.items)
   const [leading, trailing] = useMemo(
     () => distributeFlowItems(props.items),
     [props.items]

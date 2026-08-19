@@ -1,7 +1,7 @@
 {
   "remoteResource" : {
     "url" : "https://raw.githubusercontent.com/chaoscard/Scripting/main/Release/Pixiv.scripting",
-    "hash" : "e4ec9fb58e3e24273ff177b97de63467",
+    "hash" : "40cdaab99650fe295169b66675f8ce22",
     "autoUpdateInterval" : null
   },
   "name" : "Pixiv",
@@ -20,7 +20,7 @@
     "homepage" : "https:\/\/github.com\/chaoscard\/Scripting"
   },
   "icon" : "paintpalette",
-  "version" : "0.8.47",
+  "version" : "0.8.48",
   "permissions" : null,
   "intentInputTypes" : [
 

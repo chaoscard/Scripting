@@ -42,6 +42,7 @@ import {
   updateSettings,
 } from "../store/settings"
 import { onWatchlistChanged } from "../store/watchlist"
+import { cacheIllusts } from "../store/illustCache"
 import type {
   PixivIllustration,
   PixivIllustrationSeriesItem,
@@ -61,7 +62,6 @@ import {
   LoadMoreTrigger,
   IllustFlowFeed,
   NovelCard,
-  RefreshableScrollView,
 } from "./components"
 import { renderDestination } from "./routes"
 import { waitForPaginationFeedback } from "./hooks"
@@ -205,19 +205,16 @@ function SeriesIntroduction(props: {
 export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === "dark"
-  const [ambientPalette, setAmbientPalette] = useState<UserAmbientPalette | null>(
-    null
-  )
   const [ambientEnabled, setAmbientEnabled] = useState(
     () => loadSettings().ambientImmersion
   )
   const [ambientIntensity, setAmbientIntensity] = useState(
     () => loadSettings().ambientIntensity
   )
-
   const [title, setTitle] = useState("系列")
   const [caption, setCaption] = useState("")
   const [coverUrl, setCoverUrl] = useState<string | null>(null)
+  const [ambientPalette, setAmbientPalette] = useState<UserAmbientPalette | null>(null)
   const [author, setAuthor] = useState<PixivUser | null>(null)
   const [workCount, setWorkCount] = useState<number | null>(null)
   const [isWatched, setIsWatched] = useState(false)
@@ -333,6 +330,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
         const mappedIllusts = rawAscending.map((it, idx) =>
           seriesIllust(it, seriesAuthor, idx + 1)
         )
+        cacheIllusts(mappedIllusts)
         rawMappedIllustsRef.current = mappedIllusts
         const filtered = filterSeriesIllusts(mappedIllusts, isExempt)
         allIllustsRef.current = filtered
@@ -559,12 +557,11 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
   }
 
   return (
-    <RefreshableScrollView
+    <ScrollView
       navigationTitle={title}
       navigationBarTitleDisplayMode="inline"
       toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
       ignoresSafeArea={{ edges: ["top", "bottom"] }}
-      refreshable={load}
       background={
         ambientEnabled && ambientPalette
           ? {
@@ -771,6 +768,6 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
           </VStack>
         )}
       </VStack>
-    </RefreshableScrollView>
+    </ScrollView>
   )
 }

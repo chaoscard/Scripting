@@ -44,6 +44,7 @@ import {
   isR18ContentVisible,
   loadSettings,
   onSettingsChanged,
+  type AmbientIntensity,
   type AppSettings,
 } from "../store/settings"
 import {
@@ -54,6 +55,7 @@ import {
 } from "../store/history"
 import { onUserFollowChanged } from "../store/userFollow"
 import { isSeriesWatched, onWatchlistChanged, recordWatchedSeries } from "../store/watchlist"
+import { cacheIllust, getCachedIllust } from "../store/illustCache"
 import { useAsyncGuard, useLatest, usePagedList, currentBatchSize } from "./hooks"
 import type { PixivIllustration } from "../types"
 import {
@@ -94,27 +96,57 @@ function isIllustExempt(
   return false
 }
 
+function getInitialIllustPalette(
+  illust: PixivIllustration | null,
+  isDark: boolean,
+  intensity: AmbientIntensity,
+  quality: "medium" | "large" | "original"
+): IllustAmbientPalette | null {
+  if (!illust) return null
+  const candidates = [
+    cardThumbUrlOf(illust),
+    illust.image_urls?.medium,
+    illust.image_urls?.square_medium,
+    illust.image_urls?.large,
+    imageUrlOf(illust, 0, quality),
+  ]
+  for (const u of candidates) {
+    if (!u) continue
+    const pal = getCachedIllustAmbientPalette(u, isDark, intensity)
+    if (pal) return pal
+  }
+  return null
+}
+
 export function IllustDetailView(props: { illustID: number }) {
   const { illustID } = props
   const colorScheme = useColorScheme()
   const isDark = colorScheme === "dark"
-  const [illust, setIllust] = useState<PixivIllustration | null>(null)
-  const [ambientPalette, setAmbientPalette] = useState<IllustAmbientPalette | null>(
-    null
-  )
+  const [illust, setIllust] = useState<PixivIllustration | null>(() => getCachedIllust(illustID))
   const [ambientEnabled, setAmbientEnabled] = useState(
     () => loadSettings().ambientImmersion
   )
   const [ambientIntensity, setAmbientIntensity] = useState(
     () => loadSettings().ambientIntensity
   )
-  const [loading, setLoading] = useState(true)
+  const [ambientPalette, setAmbientPalette] = useState<IllustAmbientPalette | null>(() => {
+    const settings = loadSettings()
+    if (!settings.ambientImmersion) return null
+    const initial = getCachedIllust(illustID)
+    return getInitialIllustPalette(
+      initial,
+      isDark,
+      settings.ambientIntensity,
+      settings.detailImageQuality
+    )
+  })
+  const [loading, setLoading] = useState(() => !getCachedIllust(illustID))
   const [error, setError] = useState<string | null>(null)
-  const [bookmarked, setBookmarked] = useState(false)
+  const [bookmarked, setBookmarked] = useState(() => getCachedIllust(illustID)?.is_bookmarked ?? false)
   const [bookmarkLoading, setBookmarkLoading] = useState(false)
   const [bookmarkLongPressLocked, setBookmarkLongPressLocked] = useState(false)
   const [showBookmarkDetail, setShowBookmarkDetail] = useState(false)
-  const [followed, setFollowed] = useState(false)
+  const [followed, setFollowed] = useState(() => getCachedIllust(illustID)?.user?.is_followed ?? false)
   const [followLoading, setFollowLoading] = useState(false)
   const [showComments, setShowComments] = useState(false)
   const [quality, setQuality] = useState(loadSettings().detailImageQuality)
@@ -126,16 +158,19 @@ export function IllustDetailView(props: { illustID: number }) {
   // 同一实例只记录一次浏览（下拉刷新/重试不重复刷新 viewedAt）；换作品时重置
   const recordedIDRef = useRef<number | null>(null)
 
-  async function load() {
+  async function load(clear = !illustRef.current) {
     const g = guard()
-    setLoading(true)
-    setError(null)
+    if (clear) {
+      setLoading(true)
+      setError(null)
+    }
     setMediaReady(false)
     try {
       const detail = await session.call((token) =>
         illustrationDetail(illustID, token)
       )
       if (!g.isCurrent()) return
+      cacheIllust(detail)
       const settings = loadSettings()
       let isExempt = isIllustExempt(detail, settings, detail.is_bookmarked, detail.user.is_followed ?? false)
       if (!isIllustContentVisible(detail, settings, isExempt)) {
@@ -194,14 +229,38 @@ export function IllustDetailView(props: { illustID: number }) {
           .catch(() => {})
       }
     } catch (err: any) {
-      if (g.isCurrent()) setError(err?.message ?? "加载失败")
+      if (g.isCurrent()) {
+        if (!illustRef.current) {
+          setError(err?.message ?? "加载失败")
+        }
+      }
     } finally {
       if (g.isCurrent()) setLoading(false)
     }
   }
 
   useEffect(() => {
-    load()
+    const cached = getCachedIllust(illustID)
+    if (cached) {
+      setIllust(cached)
+      setBookmarked(cached.is_bookmarked)
+      setFollowed(cached.user?.is_followed ?? false)
+      const settings = loadSettings()
+      if (settings.ambientImmersion) {
+        const pal = getInitialIllustPalette(
+          cached,
+          isDark,
+          settings.ambientIntensity,
+          settings.detailImageQuality
+        )
+        if (pal) setAmbientPalette(pal)
+      }
+      setLoading(false)
+      load(false)
+    } else {
+      setIllust(null)
+      load(true)
+    }
     // 保底机制：若本体大图文件较大在 1.2 秒内仍在下载，自动放行相关作品请求，避免下方留白卡死
     const timer = setTimeout(() => {
       setMediaReady(true)
@@ -223,23 +282,35 @@ export function IllustDetailView(props: { illustID: number }) {
       setAmbientPalette(null)
       return
     }
-    const coverUrl = illust
-      ? (cardThumbUrlOf(illust) ?? imageUrlOf(illust, 0, quality))
-      : null
-    if (!coverUrl) {
+    const current = illustRef.current
+    if (!current) {
       setAmbientPalette(null)
       return
     }
+    const candidates = [
+      cardThumbUrlOf(current),
+      current.image_urls?.medium,
+      current.image_urls?.square_medium,
+      current.image_urls?.large,
+      imageUrlOf(current, 0, quality),
+    ].filter((u): u is string => Boolean(u))
+
     let active = true
-    const cached = getCachedIllustAmbientPalette(coverUrl, isDark, ambientIntensity)
-    if (cached) {
-      setAmbientPalette(cached)
+    for (const u of candidates) {
+      const cached = getCachedIllustAmbientPalette(u, isDark, ambientIntensity)
+      if (cached) {
+        setAmbientPalette(cached)
+        return
+      }
     }
-    void extractIllustAmbientPalette(coverUrl).then((result) => {
-      if (!active || !result) return
-      const modeObj = isDark ? result.dark : result.light
-      setAmbientPalette(modeObj[ambientIntensity] ?? modeObj.medium)
-    })
+    const targetUrl = candidates[0]
+    if (targetUrl) {
+      void extractIllustAmbientPalette(targetUrl).then((result) => {
+        if (!active || !result) return
+        const modeObj = isDark ? result.dark : result.light
+        setAmbientPalette(modeObj[ambientIntensity] ?? modeObj.medium)
+      })
+    }
     return () => {
       active = false
     }
@@ -303,17 +374,24 @@ export function IllustDetailView(props: { illustID: number }) {
     })
   }, [illustID])
 
-  if (loading) {
+  if (loading && !illust) {
     return (
       <ScrollView navigationTitle="作品详情" navigationBarTitleDisplayMode="inline">
         <LoadingView />
       </ScrollView>
     )
   }
-  if (error || !illust) {
+  if (error && !illust) {
     return (
       <ScrollView navigationTitle="作品详情" navigationBarTitleDisplayMode="inline">
-        <ErrorView message={error ?? "作品不存在"} onRetry={load} />
+        <ErrorView message={error} onRetry={() => load(true)} />
+      </ScrollView>
+    )
+  }
+  if (!illust) {
+    return (
+      <ScrollView navigationTitle="作品详情" navigationBarTitleDisplayMode="inline">
+        <ErrorView message="作品不存在" onRetry={() => load(true)} />
       </ScrollView>
     )
   }
