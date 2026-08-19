@@ -177,10 +177,11 @@ export function enforceCacheLimit(): void {
   saveMeta(meta)
 }
 
-// 图片下载并发控制：同一 URL 在途去重 + 全局最多 2 个并发。
+// 图片下载并发控制：同一 URL 在途去重。
+// 最大下载并发数动态对齐为高级设置“图片并发数”的 2/3；轻量预取 Worker 提升至并发数的 1/3。
 // 引入优先级调度：前台视图根据卡片在信息流中的自然次序传入 priority（值越小越优先），
 // 保证自顶向下优先加载最上方的卡片，消除左右列分发造成的挂载先后偏差。
-// 预取可在出队前取消且每次最多保留后续 2 张；可见卡片随后请求同一 URL 时会提升为前台任务。
+// 预取可在出队前取消；可见卡片随后请求同一 URL 时会提升为前台任务。
 interface PrefetchState {
   cancelled: boolean
 }
@@ -200,20 +201,40 @@ interface DownloadTask {
 }
 
 const inflightDownloads = new Map<string, DownloadTask>()
-const MAX_CONCURRENT_DOWNLOADS = 2
-const MAX_PREFETCH_WORKERS = 1
-const MAX_PREFETCH_URLS = 2
 let activeDownloads = 0
 let activePrefetchDownloads = 0
 const foregroundQueue: DownloadTask[] = []
 const prefetchQueue: DownloadTask[] = []
 
+export function maxConcurrentDownloads(): number {
+  const settings = loadSettings()
+  const concurrency = settings.imageBatchConcurrency ?? 15
+  const ratio = settings.imageDownloadConcurrencyRatio ?? 0.67
+  return Math.max(1, Math.round(concurrency * ratio))
+}
+
+export function maxPrefetchWorkers(): number {
+  const settings = loadSettings()
+  const concurrency = settings.imageBatchConcurrency ?? 15
+  const ratio = settings.imagePrefetchConcurrencyRatio ?? 0.33
+  return Math.max(1, Math.round(concurrency * ratio))
+}
+
+export function maxPrefetchUrls(): number {
+  const settings = loadSettings()
+  const concurrency = settings.imageBatchConcurrency ?? 15
+  const ratio = settings.imagePrefetchConcurrencyRatio ?? 0.33
+  return Math.max(1, Math.round(concurrency * ratio))
+}
+
 function pumpDownloads(): void {
-  while (activeDownloads < MAX_CONCURRENT_DOWNLOADS) {
+  const maxDownloads = maxConcurrentDownloads()
+  const maxPrefetch = maxPrefetchWorkers()
+  while (activeDownloads < maxDownloads) {
     let task = foregroundQueue.shift()
     let lane: "foreground" | "prefetch" = "foreground"
     if (!task) {
-      if (activePrefetchDownloads >= MAX_PREFETCH_WORKERS) return
+      if (activePrefetchDownloads >= maxPrefetch) return
       task = prefetchQueue.shift()
       lane = "prefetch"
     }
@@ -404,8 +425,10 @@ const NOOP_PREFETCH_HANDLE: PrefetchHandle = { cancel: () => {} }
 // 但会阻止当前批次继续向下载队列提交后续 URL。
 export function prefetch(urls: (string | null | undefined)[]): PrefetchHandle {
   if (!loadSettings().prefetchEnabled) return NOOP_PREFETCH_HANDLE
+  const prefetchLimit = maxPrefetchUrls()
+  const prefetchWorkersLimit = maxPrefetchWorkers()
   const unique = [...new Set(urls.filter((u): u is string => !!u))]
-    .slice(0, MAX_PREFETCH_URLS)
+    .slice(0, prefetchLimit)
   const state: PrefetchState = { cancelled: false }
   let index = 0
   const worker = async () => {
@@ -418,7 +441,7 @@ export function prefetch(urls: (string | null | undefined)[]): PrefetchHandle {
       }
     }
   }
-  for (let i = 0; i < Math.min(MAX_PREFETCH_WORKERS, unique.length); i++) {
+  for (let i = 0; i < Math.min(prefetchWorkersLimit, unique.length); i++) {
     void worker()
   }
   return {

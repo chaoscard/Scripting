@@ -139,7 +139,7 @@ export function UserDetailView(props: { userID: number }) {
       if (bgUrl && !cachedFileExists(bgUrl)) {
         await Promise.race([
           loadImage(bgUrl, 0),
-          new Promise((resolve) => setTimeout(() => resolve(null), 800)),
+          new Promise((resolve) => setTimeout(() => resolve(null), 1000)),
         ])
       }
 

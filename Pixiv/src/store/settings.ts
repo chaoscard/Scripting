@@ -16,9 +16,9 @@ export type CloseButtonAction = "minimize" | "exit"
 export type WatchlistSortOrder = "asc" | "desc"
 export type AmbientIntensity = "low" | "medium" | "high"
 export type LaunchPage = "discovery" | "ranking" | "following"
-export type ImageBatchConcurrency = 10 | 15 | 20
-export type LoadingAnimationDuration = 500 | 1000 | 1500
-export type LaunchAnimationDuration = 1000 | 1500 | 2000
+export type ImageBatchConcurrency = number
+export type LoadingAnimationDuration = number
+export type LaunchAnimationDuration = number
 
 export interface AppSettings {
   launchPage: LaunchPage
@@ -41,6 +41,8 @@ export interface AppSettings {
   cacheLimitMB: number | null
   recordHistory: boolean
   imageBatchConcurrency: ImageBatchConcurrency
+  imageDownloadConcurrencyRatio: number
+  imagePrefetchConcurrencyRatio: number
   loadingAnimationDuration: LoadingAnimationDuration
   launchAnimationDuration: LaunchAnimationDuration
   advancedSettingsUnlocked: boolean
@@ -67,6 +69,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   cacheLimitMB: 300,
   recordHistory: true,
   imageBatchConcurrency: 15,
+  imageDownloadConcurrencyRatio: 0.67,
+  imagePrefetchConcurrencyRatio: 0.33,
   loadingAnimationDuration: 1000,
   launchAnimationDuration: 1500,
   advancedSettingsUnlocked: false,
@@ -87,9 +91,10 @@ const LOADING_DURATION_VALUES: readonly LoadingAnimationDuration[] = [500, 1000,
 const LAUNCH_DURATION_VALUES: readonly LaunchAnimationDuration[] = [1000, 1500, 2000]
 const CACHE_LIMIT_VALUES = [300, 500, 1000, 2000] as const
 
-export function getImageBatchSize(level: ImageBatchConcurrency = 15): number {
-  if (level === 10) return 10
-  if (level === 20) return 20
+export function getImageBatchSize(level?: number): number {
+  if (typeof level === "number" && Number.isFinite(level) && level > 0) {
+    return Math.max(1, Math.min(90, Math.round(level)))
+  }
   return 15
 }
 
@@ -132,34 +137,53 @@ function cacheLimitOf(value: unknown): number | null {
     : DEFAULT_SETTINGS.cacheLimitMB
 }
 
-function parseImageConcurrency(value: unknown): ImageBatchConcurrency {
-  if (value === 10 || value === "10" || value === "low") return 10
-  if (value === 15 || value === "15" || value === "medium") return 15
-  if (value === 20 || value === "20" || value === "high") return 20
+function parseConcurrencyRatio(value: unknown, fallback: number): number {
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1) {
+    return Math.round(value * 100) / 100
+  }
+  if (typeof value === "string") {
+    const num = parseFloat(value)
+    if (!isNaN(num) && num >= 0 && num <= 1) {
+      return Math.round(num * 100) / 100
+    }
+  }
+  return fallback
+}
+
+function parseImageConcurrency(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return Math.max(1, Math.min(90, Math.round(value)))
+  }
+  if (typeof value === "string") {
+    const num = parseInt(value, 10)
+    if (!isNaN(num) && num > 0) {
+      return Math.max(1, Math.min(90, num))
+    }
+  }
   return DEFAULT_SETTINGS.imageBatchConcurrency
 }
 
-function parseLoadingDuration(value: unknown): LoadingAnimationDuration {
-  if (typeof value === "number" && (LOADING_DURATION_VALUES as readonly number[]).includes(value)) {
-    return value as LoadingAnimationDuration
+function parseLoadingDuration(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+    return Math.max(0, Math.min(30000, Math.round(value)))
   }
   if (typeof value === "string") {
-    const num = Number(value)
-    if ((LOADING_DURATION_VALUES as readonly number[]).includes(num)) {
-      return num as LoadingAnimationDuration
+    const num = parseInt(value, 10)
+    if (!isNaN(num) && num >= 0) {
+      return Math.max(0, Math.min(30000, num))
     }
   }
   return DEFAULT_SETTINGS.loadingAnimationDuration
 }
 
-function parseLaunchDuration(value: unknown): LaunchAnimationDuration {
-  if (typeof value === "number" && (LAUNCH_DURATION_VALUES as readonly number[]).includes(value)) {
-    return value as LaunchAnimationDuration
+function parseLaunchDuration(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+    return Math.max(0, Math.min(30000, Math.round(value)))
   }
   if (typeof value === "string") {
-    const num = Number(value)
-    if ((LAUNCH_DURATION_VALUES as readonly number[]).includes(num)) {
-      return num as LaunchAnimationDuration
+    const num = parseInt(value, 10)
+    if (!isNaN(num) && num >= 0) {
+      return Math.max(0, Math.min(30000, num))
     }
   }
   return DEFAULT_SETTINGS.launchAnimationDuration
@@ -222,6 +246,14 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
     cacheLimitMB: cacheLimitOf(stored?.cacheLimitMB),
     recordHistory: boolOr(stored?.recordHistory, DEFAULT_SETTINGS.recordHistory),
     imageBatchConcurrency: parseImageConcurrency(stored?.imageBatchConcurrency),
+    imageDownloadConcurrencyRatio: parseConcurrencyRatio(
+      stored?.imageDownloadConcurrencyRatio,
+      DEFAULT_SETTINGS.imageDownloadConcurrencyRatio
+    ),
+    imagePrefetchConcurrencyRatio: parseConcurrencyRatio(
+      stored?.imagePrefetchConcurrencyRatio,
+      DEFAULT_SETTINGS.imagePrefetchConcurrencyRatio
+    ),
     loadingAnimationDuration: parseLoadingDuration(stored?.loadingAnimationDuration),
     launchAnimationDuration: parseLaunchDuration(stored?.launchAnimationDuration),
     advancedSettingsUnlocked: boolOr(stored?.advancedSettingsUnlocked, DEFAULT_SETTINGS.advancedSettingsUnlocked),

@@ -1169,6 +1169,13 @@ export function IllustFlowFeed(props: {
           topTrailingAction={props.topTrailingActionOf?.(illust, index)}
         />
       )
+      const triggerView = props.hasMore && triggerAnchor ? (
+        <VStack
+          key={`trigger:${triggerAnchor}`}
+          frame={{ width: FLOW_CARD_WIDTH, height: 1 }}
+          onAppear={() => props.onLoadMore(triggerAnchor)}
+        />
+      ) : null
       return [
         <LazyVStack
           key="leading"
@@ -1177,6 +1184,7 @@ export function IllustFlowFeed(props: {
           frame={{ width: FLOW_CARD_WIDTH }}
         >
           {leading.map(renderItem)}
+          {triggerView}
         </LazyVStack>,
         <LazyVStack
           key="trailing"
@@ -1185,12 +1193,16 @@ export function IllustFlowFeed(props: {
           frame={{ width: FLOW_CARD_WIDTH }}
         >
           {trailing.map(renderItem)}
+          {triggerView}
         </LazyVStack>,
       ]
     },
     [
       leading,
       trailing,
+      triggerAnchor,
+      props.hasMore,
+      props.onLoadMore,
       props.cornerBadgeOf,
       props.footerTextOf,
       props.topTrailingActionOf,
@@ -1207,12 +1219,11 @@ export function IllustFlowFeed(props: {
       >
         {columnViews}
       </HStack>
-      {props.hasMore && triggerAnchor ? (
+      {props.hasMore ? (
         <VStack
-          key={`trigger:${triggerAnchor}`}
+          key="flow-footer"
           spacing={0}
           frame={{ height: 44, maxWidth: "infinity" }}
-          onAppear={() => props.onLoadMore(triggerAnchor)}
         >
           {props.isLoading ? (
             <HStack spacing={0} frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
