@@ -37,7 +37,9 @@ export class Session {
   private refreshing: RefreshTask | null = null
   private listeners: (() => void)[] = []
 
-  constructor(private readonly dependencies = defaultDependencies) {}
+  constructor(private readonly dependencies = defaultDependencies) {
+    this.restore()
+  }
 
   // 返回退订函数，供 useEffect cleanup 使用
   onAuthChanged(fn: () => void): () => void {

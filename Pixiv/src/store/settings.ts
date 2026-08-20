@@ -76,9 +76,6 @@ const DOWNLOAD_QUALITY_VALUES: readonly DownloadImageQuality[] = ["large", "orig
 const LONG_PRESS_ACTION_VALUES: readonly AppSettings["longPressBookmarkAction"][] = ["off", "follow", "detail"]
 const CLOSE_BUTTON_ACTION_VALUES: readonly CloseButtonAction[] = ["minimize", "exit"]
 const AMBIENT_INTENSITY_VALUES: readonly AmbientIntensity[] = ["low", "medium", "high"]
-const IMAGE_CONCURRENCY_VALUES: readonly ImageBatchConcurrency[] = [10, 15, 20]
-const LOADING_DURATION_VALUES: readonly LoadingAnimationDuration[] = [500, 1000, 1500]
-const LAUNCH_DURATION_VALUES: readonly LaunchAnimationDuration[] = [1000, 1500, 2000]
 const CACHE_LIMIT_VALUES = [300, 500, 1000, 2000] as const
 
 export function getImageBatchSize(level?: number): number {
@@ -131,24 +128,12 @@ function parseConcurrencyRatio(value: unknown, fallback: number): number {
   if (typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100) {
     return Math.max(0, Math.min(100, Math.round(value)))
   }
-  if (typeof value === "string") {
-    const num = parseInt(value, 10)
-    if (!isNaN(num) && num >= 0 && num <= 100) {
-      return Math.max(0, Math.min(100, num))
-    }
-  }
   return fallback
 }
 
 function parseImageConcurrency(value: unknown): number {
   if (typeof value === "number" && Number.isFinite(value) && value > 0) {
     return Math.max(1, Math.min(90, Math.round(value)))
-  }
-  if (typeof value === "string") {
-    const num = parseInt(value, 10)
-    if (!isNaN(num) && num > 0) {
-      return Math.max(1, Math.min(90, num))
-    }
   }
   return DEFAULT_SETTINGS.imageBatchConcurrency
 }
@@ -157,24 +142,12 @@ function parseFadeInDuration(value: unknown): number {
   if (typeof value === "number" && Number.isFinite(value) && value >= 1) {
     return Math.max(1, Math.min(500, Math.round(value)))
   }
-  if (typeof value === "string") {
-    const num = parseInt(value, 10)
-    if (!isNaN(num) && num >= 1) {
-      return Math.max(1, Math.min(500, num))
-    }
-  }
   return DEFAULT_SETTINGS.imageFadeInDuration
 }
 
 function parseBlurCrossFadeDuration(value: unknown): number {
   if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
     return Math.max(0, Math.min(250, Math.round(value)))
-  }
-  if (typeof value === "string") {
-    const num = parseInt(value, 10)
-    if (!isNaN(num) && num >= 0) {
-      return Math.max(0, Math.min(250, num))
-    }
   }
   return DEFAULT_SETTINGS.blurCrossFadeDuration
 }
@@ -183,12 +156,6 @@ function parseLoadingDuration(value: unknown): number {
   if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
     return Math.max(0, Math.min(30000, Math.round(value)))
   }
-  if (typeof value === "string") {
-    const num = parseInt(value, 10)
-    if (!isNaN(num) && num >= 0) {
-      return Math.max(0, Math.min(30000, num))
-    }
-  }
   return DEFAULT_SETTINGS.loadingAnimationDuration
 }
 
@@ -196,19 +163,10 @@ function parseLaunchDuration(value: unknown): number {
   if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
     return Math.max(0, Math.min(30000, Math.round(value)))
   }
-  if (typeof value === "string") {
-    const num = parseInt(value, 10)
-    if (!isNaN(num) && num >= 0) {
-      return Math.max(0, Math.min(30000, num))
-    }
-  }
   return DEFAULT_SETTINGS.launchAnimationDuration
 }
 
 function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): AppSettings {
-  const legacyDetailQuality = isOneOf(stored?.imageQuality, DETAIL_QUALITY_VALUES)
-    ? stored.imageQuality
-    : DEFAULT_SETTINGS.detailImageQuality
   return {
     ...DEFAULT_SETTINGS,
     launchPage: isOneOf(stored?.launchPage, LAUNCH_PAGE_VALUES)
@@ -235,7 +193,7 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
       : DEFAULT_SETTINGS.feedImageQuality,
     detailImageQuality: isOneOf(stored?.detailImageQuality, DETAIL_QUALITY_VALUES)
       ? stored.detailImageQuality
-      : legacyDetailQuality,
+      : DEFAULT_SETTINGS.detailImageQuality,
     downloadImageQuality: isOneOf(stored?.downloadImageQuality, DOWNLOAD_QUALITY_VALUES)
       ? stored.downloadImageQuality
       : DEFAULT_SETTINGS.downloadImageQuality,

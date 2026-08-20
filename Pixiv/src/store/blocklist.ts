@@ -1,5 +1,5 @@
 import type { PixivUser } from "../types"
-import { pixivBlocklistDirectory, pixivSettingsDirectory } from "./dataDirectory"
+import { pixivBlocklistDirectory } from "./dataDirectory"
 import { recoverFile, writeTextSafely } from "./safeFile"
 
 export interface BlockedUser {
@@ -78,28 +78,6 @@ function persistBlocklist(blocklist: BlocklistData): boolean {
   return true
 }
 
-/**
- * 尝试从历史设置文件中迁移旧版黑名单数据（保证用户无缝升级不丢数据）。
- */
-function tryMigrateFromLegacySettings(): BlocklistData | null {
-  try {
-    const legacyPath = `${pixivSettingsDirectory()}/settings.json`
-    if (FileManager.existsSync(legacyPath)) {
-      const raw = FileManager.readAsStringSync(legacyPath, "utf-8")
-      const parsed = JSON.parse(raw)
-      if (
-        (Array.isArray(parsed?.blockedTags) && parsed.blockedTags.length > 0) ||
-        (Array.isArray(parsed?.blockedUsers) && parsed.blockedUsers.length > 0)
-      ) {
-        return parseBlocklist(parsed)
-      }
-    }
-  } catch {
-    // 迁移失败不影响主流程
-  }
-  return null
-}
-
 export function loadBlocklist(): BlocklistData {
   if (cachedBlocklist) return cachedBlocklist
   const path = blocklistFilePath()
@@ -113,19 +91,12 @@ export function loadBlocklist(): BlocklistData {
       return cachedBlocklist
     }
   } catch {
-    // 文件解析异常时尝试读取缓存或迁移
+    // 文件解析异常时尝试读取缓存
   }
 
   const stored = Storage.get(KEY)
   if (stored && typeof stored === "object") {
     cachedBlocklist = parseBlocklist(stored as Partial<BlocklistData>)
-    persistBlocklist(cachedBlocklist)
-    return cachedBlocklist
-  }
-
-  const migrated = tryMigrateFromLegacySettings()
-  if (migrated) {
-    cachedBlocklist = migrated
     persistBlocklist(cachedBlocklist)
     return cachedBlocklist
   }

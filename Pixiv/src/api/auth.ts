@@ -79,9 +79,19 @@ export async function refreshToken(
   })) as AuthTokenResponse
 }
 
-// 凭证持久化（Keychain）
+// 凭证持久化（Keychain + Storage 双重保障）
 export function saveCredentials(creds: StoredCredentials): void {
-  Keychain.set(CREDENTIALS_KEY, JSON.stringify(creds))
+  const serialized = JSON.stringify(creds)
+  try {
+    Keychain.set(CREDENTIALS_KEY, serialized)
+  } catch (e: any) {
+    console.log("Keychain save error:", e?.message ?? e)
+  }
+  try {
+    Storage.set(CREDENTIALS_KEY, creds)
+  } catch (e: any) {
+    console.log("Storage save error:", e?.message ?? e)
+  }
 }
 
 function isStoredCredentials(value: unknown): value is StoredCredentials {
@@ -97,29 +107,61 @@ function isStoredCredentials(value: unknown): value is StoredCredentials {
     candidate.refreshToken.length > 0 &&
     typeof candidate.expiresAt === "number" &&
     Number.isFinite(candidate.expiresAt) &&
-    typeof account.id === "string" &&
-    account.id.length > 0 &&
+    (typeof account.id === "string" || typeof account.id === "number") &&
+    String(account.id).length > 0 &&
     typeof account.name === "string" &&
-    typeof account.account === "string" &&
-    typeof account.is_premium === "boolean"
+    typeof account.account === "string"
   )
 }
 
 export function loadCredentials(): StoredCredentials | null {
-  const raw = Keychain.get(CREDENTIALS_KEY)
-  if (!raw) return null
+  let parsed: unknown = null
   try {
-    const parsed: unknown = JSON.parse(raw)
-    if (isStoredCredentials(parsed)) return parsed
-  } catch {
-    // 损坏凭证与不完整凭证均不能进入已登录状态。
+    const raw = Keychain.get(CREDENTIALS_KEY)
+    if (raw) {
+      parsed = JSON.parse(raw)
+    }
+  } catch (e: any) {
+    console.log("Keychain read error:", e?.message ?? e)
   }
-  clearCredentials()
+
+  if (!parsed || !isStoredCredentials(parsed)) {
+    try {
+      const stored = Storage.get(CREDENTIALS_KEY)
+      if (stored && isStoredCredentials(stored)) {
+        parsed = stored
+        try {
+          Keychain.set(CREDENTIALS_KEY, JSON.stringify(stored))
+        } catch {}
+      }
+    } catch {}
+  }
+
+  if (isStoredCredentials(parsed)) {
+    return {
+      accessToken: parsed.accessToken,
+      refreshToken: parsed.refreshToken,
+      expiresAt: parsed.expiresAt,
+      user: {
+        id: String(parsed.user.id),
+        name: parsed.user.name,
+        account: parsed.user.account,
+        mail_address: parsed.user.mail_address,
+        is_premium: Boolean(parsed.user.is_premium),
+        profile_image_urls: parsed.user.profile_image_urls,
+      },
+    }
+  }
   return null
 }
 
 export function clearCredentials(): void {
-  Keychain.remove(CREDENTIALS_KEY)
+  try {
+    Keychain.remove(CREDENTIALS_KEY)
+  } catch {}
+  try {
+    Storage.remove(CREDENTIALS_KEY)
+  } catch {}
 }
 
 export function needsRefresh(creds: StoredCredentials): boolean {
@@ -132,7 +174,14 @@ export function buildCredentialsFromResponse(
   return {
     accessToken: response.access_token,
     refreshToken: response.refresh_token,
-    expiresAt: Date.now() + response.expires_in * 1000,
-    user: response.user,
+    expiresAt: Date.now() + (Number(response.expires_in) || 3600) * 1000,
+    user: {
+      id: String(response.user.id),
+      name: response.user.name,
+      account: response.user.account,
+      mail_address: response.user.mail_address,
+      is_premium: Boolean(response.user.is_premium),
+      profile_image_urls: response.user.profile_image_urls,
+    },
   }
 }

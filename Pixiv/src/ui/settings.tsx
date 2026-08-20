@@ -26,11 +26,6 @@ import {
   resetSettings,
   updateSettings,
   type LaunchPage,
-  type ImageBatchConcurrency,
-  type ImageFadeInDuration,
-  type BlurCrossFadeDuration,
-  type LoadingAnimationDuration,
-  type LaunchAnimationDuration,
 } from "../store/settings"
 import { loadBlocklist, onBlocklistChanged } from "../store/blocklist"
 import { editAIShowSettings } from "../api/pixiv"
@@ -139,10 +134,7 @@ export function SettingsView() {
         ],
       }}
     >
-      <Section
-        header={<Text>内容过滤</Text>}
-        footer={<Text font="caption" foregroundStyle="secondaryLabel">AI 设置切换时将自动同步至 Pixiv 服务端账号设置。</Text>}
-      >
+      <Section header={<Text>内容过滤</Text>}>
         <Toggle
           title="显示 R18 作品"
           value={settings.showR18}

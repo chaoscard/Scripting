@@ -19,7 +19,7 @@ export interface NovelHistoryEntry {
 
 export type HistoryEntry = IllustrationHistoryEntry | NovelHistoryEntry
 
-type StoredLegacyHistoryEntry = {
+type StoredHistoryEntry = {
   illustration?: PixivIllustration
   novel?: PixivNovel
   kind?: "illust" | "novel"
@@ -101,7 +101,7 @@ function entryKey(entry: HistoryEntry): string {
     : `novel:${entry.novel.id}`
 }
 
-function parseEntries(rawEntries: StoredLegacyHistoryEntry[]): HistoryEntry[] {
+function parseEntries(rawEntries: StoredHistoryEntry[]): HistoryEntry[] {
   const seen = new Set<string>()
   const valid: HistoryEntry[] = []
   for (const raw of rawEntries) {
