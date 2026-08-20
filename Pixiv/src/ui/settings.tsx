@@ -26,6 +26,7 @@ import {
   updateSettings,
   type LaunchPage,
   type ImageBatchConcurrency,
+  type ImageFadeInDuration,
   type LoadingAnimationDuration,
   type LaunchAnimationDuration,
 } from "../store/settings"
@@ -269,6 +270,15 @@ export function SettingsView() {
             min={0}
             max={100}
             onSave={(val) => update({ imagePrefetchConcurrencyRatio: val })}
+          />
+          <AdvancedNumberRow
+            title="淡入动画时长"
+            unit="ms"
+            value={settings.imageFadeInDuration}
+            defaultValue={200}
+            min={1}
+            max={500}
+            onSave={(val) => update({ imageFadeInDuration: val })}
           />
           <AdvancedNumberRow
             title="加载动画时长"

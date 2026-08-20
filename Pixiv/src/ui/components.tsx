@@ -205,6 +205,11 @@ export function RefreshableScrollView(props: {
 
 // 异步图片加载状态（CachedImage / AvatarImage 共用）：
 // cancelled 标志防止 url 切换后旧结果覆盖新状态；支持 priority 优先级调度
+function imageFadeDurationSec(): number {
+  const ms = loadSettings().imageFadeInDuration ?? 200
+  return Math.max(0.001, Math.min(0.5, ms / 1000))
+}
+
 function useCachedImage(
   url: string | null,
   onLoaded?: (success: boolean) => void,
@@ -256,7 +261,9 @@ function useCachedImage(
         .then((p) => {
           if (!cancelled) {
             if (p) {
-              setLoaded({ url, path: p, revision: cacheRevision })
+              withAnimation(Animation.easeOut(imageFadeDurationSec()), () => {
+                setLoaded({ url, path: p, revision: cacheRevision })
+              })
               setFailed(false)
               onLoadedRef.current?.(true)
             } else if (!isRetry) {
@@ -297,8 +304,9 @@ function useCachedImage(
   return { path, failed }
 }
 
-// 异步图片（对标 Hanairo RemoteImageView 设计）：
+// 异步图片（对标 Hanairo RemoteImageView 设计与 Pixiv 官方客户端淡入体验）：
 // 容器宽高比由元数据严格固定，加载过程与展示过程保持零布局重排（Zero Layout Shift）。
+// 底层常驻纯净骨架占位色块，图片就绪后以淡入动画平滑呈现，杜绝转圈干扰。
 export function CachedImage(props: {
   url: string | null
   aspectRatioValue?: number // 宽/高
@@ -392,6 +400,7 @@ export function CachedImage(props: {
     ? (centerCropAspect ?? 1)
     : (intrinsicAspect ?? aspectRatioValue)
   const containerFrame = frame ?? { maxWidth: "infinity" }
+  const fadeDuration = imageFadeDurationSec()
 
   return (
     <ZStack
@@ -400,32 +409,43 @@ export function CachedImage(props: {
       clipped={true}
       frame={containerFrame}
     >
+      {/* 1. 底层骨架占位色块（中性灰/深灰半透明，官方客户端质感） */}
+      <VStack
+        frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+        background="tertiarySystemFill"
+      >
+        {!url || failed ? (
+          // 仅在明确加载失败或无 URL 时展示浅灰占位图标
+          <Image
+            systemName="photo"
+            font="title2"
+            foregroundStyle="systemGray4"
+          />
+        ) : null}
+      </VStack>
+
+      {/* 2. 图片层：就绪后平滑淡入呈现 */}
       {path ? (
         croppedImage ? (
           <Image
+            key={`img-cropped-${path}`}
             image={croppedImage}
             resizable={true}
             aspectRatio={{ value: effectiveRatio, contentMode: "fill" }}
             frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+            transition={Transition.opacity().animation(Animation.easeOut(fadeDuration))}
           />
         ) : (
           <Image
+            key={`img-file-${path}`}
             filePath={path}
             resizable={true}
             aspectRatio={{ value: effectiveRatio, contentMode }}
             frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+            transition={Transition.opacity().animation(Animation.easeOut(fadeDuration))}
           />
         )
-      ) : !url || failed ? (
-        // 无 URL / 加载失败：显示占位图标（避免空 URL 无限转圈）
-        <Image
-          systemName="photo"
-          font="title2"
-          foregroundStyle="systemGray3"
-        />
-      ) : (
-        <ProgressView progressViewStyle="circular" />
-      )}
+      ) : null}
     </ZStack>
   )
 }
@@ -797,7 +817,7 @@ export function NovelCard(props: {
   )
 }
 
-// 作者头像
+// 作者头像（对齐官方淡入与纯净底色占位）
 export function AvatarImage(props: {
   url: string | null
   size?: number
@@ -812,20 +832,28 @@ export function AvatarImage(props: {
       frame={{ width: size, height: size }}
       clipShape={{ type: "rect", cornerRadius }}
     >
+      <VStack
+        frame={{ width: size, height: size }}
+        background="tertiarySystemFill"
+      >
+        {!path ? (
+          <Image
+            systemName="person.fill"
+            font="caption"
+            foregroundStyle="systemGray4"
+          />
+        ) : null}
+      </VStack>
       {path ? (
         <Image
+          key={`avatar-${path}`}
           filePath={path}
           resizable={true}
           scaleToFill={true}
           frame={{ width: size, height: size }}
+          transition={Transition.opacity().animation(Animation.easeOut(imageFadeDurationSec()))}
         />
-      ) : (
-        <Image
-          systemName="person.fill"
-          font="caption"
-          foregroundStyle="systemGray3"
-        />
-      )}
+      ) : null}
     </ZStack>
   )
 }

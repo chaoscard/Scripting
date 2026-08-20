@@ -17,6 +17,7 @@ export type WatchlistSortOrder = "asc" | "desc"
 export type AmbientIntensity = "low" | "medium" | "high"
 export type LaunchPage = "discovery" | "ranking" | "following"
 export type ImageBatchConcurrency = number
+export type ImageFadeInDuration = number
 export type LoadingAnimationDuration = number
 export type LaunchAnimationDuration = number
 
@@ -43,6 +44,7 @@ export interface AppSettings {
   imageBatchConcurrency: ImageBatchConcurrency
   imageDownloadConcurrencyRatio: number
   imagePrefetchConcurrencyRatio: number
+  imageFadeInDuration: ImageFadeInDuration
   loadingAnimationDuration: LoadingAnimationDuration
   launchAnimationDuration: LaunchAnimationDuration
   advancedSettingsUnlocked: boolean
@@ -71,6 +73,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   imageBatchConcurrency: 30,
   imageDownloadConcurrencyRatio: 100,
   imagePrefetchConcurrencyRatio: 100,
+  imageFadeInDuration: 200,
   loadingAnimationDuration: 400,
   launchAnimationDuration: 1500,
   advancedSettingsUnlocked: false,
@@ -161,6 +164,19 @@ function parseImageConcurrency(value: unknown): number {
     }
   }
   return DEFAULT_SETTINGS.imageBatchConcurrency
+}
+
+function parseFadeInDuration(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value) && value >= 1) {
+    return Math.max(1, Math.min(500, Math.round(value)))
+  }
+  if (typeof value === "string") {
+    const num = parseInt(value, 10)
+    if (!isNaN(num) && num >= 1) {
+      return Math.max(1, Math.min(500, num))
+    }
+  }
+  return DEFAULT_SETTINGS.imageFadeInDuration
 }
 
 function parseLoadingDuration(value: unknown): number {
@@ -254,6 +270,7 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
       stored?.imagePrefetchConcurrencyRatio,
       DEFAULT_SETTINGS.imagePrefetchConcurrencyRatio
     ),
+    imageFadeInDuration: parseFadeInDuration(stored?.imageFadeInDuration),
     loadingAnimationDuration: parseLoadingDuration(stored?.loadingAnimationDuration),
     launchAnimationDuration: parseLaunchDuration(stored?.launchAnimationDuration),
     advancedSettingsUnlocked: boolOr(stored?.advancedSettingsUnlocked, DEFAULT_SETTINGS.advancedSettingsUnlocked),
