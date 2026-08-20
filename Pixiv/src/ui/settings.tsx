@@ -160,8 +160,7 @@ export function SettingsView() {
           <Text tag="medium">中等</Text>
           <Text tag="large">大图</Text>
         </Picker>
-        <Picker title="详情页面" value={settings.detailImageQuality} onChanged={(value: string) => update({ detailImageQuality: value as "medium" | "large" | "original" })}>
-          <Text tag="medium">中等</Text>
+        <Picker title="详情页面" value={settings.detailImageQuality} onChanged={(value: string) => update({ detailImageQuality: value as "large" | "original" })}>
           <Text tag="large">大图</Text>
           <Text tag="original">原图</Text>
         </Picker>
@@ -241,39 +240,41 @@ export function SettingsView() {
 
       {settings.advancedSettingsUnlocked ? (
         <Section
-          header={<Text>高级设置</Text>}
-          footer={<Text>支持自定义数值；并发比例为 0-1 小数；动画时长单位为毫秒 (ms)。</Text>}
+          header={<Text>调试</Text>}
+          footer={<Text>支持自定义数值；并发比例为百分比 (0-100%)；动画时长单位为毫秒 (ms)。</Text>}
         >
           <AdvancedNumberRow
             title="图片并发数"
             unit="张"
             value={settings.imageBatchConcurrency}
-            defaultValue={15}
+            defaultValue={30}
             min={1}
             max={90}
             onSave={(val) => update({ imageBatchConcurrency: val })}
           />
-          <AdvancedDecimalRow
+          <AdvancedNumberRow
             title="下载并发比例"
+            unit="%"
             value={settings.imageDownloadConcurrencyRatio}
-            defaultValue={0.67}
+            defaultValue={100}
             min={0}
-            max={1}
+            max={100}
             onSave={(val) => update({ imageDownloadConcurrencyRatio: val })}
           />
-          <AdvancedDecimalRow
+          <AdvancedNumberRow
             title="预取并发比例"
+            unit="%"
             value={settings.imagePrefetchConcurrencyRatio}
-            defaultValue={0.33}
+            defaultValue={100}
             min={0}
-            max={1}
+            max={100}
             onSave={(val) => update({ imagePrefetchConcurrencyRatio: val })}
           />
           <AdvancedNumberRow
             title="加载动画时长"
             unit="ms"
             value={settings.loadingAnimationDuration}
-            defaultValue={1000}
+            defaultValue={400}
             min={0}
             max={10000}
             onSave={(val) => update({ loadingAnimationDuration: val })}
@@ -320,13 +321,7 @@ function AdvancedNumberRow(props: {
     <HStack alignment="center" spacing={8} frame={{ maxWidth: "infinity" }}>
       <Text>{title}</Text>
       <Spacer />
-      <HStack
-        alignment="center"
-        spacing={4}
-        padding={{ horizontal: 10, vertical: 4 }}
-        background="systemGray6"
-        clipShape={{ type: "rect", cornerRadius: 8 }}
-      >
+      <HStack alignment="center" spacing={4}>
         <TextField
           label={<Text>{title}</Text>}
           prompt={String(defaultValue)}
@@ -344,74 +339,15 @@ function AdvancedNumberRow(props: {
           onBlur={() => commit(text)}
           axis="horizontal"
           textFieldStyle="plain"
-          frame={{ width: 60 }}
+          multilineTextAlignment="trailing"
+          foregroundStyle="secondaryLabel"
+          frame={{ minWidth: 60, alignment: "trailing" }}
         />
-        <Text font="subheadline" foregroundStyle="secondaryLabel">
-          {unit}
-        </Text>
-      </HStack>
-    </HStack>
-  )
-}
-
-function AdvancedDecimalRow(props: {
-  title: string
-  value: number
-  defaultValue: number
-  min?: number
-  max?: number
-  onSave: (num: number) => void
-}) {
-  const { title, value, defaultValue, min = 0, max = 1, onSave } = props
-  const [text, setText] = useState(String(value ?? defaultValue))
-
-  useEffect(() => {
-    setText(String(value ?? defaultValue))
-  }, [value, defaultValue])
-
-  const commit = (inputStr: string) => {
-    const raw = parseFloat(inputStr)
-    const finalVal =
-      !isNaN(raw)
-        ? Math.max(min, Math.min(max, Math.round(raw * 100) / 100))
-        : defaultValue
-    setText(String(finalVal))
-    onSave(finalVal)
-  }
-
-  return (
-    <HStack alignment="center" spacing={8} frame={{ maxWidth: "infinity" }}>
-      <Text>{title}</Text>
-      <Spacer />
-      <HStack
-        alignment="center"
-        spacing={4}
-        padding={{ horizontal: 10, vertical: 4 }}
-        background="systemGray6"
-        clipShape={{ type: "rect", cornerRadius: 8 }}
-      >
-        <TextField
-          label={<Text>{title}</Text>}
-          prompt={String(defaultValue)}
-          value={text}
-          onChanged={(v: string) => {
-            const sanitized = v.replace(/[^0-9.]/g, "")
-            const parts = sanitized.split(".")
-            const valid =
-              parts.length > 2 ? `${parts[0]}.${parts.slice(1).join("")}` : sanitized
-            setText(valid)
-            if (valid && valid !== "." && !valid.endsWith(".")) {
-              const num = parseFloat(valid)
-              if (!isNaN(num)) {
-                onSave(Math.max(min, Math.min(max, Math.round(num * 100) / 100)))
-              }
-            }
-          }}
-          onBlur={() => commit(text)}
-          axis="horizontal"
-          textFieldStyle="plain"
-          frame={{ width: 60 }}
-        />
+        {unit ? (
+          <Text font="body" foregroundStyle="secondaryLabel">
+            {unit}
+          </Text>
+        ) : null}
       </HStack>
     </HStack>
   )

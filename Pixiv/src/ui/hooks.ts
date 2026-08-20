@@ -7,9 +7,9 @@ import {
   type UserAmbientPalette,
 } from "../image/colorExtractor"
 
-// 触底回弹缓冲：由高级设置配置（默认 1000ms），确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
+// 触底回弹缓冲：由调试设置配置（默认 400ms），确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
 export function paginationFeedbackDuration(): number {
-  return loadSettings().loadingAnimationDuration ?? 1000
+  return loadSettings().loadingAnimationDuration ?? 400
 }
 
 export function waitForPaginationFeedback(): Promise<void> {

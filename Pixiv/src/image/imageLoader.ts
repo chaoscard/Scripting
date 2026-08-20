@@ -208,22 +208,22 @@ const prefetchQueue: DownloadTask[] = []
 
 export function maxConcurrentDownloads(): number {
   const settings = loadSettings()
-  const concurrency = settings.imageBatchConcurrency ?? 15
-  const ratio = settings.imageDownloadConcurrencyRatio ?? 0.67
+  const concurrency = settings.imageBatchConcurrency ?? 30
+  const ratio = (settings.imageDownloadConcurrencyRatio ?? 100) / 100
   return Math.max(1, Math.round(concurrency * ratio))
 }
 
 export function maxPrefetchWorkers(): number {
   const settings = loadSettings()
-  const concurrency = settings.imageBatchConcurrency ?? 15
-  const ratio = settings.imagePrefetchConcurrencyRatio ?? 0.33
+  const concurrency = settings.imageBatchConcurrency ?? 30
+  const ratio = (settings.imagePrefetchConcurrencyRatio ?? 100) / 100
   return Math.max(1, Math.round(concurrency * ratio))
 }
 
 export function maxPrefetchUrls(): number {
   const settings = loadSettings()
-  const concurrency = settings.imageBatchConcurrency ?? 15
-  const ratio = settings.imagePrefetchConcurrencyRatio ?? 0.33
+  const concurrency = settings.imageBatchConcurrency ?? 30
+  const ratio = (settings.imagePrefetchConcurrencyRatio ?? 100) / 100
   return Math.max(1, Math.round(concurrency * ratio))
 }
 

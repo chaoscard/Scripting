@@ -75,36 +75,42 @@ export function UgoiraPlayerView(props: {
       alignment="center"
       spacing={0}
       aspectRatio={{ value: aspectRatioValue, contentMode: "fit" }}
+      clipShape={{ type: "rect", cornerRadius: 8 }}
       frame={{
         width: Device.screen.width,
         height: Device.screen.width / aspectRatioValue,
       }}
-      padding={40}
     >
-      {loading ? <ProgressView /> : error ? (
-        <>
+      {loading ? (
+        <ProgressView progressViewStyle="circular" />
+      ) : error ? (
+        <VStack alignment="center" spacing={8} padding={20}>
           <Text font="footnote" foregroundStyle="systemRed">
             {error}
           </Text>
-          <Button title="重试" buttonStyle="glass" action={() => {
-            // 重新构建（seq 自增使旧的失败状态/在途结果失效）
-            const seq = ++seqRef.current
-            setError(null)
-            setLoading(true)
-            buildUgoira(illustID)
-              .then((r) => {
-                if (seq === seqRef.current) setResult(r)
-              })
-              .catch((err: any) => {
-                if (seq === seqRef.current) {
-                  setError(err?.message ?? "动图合成失败")
-                }
-              })
-              .finally(() => {
-                if (seq === seqRef.current) setLoading(false)
-              })
-          }} />
-        </>
+          <Button
+            title="重试"
+            buttonStyle="glass"
+            action={() => {
+              // 重新构建（seq 自增使旧的失败状态/在途结果失效）
+              const seq = ++seqRef.current
+              setError(null)
+              setLoading(true)
+              buildUgoira(illustID)
+                .then((r) => {
+                  if (seq === seqRef.current) setResult(r)
+                })
+                .catch((err: any) => {
+                  if (seq === seqRef.current) {
+                    setError(err?.message ?? "动图合成失败")
+                  }
+                })
+                .finally(() => {
+                  if (seq === seqRef.current) setLoading(false)
+                })
+            }}
+          />
+        </VStack>
       ) : null}
     </VStack>
   )

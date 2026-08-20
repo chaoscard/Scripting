@@ -66,6 +66,7 @@ import {
   BookmarkDetailSheet,
   CachedImage,
   ErrorView,
+  ExpandableIntroduction,
   IllustFlowFeed,
   formatDate,
   formatNumber,
@@ -669,7 +670,7 @@ export function IllustDetailView(props: { illustID: number }) {
       }}
      
     >
-      <VStack alignment="leading" spacing={12} frame={{ maxWidth: "infinity" }}>
+      <VStack alignment="leading" spacing={12} frame={{ maxWidth: "infinity", alignment: "leading" }}>
         {/* 大图区：动图走播放器；图片无限向下滚动展示全部页 */}
         <VStack
           alignment="center"
@@ -690,9 +691,10 @@ export function IllustDetailView(props: { illustID: number }) {
                   key={idx}
                   url={url}
                   aspectRatioValue={pageAspect}
+                  useIntrinsicAspectRatio={true}
                   cornerRadius={6}
                   contentMode="fit"
-                  frame={{ width: Device.screen.width, height: Device.screen.width / pageAspect }}
+                  frame={{ maxWidth: "infinity" }}
                   priority={idx}
                   onLoaded={idx === 0 ? () => setMediaReady(true) : undefined}
                 />
@@ -702,58 +704,54 @@ export function IllustDetailView(props: { illustID: number }) {
             <CachedImage
               url={pageURLs[0] ?? null}
               aspectRatioValue={pageAspect}
+              useIntrinsicAspectRatio={true}
               cornerRadius={8}
               contentMode="fit"
-              frame={{ width: Device.screen.width, height: Device.screen.width / pageAspect }}
+              frame={{ maxWidth: "infinity" }}
               priority={0}
               onLoaded={() => setMediaReady(true)}
             />
           )}
         </VStack>
 
-        <VStack alignment="leading" spacing={8} padding={{ horizontal: 14 }}>
-          {/* 信息 */}
-          <VStack alignment="leading" spacing={6}>
-            <Text font="subheadline" fontWeight="semibold">
-              信息
-            </Text>
-            <HStack spacing={10}>
-              <HStack spacing={3}>
-                <Image systemName="eye" font="footnote" foregroundStyle="secondaryLabel" />
-                <Text font="footnote" foregroundStyle="secondaryLabel">
-                  {formatNumber(current.total_view)}
-                </Text>
-              </HStack>
-              <HStack spacing={3}>
-                <Image systemName="heart" font="footnote" foregroundStyle="secondaryLabel" />
-                <Text font="footnote" foregroundStyle="secondaryLabel">
-                  {formatNumber(current.total_bookmarks)}
-                </Text>
-              </HStack>
-              <HStack spacing={3}>
-                <Image systemName="bubble.left" font="footnote" foregroundStyle="secondaryLabel" />
-                <Text font="footnote" foregroundStyle="secondaryLabel">
-                  {formatNumber(current.total_comments)}
-                </Text>
-              </HStack>
-              {pageCount > 1 && (
-                <HStack spacing={3}>
-                  <Image systemName="rectangle.stack" font="footnote" foregroundStyle="secondaryLabel" />
-                  <Text font="footnote" foregroundStyle="secondaryLabel">
-                    {pageCount}P
-                  </Text>
-                </HStack>
-              )}
-              <Text font="footnote" foregroundStyle="secondaryLabel">
-                {formatDate(current.create_date)}
+        <VStack alignment="leading" spacing={8} padding={{ horizontal: 14 }} frame={{ maxWidth: "infinity", alignment: "leading" }}>
+          {/* 统计指标 */}
+          <HStack spacing={10}>
+            <HStack spacing={3}>
+              <Image systemName="eye" font="footnote" />
+              <Text font="footnote">
+                {formatNumber(current.total_view)}
               </Text>
             </HStack>
-          </VStack>
+            <HStack spacing={3}>
+              <Image systemName="heart" font="footnote" />
+              <Text font="footnote">
+                {formatNumber(current.total_bookmarks)}
+              </Text>
+            </HStack>
+            <HStack spacing={3}>
+              <Image systemName="bubble.left" font="footnote" />
+              <Text font="footnote">
+                {formatNumber(current.total_comments)}
+              </Text>
+            </HStack>
+            {pageCount > 1 && (
+              <HStack spacing={3}>
+                <Image systemName="rectangle.stack" font="footnote" />
+                <Text font="footnote">
+                  {pageCount}P
+                </Text>
+              </HStack>
+            )}
+            <Text font="footnote">
+              {formatDate(current.create_date)}
+            </Text>
+          </HStack>
 
           {/* 系列 */}
           {Boolean(current.series?.id) && current.series ? (
             <VStack alignment="leading" spacing={4}>
-              <Text font="subheadline" fontWeight="semibold">
+              <Text font="subheadline" fontWeight="semibold" foregroundStyle="secondaryLabel">
                 系列
               </Text>
               <NavigationLink value={`mangaSeries:${current.series.id}`}>
@@ -764,23 +762,17 @@ export function IllustDetailView(props: { illustID: number }) {
             </VStack>
           ) : null}
 
-          {/* 简介（Pixiv caption 为 HTML，转纯文本显示） */}
-          {current.caption ? (
-            <VStack alignment="leading" spacing={4}>
-              <Text font="subheadline" fontWeight="semibold">
-                简介
-              </Text>
-              <LinkedDescription
-                html={current.caption}
-                routeDestination={renderDestination}
-              />
-            </VStack>
-          ) : null}
+          {/* 简介 */}
+          <ExpandableIntroduction
+            title="简介"
+            caption={current.caption}
+            routeDestination={renderDestination}
+          />
 
           {/* 标签：原生流式换行展示所有标签 */}
           {current.tags.length > 0 ? (
             <VStack alignment="leading" spacing={6}>
-              <Text font="subheadline" fontWeight="semibold">
+              <Text font="subheadline" fontWeight="semibold" foregroundStyle="secondaryLabel">
                 标签
               </Text>
               <FlowLayout spacing={6}>
@@ -871,9 +863,14 @@ function RelatedIllustrationsSection(props: {
       alignment="leading"
       spacing={8}
       padding={{ top: 4 }}
-      frame={{ maxWidth: "infinity" }}
+      frame={{ maxWidth: "infinity", alignment: "leading" }}
     >
-      <Text font="subheadline" fontWeight="semibold" padding={{ horizontal: 14 }}>
+      <Text
+        font="subheadline"
+        fontWeight="semibold"
+        foregroundStyle="secondaryLabel"
+        padding={{ horizontal: 14 }}
+      >
         相关作品
       </Text>
       {paged.initialLoading ? (
@@ -901,7 +898,7 @@ function RelatedIllustrationsSection(props: {
           isLoading={paged.loadingMore}
         />
       ) : (
-        <HStack spacing={0} padding={{ horizontal: 14, vertical: 8 }}>
+        <HStack spacing={0} padding={{ horizontal: 14, vertical: 8 }} frame={{ maxWidth: "infinity", alignment: "leading" }}>
           <Text font="footnote" foregroundStyle="secondaryLabel">
             暂无相关作品
           </Text>

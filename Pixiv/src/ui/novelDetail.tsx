@@ -52,6 +52,7 @@ import {
   AvatarImage,
   BookmarkDetailSheet,
   ErrorView,
+  ExpandableIntroduction,
   formatDate,
   formatNumber,
   LinkedDescription,
@@ -455,48 +456,43 @@ export function NovelDetailView(props: { novelID: number }) {
     >
       <VStack alignment="leading" spacing={12} frame={{ maxWidth: "infinity" }}>
         <VStack alignment="leading" spacing={8} padding={{ horizontal: 14, top: 12 }}>
-          {/* 信息 */}
-          <VStack alignment="leading" spacing={6}>
-            <Text font="subheadline" fontWeight="semibold">
-              信息
-            </Text>
-            <HStack spacing={10}>
-              <HStack spacing={3}>
-                <Image systemName="eye" font="footnote" foregroundStyle="secondaryLabel" />
-                <Text font="footnote" foregroundStyle="secondaryLabel">
-                  {formatNumber(current.total_view)}
-                </Text>
-              </HStack>
-              <HStack spacing={3}>
-                <Image systemName="heart" font="footnote" foregroundStyle="secondaryLabel" />
-                <Text font="footnote" foregroundStyle="secondaryLabel">
-                  {formatNumber(current.total_bookmarks)}
-                </Text>
-              </HStack>
-              <HStack spacing={3}>
-                <Image systemName="bubble.left" font="footnote" foregroundStyle="secondaryLabel" />
-                <Text font="footnote" foregroundStyle="secondaryLabel">
-                  {formatNumber(current.total_comments)}
-                </Text>
-              </HStack>
-              {Boolean(current.text_length || text.length) && (
-                <HStack spacing={3}>
-                  <Image systemName="character.cursor.ibeam" font="footnote" foregroundStyle="secondaryLabel" />
-                  <Text font="footnote" foregroundStyle="secondaryLabel">
-                    {current.text_length ?? text.length}
-                  </Text>
-                </HStack>
-              )}
-              <Text font="footnote" foregroundStyle="secondaryLabel">
-                {formatDate(current.create_date)}
+          {/* 统计指标 */}
+          <HStack spacing={10}>
+            <HStack spacing={3}>
+              <Image systemName="eye" font="footnote" />
+              <Text font="footnote">
+                {formatNumber(current.total_view)}
               </Text>
             </HStack>
-          </VStack>
+            <HStack spacing={3}>
+              <Image systemName="heart" font="footnote" />
+              <Text font="footnote">
+                {formatNumber(current.total_bookmarks)}
+              </Text>
+            </HStack>
+            <HStack spacing={3}>
+              <Image systemName="bubble.left" font="footnote" />
+              <Text font="footnote">
+                {formatNumber(current.total_comments)}
+              </Text>
+            </HStack>
+            {Boolean(current.text_length || text.length) && (
+              <HStack spacing={3}>
+                <Image systemName="character.cursor.ibeam" font="footnote" />
+                <Text font="footnote">
+                  {current.text_length ?? text.length}
+                </Text>
+              </HStack>
+            )}
+            <Text font="footnote">
+              {formatDate(current.create_date)}
+            </Text>
+          </HStack>
 
           {/* 系列 */}
           {Boolean(current.series?.id) || Boolean(current.series_prev?.id) || Boolean(current.series_next?.id) ? (
             <VStack alignment="leading" spacing={4}>
-              <Text font="subheadline" fontWeight="semibold">
+              <Text font="subheadline" fontWeight="semibold" foregroundStyle="secondaryLabel">
                 系列
               </Text>
               {Boolean(current.series?.id) && current.series ? (
@@ -524,22 +520,16 @@ export function NovelDetailView(props: { novelID: number }) {
           ) : null}
 
           {/* 简介 */}
-          {current.caption ? (
-            <VStack alignment="leading" spacing={4}>
-              <Text font="subheadline" fontWeight="semibold">
-                简介
-              </Text>
-              <LinkedDescription
-                html={current.caption}
-                routeDestination={renderDestination}
-              />
-            </VStack>
-          ) : null}
+          <ExpandableIntroduction
+            title="简介"
+            caption={current.caption}
+            routeDestination={renderDestination}
+          />
 
           {/* 标签 */}
           {current.tags.length > 0 ? (
             <VStack alignment="leading" spacing={6}>
-              <Text font="subheadline" fontWeight="semibold">
+              <Text font="subheadline" fontWeight="semibold" foregroundStyle="secondaryLabel">
                 标签
               </Text>
               <FlowLayout spacing={6}>

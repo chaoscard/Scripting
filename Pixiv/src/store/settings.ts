@@ -10,7 +10,7 @@ export interface BlockedUser {
 }
 
 export type FeedImageQuality = "medium" | "large"
-export type DetailImageQuality = "medium" | "large" | "original"
+export type DetailImageQuality = "large" | "original"
 export type DownloadImageQuality = "large" | "original"
 export type CloseButtonAction = "minimize" | "exit"
 export type WatchlistSortOrder = "asc" | "desc"
@@ -53,8 +53,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   showR18: false,
   showR18G: false,
   showAI: false,
-  followFilterExempt: false,
-  libraryFilterExempt: false,
+  followFilterExempt: true,
+  libraryFilterExempt: true,
   blockedTags: [],
   blockedUsers: [],
   ambientImmersion: true,
@@ -68,10 +68,10 @@ const DEFAULT_SETTINGS: AppSettings = {
   prefetchEnabled: true,
   cacheLimitMB: 300,
   recordHistory: true,
-  imageBatchConcurrency: 15,
-  imageDownloadConcurrencyRatio: 0.67,
-  imagePrefetchConcurrencyRatio: 0.33,
-  loadingAnimationDuration: 1000,
+  imageBatchConcurrency: 30,
+  imageDownloadConcurrencyRatio: 100,
+  imagePrefetchConcurrencyRatio: 100,
+  loadingAnimationDuration: 400,
   launchAnimationDuration: 1500,
   advancedSettingsUnlocked: false,
 }
@@ -81,7 +81,7 @@ const SETTINGS_FILE_NAME = "settings.json"
 const LAUNCH_PAGE_VALUES: readonly LaunchPage[] = ["discovery", "ranking", "following"]
 const WATCHLIST_SORT_VALUES: readonly WatchlistSortOrder[] = ["asc", "desc"]
 const FEED_QUALITY_VALUES: readonly FeedImageQuality[] = ["medium", "large"]
-const DETAIL_QUALITY_VALUES: readonly DetailImageQuality[] = ["medium", "large", "original"]
+const DETAIL_QUALITY_VALUES: readonly DetailImageQuality[] = ["large", "original"]
 const DOWNLOAD_QUALITY_VALUES: readonly DownloadImageQuality[] = ["large", "original"]
 const LONG_PRESS_ACTION_VALUES: readonly AppSettings["longPressBookmarkAction"][] = ["off", "follow", "detail"]
 const CLOSE_BUTTON_ACTION_VALUES: readonly CloseButtonAction[] = ["minimize", "exit"]
@@ -95,7 +95,7 @@ export function getImageBatchSize(level?: number): number {
   if (typeof level === "number" && Number.isFinite(level) && level > 0) {
     return Math.max(1, Math.min(90, Math.round(level)))
   }
-  return 15
+  return 30
 }
 
 let cachedSettings: AppSettings | null = null
@@ -138,13 +138,13 @@ function cacheLimitOf(value: unknown): number | null {
 }
 
 function parseConcurrencyRatio(value: unknown, fallback: number): number {
-  if (typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1) {
-    return Math.round(value * 100) / 100
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100) {
+    return Math.max(0, Math.min(100, Math.round(value)))
   }
   if (typeof value === "string") {
-    const num = parseFloat(value)
-    if (!isNaN(num) && num >= 0 && num <= 1) {
-      return Math.round(num * 100) / 100
+    const num = parseInt(value, 10)
+    if (!isNaN(num) && num >= 0 && num <= 100) {
+      return Math.max(0, Math.min(100, num))
     }
   }
   return fallback
