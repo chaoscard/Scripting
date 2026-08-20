@@ -233,9 +233,13 @@ function useCachedImage(
   const [failed, setFailed] = useState(false)
   // 预取已写入磁盘的文件在首帧直接使用，避免 effect 调度前短暂显示加载圈。
   const cachedPath = useMemo(() => (url ? cachedFilePath(url) : null), [url, cacheRevision])
-  const path = cachedPath ?? (
+  const targetPath = cachedPath ?? (
     loaded.url === url && loaded.revision === cacheRevision ? loaded.path : null
   )
+  // 当 url 切换（如详情页画质从 large 升级至 original）且新 url 正在加载时，
+  // 保留此前已成功加载的图片 path 作为展示回退，避免卸载旧图导致的闪退/闪白/闪回模糊。
+  const fallbackPath = !targetPath && loaded.path && loaded.revision === cacheRevision ? loaded.path : null
+  const path = targetPath ?? fallbackPath
   const onLoadedRef = useLatest(onLoaded)
 
   useEffect(() => onImageCacheChanged(() => setCacheRevision(imageCacheRevision())), [])
@@ -256,6 +260,9 @@ function useCachedImage(
       return
     }
     if (cachedPath) {
+      if (loaded.url !== url || loaded.path !== cachedPath) {
+        setLoaded({ url, path: cachedPath, revision: cacheRevision })
+      }
       return () => {
         cancelled = true
       }
@@ -304,7 +311,7 @@ function useCachedImage(
     }
   }, [url, cacheRevision, cachedPath, onLoadedRef, priority])
 
-  return { path, failed }
+  return { path, isTargetLoaded: Boolean(targetPath), failed }
 }
 
 // 异步图片（对标 Hanairo RemoteImageView 设计与 Telegram 渐进式模糊预览）：
@@ -340,12 +347,18 @@ export function CachedImage(props: {
     onLoaded,
     priority,
   } = props
-  const { path, failed } = useCachedImage(url, onLoaded, priority)
-  // 若提供了 previewUrl，缩略图始终常驻底层（高清大图就绪后也保留），彻底根除 GPU 解码交替白闪
+  const { path, isTargetLoaded, failed } = useCachedImage(url, onLoaded, priority)
+  const initialHitRef = useRef(Boolean(path))
+  // 若提供了 previewUrl，缩略图在本地命中时垫底；
+  // 但若本地尚未下载 previewUrl，或 previewPath 与最终大图 path 完全相同，或首帧已命中大图，则不渲染模糊层，避免重叠抽搐与白闪。
   const previewPath = useMemo(() => {
     if (!previewUrl) return null
     return cachedFilePath(previewUrl)
   }, [previewUrl])
+
+  const showBlurPreview = Boolean(
+    !initialHitRef.current && previewPath && previewPath !== path
+  )
 
   const croppedImage = useMemo(() => {
     if (!path) return null
@@ -398,53 +411,50 @@ export function CachedImage(props: {
     return null
   }, [path, centerCropSquare, centerCropAspect])
 
-  const previewCroppedImage = useMemo(() => {
-    if (!previewPath) return null
-    if (centerCropSquare) {
-      try {
-        const image = UIImage.fromFile(previewPath)
-        if (!image || image.width <= 0 || image.height <= 0) return null
+  const previewBlurredImage = useMemo(() => {
+    if (!showBlurPreview || !previewPath) return null
+    try {
+      const image = UIImage.fromFile(previewPath)
+      if (!image || image.width <= 0 || image.height <= 0) return null
+      let targetImg = image
+      if (centerCropSquare) {
         const side = Math.min(image.width, image.height)
-        return image.croppedTo({
+        const cropped = image.croppedTo({
           x: (image.width - side) / 2,
           y: (image.height - side) / 2,
           width: side,
           height: side,
         })
-      } catch {
-        return null
-      }
-    }
-    if (centerCropAspect != null && centerCropAspect > 0) {
-      try {
-        const image = UIImage.fromFile(previewPath)
-        if (!image || image.width <= 0 || image.height <= 0) return null
+        if (cropped) targetImg = cropped
+      } else if (centerCropAspect != null && centerCropAspect > 0) {
         const currentAspect = image.width / image.height
         if (Math.abs(currentAspect - centerCropAspect) > 0.01) {
           if (currentAspect > centerCropAspect) {
             const targetWidth = image.height * centerCropAspect
-            return image.croppedTo({
+            const cropped = image.croppedTo({
               x: (image.width - targetWidth) / 2,
               y: 0,
               width: targetWidth,
               height: image.height,
             })
+            if (cropped) targetImg = cropped
           } else {
             const targetHeight = image.width / centerCropAspect
-            return image.croppedTo({
+            const cropped = image.croppedTo({
               x: 0,
               y: (image.height - targetHeight) / 2,
               width: image.width,
               height: targetHeight,
             })
+            if (cropped) targetImg = cropped
           }
         }
-      } catch {
-        return null
       }
+      return targetImg.blurred(blurPreviewRadius) ?? targetImg
+    } catch {
+      return null
     }
-    return null
-  }, [previewPath, centerCropSquare, centerCropAspect])
+  }, [showBlurPreview, previewPath, centerCropSquare, centerCropAspect, blurPreviewRadius])
 
   const intrinsicAspect = useMemo(() => {
     if (!path || !useIntrinsicAspectRatio) return null
@@ -459,18 +469,33 @@ export function CachedImage(props: {
     return null
   }, [path, useIntrinsicAspectRatio])
 
+  // 当传入了有效且明确的 aspectRatioValue 且与图片真实比例差异极小（< 2% 浮点/整数缩放舍入误差）时，
+  // 保持 aspectRatioValue，防止大图解码完成瞬间由于微小亚像素差异触发外层容器二次重新排版（Layout Shift）；
+  // 仅在未指定比例或真实比例与占位比例存在显著差异（如多页漫画不同横竖跨页）时采用真实比例。
+  const stableAspect = useMemo(() => {
+    if (intrinsicAspect == null) return aspectRatioValue
+    if (aspectRatioValue > 0 && Math.abs(intrinsicAspect - aspectRatioValue) / aspectRatioValue < 0.02) {
+      return aspectRatioValue
+    }
+    return intrinsicAspect
+  }, [intrinsicAspect, aspectRatioValue])
+
   const effectiveRatio = croppedImage
     ? (centerCropAspect ?? 1)
-    : (intrinsicAspect ?? aspectRatioValue)
+    : (stableAspect ?? aspectRatioValue)
   const containerFrame = frame ?? { maxWidth: "infinity" }
   const fadeDuration = imageFadeDurationSec()
   const crossFadeDuration = blurCrossFadeDurationSec()
-  // 有预览缩略图垫底时采用动态配置的模糊消融（0-250ms，默认 100ms），既无闪烁跳帧又极为轻快；无预览图时由设置控制淡入
-  const imageTransition = disableFadeIn
+
+  // 首帧已命中缓存时直接硬切呈现（0ms 动画），秒开无延时无白闪；
+  // 异步加载完成后：
+  // 1. 有本地模糊预览图垫底时，采用配置的模糊消融（0-250ms，默认 100ms），平滑过渡；
+  // 2. 无本地预览图垫底时（如多页漫画后续页/冷启动），使用标准设置淡入，避免在灰色底色上误触发消融产生灰白闪屏。
+  const imageTransition = disableFadeIn || initialHitRef.current
     ? undefined
-    : previewUrl
-      ? (crossFadeDuration > 0 ? Transition.opacity().animation(Animation.easeOut(crossFadeDuration)) : undefined)
-      : Transition.opacity().animation(Animation.easeOut(fadeDuration))
+    : showBlurPreview
+      ? (crossFadeDuration > 0 ? Transition.fade(crossFadeDuration) : undefined)
+      : (fadeDuration > 0 ? Transition.fade(fadeDuration) : undefined)
 
   return (
     <ZStack
@@ -494,31 +519,21 @@ export function CachedImage(props: {
         ) : null}
       </VStack>
 
-      {/* 2. 模糊缩略图垫底层（常驻底层，即使高清就绪后也不卸载，彻底杜绝交替白闪） */}
-      {previewPath ? (
-        previewCroppedImage ? (
-          <Image
-            image={previewCroppedImage}
-            resizable={true}
-            aspectRatio={{ value: effectiveRatio, contentMode: "fill" }}
-            frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-            blur={blurPreviewRadius}
-          />
-        ) : (
-          <Image
-            filePath={previewPath}
-            resizable={true}
-            aspectRatio={{ value: effectiveRatio, contentMode }}
-            frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-            blur={blurPreviewRadius}
-          />
-        )
+      {/* 2. 模糊缩略图垫底层（预模糊位图直出，彻底杜绝 Metal 滤镜 1 帧清晰跳变与交替白闪） */}
+      {showBlurPreview && previewBlurredImage ? (
+        <Image
+          image={previewBlurredImage}
+          resizable={true}
+          aspectRatio={{ value: effectiveRatio, contentMode: "fill" }}
+          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+        />
       ) : null}
 
       {/* 3. 高清图片层：叠在模糊缩略图之上，平滑消融呈现 */}
       {path ? (
         croppedImage ? (
           <Image
+            key={path}
             image={croppedImage}
             resizable={true}
             aspectRatio={{ value: effectiveRatio, contentMode: "fill" }}
@@ -527,6 +542,7 @@ export function CachedImage(props: {
           />
         ) : (
           <Image
+            key={path}
             filePath={path}
             resizable={true}
             aspectRatio={{ value: effectiveRatio, contentMode }}

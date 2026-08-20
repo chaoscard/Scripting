@@ -232,20 +232,6 @@ export function IllustDetailView(props: { illustID: number }) {
   useEffect(() => {
     const cached = getCachedIllust(illustID)
     if (cached) {
-      setIllust(cached)
-      setBookmarked(cached.is_bookmarked)
-      setFollowed(cached.user?.is_followed ?? false)
-      const settings = loadSettings()
-      if (settings.ambientImmersion) {
-        const pal = getInitialIllustPalette(
-          cached,
-          isDark,
-          settings.ambientIntensity,
-          settings.detailImageQuality
-        )
-        if (pal) setAmbientPalette(pal)
-      }
-      setLoading(false)
       load(false)
     } else {
       setIllust(null)
