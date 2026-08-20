@@ -667,7 +667,9 @@ export function IllustDetailView(props: { illustID: number }) {
           {current.type === "ugoira" ? (
             <UgoiraPlayerView
               illustID={current.id}
+              previewUrl={cardThumbUrlOf(current) || current.image_urls?.medium || current.image_urls?.square_medium || null}
               aspectRatioValue={pageAspect}
+              cornerRadius={8}
               onLoaded={() => setMediaReady(true)}
             />
           ) : pageCount > 1 ? (
