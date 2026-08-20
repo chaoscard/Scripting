@@ -19,6 +19,7 @@ export interface PixivUser {
   profile_image_urls?: { medium?: string }
   comment?: string
   is_followed?: boolean
+  is_mypixiv?: boolean
 }
 
 export interface PixivSeries {

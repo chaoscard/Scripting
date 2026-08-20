@@ -32,12 +32,14 @@ import {
   thumbUrlOf,
 } from "../image/imageLoader"
 import {
-  isIllustContentVisible,
-  isNovelContentVisible,
   isUserBlocked,
   loadSettings,
   onSettingsChanged,
 } from "../store/settings"
+import {
+  isIllustContentVisible,
+  isNovelContentVisible,
+} from "../store/contentFilter"
 import { destinationElement } from "./routes"
 import {
   currentBatchSize,
@@ -100,7 +102,12 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
           word: submitted,
           target: "partial_match_for_tags",
           sort,
-          aiFilter: settings.showAI ? 0 : 1,
+          aiFilter:
+            settings.showAI ||
+            settings.followFilterExempt ||
+            settings.libraryFilterExempt
+              ? 0
+              : 1,
         },
         token
       )
@@ -157,7 +164,11 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
         .map((preview) => ({
           ...preview,
           illusts: dedupeByID(
-            preview.illusts.filter((illust) => isIllustContentVisible(illust, settings))
+            preview.illusts.filter((illust) =>
+              isIllustContentVisible(illust, settings, {
+                isAuthorFollowed: preview.user.is_followed,
+              })
+            )
           ),
         }))
     },

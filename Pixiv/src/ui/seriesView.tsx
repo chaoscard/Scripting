@@ -15,11 +15,6 @@ import {
   ZStack,
 } from "scripting"
 import {
-  extractUserAmbientPalette,
-  getCachedUserAmbientPalette,
-  type UserAmbientPalette,
-} from "../image/colorExtractor"
-import {
   cachedFileExists,
   cardThumbUrlOf,
   loadImage,
@@ -35,12 +30,15 @@ import {
 } from "../api/pixiv"
 import { session } from "../api/session"
 import {
-  isIllustContentVisible,
-  isNovelContentVisible,
   loadSettings,
   onSettingsChanged,
   updateSettings,
 } from "../store/settings"
+import {
+  isIllustContentVisible,
+  isNovelContentVisible,
+} from "../store/contentFilter"
+import { isUserFollowed, onUserFollowChanged } from "../store/userFollow"
 import { onWatchlistChanged } from "../store/watchlist"
 import { cacheIllusts } from "../store/illustCache"
 import type {
@@ -55,8 +53,10 @@ import {
   CachedImage,
   EmptyView,
   ErrorView,
+  ExpandableIntroduction,
   htmlToPlainText,
   ImageNumberBadge,
+  ImmersiveHeaderBanner,
   LinkedDescription,
   LoadingView,
   LoadMoreTrigger,
@@ -64,7 +64,7 @@ import {
   NovelCard,
 } from "./components"
 import { renderDestination } from "./routes"
-import { waitForPaginationFeedback } from "./hooks"
+import { useUserAmbientPalette, waitForPaginationFeedback } from "./hooks"
 
 type SeriesKind = "manga" | "novel"
 
@@ -114,15 +114,35 @@ function seriesIllust(
   }
 }
 
-function filterSeriesIllusts(items: PixivIllustration[], isExempt = false): PixivIllustration[] {
+function filterSeriesIllusts(
+  items: PixivIllustration[],
+  isSeriesWatched = false,
+  author?: PixivUser | null
+): PixivIllustration[] {
   const settings = loadSettings()
-  return items.filter((item) => isIllustContentVisible(item, settings, isExempt || settings.followFilterExempt))
+  const isAuthorFollowed =
+    author?.is_followed ?? (author?.id ? isUserFollowed(author.id) : false)
+  return items.filter((item) =>
+    isIllustContentVisible(item, settings, {
+      isSeriesWatched,
+      isAuthorFollowed,
+    })
+  )
 }
 
-function filterSeriesNovels(items: PixivNovel[], isExempt = false): PixivNovel[] {
+function filterSeriesNovels(
+  items: PixivNovel[],
+  isSeriesWatched = false,
+  author?: PixivUser | null
+): PixivNovel[] {
   const settings = loadSettings()
+  const isAuthorFollowed =
+    author?.is_followed ?? (author?.id ? isUserFollowed(author.id) : false)
   return items.filter((item) =>
-    isNovelContentVisible(item, settings, isExempt || settings.followFilterExempt)
+    isNovelContentVisible(item, settings, {
+      isSeriesWatched,
+      isAuthorFollowed,
+    })
   )
 }
 
@@ -143,85 +163,21 @@ function extractCoverUrl(
   return null
 }
 
-function SeriesIntroduction(props: {
-  caption: string
-  routeDestination: (route: string) => any
-}) {
-  const [expanded, setExpanded] = useState(false)
-  const plainText = useMemo(
-    () => htmlToPlainText(props.caption).trim(),
-    [props.caption]
-  )
-
-  const lines = useMemo(() => plainText.split(/\r?\n/), [plainText])
-  const exceedsFiveLines = lines.length > 5 || plainText.length > 220
-
-  if (!plainText) return null
-
-  return (
-    <VStack
-      alignment="leading"
-      spacing={8}
-      padding={{ top: 12, horizontal: 12, bottom: exceedsFiveLines ? 10 : 12 }}
-      glassEffect={{ type: "rect", cornerRadius: 14 }}
-      shadow={{ color: "#0000000F", radius: 18, y: 8 }}
-      frame={{ maxWidth: "infinity" }}
-      contentShape="rect"
-      onTapGesture={
-        exceedsFiveLines
-          ? () => {
-              setExpanded((prev) => !prev)
-            }
-          : undefined
-      }
-    >
-      <LinkedDescription
-        html={props.caption}
-        routeDestination={props.routeDestination}
-        lineLimit={!expanded && exceedsFiveLines ? 5 : undefined}
-      />
-
-      {exceedsFiveLines ? (
-        <HStack
-          alignment="center"
-          spacing={4}
-          frame={{ maxWidth: "infinity", alignment: "center" }}
-          padding={{ top: 4, bottom: 2 }}
-        >
-          <Text font="caption2" foregroundStyle="secondaryLabel">
-            {expanded ? "点击收起" : "点击展开全文"}
-          </Text>
-          <Image
-            systemName={expanded ? "chevron.up" : "chevron.down"}
-            font="caption2"
-            foregroundStyle="secondaryLabel"
-          />
-        </HStack>
-      ) : null}
-    </VStack>
-  )
-}
-
 export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
-  const colorScheme = useColorScheme()
-  const isDark = colorScheme === "dark"
-  const [ambientEnabled, setAmbientEnabled] = useState(
-    () => loadSettings().ambientImmersion
-  )
-  const [ambientIntensity, setAmbientIntensity] = useState(
-    () => loadSettings().ambientIntensity
-  )
   const [title, setTitle] = useState("系列")
   const [caption, setCaption] = useState("")
   const [coverUrl, setCoverUrl] = useState<string | null>(null)
-  const [ambientPalette, setAmbientPalette] = useState<UserAmbientPalette | null>(null)
   const [author, setAuthor] = useState<PixivUser | null>(null)
+  const authorRef = useRef<PixivUser | null>(null)
+  authorRef.current = author
   const [workCount, setWorkCount] = useState<number | null>(null)
   const [isWatched, setIsWatched] = useState(false)
   const [watchLoading, setWatchLoading] = useState(false)
   const [isAscending, setIsAscending] = useState(
     () => loadSettings().watchlistSortOrder === "asc"
   )
+
+  const { ambientBackground } = useUserAmbientPalette(coverUrl)
 
   // 全量已获取未过滤的原始数据映射池
   const rawMappedIllustsRef = useRef<PixivIllustration[]>([])
@@ -235,7 +191,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
 
   function applyFilterAndSort(targetAsc: boolean, isWatchedNow: boolean) {
     if (props.kind === "manga") {
-      const filtered = filterSeriesIllusts(rawMappedIllustsRef.current, isWatchedNow)
+      const filtered = filterSeriesIllusts(rawMappedIllustsRef.current, isWatchedNow, authorRef.current)
       allIllustsRef.current = filtered
       const sorted = targetAsc ? filtered : [...filtered].reverse()
       const pub = sorted.slice(0, UI_BATCH_SIZE)
@@ -248,7 +204,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
         ...pend.slice(0, UI_BATCH_SIZE).map(cardThumbUrlOf),
       ])
     } else {
-      const filtered = filterSeriesNovels(rawMappedNovelsRef.current, isWatchedNow)
+      const filtered = filterSeriesNovels(rawMappedNovelsRef.current, isWatchedNow, authorRef.current)
       allNovelsRef.current = filtered
       const sorted = targetAsc ? filtered : [...filtered].reverse()
       setPublishedNovels(sorted.slice(0, UI_BATCH_SIZE))
@@ -332,7 +288,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
         )
         cacheIllusts(mappedIllusts)
         rawMappedIllustsRef.current = mappedIllusts
-        const filtered = filterSeriesIllusts(mappedIllusts, isExempt)
+        const filtered = filterSeriesIllusts(mappedIllusts, isExempt, seriesAuthor)
         allIllustsRef.current = filtered
         setWorkCount(detail.series_work_count ?? allRawIllusts.length)
 
@@ -402,7 +358,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
           episode_number: idx + 1,
         }))
         rawMappedNovelsRef.current = mappedNovels
-        const filtered = filterSeriesNovels(mappedNovels, isExempt)
+        const filtered = filterSeriesNovels(mappedNovels, isExempt, seriesAuthor)
         allNovelsRef.current = filtered
         setWorkCount(detail.content_count ?? allRawNovels.length)
 
@@ -498,34 +454,18 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
   }, [props.seriesID, isAscending])
 
   useEffect(() => {
-    if (!ambientEnabled) {
-      setAmbientPalette(null)
-      return
-    }
-    if (!coverUrl) {
-      setAmbientPalette(null)
-      return
-    }
-    let active = true
-    const cached = getCachedUserAmbientPalette(coverUrl, isDark, ambientIntensity)
-    if (cached) {
-      setAmbientPalette(cached)
-    }
-    void extractUserAmbientPalette(coverUrl).then((result) => {
-      if (!active || !result) return
-      const modeObj = isDark ? result.dark : result.light
-      setAmbientPalette(modeObj[ambientIntensity] ?? modeObj.medium)
+    return onUserFollowChanged((changedUserID) => {
+      if (authorRef.current?.id === changedUserID) {
+        applyFilterAndSort(isAscending, isWatchedRef.current)
+      }
     })
-    return () => {
-      active = false
-    }
-  }, [coverUrl, isDark, ambientEnabled, ambientIntensity])
+  }, [isAscending])
+
+
 
   useEffect(() => {
     return onSettingsChanged(() => {
       const nextSettings = loadSettings()
-      setAmbientEnabled(nextSettings.ambientImmersion)
-      setAmbientIntensity(nextSettings.ambientIntensity)
       const targetAsc = nextSettings.watchlistSortOrder === "asc"
       setIsAscending(targetAsc)
       applyFilterAndSort(targetAsc, isWatchedRef.current)
@@ -562,20 +502,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
       navigationBarTitleDisplayMode="inline"
       toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
       ignoresSafeArea={{ edges: ["top", "bottom"] }}
-      background={
-        ambientEnabled && ambientPalette
-          ? {
-              colors: [
-                ambientPalette.topColor,
-                ambientPalette.midColor,
-                ambientPalette.worksColor,
-                ambientPalette.worksColor,
-              ],
-              startPoint: "top",
-              endPoint: "bottom",
-            }
-          : undefined
-      }
+      background={ambientBackground}
       toolbar={{
         topBarTrailing: [
           <Button
@@ -642,28 +569,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
     >
       <VStack alignment="leading" spacing={0} frame={{ maxWidth: "infinity" }}>
         {/* 沉浸式顶部背景图与居中悬浮胶囊标题 */}
-        <ZStack alignment="bottom" frame={{ maxWidth: "infinity" }}>
-          {coverUrl ? (
-            <CachedImage
-              url={coverUrl}
-              useIntrinsicAspectRatio={true}
-              aspectRatioValue={2.4}
-              contentMode="fill"
-              cornerRadius={0}
-              priority={0}
-              frame={{ maxWidth: "infinity" }}
-            />
-          ) : (
-            <VStack
-              frame={{ maxWidth: "infinity", height: 160 }}
-              background={{
-                colors: ["rgba(0, 150, 250, 0.18)", "rgba(0, 150, 250, 0.04)"],
-                startPoint: "topLeading",
-                endPoint: "bottomTrailing",
-              }}
-            />
-          )}
-
+        <ImmersiveHeaderBanner url={coverUrl}>
           {/* 胶囊状液态玻璃标题：垂直中心线对齐封面底边（参考用户主页头像位置） */}
           <HStack
             alignment="center"
@@ -682,7 +588,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
               {title}
             </Text>
           </HStack>
-        </ZStack>
+        </ImmersiveHeaderBanner>
 
         {/* 系列信息 */}
         <VStack
@@ -710,7 +616,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
               frame={{ maxWidth: "infinity" }}
               padding={{ top: 6 }}
             >
-              <SeriesIntroduction
+              <ExpandableIntroduction
                 caption={caption}
                 routeDestination={renderDestination}
               />

@@ -25,11 +25,13 @@ import {
 import { session } from "../api/session"
 import { cardThumbUrlOf, novelThumbUrlOf, prefetch } from "../image/imageLoader"
 import {
-  isIllustContentVisible,
-  isNovelContentVisible,
   loadSettings,
   onSettingsChanged,
 } from "../store/settings"
+import {
+  isIllustContentVisible,
+  isNovelContentVisible,
+} from "../store/contentFilter"
 import { useAsyncGuard, useLatest, usePagedList, currentBatchSize } from "./hooks"
 import type { PixivBookmarkTag, PixivIllustration, PixivNovel } from "../types"
 import {
@@ -296,13 +298,13 @@ function LibraryFeed(props: {
 export function filterIllustrationBookmarks(items: PixivIllustration[]): PixivIllustration[] {
   const settings = loadSettings()
   return items.filter((item) =>
-    isIllustContentVisible(item, settings, settings.libraryFilterExempt)
+    isIllustContentVisible(item, settings, { isBookmarked: true })
   )
 }
 
 export function filterNovelBookmarks(items: PixivNovel[]): PixivNovel[] {
   const settings = loadSettings()
   return items.filter((item) =>
-    isNovelContentVisible(item, settings, settings.libraryFilterExempt)
+    isNovelContentVisible(item, settings, { isBookmarked: true })
   )
 }

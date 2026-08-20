@@ -7,10 +7,10 @@ import {
 import { nextNovelMarkers, novelMarkers } from "../api/pixiv"
 import { novelThumbUrlOf, prefetch } from "../image/imageLoader"
 import {
-  isNovelContentVisible,
   loadSettings,
   onSettingsChanged,
 } from "../store/settings"
+import { isNovelContentVisible } from "../store/contentFilter"
 import { useLatest, usePagedList, currentBatchSize } from "./hooks"
 import { destinationElement } from "./routes"
 import type { PixivNovelMarker } from "../types"
@@ -35,7 +35,7 @@ export function NovelLibraryView() {
         isNovelContentVisible(
           item.novel,
           settings,
-          settings.libraryFilterExempt
+          { isBookmarked: true }
         )
       )
     },

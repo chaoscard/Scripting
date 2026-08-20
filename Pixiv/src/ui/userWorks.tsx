@@ -16,11 +16,14 @@ import {
 import { session } from "../api/session"
 import { cardThumbUrlOf, novelThumbUrlOf, prefetch } from "../image/imageLoader"
 import {
-  isIllustContentVisible,
-  isNovelContentVisible,
   loadSettings,
   onSettingsChanged,
 } from "../store/settings"
+import {
+  isIllustContentVisible,
+  isNovelContentVisible,
+} from "../store/contentFilter"
+import { isUserFollowed, onUserFollowChanged } from "../store/userFollow"
 import { useLatest, usePagedList, currentBatchSize } from "./hooks"
 import type { PixivIllustration, PixivNovel } from "../types"
 import {
@@ -89,13 +92,22 @@ function UserWorksFeed(props: {
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
   const { userID, tab, onRegisterRefresh } = props
+  const [isFollowed, setIsFollowed] = useState(() => isUserFollowed(userID) ?? false)
+
+  useEffect(() => {
+    return onUserFollowChanged((changedUserID, followed) => {
+      if (changedUserID === userID) {
+        setIsFollowed(followed)
+      }
+    })
+  }, [userID])
 
   // 1. 插画
   const illustPaged = usePagedList<PixivIllustration>({
     first: (token) => userWorks(userID, "illust", token),
     more: (nextURL, token) => nextIllustrations(nextURL, token),
-    filter: filterIllustrations,
-    deps: [userID, "illust"],
+    filter: (items) => filterIllustrations(items, isFollowed),
+    deps: [userID, "illust", isFollowed],
     enabled: tab === "illust",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
@@ -105,8 +117,8 @@ function UserWorksFeed(props: {
   const mangaPaged = usePagedList<PixivIllustration>({
     first: (token) => userWorks(userID, "manga", token),
     more: (nextURL, token) => nextIllustrations(nextURL, token),
-    filter: filterIllustrations,
-    deps: [userID, "manga"],
+    filter: (items) => filterIllustrations(items, isFollowed),
+    deps: [userID, "manga", isFollowed],
     enabled: tab === "manga",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
@@ -116,8 +128,8 @@ function UserWorksFeed(props: {
   const novelPaged = usePagedList<PixivNovel>({
     first: (token) => userNovels(userID, token),
     more: (nextURL, token) => nextNovels(nextURL, token),
-    filter: filterNovels,
-    deps: [userID],
+    filter: (items) => filterNovels(items, isFollowed),
+    deps: [userID, isFollowed],
     enabled: tab === "novel",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
@@ -134,6 +146,12 @@ function UserWorksFeed(props: {
       novelPagedRef.current.reapplyFilter()
     })
   }, [])
+
+  useEffect(() => {
+    illustPagedRef.current.reapplyFilter()
+    mangaPagedRef.current.reapplyFilter()
+    novelPagedRef.current.reapplyFilter()
+  }, [isFollowed])
 
   const activeRefresh =
     tab === "illust"
@@ -204,12 +222,16 @@ function UserWorksFeed(props: {
   )
 }
 
-function filterIllustrations(items: PixivIllustration[]): PixivIllustration[] {
+function filterIllustrations(items: PixivIllustration[], isAuthorFollowed = false): PixivIllustration[] {
   const settings = loadSettings()
-  return items.filter((item) => isIllustContentVisible(item, settings))
+  return items.filter((item) =>
+    isIllustContentVisible(item, settings, { isAuthorFollowed })
+  )
 }
 
-function filterNovels(items: PixivNovel[]): PixivNovel[] {
+function filterNovels(items: PixivNovel[], isAuthorFollowed = false): PixivNovel[] {
   const settings = loadSettings()
-  return items.filter((item) => isNovelContentVisible(item, settings))
+  return items.filter((item) =>
+    isNovelContentVisible(item, settings, { isAuthorFollowed })
+  )
 }

@@ -25,11 +25,13 @@ import {
 } from "../api/pixiv"
 import { cardThumbUrlOf, novelThumbUrlOf, prefetch } from "../image/imageLoader"
 import {
-  isIllustContentVisible,
-  isNovelContentVisible,
   loadSettings,
   onSettingsChanged,
 } from "../store/settings"
+import {
+  isIllustContentVisible,
+  isNovelContentVisible,
+} from "../store/contentFilter"
 import { refreshWatchlistFromCloud } from "../store/watchlist"
 import { destinationElement } from "./routes"
 import { useLatest, usePagedList, currentBatchSize } from "./hooks"
@@ -323,19 +325,15 @@ function WatchlistFeed(props: {
       prefetch(pendingItems.slice(0, currentBatchSize()).map(watchlistThumbUrlOf)).cancel,
   })
 
-  const mangaPagedRef = useLatest(mangaPaged)
-  const novelPagedRef = useLatest(novelPaged)
+  useSettingsFilter(mangaPaged)
+  useSettingsFilter(novelPaged)
+
+  const activeRefresh = kind === "manga" ? mangaPaged.refresh : novelPaged.refresh
   useEffect(() => {
-    return onSettingsChanged(() => {
-      mangaPagedRef.current.reapplyFilter()
-      novelPagedRef.current.reapplyFilter()
-    })
-  }, [])
+    onRegisterRefresh?.(activeRefresh)
+  }, [activeRefresh, onRegisterRefresh])
 
   const currentPaged = kind === "manga" ? mangaPaged : novelPaged
-  useEffect(() => {
-    onRegisterRefresh?.(currentPaged.refresh)
-  }, [currentPaged.refresh, onRegisterRefresh])
 
   return (
     <VStack alignment="leading" spacing={10}>
@@ -344,11 +342,11 @@ function WatchlistFeed(props: {
       ) : currentPaged.error && currentPaged.items.length === 0 ? (
         <ErrorView message={currentPaged.error} onRetry={currentPaged.refresh} />
       ) : currentPaged.items.length === 0 ? (
-        <EmptyView text={`暂无追更${kind === "manga" ? "漫画" : "小说"}`} systemImage="bookmark" />
+        <EmptyView text={`暂无追更${kind === "manga" ? "漫画" : "小说"}，下拉刷新试试`} systemImage="bookmark" />
       ) : (
         <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
-          {currentPaged.items.map((item) => (
-            <WatchlistSeriesCard key={item.id} item={item} kind={kind} />
+          {currentPaged.items.map((item, index) => (
+            <WatchlistSeriesCard key={item.id} item={item} kind={kind} priority={index} />
           ))}
           <LoadMoreTrigger
             anchor={currentPaged.items[currentPaged.items.length - 1].id}
@@ -372,7 +370,7 @@ function FriendsFeed(props: {
   const illustPaged = usePagedList<PixivIllustration>({
     first: myPixivFeed,
     more: (nextURL, token) => nextIllustrations(nextURL, token),
-    filter: filterIllustrationItems,
+    filter: filterFollowingIllustrationItems,
     deps: ["friends", "illust"],
     enabled: enabled && kind === "illust",
     onBatchPublished: (_, pendingItems) =>
@@ -382,7 +380,7 @@ function FriendsFeed(props: {
   const novelPaged = usePagedList<PixivNovel>({
     first: myPixivNovels,
     more: (nextURL, token) => nextNovels(nextURL, token),
-    filter: filterNovelItems,
+    filter: filterFollowingNovelItems,
     deps: ["friends", "novel"],
     enabled: enabled && kind === "novel",
     onBatchPublished: (_, pendingItems) =>
@@ -459,9 +457,7 @@ function NovelFeedItems(props: {
   )
 }
 
-function useSettingsFilter(
-  paged: ReturnType<typeof usePagedList<PixivIllustration>> | ReturnType<typeof usePagedList<PixivNovel>>
-) {
+function useSettingsFilter(paged: ReturnType<typeof usePagedList<any>>) {
   const pagedRef = useLatest(paged)
   useEffect(() => {
     return onSettingsChanged(() => {
@@ -473,25 +469,15 @@ function useSettingsFilter(
 function filterFollowingIllustrationItems(items: PixivIllustration[]): PixivIllustration[] {
   const settings = loadSettings()
   return items.filter((item) =>
-    isIllustContentVisible(item, settings, settings.followFilterExempt)
+    isIllustContentVisible(item, settings, { isAuthorFollowed: true, isAuthorFriend: true })
   )
 }
 
 function filterFollowingNovelItems(items: PixivNovel[]): PixivNovel[] {
   const settings = loadSettings()
   return items.filter((novel) =>
-    isNovelContentVisible(novel, settings, settings.followFilterExempt)
+    isNovelContentVisible(novel, settings, { isAuthorFollowed: true, isAuthorFriend: true })
   )
-}
-
-function filterIllustrationItems(items: PixivIllustration[]): PixivIllustration[] {
-  const settings = loadSettings()
-  return items.filter((item) => isIllustContentVisible(item, settings))
-}
-
-function filterNovelItems(items: PixivNovel[]): PixivNovel[] {
-  const settings = loadSettings()
-  return items.filter((item) => isNovelContentVisible(item, settings))
 }
 
 function filterWatchlistItems(

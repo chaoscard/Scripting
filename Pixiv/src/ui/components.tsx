@@ -459,9 +459,10 @@ function formatWatchlistDate(dateStr?: string | null): string {
 export function WatchlistSeriesCard(props: {
   item: PixivWatchlistSeries
   kind?: "manga" | "novel"
+  priority?: number
   onAppear?: () => void
 }) {
-  const { item, kind = "manga", onAppear } = props
+  const { item, kind = "manga", priority, onAppear } = props
   const isNovel = kind === "novel"
   const seriesRoute = isNovel ? `novelSeries:${item.id}` : `mangaSeries:${item.id}`
   const targetRoute = item.latest_content_id != null
@@ -507,6 +508,7 @@ export function WatchlistSeriesCard(props: {
               cornerRadius={0}
               contentMode="fill"
               frame={{ width: 68, height: 96 }}
+              priority={priority}
             />
           </ZStack>
           <VStack
@@ -830,7 +832,7 @@ export function AvatarImage(props: {
 
 // 网格作品卡片（列表页共用）：玻璃卡片 + 缩略图 + 标题 + 作者/收藏数/浏览数
 // 多页作品在图片左下角显示 rectangle.stack.fill + 纯数字页数。
-// cornerBadge 为图片左上角非交互角标；footerText 用于补充信息。
+// conerBadge 为图片左上角非交互角标；footerText 用于补充信息。
 // topTrailingAction 只传操作语义，按钮布局与命中区域由统一卡片模板负责。
 // 注意：属性名不能叫 badge，那是 SwiftUI 保留修饰符名（只接受 string|number），
 // 会导致 JSX 类型检查报错。
@@ -861,6 +863,7 @@ export function IllustCard(props: {
   flow?: boolean
   priority?: number
   cornerBadge?: any
+  conerBadge?: any
   footerText?: string
   topTrailingAction?: IllustCardAction
 }) {
@@ -869,7 +872,7 @@ export function IllustCard(props: {
     onAppear,
     flow = false,
     priority,
-    cornerBadge,
+    cornerBadge = props.conerBadge,
     footerText,
     topTrailingAction,
   } = props
@@ -1882,10 +1885,10 @@ function descriptionSegments(html: string): DescriptionSegment[] {
       "\n"
     )
   const segments: DescriptionSegment[] = []
-  const anchorPattern = /<a\b[^>]*\bhref\s*=\s*(["'])(.*?)\1[^>]*>([\s\S]*?)<\/a\s*>/gi
+  const anchorPatten = /<a\b[^>]*\bhref\s*=\s*(["'])(.*?)\1[^>]*>([\s\S]*?)<\/a\s*>/gi
   let cursor = 0
   let match: RegExpExecArray | null
-  while ((match = anchorPattern.exec(prepared)) != null) {
+  while ((match = anchorPatten.exec(prepared)) != null) {
     appendDescriptionTextSegments(
       segments,
       htmlFragmentToPlainText(prepared.slice(cursor, match.index))
@@ -1915,7 +1918,7 @@ function appendInlineDescriptionSegments(
   text: string
 ) {
   const urlChar = "[a-zA-Z0-9\\-._~:/?#\\[\\]@!$&'()*+,;%=]"
-  const pattern = new RegExp(
+  const patten = new RegExp(
     "(?:https?:\\/\\/|www\\.)" + urlChar + "+|" +
     "(?:https?:\\/\\/)?(?:www\\.)?pixiv\\.net\\/(?:users?|user|artworks|novels?|novel|manga|illusts?|illust)" + urlChar + "*|" +
     "\\/?(?:users?|user|artworks|novels?|novel|manga|illusts?|illust)\\/" + urlChar + "+|" +
@@ -1926,7 +1929,7 @@ function appendInlineDescriptionSegments(
   )
   let cursor = 0
   let match: RegExpExecArray | null
-  while ((match = pattern.exec(text)) != null) {
+  while ((match = patten.exec(text)) != null) {
     appendPlainDescriptionSegment(segments, text.slice(cursor, match.index))
     const raw = match[0]
     const link = raw.replace(/[),.，。！!？?;；]+$/, "")
@@ -2028,7 +2031,7 @@ function routeForDescriptionLink(value: string): string | null {
     return `illust:${id}`
   }
 
-  // 6. External http / www links
+  // 6. Extenal http / www links
   if (/^www\./i.test(decoded)) return `https://${decoded}`
   if (/^https?:\/\//i.test(decoded)) return decoded
 
@@ -2237,6 +2240,116 @@ export function ErrorView(props: {
         />
       </VStack>
     </ZStack>
+  )
+}
+
+// 沉浸式顶部封面横幅（支持自然等比/自适应占位，提供底边悬浮锚定）
+export function ImmersiveHeaderBanner(props: {
+  url?: string | null
+  aspectRatioValue?: number
+  placeholderHeight?: number
+  children?: any
+}) {
+  const { url, aspectRatioValue = 2.4, placeholderHeight = 160, children } = props
+  return (
+    <ZStack alignment="bottom" frame={{ maxWidth: "infinity" }}>
+      {url ? (
+        <CachedImage
+          url={url}
+          useIntrinsicAspectRatio={true}
+          aspectRatioValue={aspectRatioValue}
+          contentMode="fill"
+          cornerRadius={0}
+          priority={0}
+          frame={{ maxWidth: "infinity" }}
+        />
+      ) : (
+        <VStack
+          frame={{ maxWidth: "infinity", height: placeholderHeight }}
+          background={{
+            colors: ["rgba(0, 150, 250, 0.18)", "rgba(0, 150, 250, 0.04)"],
+            startPoint: "topLeading",
+            endPoint: "bottomTrailing",
+          }}
+        />
+      )}
+      {children}
+    </ZStack>
+  )
+}
+
+// 可折叠展开的富文本简介卡片（多行超过 5 行或 220 字时显示展开/收起）
+export function ExpandableIntroduction(props: {
+  commentHtml?: string
+  rawComment?: string
+  caption?: string
+  title?: string
+  routeDestination: (route: string) => any
+}) {
+  const { commentHtml, rawComment, caption, title, routeDestination } = props
+  const rawHtmlOrText = caption ?? commentHtml ?? rawComment ?? ""
+  const [expanded, setExpanded] = useState(false)
+  const plainText = useMemo(
+    () => htmlToPlainText(rawComment || caption || commentHtml || "").trim(),
+    [rawComment, caption, commentHtml]
+  )
+
+  const lines = useMemo(() => plainText.split(/\r?\n/), [plainText])
+  const exceedsFiveLines = lines.length > 5 || plainText.length > 220
+
+  if (!plainText) return null
+
+  return (
+    <VStack alignment="leading" spacing={6} frame={{ maxWidth: "infinity" }}>
+      {title ? (
+        <Text
+          font="subheadline"
+          fontWeight="semibold"
+          foregroundStyle="secondaryLabel"
+        >
+          {title}
+        </Text>
+      ) : null}
+      <VStack
+        alignment="leading"
+        spacing={8}
+        padding={{ top: 12, horizontal: 12, bottom: exceedsFiveLines ? 10 : 12 }}
+        glassEffect={{ type: "rect", cornerRadius: 14 }}
+        frame={{ maxWidth: "infinity" }}
+        contentShape="rect"
+        onTapGesture={
+          exceedsFiveLines
+            ? () => {
+                setExpanded((prev) => !prev)
+              }
+            : undefined
+        }
+      >
+        <LinkedDescription
+          html={rawHtmlOrText}
+          routeDestination={routeDestination}
+          lineLimit={!expanded && exceedsFiveLines ? 5 : undefined}
+        />
+
+        {exceedsFiveLines ? (
+          <HStack
+            alignment="center"
+            spacing={4}
+            frame={{ maxWidth: "infinity", alignment: "center" }}
+            padding={{ top: 4, bottom: 2 }}
+          >
+            <Text font="caption2" foregroundStyle="secondaryLabel">
+              {expanded ? "点击收起" : "点击展开全文"}
+            </Text>
+            <Image
+              systemName={expanded ? "chevron.up" : "chevron.down"}
+              font="caption2"
+              foregroundStyle="secondaryLabel"
+            />
+          </HStack>
+        ) : null}
+      </VStack>
+    </VStack>
   )
 }
 

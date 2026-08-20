@@ -35,16 +35,19 @@ import {
   recordNovelHistory,
   updateNovelHistoryBookmark,
 } from "../store/history"
-import { onUserFollowChanged } from "../store/userFollow"
+import { onUserFollowChanged, recordUserFollowed } from "../store/userFollow"
 import { isSeriesWatched, onWatchlistChanged, recordWatchedSeries } from "../store/watchlist"
 import type { PixivNovel, PixivNovelDetail } from "../types"
 import {
-  isNovelContentVisible,
-  isR18ContentVisible,
   loadSettings,
   onSettingsChanged,
   type AppSettings,
 } from "../store/settings"
+import {
+  isNovelContentVisible,
+  isNovelExempt,
+  isR18ContentVisible,
+} from "../store/contentFilter"
 import {
   AvatarImage,
   BookmarkDetailSheet,
@@ -61,22 +64,6 @@ import { requestPixivRoute } from "./routeNavigation"
 
 const RESTRICTED_CONTENT_MESSAGE = "该小说已被内容分级设置隐藏"
 
-function isNovelExempt(
-  detail: PixivNovelDetail,
-  settings: AppSettings,
-  isBookmarked = false,
-  isFollowed = false
-): boolean {
-  if (settings.followFilterExempt) {
-    if (isFollowed || detail.user?.is_followed) return true
-    if (detail.series?.id != null && isSeriesWatched(detail.series.id)) return true
-  }
-  if (settings.libraryFilterExempt) {
-    if (isBookmarked || detail.is_bookmarked) return true
-    if (hasHistory(detail.id, "novel")) return true
-  }
-  return false
-}
 const TEXT_CHUNK_SIZE = 2000
 
 function chunkText(text: string, size = TEXT_CHUNK_SIZE): string[] {
@@ -119,8 +106,11 @@ export function NovelDetailView(props: { novelID: number }) {
     try {
       const detail = await session.call((token) => novelDetail(novelID, token))
       if (!g.isCurrent()) return
+      if (detail.user?.id) {
+        recordUserFollowed(detail.user.id, detail.user.is_followed ?? false)
+      }
       const settings = loadSettings()
-      let isExempt = isNovelExempt(detail, settings, detail.is_bookmarked, detail.user?.is_followed ?? false)
+      let isExempt = isNovelExempt(detail, settings, { isBookmarked: detail.is_bookmarked, isAuthorFollowed: detail.user?.is_followed ?? false })
       if (!isNovelContentVisible(detail, settings, isExempt)) {
         if (settings.followFilterExempt && detail.series?.id != null && !isSeriesWatched(detail.series.id)) {
           try {
@@ -183,7 +173,7 @@ export function NovelDetailView(props: { novelID: number }) {
       const settings = loadSettings()
       const current = novelRef.current
       if (current) {
-        const isExempt = isNovelExempt(current, settings, bookmarked, followed)
+        const isExempt = isNovelExempt(current, settings, { isBookmarked: bookmarked, isAuthorFollowed: followed })
         if (
           !isNovelContentVisible(
             current,
@@ -212,7 +202,7 @@ export function NovelDetailView(props: { novelID: number }) {
       const current = novelRef.current
       if (current?.series?.id === seriesID) {
         const settings = loadSettings()
-        const isExempt = isNovelExempt(current, settings, bookmarked, followed)
+        const isExempt = isNovelExempt(current, settings, { isBookmarked: bookmarked, isAuthorFollowed: followed })
         if (!isNovelContentVisible(current, settings, isExempt)) {
           restrictedLevelRef.current = current.x_restrict
           guard()

@@ -40,20 +40,23 @@ import {
   type IllustAmbientPalette,
 } from "../image/colorExtractor"
 import {
-  isIllustContentVisible,
-  isR18ContentVisible,
   loadSettings,
   onSettingsChanged,
   type AmbientIntensity,
   type AppSettings,
 } from "../store/settings"
 import {
+  isIllustContentVisible,
+  isIllustExempt,
+  isR18ContentVisible,
+} from "../store/contentFilter"
+import {
   hasHistory,
   onHistoryChanged,
   recordHistory,
   updateHistoryBookmark,
 } from "../store/history"
-import { onUserFollowChanged } from "../store/userFollow"
+import { onUserFollowChanged, recordUserFollowed } from "../store/userFollow"
 import { isSeriesWatched, onWatchlistChanged, recordWatchedSeries } from "../store/watchlist"
 import { cacheIllust, getCachedIllust } from "../store/illustCache"
 import { useAsyncGuard, useLatest, usePagedList, currentBatchSize } from "./hooks"
@@ -78,23 +81,6 @@ import { renderDestination } from "./routes"
 import { requestPixivRoute } from "./routeNavigation"
 
 const RESTRICTED_CONTENT_MESSAGE = "该作品已被内容分级设置隐藏"
-
-function isIllustExempt(
-  detail: PixivIllustration,
-  settings: AppSettings,
-  isBookmarked = false,
-  isFollowed = false
-): boolean {
-  if (settings.followFilterExempt) {
-    if (isFollowed || detail.user?.is_followed) return true
-    if (detail.series?.id != null && isSeriesWatched(detail.series.id)) return true
-  }
-  if (settings.libraryFilterExempt) {
-    if (isBookmarked || detail.is_bookmarked) return true
-    if (hasHistory(detail.id, "illust")) return true
-  }
-  return false
-}
 
 function getInitialIllustPalette(
   illust: PixivIllustration | null,
@@ -171,8 +157,11 @@ export function IllustDetailView(props: { illustID: number }) {
       )
       if (!g.isCurrent()) return
       cacheIllust(detail)
+      if (detail.user?.id) {
+        recordUserFollowed(detail.user.id, detail.user.is_followed ?? false)
+      }
       const settings = loadSettings()
-      let isExempt = isIllustExempt(detail, settings, detail.is_bookmarked, detail.user.is_followed ?? false)
+      let isExempt = isIllustExempt(detail, settings, { isBookmarked: detail.is_bookmarked, isAuthorFollowed: detail.user.is_followed ?? false })
       if (!isIllustContentVisible(detail, settings, isExempt)) {
         if (settings.followFilterExempt && detail.series?.id != null && !isSeriesWatched(detail.series.id)) {
           try {
@@ -325,7 +314,7 @@ export function IllustDetailView(props: { illustID: number }) {
       setAmbientIntensity(settings.ambientIntensity)
       const current = illustRef.current
       if (current) {
-        const isExempt = isIllustExempt(current, settings, bookmarked, followed)
+        const isExempt = isIllustExempt(current, settings, { isBookmarked: bookmarked, isAuthorFollowed: followed })
         if (
           !isIllustContentVisible(current, settings, isExempt)
         ) {
@@ -349,7 +338,7 @@ export function IllustDetailView(props: { illustID: number }) {
       const current = illustRef.current
       if (current?.series?.id === seriesID) {
         const settings = loadSettings()
-        const isExempt = isIllustExempt(current, settings, bookmarked, followed)
+        const isExempt = isIllustExempt(current, settings, { isBookmarked: bookmarked, isAuthorFollowed: followed })
         if (!isIllustContentVisible(current, settings, isExempt)) {
           restrictedLevelRef.current = current.x_restrict
           guard()

@@ -16,11 +16,13 @@ import {
 import { nextIllustrations, nextNovels, novelRanking, ranking } from "../api/pixiv"
 import { cardThumbUrlOf, novelThumbUrlOf, prefetch } from "../image/imageLoader"
 import {
-  isIllustContentVisible,
-  isNovelContentVisible,
   loadSettings,
   onSettingsChanged,
 } from "../store/settings"
+import {
+  isIllustContentVisible,
+  isNovelContentVisible,
+} from "../store/contentFilter"
 import { destinationElement } from "./routes"
 import { useLatest, usePagedList, currentBatchSize } from "./hooks"
 import type { PixivIllustration, PixivNovel } from "../types"

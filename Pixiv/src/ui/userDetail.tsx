@@ -12,6 +12,7 @@ import {
   ScrollView,
   Spacer,
   Text,
+  useCallback,
   useColorScheme,
   useEffect,
   useMemo,
@@ -46,17 +47,18 @@ import {
 } from "../image/imageLoader"
 import {
   blockUser,
-  isIllustContentVisible,
-  isNovelContentVisible,
-  isR18ContentVisible,
   isUserBlocked,
   loadSettings,
   onSettingsChanged,
   unblockUser,
 } from "../store/settings"
-import { onUserFollowChanged } from "../store/userFollow"
+import {
+  isIllustContentVisible,
+  isNovelContentVisible,
+} from "../store/contentFilter"
+import { onUserFollowChanged, recordUserFollowed } from "../store/userFollow"
 import { renderDestination } from "./routes"
-import { useAsyncGuard, useLatest, usePagedList, currentBatchSize } from "./hooks"
+import { useAsyncGuard, useLatest, usePagedList, useUserAmbientPalette, currentBatchSize } from "./hooks"
 import type {
   PixivIllustration,
   PixivNovel,
@@ -68,7 +70,9 @@ import {
   CachedImage,
   EmptyView,
   ErrorView,
+  ExpandableIntroduction,
   htmlToPlainText,
+  ImmersiveHeaderBanner,
   LinkedDescription,
   LoadingView,
   LoadMoreTrigger,
@@ -81,42 +85,51 @@ type UserWorkKind = "illust" | "manga" | "novel"
 
 export function UserDetailView(props: { userID: number }) {
   const { userID } = props
-  const colorScheme = useColorScheme()
-  const isDark = colorScheme === "dark"
+
   const [detail, setDetail] = useState<PixivUserDetail | null>(null)
   const [webDetail, setWebDetail] = useState<PixivWebUserDetail | null>(null)
   const [followed, setFollowed] = useState(false)
   const [detailError, setDetailError] = useState<string | null>(null)
   const [followBusy, setFollowBusy] = useState(false)
   const [kind, setKind] = useState<UserWorkKind>("illust")
-  const [ambientPalette, setAmbientPalette] = useState<UserAmbientPalette | null>(
-    null
-  )
-  const [ambientEnabled, setAmbientEnabled] = useState(
-    () => loadSettings().ambientImmersion
-  )
-  const [ambientIntensity, setAmbientIntensity] = useState(
-    () => loadSettings().ambientIntensity
-  )
+  const [emptyKinds, setEmptyKinds] = useState<Partial<Record<UserWorkKind, boolean>>>({})
+  const { ambientBackground } = useUserAmbientPalette(detail?.profile.background_image_url)
 
-  const availableKinds = useMemo<UserWorkKind[]>(() => {
-    if (!detail) return ["illust"]
+  const baseKinds = useMemo<UserWorkKind[]>(() => {
+    if (!detail) return []
     const kinds: UserWorkKind[] = []
     if ((detail.profile.total_illusts ?? 0) > 0) kinds.push("illust")
     if ((detail.profile.total_manga ?? 0) > 0) kinds.push("manga")
     if ((detail.profile.total_novels ?? 0) > 0) kinds.push("novel")
-    return kinds.length > 0 ? kinds : ["illust"]
+    return kinds
   }, [
     detail?.profile.total_illusts,
     detail?.profile.total_manga,
     detail?.profile.total_novels,
   ])
 
+  const availableKinds = useMemo<UserWorkKind[]>(() => {
+    return baseKinds.filter((k) => !emptyKinds[k])
+  }, [baseKinds, emptyKinds])
+
+  const activeKind: UserWorkKind = useMemo(() => {
+    if (availableKinds.length === 0) return baseKinds[0] ?? "illust"
+    if (availableKinds.includes(kind)) return kind
+    return availableKinds[0]
+  }, [availableKinds, baseKinds, kind])
+
   useEffect(() => {
-    if (detail && !availableKinds.includes(kind)) {
+    if (availableKinds.length > 0 && !availableKinds.includes(kind)) {
       setKind(availableKinds[0])
     }
-  }, [detail, availableKinds, kind])
+  }, [availableKinds, kind])
+
+  const handleKindEmpty = useCallback((targetKind: UserWorkKind, isEmpty: boolean) => {
+    setEmptyKinds((prev) => {
+      if (prev[targetKind] === isEmpty) return prev
+      return { ...prev, [targetKind]: isEmpty }
+    })
+  }, [])
 
   const guard = useAsyncGuard()
   const followStateVersionRef = useRef(0)
@@ -146,6 +159,9 @@ export function UserDetailView(props: { userID: number }) {
       if (!g.isCurrent()) return
       setDetail(result)
       setWebDetail(webResult)
+      if (result.user?.id) {
+        recordUserFollowed(result.user.id, result.user.is_followed ?? false)
+      }
       if (followStateVersion === followStateVersionRef.current) {
         setFollowed(result.user.is_followed ?? false)
       }
@@ -167,46 +183,24 @@ export function UserDetailView(props: { userID: number }) {
     }
   }
 
-  useEffect(() => {
-    if (!ambientEnabled) {
-      setAmbientPalette(null)
-      return
-    }
-    const bgUrl = detail?.profile.background_image_url
-    if (!bgUrl) {
-      setAmbientPalette(null)
-      return
-    }
-    let active = true
-    const cached = getCachedUserAmbientPalette(bgUrl, isDark, ambientIntensity)
-    if (cached) {
-      setAmbientPalette(cached)
-    }
-    void extractUserAmbientPalette(bgUrl).then((result) => {
-      if (!active || !result) return
-      const modeObj = isDark ? result.dark : result.light
-      setAmbientPalette(modeObj[ambientIntensity] ?? modeObj.medium)
-    })
-    return () => {
-      active = false
-    }
-  }, [detail?.profile.background_image_url, isDark, ambientEnabled, ambientIntensity])
-
-  useEffect(() => {
-    return onSettingsChanged(() => {
-      const nextSettings = loadSettings()
-      setAmbientEnabled(nextSettings.ambientImmersion)
-      setAmbientIntensity(nextSettings.ambientIntensity)
-    })
-  }, [])
 
   useEffect(() => {
     return onUserFollowChanged((changedUserID, nextFollowed) => {
       if (changedUserID !== userID) return
       followStateVersionRef.current++
       setFollowed(nextFollowed)
+      setEmptyKinds({})
+      if (nextFollowed && baseKinds.length > 0) {
+        setKind(baseKinds[0])
+      }
     })
-  }, [userID])
+  }, [userID, baseKinds])
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      setEmptyKinds({})
+    })
+  }, [])
 
   useEffect(() => {
     void loadDetail()
@@ -283,20 +277,7 @@ export function UserDetailView(props: { userID: number }) {
       toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
       ignoresSafeArea={{ edges: ["top", "bottom"] }}
       refreshable={handleRefresh}
-      background={
-        ambientEnabled && ambientPalette
-          ? {
-              colors: [
-                ambientPalette.topColor,
-                ambientPalette.midColor,
-                ambientPalette.worksColor,
-                ambientPalette.worksColor,
-              ],
-              startPoint: "top",
-              endPoint: "bottom",
-            }
-          : undefined
-      }
+      background={ambientBackground}
       toolbar={{
         topBarTrailing: [
           ...(!isOwnProfile ? [
@@ -397,23 +378,29 @@ export function UserDetailView(props: { userID: number }) {
         <UserProfileHeader
           detail={detail}
           webDetail={webDetail}
-          ambientPalette={ambientPalette}
+          
         />
 
         {/* 位于个人资料和作品列表之间的分段选择器（仅显示有投稿项，<=1 项时自动隐藏） */}
         <UserWorkPicker
           availableKinds={availableKinds}
-          kind={kind}
+          kind={activeKind}
           onChanged={setKind}
         />
 
-        <UserWorksFeedSection
-          userID={userID}
-          kind={kind}
-          onRegisterRefresh={(fn) => {
-            worksRefreshRef.current = fn
-          }}
-        />
+        {availableKinds.length === 0 ? (
+          <EmptyView text="暂无作品投稿" systemImage="photo.on.rectangle.angled" />
+        ) : (
+          <UserWorksFeedSection
+            userID={userID}
+            kind={activeKind}
+            isAuthorFollowed={followed}
+            onKindEmpty={handleKindEmpty}
+            onRegisterRefresh={(fn) => {
+              worksRefreshRef.current = fn
+            }}
+          />
+        )}
       </VStack>
     </RefreshableScrollView>
   )
@@ -422,16 +409,18 @@ export function UserDetailView(props: { userID: number }) {
 function UserWorksFeedSection(props: {
   userID: number
   kind: "illust" | "manga" | "novel"
+  isAuthorFollowed?: boolean
+  onKindEmpty?: (kind: UserWorkKind, isEmpty: boolean) => void
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { userID, kind, onRegisterRefresh } = props
+  const { userID, kind, isAuthorFollowed = false, onKindEmpty, onRegisterRefresh } = props
 
   // 1. 插画
   const illustPaged = usePagedList<PixivIllustration>({
     first: (token) => userWorks(userID, "illust", token),
     more: (nextURL, token) => nextIllustrations(nextURL, token),
-    filter: filterIllustrations,
-    deps: [userID, "illust"],
+    filter: (items) => filterIllustrations(items, isAuthorFollowed),
+    deps: [userID, "illust", isAuthorFollowed],
     enabled: kind === "illust",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
@@ -441,8 +430,8 @@ function UserWorksFeedSection(props: {
   const mangaPaged = usePagedList<PixivIllustration>({
     first: (token) => userWorks(userID, "manga", token),
     more: (nextURL, token) => nextIllustrations(nextURL, token),
-    filter: filterIllustrations,
-    deps: [userID, "manga"],
+    filter: (items) => filterIllustrations(items, isAuthorFollowed),
+    deps: [userID, "manga", isAuthorFollowed],
     enabled: kind === "manga",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
@@ -452,8 +441,8 @@ function UserWorksFeedSection(props: {
   const novelPaged = usePagedList<PixivNovel>({
     first: (token) => userNovels(userID, token),
     more: (nextURL, token) => nextNovels(nextURL, token),
-    filter: filterNovels,
-    deps: [userID],
+    filter: (items) => filterNovels(items, isAuthorFollowed),
+    deps: [userID, isAuthorFollowed],
     enabled: kind === "novel",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
@@ -464,12 +453,82 @@ function UserWorksFeedSection(props: {
   const novelPagedRef = useLatest(novelPaged)
 
   useEffect(() => {
+    if (
+      kind === "illust" &&
+      illustPaged.hasLoaded &&
+      !illustPaged.initialLoading &&
+      !illustPaged.loadingMore &&
+      !illustPaged.error
+    ) {
+      onKindEmpty?.("illust", illustPaged.items.length === 0)
+    }
+  }, [
+    kind,
+    illustPaged.hasLoaded,
+    illustPaged.initialLoading,
+    illustPaged.loadingMore,
+    illustPaged.error,
+    illustPaged.items.length,
+    onKindEmpty,
+  ])
+
+  useEffect(() => {
+    if (
+      kind === "manga" &&
+      mangaPaged.hasLoaded &&
+      !mangaPaged.initialLoading &&
+      !mangaPaged.loadingMore &&
+      !mangaPaged.error
+    ) {
+      onKindEmpty?.("manga", mangaPaged.items.length === 0)
+    }
+  }, [
+    kind,
+    mangaPaged.hasLoaded,
+    mangaPaged.initialLoading,
+    mangaPaged.loadingMore,
+    mangaPaged.error,
+    mangaPaged.items.length,
+    onKindEmpty,
+  ])
+
+  useEffect(() => {
+    if (
+      kind === "novel" &&
+      novelPaged.hasLoaded &&
+      !novelPaged.initialLoading &&
+      !novelPaged.loadingMore &&
+      !novelPaged.error
+    ) {
+      onKindEmpty?.("novel", novelPaged.items.length === 0)
+    }
+  }, [
+    kind,
+    novelPaged.hasLoaded,
+    novelPaged.initialLoading,
+    novelPaged.loadingMore,
+    novelPaged.error,
+    novelPaged.items.length,
+    onKindEmpty,
+  ])
+
+  useEffect(() => {
     return onSettingsChanged(() => {
-      illustPagedRef.current.reapplyFilter()
-      mangaPagedRef.current.reapplyFilter()
-      novelPagedRef.current.reapplyFilter()
+      illustPagedRef.current.refresh()
+      mangaPagedRef.current.refresh()
+      novelPagedRef.current.refresh()
     })
   }, [])
+
+  useEffect(() => {
+    return onUserFollowChanged((changedUserID) => {
+      if (changedUserID === userID) {
+        illustPagedRef.current.refresh()
+        mangaPagedRef.current.refresh()
+        novelPagedRef.current.refresh()
+      }
+    })
+  }, [userID])
 
   const activeRefresh =
     kind === "illust"
@@ -735,74 +794,6 @@ function UserSocialBar(props: { socials: SocialLinkItem[] }) {
   )
 }
 
-function ExpandableIntroduction(props: {
-  commentHtml: string
-  rawComment: string
-  routeDestination: (route: string) => any
-}) {
-  const [expanded, setExpanded] = useState(false)
-  const plainText = useMemo(
-    () => htmlToPlainText(props.rawComment || props.commentHtml).trim(),
-    [props.rawComment, props.commentHtml]
-  )
-
-  const lines = useMemo(() => plainText.split(/\r?\n/), [plainText])
-  const exceedsFiveLines = lines.length > 5 || plainText.length > 220
-
-  if (!plainText) return null
-
-  return (
-    <VStack alignment="leading" spacing={6} frame={{ maxWidth: "infinity" }}>
-      <Text
-        font="subheadline"
-        fontWeight="semibold"
-        foregroundStyle="secondaryLabel"
-      >
-        简介
-      </Text>
-      <VStack
-        alignment="leading"
-        spacing={8}
-        padding={{ top: 12, horizontal: 12, bottom: exceedsFiveLines ? 10 : 12 }}
-        glassEffect={{ type: "rect", cornerRadius: 14 }}
-        frame={{ maxWidth: "infinity" }}
-        contentShape="rect"
-        onTapGesture={
-          exceedsFiveLines
-            ? () => {
-                setExpanded((prev) => !prev)
-              }
-            : undefined
-        }
-      >
-        <LinkedDescription
-          html={props.commentHtml || props.rawComment || ""}
-          routeDestination={props.routeDestination}
-          lineLimit={!expanded && exceedsFiveLines ? 5 : undefined}
-        />
-
-        {exceedsFiveLines ? (
-          <HStack
-            alignment="center"
-            spacing={4}
-            frame={{ maxWidth: "infinity", alignment: "center" }}
-            padding={{ top: 4, bottom: 2 }}
-          >
-            <Text font="caption2" foregroundStyle="secondaryLabel">
-              {expanded ? "点击收起" : "点击展开全文"}
-            </Text>
-            <Image
-              systemName={expanded ? "chevron.up" : "chevron.down"}
-              font="caption2"
-              foregroundStyle="secondaryLabel"
-            />
-          </HStack>
-        ) : null}
-      </VStack>
-    </VStack>
-  )
-}
-
 function buildAboutFields(
   detail: PixivUserDetail,
   webDetail: PixivWebUserDetail | null
@@ -977,6 +968,7 @@ function UserProfileHeader(props: {
 
         {/* 简介：从网页端取，默认展示五行，超过五行点击文本框下拉展示 */}
         <ExpandableIntroduction
+          title="简介"
           commentHtml={commentHtml}
           rawComment={rawComment}
           routeDestination={renderDestination}
@@ -1049,12 +1041,16 @@ function UserWorkPicker(props: {
   )
 }
 
-function filterIllustrations(items: PixivIllustration[]): PixivIllustration[] {
+function filterIllustrations(items: PixivIllustration[], isAuthorFollowed = false): PixivIllustration[] {
   const settings = loadSettings()
-  return items.filter((item) => isIllustContentVisible(item, settings))
+  return items.filter((item) =>
+    isIllustContentVisible(item, settings, { isAuthorFollowed })
+  )
 }
 
-function filterNovels(items: PixivNovel[]): PixivNovel[] {
+function filterNovels(items: PixivNovel[], isAuthorFollowed = false): PixivNovel[] {
   const settings = loadSettings()
-  return items.filter((item) => isNovelContentVisible(item, settings))
+  return items.filter((item) =>
+    isNovelContentVisible(item, settings, { isAuthorFollowed })
+  )
 }

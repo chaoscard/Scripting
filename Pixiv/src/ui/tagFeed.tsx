@@ -15,10 +15,10 @@ import {
 import { session } from "../api/session"
 import { cardThumbUrlOf, prefetch } from "../image/imageLoader"
 import {
-  isIllustContentVisible,
   loadSettings,
   onSettingsChanged,
 } from "../store/settings"
+import { isIllustContentVisible } from "../store/contentFilter"
 import { useLatest, usePagedList, currentBatchSize } from "./hooks"
 import type { PixivIllustration } from "../types"
 import {

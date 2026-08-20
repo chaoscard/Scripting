@@ -273,13 +273,6 @@ function persistSettings(settings: AppSettings): boolean {
   return true
 }
 
-export function isR18ContentVisible(xRestrict: number, showR18: boolean, showR18G: boolean): boolean {
-  if (xRestrict === 0) return true
-  if (xRestrict === 1) return showR18
-  if (xRestrict === 2) return showR18G
-  return false
-}
-
 export function isTagBlocked(tag: string, blockedTags = loadSettings().blockedTags): boolean {
   return blockedTags.includes(tag)
 }
@@ -317,36 +310,6 @@ export function blockUser(user: PixivUser): AppSettings {
 export function unblockUser(userID: number): AppSettings {
   const settings = loadSettings()
   return updateSettings({ blockedUsers: settings.blockedUsers.filter((user) => user.id !== userID) })
-}
-
-export function isIllustContentVisible(
-  item: { x_restrict: number; illust_ai_type?: number; tags?: { name: string }[]; user?: { id: number } },
-  settings = loadSettings(),
-  bypassRatingAndAI = false
-): boolean {
-  return (
-    (bypassRatingAndAI || (
-      isR18ContentVisible(item.x_restrict, settings.showR18, settings.showR18G) &&
-      (settings.showAI || item.illust_ai_type !== 2)
-    )) &&
-    !isUserBlocked(item.user?.id ?? 0, settings.blockedUsers) &&
-    !(item.tags ?? []).some((tag) => isTagBlocked(tag.name, settings.blockedTags))
-  )
-}
-
-export function isNovelContentVisible(
-  item: { x_restrict: number; novel_ai_type?: number; tags?: { name: string }[]; user?: { id: number } },
-  settings = loadSettings(),
-  bypassRatingAndAI = false
-): boolean {
-  return (
-    (bypassRatingAndAI || (
-      isR18ContentVisible(item.x_restrict, settings.showR18, settings.showR18G) &&
-      (settings.showAI || item.novel_ai_type !== 2)
-    )) &&
-    !isUserBlocked(item.user?.id ?? 0, settings.blockedUsers) &&
-    !(item.tags ?? []).some((tag) => isTagBlocked(tag.name, settings.blockedTags))
-  )
 }
 
 export function onSettingsChanged(fn: () => void): () => void {

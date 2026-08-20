@@ -30,11 +30,13 @@ import {
   type HistoryEntry,
 } from "../store/history"
 import {
-  isIllustContentVisible,
-  isNovelContentVisible,
   loadSettings,
   onSettingsChanged,
 } from "../store/settings"
+import {
+  isIllustContentVisible,
+  isNovelContentVisible,
+} from "../store/contentFilter"
 import { cardThumbUrlOf, novelThumbUrlOf, prefetch } from "../image/imageLoader"
 import type { PixivNovel } from "../types"
 import { waitForPaginationFeedback } from "./hooks"
@@ -51,7 +53,7 @@ function getVisibleHistory(kind: HistoryKind): HistoryEntry[] {
         isNovelContentVisible(
           entry.novel,
           settings,
-          settings.libraryFilterExempt
+          { hasHistory: true }
         )
       )
     }
@@ -66,7 +68,7 @@ function getVisibleHistory(kind: HistoryKind): HistoryEntry[] {
       isIllustContentVisible(
         entry.illustration,
         settings,
-        settings.libraryFilterExempt
+        { hasHistory: true }
       )
     )
   })

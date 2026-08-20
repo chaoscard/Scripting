@@ -101,7 +101,7 @@ export function SettingsView() {
         <Toggle title="显示 R18 作品" value={settings.showR18} onChanged={(value) => update({ showR18: value })} />
         <Toggle title="显示 R18G 作品" value={settings.showR18G} onChanged={(value) => update({ showR18G: value })} />
         <Toggle title="显示 AI 生成作品" value={settings.showAI} onChanged={(value) => update({ showAI: value })} />
-        <Toggle title="豁免关注和追更" value={settings.followFilterExempt} onChanged={(value) => update({ followFilterExempt: value })} />
+        <Toggle title="豁免关注、好友和追更" value={settings.followFilterExempt} onChanged={(value) => update({ followFilterExempt: value })} />
         <Toggle title="豁免收藏和记录" value={settings.libraryFilterExempt} onChanged={(value) => update({ libraryFilterExempt: value })} />
         <NavigationLink value="blockedSettings">
           <HStack spacing={8}>

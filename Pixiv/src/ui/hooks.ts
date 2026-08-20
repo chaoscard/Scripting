@@ -1,6 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "scripting"
+import { useCallback, useEffect, useRef, useState, useColorScheme, type Color } from "scripting"
 import { session } from "../api/session"
-import { getImageBatchSize, loadSettings } from "../store/settings"
+import { getImageBatchSize, loadSettings, onSettingsChanged, type AmbientIntensity } from "../store/settings"
+import {
+  extractUserAmbientPalette,
+  getCachedUserAmbientPalette,
+  type UserAmbientPalette,
+} from "../image/colorExtractor"
 
 // 触底回弹缓冲：由高级设置配置（默认 1000ms），确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
 export function paginationFeedbackDuration(): number {
@@ -9,6 +14,72 @@ export function paginationFeedbackDuration(): number {
 
 export function waitForPaginationFeedback(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, paginationFeedbackDuration()))
+}
+
+// ---------- 氛围色 Hook ----------
+
+export function useUserAmbientPalette(imageUrl: string | null | undefined): {
+  ambientEnabled: boolean
+  ambientIntensity: AmbientIntensity
+  ambientPalette: UserAmbientPalette | null
+  ambientBackground: { colors: Color[]; startPoint: "top"; endPoint: "bottom" } | undefined
+} {
+  const colorScheme = useColorScheme()
+  const isDark = colorScheme === "dark"
+  const [ambientEnabled, setAmbientEnabled] = useState(
+    () => loadSettings().ambientImmersion
+  )
+  const [ambientIntensity, setAmbientIntensity] = useState<AmbientIntensity>(
+    () => loadSettings().ambientIntensity
+  )
+  const [ambientPalette, setAmbientPalette] = useState<UserAmbientPalette | null>(() => {
+    if (!loadSettings().ambientImmersion || !imageUrl) return null
+    return getCachedUserAmbientPalette(imageUrl, isDark, loadSettings().ambientIntensity)
+  })
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      const nextSettings = loadSettings()
+      setAmbientEnabled(nextSettings.ambientImmersion)
+      setAmbientIntensity(nextSettings.ambientIntensity)
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!ambientEnabled || !imageUrl) {
+      setAmbientPalette(null)
+      return
+    }
+    let active = true
+    const cached = getCachedUserAmbientPalette(imageUrl, isDark, ambientIntensity)
+    if (cached) {
+      setAmbientPalette(cached)
+    }
+    void extractUserAmbientPalette(imageUrl).then((result) => {
+      if (!active || !result) return
+      const modeObj = isDark ? result.dark : result.light
+      setAmbientPalette(modeObj[ambientIntensity] ?? modeObj.medium)
+    })
+    return () => {
+      active = false
+    }
+  }, [imageUrl, isDark, ambientEnabled, ambientIntensity])
+
+  const ambientBackground =
+    ambientEnabled && ambientPalette
+      ? {
+          colors: [
+            ambientPalette.topColor,
+            ambientPalette.midColor,
+            ambientPalette.worksColor,
+            ambientPalette.worksColor,
+          ],
+          startPoint: "top" as const,
+          endPoint: "bottom" as const,
+        }
+      : undefined
+
+  return { ambientEnabled, ambientIntensity, ambientPalette, ambientBackground }
 }
 
 // ---------- 通用 hooks ----------
@@ -176,6 +247,7 @@ export function usePagedList<T extends { id: number | string }>(
   const [loadingMore, setLoadingMore] = useState(false)
   // 未激活的常驻流在首次显示前也应保持首屏加载态，避免切换时先短暂渲染空态。
   const [initialLoading, setInitialLoading] = useState(true)
+  const [hasLoaded, setHasLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const seqRef = useRef(0)
@@ -191,7 +263,7 @@ export function usePagedList<T extends { id: number | string }>(
   const itemsRef = useLatest(items)
   const initialLoadingRef = useLatest(initialLoading)
   const hasLoadedRef = useRef(false)
-  const prevDepsRef = useRef<unknown[] | null>(null)
+  const loadedDepsRef = useRef<unknown[] | null>(null)
   const activationRef = useRef(0)
   const batchPublishedCleanupRef = useRef<(() => void) | null>(null)
   const consumedTailRef = useRef<string | null>(null)
@@ -219,6 +291,7 @@ export function usePagedList<T extends { id: number | string }>(
     // 首次加载尚未完成就离开时，下次激活必须重新请求，不能停在加载中。
     if (itemsRef.current.length === 0 && initialLoadingRef.current) {
       hasLoadedRef.current = false
+      setHasLoaded(false)
     }
   }
 
@@ -248,6 +321,7 @@ export function usePagedList<T extends { id: number | string }>(
     setError(null)
     if (clear) {
       setInitialLoading(true)
+      setHasLoaded(false)
       setItems([])
       setPendingItems([])
       setNextURL(null)
@@ -309,6 +383,7 @@ export function usePagedList<T extends { id: number | string }>(
       setNextURL(nextPageURL)
       consumedTailRef.current = null
       notifyBatchPublished(published, pending)
+      setHasLoaded(true)
     } catch (err: any) {
       if (
         seq !== seqRef.current ||
@@ -464,13 +539,13 @@ export function usePagedList<T extends { id: number | string }>(
     }
     activationRef.current++
     consumedTailRef.current = null
-    const prev = prevDepsRef.current
-    prevDepsRef.current = deps
+    const prev = loadedDepsRef.current
     const changed =
       prev == null ||
       prev.length !== deps.length ||
       prev.some((d, i) => !Object.is(d, deps[i]))
     if (changed || !hasLoadedRef.current) {
+      loadedDepsRef.current = deps
       hasLoadedRef.current = true
       load(true)
     }
@@ -488,6 +563,7 @@ export function usePagedList<T extends { id: number | string }>(
     nextURL,
     loadingMore,
     initialLoading,
+    hasLoaded,
     error,
     refresh,
     reapplyFilter,
