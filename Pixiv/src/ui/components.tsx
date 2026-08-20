@@ -210,6 +210,11 @@ function imageFadeDurationSec(): number {
   return Math.max(0.001, Math.min(0.5, ms / 1000))
 }
 
+function blurCrossFadeDurationSec(): number {
+  const ms = loadSettings().blurCrossFadeDuration ?? 100
+  return Math.max(0, Math.min(0.25, ms / 1000))
+}
+
 function useCachedImage(
   url: string | null,
   onLoaded?: (success: boolean) => void,
@@ -261,9 +266,7 @@ function useCachedImage(
         .then((p) => {
           if (!cancelled) {
             if (p) {
-              withAnimation(Animation.easeOut(imageFadeDurationSec()), () => {
-                setLoaded({ url, path: p, revision: cacheRevision })
-              })
+              setLoaded({ url, path: p, revision: cacheRevision })
               setFailed(false)
               onLoadedRef.current?.(true)
             } else if (!isRetry) {
@@ -304,34 +307,46 @@ function useCachedImage(
   return { path, failed }
 }
 
-// 异步图片（对标 Hanairo RemoteImageView 设计与 Pixiv 官方客户端淡入体验）：
+// 异步图片（对标 Hanairo RemoteImageView 设计与 Telegram 渐进式模糊预览）：
 // 容器宽高比由元数据严格固定，加载过程与展示过程保持零布局重排（Zero Layout Shift）。
-// 底层常驻纯净骨架占位色块，图片就绪后以淡入动画平滑呈现，杜绝转圈干扰。
+// 底层常驻纯净骨架占位色块；瀑布流普通卡片支持平滑淡入（由设置控制），详情大图支持 previewUrl 模糊垫底并即时平滑消融。
 export function CachedImage(props: {
   url: string | null
+  previewUrl?: string | null
+  blurPreviewRadius?: number
   aspectRatioValue?: number // 宽/高
   cornerRadius?: number
   contentMode?: "fit" | "fill"
   centerCropSquare?: boolean
   centerCropAspect?: number
   useIntrinsicAspectRatio?: boolean
+  disableFadeIn?: boolean
   frame?: any // 覆盖默认整宽 frame（如固定尺寸缩略图）
   onLoaded?: (success: boolean) => void
   priority?: number
 }) {
   const {
     url,
+    previewUrl,
+    blurPreviewRadius = 8,
     aspectRatioValue = 1,
     cornerRadius = 10,
     contentMode = "fill",
     centerCropSquare = false,
     centerCropAspect,
     useIntrinsicAspectRatio = false,
+    disableFadeIn = false,
     frame,
     onLoaded,
     priority,
   } = props
   const { path, failed } = useCachedImage(url, onLoaded, priority)
+  // 若提供了 previewUrl，缩略图始终常驻底层（高清大图就绪后也保留），彻底根除 GPU 解码交替白闪
+  const previewPath = useMemo(() => {
+    if (!previewUrl) return null
+    return cachedFilePath(previewUrl)
+  }, [previewUrl])
+
   const croppedImage = useMemo(() => {
     if (!path) return null
     if (centerCropSquare) {
@@ -383,6 +398,54 @@ export function CachedImage(props: {
     return null
   }, [path, centerCropSquare, centerCropAspect])
 
+  const previewCroppedImage = useMemo(() => {
+    if (!previewPath) return null
+    if (centerCropSquare) {
+      try {
+        const image = UIImage.fromFile(previewPath)
+        if (!image || image.width <= 0 || image.height <= 0) return null
+        const side = Math.min(image.width, image.height)
+        return image.croppedTo({
+          x: (image.width - side) / 2,
+          y: (image.height - side) / 2,
+          width: side,
+          height: side,
+        })
+      } catch {
+        return null
+      }
+    }
+    if (centerCropAspect != null && centerCropAspect > 0) {
+      try {
+        const image = UIImage.fromFile(previewPath)
+        if (!image || image.width <= 0 || image.height <= 0) return null
+        const currentAspect = image.width / image.height
+        if (Math.abs(currentAspect - centerCropAspect) > 0.01) {
+          if (currentAspect > centerCropAspect) {
+            const targetWidth = image.height * centerCropAspect
+            return image.croppedTo({
+              x: (image.width - targetWidth) / 2,
+              y: 0,
+              width: targetWidth,
+              height: image.height,
+            })
+          } else {
+            const targetHeight = image.width / centerCropAspect
+            return image.croppedTo({
+              x: 0,
+              y: (image.height - targetHeight) / 2,
+              width: image.width,
+              height: targetHeight,
+            })
+          }
+        }
+      } catch {
+        return null
+      }
+    }
+    return null
+  }, [previewPath, centerCropSquare, centerCropAspect])
+
   const intrinsicAspect = useMemo(() => {
     if (!path || !useIntrinsicAspectRatio) return null
     try {
@@ -401,6 +464,13 @@ export function CachedImage(props: {
     : (intrinsicAspect ?? aspectRatioValue)
   const containerFrame = frame ?? { maxWidth: "infinity" }
   const fadeDuration = imageFadeDurationSec()
+  const crossFadeDuration = blurCrossFadeDurationSec()
+  // 有预览缩略图垫底时采用动态配置的模糊消融（0-250ms，默认 100ms），既无闪烁跳帧又极为轻快；无预览图时由设置控制淡入
+  const imageTransition = disableFadeIn
+    ? undefined
+    : previewUrl
+      ? (crossFadeDuration > 0 ? Transition.opacity().animation(Animation.easeOut(crossFadeDuration)) : undefined)
+      : Transition.opacity().animation(Animation.easeOut(fadeDuration))
 
   return (
     <ZStack
@@ -424,25 +494,44 @@ export function CachedImage(props: {
         ) : null}
       </VStack>
 
-      {/* 2. 图片层：就绪后平滑淡入呈现 */}
+      {/* 2. 模糊缩略图垫底层（常驻底层，即使高清就绪后也不卸载，彻底杜绝交替白闪） */}
+      {previewPath ? (
+        previewCroppedImage ? (
+          <Image
+            image={previewCroppedImage}
+            resizable={true}
+            aspectRatio={{ value: effectiveRatio, contentMode: "fill" }}
+            frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+            blur={blurPreviewRadius}
+          />
+        ) : (
+          <Image
+            filePath={previewPath}
+            resizable={true}
+            aspectRatio={{ value: effectiveRatio, contentMode }}
+            frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+            blur={blurPreviewRadius}
+          />
+        )
+      ) : null}
+
+      {/* 3. 高清图片层：叠在模糊缩略图之上，平滑消融呈现 */}
       {path ? (
         croppedImage ? (
           <Image
-            key={`img-cropped-${path}`}
             image={croppedImage}
             resizable={true}
             aspectRatio={{ value: effectiveRatio, contentMode: "fill" }}
             frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-            transition={Transition.opacity().animation(Animation.easeOut(fadeDuration))}
+            transition={imageTransition}
           />
         ) : (
           <Image
-            key={`img-file-${path}`}
             filePath={path}
             resizable={true}
             aspectRatio={{ value: effectiveRatio, contentMode }}
             frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-            transition={Transition.opacity().animation(Animation.easeOut(fadeDuration))}
+            transition={imageTransition}
           />
         )
       ) : null}
@@ -817,7 +906,7 @@ export function NovelCard(props: {
   )
 }
 
-// 作者头像（对齐官方淡入与纯净底色占位）
+// 作者头像（下载完成后立刻硬切呈现，纯净中性骨架占位）
 export function AvatarImage(props: {
   url: string | null
   size?: number
@@ -851,7 +940,6 @@ export function AvatarImage(props: {
           resizable={true}
           scaleToFill={true}
           frame={{ width: size, height: size }}
-          transition={Transition.opacity().animation(Animation.easeOut(imageFadeDurationSec()))}
         />
       ) : null}
     </ZStack>
@@ -2274,16 +2362,18 @@ export function ErrorView(props: {
 // 沉浸式顶部封面横幅（支持自然等比/自适应占位，提供底边悬浮锚定）
 export function ImmersiveHeaderBanner(props: {
   url?: string | null
+  previewUrl?: string | null
   aspectRatioValue?: number
   placeholderHeight?: number
   children?: any
 }) {
-  const { url, aspectRatioValue = 2.4, placeholderHeight = 160, children } = props
+  const { url, previewUrl, aspectRatioValue = 2.4, placeholderHeight = 160, children } = props
   return (
     <ZStack alignment="bottom" frame={{ maxWidth: "infinity" }}>
-      {url ? (
+      {url || previewUrl ? (
         <CachedImage
-          url={url}
+          url={url ?? null}
+          previewUrl={previewUrl ?? null}
           useIntrinsicAspectRatio={true}
           aspectRatioValue={aspectRatioValue}
           contentMode="fill"

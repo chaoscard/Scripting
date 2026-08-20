@@ -18,6 +18,7 @@ export type AmbientIntensity = "low" | "medium" | "high"
 export type LaunchPage = "discovery" | "ranking" | "following"
 export type ImageBatchConcurrency = number
 export type ImageFadeInDuration = number
+export type BlurCrossFadeDuration = number
 export type LoadingAnimationDuration = number
 export type LaunchAnimationDuration = number
 
@@ -45,6 +46,7 @@ export interface AppSettings {
   imageDownloadConcurrencyRatio: number
   imagePrefetchConcurrencyRatio: number
   imageFadeInDuration: ImageFadeInDuration
+  blurCrossFadeDuration: BlurCrossFadeDuration
   loadingAnimationDuration: LoadingAnimationDuration
   launchAnimationDuration: LaunchAnimationDuration
   advancedSettingsUnlocked: boolean
@@ -74,6 +76,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   imageDownloadConcurrencyRatio: 100,
   imagePrefetchConcurrencyRatio: 100,
   imageFadeInDuration: 200,
+  blurCrossFadeDuration: 100,
   loadingAnimationDuration: 400,
   launchAnimationDuration: 1500,
   advancedSettingsUnlocked: false,
@@ -179,6 +182,19 @@ function parseFadeInDuration(value: unknown): number {
   return DEFAULT_SETTINGS.imageFadeInDuration
 }
 
+function parseBlurCrossFadeDuration(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+    return Math.max(0, Math.min(250, Math.round(value)))
+  }
+  if (typeof value === "string") {
+    const num = parseInt(value, 10)
+    if (!isNaN(num) && num >= 0) {
+      return Math.max(0, Math.min(250, num))
+    }
+  }
+  return DEFAULT_SETTINGS.blurCrossFadeDuration
+}
+
 function parseLoadingDuration(value: unknown): number {
   if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
     return Math.max(0, Math.min(30000, Math.round(value)))
@@ -271,6 +287,7 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
       DEFAULT_SETTINGS.imagePrefetchConcurrencyRatio
     ),
     imageFadeInDuration: parseFadeInDuration(stored?.imageFadeInDuration),
+    blurCrossFadeDuration: parseBlurCrossFadeDuration(stored?.blurCrossFadeDuration),
     loadingAnimationDuration: parseLoadingDuration(stored?.loadingAnimationDuration),
     launchAnimationDuration: parseLaunchDuration(stored?.launchAnimationDuration),
     advancedSettingsUnlocked: boolOr(stored?.advancedSettingsUnlocked, DEFAULT_SETTINGS.advancedSettingsUnlocked),

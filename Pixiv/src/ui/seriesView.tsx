@@ -207,22 +207,23 @@ function candidateUrlOf(item: any): string | null {
   return null
 }
 
-function extractCoverUrl(
+function extractRawCoverCandidate(
   detail?: any,
   firstItem?: any,
   fallbackItem?: any
 ): string | null {
-  const candidate =
+  return (
     candidateUrlOf(detail) ??
     candidateUrlOf(firstItem) ??
     candidateUrlOf(fallbackItem)
-  return upgradeHighQualityCoverUrl(candidate)
+  )
 }
 
 export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
   const [title, setTitle] = useState("系列")
   const [caption, setCaption] = useState("")
   const [coverUrl, setCoverUrl] = useState<string | null>(null)
+  const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null)
   const [author, setAuthor] = useState<PixivUser | null>(null)
   const authorRef = useRef<PixivUser | null>(null)
   authorRef.current = author
@@ -237,7 +238,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
   const isAscendingRef = useRef(isAscending)
   isAscendingRef.current = isAscending
 
-  const { ambientBackground } = useUserAmbientPalette(coverUrl)
+  const { ambientBackground } = useUserAmbientPalette(coverPreviewUrl || coverUrl)
 
   // 全量已获取未过滤的原始数据映射池（按自然正序 1..N 存储）
   const rawMappedIllustsRef = useRef<PixivIllustration[]>([])
@@ -270,17 +271,13 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
       setAuthor(seriesAuthor)
       authorRef.current = seriesAuthor
 
-      const cover = extractCoverUrl(
+      const rawCover = extractRawCoverCandidate(
         detail,
         result.illust_series_first_illust,
         result.illusts?.[0]
       )
-      if (cover && !cachedFileExists(cover)) {
-        await Promise.race([
-          loadImage(cover, 0),
-          new Promise((resolve) => setTimeout(() => resolve(null), 1000)),
-        ])
-      }
+      const cover = upgradeHighQualityCoverUrl(rawCover)
+      setCoverPreviewUrl(rawCover)
       setCoverUrl(cover)
 
       const allRawIllusts: PixivIllustrationSeriesItem[] = Array.isArray(result.illusts) ? [...result.illusts] : []
@@ -345,17 +342,13 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
       setAuthor(seriesAuthor)
       authorRef.current = seriesAuthor
 
-      const cover = extractCoverUrl(
+      const rawCover = extractRawCoverCandidate(
         detail,
         result.novel_series_first_novel,
         result.novels?.[0]
       )
-      if (cover && !cachedFileExists(cover)) {
-        await Promise.race([
-          loadImage(cover, 0),
-          new Promise((resolve) => setTimeout(() => resolve(null), 1000)),
-        ])
-      }
+      const cover = upgradeHighQualityCoverUrl(rawCover)
+      setCoverPreviewUrl(rawCover)
       setCoverUrl(cover)
 
       const allRawNovels: PixivNovel[] = Array.isArray(result.novels) ? [...result.novels] : []
@@ -541,7 +534,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
     >
       <VStack alignment="leading" spacing={0} frame={{ maxWidth: "infinity" }}>
         {/* 沉浸式顶部背景图与居中悬浮胶囊标题 */}
-        <ImmersiveHeaderBanner url={coverUrl}>
+        <ImmersiveHeaderBanner url={coverUrl} previewUrl={coverPreviewUrl}>
           {/* 胶囊状液态玻璃标题：垂直中心线对齐封面底边（参考用户主页头像位置） */}
           <HStack
             alignment="center"

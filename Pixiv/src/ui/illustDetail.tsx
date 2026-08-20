@@ -686,23 +686,31 @@ export function IllustDetailView(props: { illustID: number }) {
             />
           ) : pageCount > 1 ? (
             <LazyVStack spacing={4} alignment="center">
-              {pageURLs.map((url, idx) => (
-                <CachedImage
-                  key={idx}
-                  url={url}
-                  aspectRatioValue={pageAspect}
-                  useIntrinsicAspectRatio={true}
-                  cornerRadius={6}
-                  contentMode="fit"
-                  frame={{ maxWidth: "infinity" }}
-                  priority={idx}
-                  onLoaded={idx === 0 ? () => setMediaReady(true) : undefined}
-                />
-              ))}
+              {pageURLs.map((url, idx) => {
+                const preview = idx === 0
+                  ? (cardThumbUrlOf(current) || current.image_urls?.medium || current.image_urls?.square_medium || null)
+                  : imageUrlOf(current, idx, "medium")
+                return (
+                  <CachedImage
+                    key={`illust-page-${current.id}-${idx}`}
+                    url={url}
+                    previewUrl={preview}
+                    aspectRatioValue={pageAspect}
+                    useIntrinsicAspectRatio={true}
+                    cornerRadius={6}
+                    contentMode="fit"
+                    frame={{ maxWidth: "infinity" }}
+                    priority={idx}
+                    onLoaded={idx === 0 ? () => setMediaReady(true) : undefined}
+                  />
+                )
+              })}
             </LazyVStack>
           ) : (
             <CachedImage
+              key={`illust-single-${current.id}`}
               url={pageURLs[0] ?? null}
+              previewUrl={cardThumbUrlOf(current) || current.image_urls?.medium || current.image_urls?.square_medium || null}
               aspectRatioValue={pageAspect}
               useIntrinsicAspectRatio={true}
               cornerRadius={8}

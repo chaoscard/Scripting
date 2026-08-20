@@ -27,6 +27,7 @@ import {
   type LaunchPage,
   type ImageBatchConcurrency,
   type ImageFadeInDuration,
+  type BlurCrossFadeDuration,
   type LoadingAnimationDuration,
   type LaunchAnimationDuration,
 } from "../store/settings"
@@ -279,6 +280,15 @@ export function SettingsView() {
             min={1}
             max={500}
             onSave={(val) => update({ imageFadeInDuration: val })}
+          />
+          <AdvancedNumberRow
+            title="模糊消融时长"
+            unit="ms"
+            value={settings.blurCrossFadeDuration}
+            defaultValue={100}
+            min={0}
+            max={250}
+            onSave={(val) => update({ blurCrossFadeDuration: val })}
           />
           <AdvancedNumberRow
             title="加载动画时长"
