@@ -429,7 +429,7 @@ export function usePagedList<T extends { id: number | string }>(
       loadingMoreTaskRef.current = task
       setLoadingMore(true)
       try {
-        // 缓冲 1500ms：确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
+        // 触底回弹缓冲：由设置中的 loadingAnimationDuration 动态控制，随后平滑展开新批次卡片
         await waitForPaginationFeedback()
         if (loadingMoreTaskRef.current !== task || !enabledRef.current) {
           consumedTailRef.current = null

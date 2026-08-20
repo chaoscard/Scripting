@@ -6,7 +6,6 @@ import {
   LazyVStack,
   Picker,
   Text,
-  useCallback,
   useEffect,
   useRef,
   useState,
@@ -38,40 +37,55 @@ import {
   isNovelContentVisible,
 } from "../store/contentFilter"
 import { cardThumbUrlOf, novelThumbUrlOf, prefetch } from "../image/imageLoader"
-import type { PixivNovel } from "../types"
-import { waitForPaginationFeedback } from "./hooks"
-const UI_BATCH_SIZE = 10
+import { destinationElement } from "./routes"
+import { currentBatchSize, useLatest, usePagedList } from "./hooks"
+import type { PixivIllustration, PixivNovel } from "../types"
 
 type HistoryKind = HistoryContentKind
 
-function getVisibleHistory(kind: HistoryKind): HistoryEntry[] {
-  const settings = loadSettings()
-  return getHistory().filter((entry) => {
-    if (entry.kind === "novel") {
-      return (
-        kind === "novel" &&
-        isNovelContentVisible(
-          entry.novel,
-          settings,
-          { hasHistory: true }
-        )
-      )
-    }
-    const matchesKind =
-      kind === "illustration"
+interface HistoryIllustItem extends PixivIllustration {
+  viewedAt: number
+}
+
+interface HistoryNovelItem extends PixivNovel {
+  viewedAt: number
+}
+
+function loadHistoryIllusts(kind: "illustration" | "manga"): HistoryIllustItem[] {
+  return getHistory()
+    .filter((entry): entry is Extract<HistoryEntry, { kind: "illust" }> => {
+      if (entry.kind !== "illust") return false
+      return kind === "illustration"
         ? entry.illustration.type !== "manga"
-        : kind === "manga"
-          ? entry.illustration.type === "manga"
-          : false
-    return (
-      matchesKind &&
-      isIllustContentVisible(
-        entry.illustration,
-        settings,
-        { hasHistory: true }
-      )
-    )
-  })
+        : entry.illustration.type === "manga"
+    })
+    .map((entry) => ({
+      ...entry.illustration,
+      viewedAt: entry.viewedAt,
+    }))
+}
+
+function loadHistoryNovels(): HistoryNovelItem[] {
+  return getHistory()
+    .filter((entry): entry is Extract<HistoryEntry, { kind: "novel" }> => entry.kind === "novel")
+    .map((entry) => ({
+      ...entry.novel,
+      viewedAt: entry.viewedAt,
+    }))
+}
+
+function filterHistoryIllusts(items: HistoryIllustItem[]): HistoryIllustItem[] {
+  const settings = loadSettings()
+  return items.filter((item) =>
+    isIllustContentVisible(item, settings, { hasHistory: true })
+  )
+}
+
+function filterHistoryNovels(items: HistoryNovelItem[]): HistoryNovelItem[] {
+  const settings = loadSettings()
+  return items.filter((item) =>
+    isNovelContentVisible(item, settings, { hasHistory: true })
+  )
 }
 
 export function HistoryView() {
@@ -85,6 +99,7 @@ export function HistoryView() {
   return (
     <RefreshableScrollView
       navigationBarTitleDisplayMode="inline"
+      navigationDestination={destinationElement}
       toolbar={historyToolbar({ kind, onClear: clearCurrentKind })}
       refreshable={() => refreshHandlerRef.current()}
     >
@@ -92,7 +107,9 @@ export function HistoryView() {
         <HistoryKindPicker kind={kind} onKindChange={setKind} />
         <HistoryFeed
           kind={kind}
-          onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
+          onRegisterRefresh={(fn) => {
+            refreshHandlerRef.current = fn
+          }}
         />
       </VStack>
     </RefreshableScrollView>
@@ -163,126 +180,190 @@ function HistoryFeed(props: {
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
   const { kind, onRegisterRefresh } = props
-  const [itemsMap, setItemsMap] = useState<Record<HistoryKind, HistoryEntry[]>>(() => ({
-    illustration: getVisibleHistory("illustration"),
-    manga: getVisibleHistory("manga"),
-    novel: getVisibleHistory("novel"),
-  }))
 
-  const reloadAll = useCallback(() => {
-    setItemsMap({
-      illustration: getVisibleHistory("illustration"),
-      manga: getVisibleHistory("manga"),
-      novel: getVisibleHistory("novel"),
-    })
-  }, [])
+  // 1. 插画历史流
+  const illustPaged = usePagedList<HistoryIllustItem>({
+    first: async () => ({
+      items: loadHistoryIllusts("illustration"),
+      nextURL: null,
+    }),
+    filter: filterHistoryIllusts,
+    deps: ["history", "illustration"],
+    enabled: kind === "illustration",
+    onBatchPublished: (_, pendingItems) =>
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
+  })
+
+  // 2. 漫画历史流
+  const mangaPaged = usePagedList<HistoryIllustItem>({
+    first: async () => ({
+      items: loadHistoryIllusts("manga"),
+      nextURL: null,
+    }),
+    filter: filterHistoryIllusts,
+    deps: ["history", "manga"],
+    enabled: kind === "manga",
+    onBatchPublished: (_, pendingItems) =>
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
+  })
+
+  // 3. 小说历史流
+  const novelPaged = usePagedList<HistoryNovelItem>({
+    first: async () => ({
+      items: loadHistoryNovels(),
+      nextURL: null,
+    }),
+    filter: filterHistoryNovels,
+    deps: ["history", "novel"],
+    enabled: kind === "novel",
+    onBatchPublished: (_, pendingItems) =>
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
+  })
+
+  const illustPagedRef = useLatest(illustPaged)
+  const mangaPagedRef = useLatest(mangaPaged)
+  const novelPagedRef = useLatest(novelPaged)
 
   useEffect(() => {
-    reloadAll()
-    const unsubscribeHistory = onHistoryChanged(reloadAll)
-    const unsubscribeSettings = onSettingsChanged(reloadAll)
+    const handleHistoryChange = () => {
+      illustPagedRef.current.refresh()
+      mangaPagedRef.current.refresh()
+      novelPagedRef.current.refresh()
+    }
+    const handleSettingsChange = () => {
+      illustPagedRef.current.reapplyFilter()
+      mangaPagedRef.current.reapplyFilter()
+      novelPagedRef.current.reapplyFilter()
+    }
+    const unsubscribeHistory = onHistoryChanged(handleHistoryChange)
+    const unsubscribeSettings = onSettingsChanged(handleSettingsChange)
     return () => {
       unsubscribeHistory()
       unsubscribeSettings()
     }
-  }, [reloadAll])
+  }, [])
+
+  const activeRefresh =
+    kind === "illustration"
+      ? illustPaged.refresh
+      : kind === "manga"
+        ? mangaPaged.refresh
+        : novelPaged.refresh
 
   useEffect(() => {
     onRegisterRefresh?.(async () => {
       await refreshHistoryFromCloud()
-      reloadAll()
+      await activeRefresh()
     })
-  }, [onRegisterRefresh, reloadAll])
-
-  const items = itemsMap[kind]
+  }, [activeRefresh, onRegisterRefresh])
 
   return (
     <VStack alignment="leading" spacing={10}>
-      <HStack spacing={8} padding={{ horizontal: 14 }}>
-        <Text font="caption" foregroundStyle="secondaryLabel">
-          共 {items.length} 条记录
-        </Text>
-      </HStack>
-      <HistoryContent kind={kind} items={items} />
+      {kind === "illustration" ? (
+        <IllustHistoryContent
+          paged={illustPaged}
+          kind="illustration"
+          totalCount={loadHistoryIllusts("illustration").length}
+        />
+      ) : kind === "manga" ? (
+        <IllustHistoryContent
+          paged={mangaPaged}
+          kind="manga"
+          totalCount={loadHistoryIllusts("manga").length}
+        />
+      ) : (
+        <NovelHistoryContent
+          paged={novelPaged}
+          totalCount={loadHistoryNovels().length}
+        />
+      )}
     </VStack>
   )
 }
 
-function HistoryContent(props: { kind: HistoryKind; items: HistoryEntry[] }) {
-  const [visibleCounts, setVisibleCounts] = useState<Record<HistoryKind, number>>({
-    illustration: UI_BATCH_SIZE,
-    manga: UI_BATCH_SIZE,
-    novel: UI_BATCH_SIZE,
-  })
-  const [loadingMore, setLoadingMore] = useState(false)
-  const loadingMoreLockRef = useRef(false)
-  const prefetchTaskRef = useRef<{ cancel: () => void } | null>(null)
+function IllustHistoryContent(props: {
+  paged: ReturnType<typeof usePagedList<HistoryIllustItem>>
+  kind: "illustration" | "manga"
+  totalCount: number
+}) {
+  const { paged, kind, totalCount } = props
 
-  const visibleCount = visibleCounts[props.kind] ?? UI_BATCH_SIZE
-
-  useEffect(() => {
-    prefetchTaskRef.current?.cancel()
-    if (props.kind === "novel") {
-      const novels = props.items.filter(
-        (entry): entry is Extract<HistoryEntry, { kind: "novel" }> =>
-          entry.kind === "novel"
-      )
-      const nextNovels = novels.slice(visibleCount, visibleCount + UI_BATCH_SIZE)
-      prefetchTaskRef.current = prefetch(
-        nextNovels.map((e) => novelThumbUrlOf(e.novel as PixivNovel))
-      )
-    } else {
-      const illustEntries = props.items.filter(
-        (entry): entry is Extract<HistoryEntry, { kind: "illust" }> =>
-          entry.kind === "illust"
-      )
-      const nextIllusts = illustEntries.slice(visibleCount, visibleCount + UI_BATCH_SIZE)
-      prefetchTaskRef.current = prefetch(
-        nextIllusts.map((e) => cardThumbUrlOf(e.illustration))
-      )
-    }
-    return () => prefetchTaskRef.current?.cancel()
-  }, [visibleCount, props.kind, props.items])
-
-  if (props.items.length === 0) {
+  if (paged.items.length === 0 && !paged.initialLoading) {
     const text =
-      props.kind === "novel"
-        ? "暂无小说浏览记录，打开小说后会自动记录"
-        : "暂无浏览记录，打开作品后会自动记录"
+      kind === "manga"
+        ? "暂无漫画浏览记录，打开作品后会自动记录"
+        : "暂无插画浏览记录，打开作品后会自动记录"
     return <EmptyView text={text} systemImage="clock" />
   }
 
-  if (props.kind === "novel") {
-    const novels = props.items.filter(
-      (entry): entry is Extract<HistoryEntry, { kind: "novel" }> =>
-        entry.kind === "novel"
-    )
-    const visibleNovels = novels.slice(0, visibleCount)
-    const lastNovel = visibleNovels[visibleNovels.length - 1]
+  return (
+    <VStack alignment="leading" spacing={8}>
+      <HStack frame={{ maxWidth: "infinity", alignment: "center" }} padding={{ horizontal: 14 }}>
+        <Text
+          font="caption"
+          foregroundStyle="secondaryLabel"
+          multilineTextAlignment="center"
+          frame={{ maxWidth: "infinity", alignment: "center" }}
+        >
+          共 {totalCount} 条记录
+        </Text>
+      </HStack>
+      <IllustFlowFeed
+        items={paged.items}
+        onLoadMore={paged.loadMore}
+        hasMore={paged.hasMore}
+        isLoading={paged.loadingMore}
+        footerTextOf={(_, index) =>
+          paged.items[index]
+            ? formatDate(new Date(paged.items[index].viewedAt).toISOString())
+            : undefined
+        }
+        topTrailingActionOf={(illust) => ({
+          title: "移除",
+          systemImage: "trash",
+          tint: "#FF3B30",
+          foregroundStyle: "systemRed",
+          action: () => removeHistoryEntry("illust", illust.id),
+        })}
+      />
+    </VStack>
+  )
+}
 
-    async function loadMoreNovels() {
-      if (loadingMoreLockRef.current || visibleCount >= novels.length) return
-      loadingMoreLockRef.current = true
-      setLoadingMore(true)
-      try {
-        // 缓冲 1500ms：确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
-        await waitForPaginationFeedback()
-        setVisibleCounts((prev) => ({
-          ...prev,
-          novel: Math.min((prev.novel ?? UI_BATCH_SIZE) + UI_BATCH_SIZE, novels.length),
-        }))
-      } finally {
-        loadingMoreLockRef.current = false
-        setLoadingMore(false)
-      }
-    }
+function NovelHistoryContent(props: {
+  paged: ReturnType<typeof usePagedList<HistoryNovelItem>>
+  totalCount: number
+}) {
+  const { paged, totalCount } = props
 
+  if (paged.items.length === 0 && !paged.initialLoading) {
     return (
+      <EmptyView
+        text="暂无小说浏览记录，打开小说后会自动记录"
+        systemImage="clock"
+      />
+    )
+  }
+
+  const lastNovel = paged.items[paged.items.length - 1]
+
+  return (
+    <VStack alignment="leading" spacing={8}>
+      <HStack frame={{ maxWidth: "infinity", alignment: "center" }} padding={{ horizontal: 14 }}>
+        <Text
+          font="caption"
+          foregroundStyle="secondaryLabel"
+          multilineTextAlignment="center"
+          frame={{ maxWidth: "infinity", alignment: "center" }}
+        >
+          共 {totalCount} 条记录
+        </Text>
+      </HStack>
       <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
-        {visibleNovels.map((entry, index) => (
+        {paged.items.map((entry, index) => (
           <NovelCard
-            key={entry.novel.id}
-            novel={entry.novel as PixivNovel}
+            key={entry.id}
+            novel={entry}
             priority={index}
             footerText={formatDate(new Date(entry.viewedAt).toISOString())}
             topTrailingAction={{
@@ -290,64 +371,19 @@ function HistoryContent(props: { kind: HistoryKind; items: HistoryEntry[] }) {
               systemImage: "trash",
               tint: "#FF3B30",
               foregroundStyle: "systemRed",
-              action: () => removeHistoryEntry("novel", entry.novel.id),
+              action: () => removeHistoryEntry("novel", entry.id),
             }}
           />
         ))}
         {lastNovel ? (
           <LoadMoreTrigger
-            anchor={lastNovel.novel.id}
-            onLoadMore={() => void loadMoreNovels()}
-            hasMore={visibleCount < novels.length}
-            isLoading={loadingMore}
+            anchor={lastNovel.id}
+            onLoadMore={paged.loadMore}
+            hasMore={paged.hasMore}
+            isLoading={paged.loadingMore}
           />
         ) : null}
       </LazyVStack>
-    )
-  }
-
-  const illustEntries = props.items.filter(
-    (entry): entry is Extract<HistoryEntry, { kind: "illust" }> =>
-      entry.kind === "illust"
-  )
-  const visibleIllusts = illustEntries.slice(0, visibleCount)
-
-  async function loadMoreIllusts() {
-    if (loadingMoreLockRef.current || visibleCount >= illustEntries.length) return
-    loadingMoreLockRef.current = true
-    setLoadingMore(true)
-    try {
-      // 缓冲 1500ms：确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
-      await waitForPaginationFeedback()
-      setVisibleCounts((prev) => ({
-        ...prev,
-        [props.kind]: Math.min(
-          (prev[props.kind] ?? UI_BATCH_SIZE) + UI_BATCH_SIZE,
-          illustEntries.length
-        ),
-      }))
-    } finally {
-      loadingMoreLockRef.current = false
-      setLoadingMore(false)
-    }
-  }
-
-  return (
-    <IllustFlowFeed
-      items={visibleIllusts.map((entry) => entry.illustration)}
-      onLoadMore={() => void loadMoreIllusts()}
-      hasMore={visibleCount < illustEntries.length}
-      isLoading={loadingMore}
-      footerTextOf={(_, index) =>
-        formatDate(new Date(visibleIllusts[index].viewedAt).toISOString())
-      }
-      topTrailingActionOf={(illust) => ({
-        title: "移除",
-        systemImage: "trash",
-        tint: "#FF3B30",
-        foregroundStyle: "systemRed",
-        action: () => removeHistoryEntry("illust", illust.id),
-      })}
-    />
+    </VStack>
   )
 }

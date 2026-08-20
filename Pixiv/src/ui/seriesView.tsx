@@ -18,7 +18,9 @@ import {
   cachedFileExists,
   cardThumbUrlOf,
   loadImage,
+  novelThumbUrlOf,
   prefetch,
+  upgradeHighQualityCoverUrl,
 } from "../image/imageLoader"
 import {
   addWatchlistSeries,
@@ -64,11 +66,14 @@ import {
   NovelCard,
 } from "./components"
 import { renderDestination } from "./routes"
-import { useUserAmbientPalette, waitForPaginationFeedback } from "./hooks"
+import {
+  currentBatchSize,
+  useLatest,
+  usePagedList,
+  useUserAmbientPalette,
+} from "./hooks"
 
 type SeriesKind = "manga" | "novel"
-
-const UI_BATCH_SIZE = 10
 
 function seriesIllust(
   item: PixivIllustrationSeriesItem,
@@ -146,21 +151,72 @@ function filterSeriesNovels(
   )
 }
 
-function extractCoverUrl(
-  detailCover?: PixivImageUrls | string | null,
-  firstItemUrls?: PixivImageUrls | null,
-  fallbackUrls?: PixivImageUrls | null
-): string | null {
-  if (typeof detailCover === "string" && detailCover) return detailCover
-  if (detailCover && typeof detailCover === "object") {
-    const url = detailCover.large ?? detailCover.medium ?? detailCover.square_medium
-    if (url) return url
+function candidateUrlOf(item: any): string | null {
+  if (!item) return null
+  if (typeof item === "string") return item
+  if (typeof item !== "object") return null
+
+  // 1. cover?.urls: 优先最高画质 original -> 1200x1200 -> 480mw -> large -> 240mw -> medium -> square_medium -> 128x128
+  const coverUrls = item.cover?.urls ?? item.cover_image_urls ?? item.cover
+  if (coverUrls && typeof coverUrls === "object") {
+    const url =
+      coverUrls.original ??
+      coverUrls["1200x1200"] ??
+      coverUrls["480mw"] ??
+      coverUrls.large ??
+      coverUrls["240mw"] ??
+      coverUrls.medium ??
+      coverUrls.square_medium ??
+      coverUrls["128x128"]
+    if (url && typeof url === "string") return url
   }
-  const first = firstItemUrls?.large ?? firstItemUrls?.medium ?? firstItemUrls?.square_medium
-  if (first) return first
-  const fallback = fallbackUrls?.large ?? fallbackUrls?.medium ?? fallbackUrls?.square_medium
-  if (fallback) return fallback
+
+  // 2. meta_single_page.original_image_url
+  if (item.meta_single_page?.original_image_url) {
+    return item.meta_single_page.original_image_url
+  }
+
+  // 3. meta_pages[0].image_urls
+  if (Array.isArray(item.meta_pages) && item.meta_pages.length > 0) {
+    const firstPage = item.meta_pages[0]?.image_urls
+    if (firstPage) {
+      const url =
+        firstPage.original ??
+        firstPage.large ??
+        firstPage.medium ??
+        firstPage.square_medium
+      if (url) return url
+    }
+  }
+
+  // 4. image_urls: original -> large -> medium -> square_medium
+  if (item.image_urls && typeof item.image_urls === "object") {
+    const url =
+      item.image_urls.original ??
+      item.image_urls.large ??
+      item.image_urls.medium ??
+      item.image_urls.square_medium
+    if (url && typeof url === "string") return url
+  }
+
+  // 5. item.url
+  if (typeof item.url === "string" && item.url) {
+    return item.url
+  }
+
   return null
+}
+
+function extractCoverUrl(
+  detail?: any,
+  firstItem?: any,
+  fallbackItem?: any
+): string | null {
+  const candidate =
+    candidateUrlOf(detail) ??
+    candidateUrlOf(firstItem) ??
+    candidateUrlOf(fallbackItem)
+  return upgradeHighQualityCoverUrl(candidate)
 }
 
 export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
@@ -172,251 +228,172 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
   authorRef.current = author
   const [workCount, setWorkCount] = useState<number | null>(null)
   const [isWatched, setIsWatched] = useState(false)
+  const isWatchedRef = useRef(isWatched)
+  isWatchedRef.current = isWatched
   const [watchLoading, setWatchLoading] = useState(false)
   const [isAscending, setIsAscending] = useState(
     () => loadSettings().watchlistSortOrder === "asc"
   )
+  const isAscendingRef = useRef(isAscending)
+  isAscendingRef.current = isAscending
 
   const { ambientBackground } = useUserAmbientPalette(coverUrl)
 
-  // 全量已获取未过滤的原始数据映射池
+  // 全量已获取未过滤的原始数据映射池（按自然正序 1..N 存储）
   const rawMappedIllustsRef = useRef<PixivIllustration[]>([])
   const rawMappedNovelsRef = useRef<PixivNovel[]>([])
 
-  // 全量已获取且过滤后的数据池（支持正序/倒序切换与分批派发）
-  const allIllustsRef = useRef<PixivIllustration[]>([])
-  const allNovelsRef = useRef<PixivNovel[]>([])
-  const isWatchedRef = useRef(isWatched)
-  isWatchedRef.current = isWatched
+  // 1. 漫画系列分页流
+  const illustPaged = usePagedList<PixivIllustration>({
+    first: async (token) => {
+      // 若已有缓存原始数据且只是切换了排序，直接快速复用
+      if (rawMappedIllustsRef.current.length > 0) {
+        const sorted = isAscendingRef.current
+          ? rawMappedIllustsRef.current
+          : [...rawMappedIllustsRef.current].reverse()
+        return { items: sorted, nextURL: null }
+      }
 
-  function applyFilterAndSort(targetAsc: boolean, isWatchedNow: boolean) {
-    if (props.kind === "manga") {
-      const filtered = filterSeriesIllusts(rawMappedIllustsRef.current, isWatchedNow, authorRef.current)
-      allIllustsRef.current = filtered
-      const sorted = targetAsc ? filtered : [...filtered].reverse()
-      const pub = sorted.slice(0, UI_BATCH_SIZE)
-      const pend = sorted.slice(UI_BATCH_SIZE)
-      setPublishedIllusts(pub)
-      setPendingIllusts(pend)
-      prefetchTaskRef.current?.cancel()
-      prefetchTaskRef.current = prefetch([
-        ...pub.map(cardThumbUrlOf),
-        ...pend.slice(0, UI_BATCH_SIZE).map(cardThumbUrlOf),
-      ])
-    } else {
-      const filtered = filterSeriesNovels(rawMappedNovelsRef.current, isWatchedNow, authorRef.current)
-      allNovelsRef.current = filtered
-      const sorted = targetAsc ? filtered : [...filtered].reverse()
-      setPublishedNovels(sorted.slice(0, UI_BATCH_SIZE))
-      setPendingNovels(sorted.slice(UI_BATCH_SIZE))
-    }
-  }
+      const result = await illustrationSeries(props.seriesID, token)
+      const detail = result.illust_series_detail
+      setTitle(detail.title || "漫画系列")
+      setCaption(detail.caption || "")
+      const isExempt = Boolean(detail.watchlist_added ?? (detail as any).is_watched)
+      setIsWatched(isExempt)
+      isWatchedRef.current = isExempt
 
-  // 当前已发布到 UI 的分批数据（初始严格为前 10 条）
-  const [publishedIllusts, setPublishedIllusts] = useState<PixivIllustration[]>([])
-  const [pendingIllusts, setPendingIllusts] = useState<PixivIllustration[]>([])
+      const seriesAuthor =
+        detail.user ??
+        result.illust_series_first_illust?.user ??
+        result.illusts?.[0]?.user ??
+        null
+      setAuthor(seriesAuthor)
+      authorRef.current = seriesAuthor
 
-  const [publishedNovels, setPublishedNovels] = useState<PixivNovel[]>([])
-  const [pendingNovels, setPendingNovels] = useState<PixivNovel[]>([])
-
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [loadingMore, setLoadingMore] = useState(false)
-  const loadingMoreLockRef = useRef(false)
-  const prefetchTaskRef = useRef<{ cancel: () => void } | null>(null)
-
-  async function load() {
-    setLoading(true)
-    setError(null)
-    loadingMoreLockRef.current = false
-    setLoadingMore(false)
-    const currentSettings = loadSettings()
-    const currentAsc = currentSettings.watchlistSortOrder === "asc"
-    setIsAscending(currentAsc)
-    try {
-      if (props.kind === "manga") {
-        const result = await session.call((token) => illustrationSeries(props.seriesID, token))
-        const detail = result.illust_series_detail
-        setTitle(detail.title || "漫画系列")
-        setCaption(detail.caption || "")
-        const isExempt = Boolean(detail.watchlist_added ?? (detail as any).is_watched)
-        setIsWatched(isExempt)
-
-        const seriesAuthor =
-          detail.user ??
-          result.illust_series_first_illust?.user ??
-          result.illusts?.[0]?.user ??
-          null
-        setAuthor(seriesAuthor)
-
-        const cover = extractCoverUrl(
-          detail.cover_image_urls ?? detail.url,
-          result.illust_series_first_illust?.image_urls,
-          result.illusts?.[0]?.image_urls
-        )
-        if (cover && !cachedFileExists(cover)) {
-          await Promise.race([
-            loadImage(cover, 0),
-            new Promise((resolve) => setTimeout(() => resolve(null), 1000)),
-          ])
-        }
-        setCoverUrl(cover)
-
-        const allRawIllusts: PixivIllustrationSeriesItem[] = Array.isArray(result.illusts) ? [...result.illusts] : []
-        let currentNextURL = result.next_url ?? null
-
-        // 循环拉取后续全部章节分页，组装系列完整作品列表（Pixiv 单次请求最多返回 30 条）
-        while (currentNextURL && allRawIllusts.length < 500) {
-          try {
-            const nextResult = await session.call((token) => nextIllustrationSeries(currentNextURL!, token))
-            if (Array.isArray(nextResult.illusts) && nextResult.illusts.length > 0) {
-              allRawIllusts.push(...nextResult.illusts)
-              currentNextURL = nextResult.next_url ?? null
-            } else {
-              break
-            }
-          } catch {
-            break
-          }
-        }
-
-        // Pixiv API 返回的全部章节数组为全局倒序（[最新一话, ..., 第 1 话]）
-        // 整体反转为自然正序（[第 1 话, ..., 最新一话]），并为每一话固定标注绝对真实话数 episode_number
-        const rawAscending = [...allRawIllusts].reverse()
-        const mappedIllusts = rawAscending.map((it, idx) =>
-          seriesIllust(it, seriesAuthor, idx + 1)
-        )
-        cacheIllusts(mappedIllusts)
-        rawMappedIllustsRef.current = mappedIllusts
-        const filtered = filterSeriesIllusts(mappedIllusts, isExempt, seriesAuthor)
-        allIllustsRef.current = filtered
-        setWorkCount(detail.series_work_count ?? allRawIllusts.length)
-
-        const sorted = currentAsc ? filtered : [...filtered].reverse()
-        const pub = sorted.slice(0, UI_BATCH_SIZE)
-        const pend = sorted.slice(UI_BATCH_SIZE)
-
-        setPublishedIllusts(pub)
-        setPendingIllusts(pend)
-        setPublishedNovels([])
-        setPendingNovels([])
-
-        prefetchTaskRef.current?.cancel()
-        prefetchTaskRef.current = prefetch([
-          ...pub.map(cardThumbUrlOf),
-          ...pend.slice(0, UI_BATCH_SIZE).map(cardThumbUrlOf),
+      const cover = extractCoverUrl(
+        detail,
+        result.illust_series_first_illust,
+        result.illusts?.[0]
+      )
+      if (cover && !cachedFileExists(cover)) {
+        await Promise.race([
+          loadImage(cover, 0),
+          new Promise((resolve) => setTimeout(() => resolve(null), 1000)),
         ])
-      } else {
-        const result = await session.call((token) => novelSeries(props.seriesID, token))
-        const detail = result.novel_series_detail
-        setTitle(detail.title || "小说系列")
-        setCaption(detail.caption || "")
-        const isExempt = Boolean(detail.watchlist_added ?? (detail as any).is_watched)
-        setIsWatched(isExempt)
+      }
+      setCoverUrl(cover)
 
-        const seriesAuthor =
-          detail.user ??
-          result.novel_series_first_novel?.user ??
-          result.novels?.[0]?.user ??
-          null
-        setAuthor(seriesAuthor)
+      const allRawIllusts: PixivIllustrationSeriesItem[] = Array.isArray(result.illusts) ? [...result.illusts] : []
+      let currentNextURL = result.next_url ?? null
 
-        const cover = extractCoverUrl(
-          detail.cover_image_urls ?? detail.url,
-          result.novel_series_first_novel?.image_urls,
-          result.novels?.[0]?.image_urls
-        )
-        if (cover && !cachedFileExists(cover)) {
-          await Promise.race([
-            loadImage(cover, 0),
-            new Promise((resolve) => setTimeout(() => resolve(null), 1000)),
-          ])
-        }
-        setCoverUrl(cover)
-
-        const allRawNovels: PixivNovel[] = Array.isArray(result.novels) ? [...result.novels] : []
-        let currentNextURL = result.next_url ?? null
-
-        // 循环拉取小说系列后续全部章节
-        while (currentNextURL && allRawNovels.length < 500) {
-          try {
-            const nextResult = await session.call((token) => nextNovelSeries(currentNextURL!, token))
-            if (Array.isArray(nextResult.novels) && nextResult.novels.length > 0) {
-              allRawNovels.push(...nextResult.novels)
-              currentNextURL = nextResult.next_url ?? null
-            } else {
-              break
-            }
-          } catch {
+      while (currentNextURL && allRawIllusts.length < 500) {
+        try {
+          const nextResult = await nextIllustrationSeries(currentNextURL!, token)
+          if (Array.isArray(nextResult.illusts) && nextResult.illusts.length > 0) {
+            allRawIllusts.push(...nextResult.illusts)
+            currentNextURL = nextResult.next_url ?? null
+          } else {
             break
           }
+        } catch {
+          break
         }
-
-        // Pixiv API 返回的小说章节列表官方为自然正序（[第 1 话, ..., 最新一话]），直接作为正序基准并固定标注 episode_number
-        const mappedNovels = allRawNovels.map((novel, idx) => ({
-          ...novel,
-          episode_number: idx + 1,
-        }))
-        rawMappedNovelsRef.current = mappedNovels
-        const filtered = filterSeriesNovels(mappedNovels, isExempt, seriesAuthor)
-        allNovelsRef.current = filtered
-        setWorkCount(detail.content_count ?? allRawNovels.length)
-
-        const sorted = currentAsc ? filtered : [...filtered].reverse()
-        const pub = sorted.slice(0, UI_BATCH_SIZE)
-        const pend = sorted.slice(UI_BATCH_SIZE)
-
-        setPublishedNovels(pub)
-        setPendingNovels(pend)
-        setPublishedIllusts([])
-        setPendingIllusts([])
       }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "系列加载失败")
-    } finally {
-      setLoading(false)
-    }
-  }
 
-  async function loadMore() {
-    if (loadingMoreLockRef.current) return
-    if (props.kind === "manga") {
-      if (pendingIllusts.length === 0) return
-      loadingMoreLockRef.current = true
-      setLoadingMore(true)
-      try {
-        // 缓冲 1500ms：确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
-        await waitForPaginationFeedback()
-        const nextBatch = pendingIllusts.slice(0, UI_BATCH_SIZE)
-        const remaining = pendingIllusts.slice(UI_BATCH_SIZE)
-        setPublishedIllusts((current) => [...current, ...nextBatch])
-        setPendingIllusts(remaining)
-        prefetchTaskRef.current?.cancel()
-        prefetchTaskRef.current = prefetch(remaining.slice(0, UI_BATCH_SIZE).map(cardThumbUrlOf))
-      } catch {
-        // 出错静默，允许用户再次触底重试
-      } finally {
-        loadingMoreLockRef.current = false
-        setLoadingMore(false)
+      const rawAscending = [...allRawIllusts].reverse()
+      const mappedIllusts = rawAscending.map((it, idx) =>
+        seriesIllust(it, seriesAuthor, idx + 1)
+      )
+      cacheIllusts(mappedIllusts)
+      rawMappedIllustsRef.current = mappedIllusts
+      setWorkCount(detail.series_work_count ?? allRawIllusts.length)
+
+      const sorted = isAscendingRef.current ? mappedIllusts : [...mappedIllusts].reverse()
+      return { items: sorted, nextURL: null }
+    },
+    filter: (items) => filterSeriesIllusts(items, isWatchedRef.current, authorRef.current),
+    deps: [props.seriesID, isAscending],
+    enabled: props.kind === "manga",
+    onBatchPublished: (_, pendingItems) =>
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
+  })
+
+  // 2. 小说系列分页流
+  const novelPaged = usePagedList<PixivNovel>({
+    first: async (token) => {
+      // 若已有缓存原始数据且只是切换了排序，直接快速复用
+      if (rawMappedNovelsRef.current.length > 0) {
+        const sorted = isAscendingRef.current
+          ? rawMappedNovelsRef.current
+          : [...rawMappedNovelsRef.current].reverse()
+        return { items: sorted, nextURL: null }
       }
-    } else {
-      if (pendingNovels.length === 0) return
-      loadingMoreLockRef.current = true
-      setLoadingMore(true)
-      try {
-        await waitForPaginationFeedback()
-        const nextBatch = pendingNovels.slice(0, UI_BATCH_SIZE)
-        const remaining = pendingNovels.slice(UI_BATCH_SIZE)
-        setPublishedNovels((current) => [...current, ...nextBatch])
-        setPendingNovels(remaining)
-      } catch {
-        // 出错静默
-      } finally {
-        loadingMoreLockRef.current = false
-        setLoadingMore(false)
+
+      const result = await novelSeries(props.seriesID, token)
+      const detail = result.novel_series_detail
+      setTitle(detail.title || "小说系列")
+      setCaption(detail.caption || "")
+      const isExempt = Boolean(detail.watchlist_added ?? (detail as any).is_watched)
+      setIsWatched(isExempt)
+      isWatchedRef.current = isExempt
+
+      const seriesAuthor =
+        detail.user ??
+        result.novel_series_first_novel?.user ??
+        result.novels?.[0]?.user ??
+        null
+      setAuthor(seriesAuthor)
+      authorRef.current = seriesAuthor
+
+      const cover = extractCoverUrl(
+        detail,
+        result.novel_series_first_novel,
+        result.novels?.[0]
+      )
+      if (cover && !cachedFileExists(cover)) {
+        await Promise.race([
+          loadImage(cover, 0),
+          new Promise((resolve) => setTimeout(() => resolve(null), 1000)),
+        ])
       }
-    }
-  }
+      setCoverUrl(cover)
+
+      const allRawNovels: PixivNovel[] = Array.isArray(result.novels) ? [...result.novels] : []
+      let currentNextURL = result.next_url ?? null
+
+      while (currentNextURL && allRawNovels.length < 500) {
+        try {
+          const nextResult = await nextNovelSeries(currentNextURL!, token)
+          if (Array.isArray(nextResult.novels) && nextResult.novels.length > 0) {
+            allRawNovels.push(...nextResult.novels)
+            currentNextURL = nextResult.next_url ?? null
+          } else {
+            break
+          }
+        } catch {
+          break
+        }
+      }
+
+      const mappedNovels = allRawNovels.map((novel, idx) => ({
+        ...novel,
+        episode_number: idx + 1,
+      }))
+      rawMappedNovelsRef.current = mappedNovels
+      setWorkCount(detail.content_count ?? allRawNovels.length)
+
+      const sorted = isAscendingRef.current ? mappedNovels : [...mappedNovels].reverse()
+      return { items: sorted, nextURL: null }
+    },
+    filter: (items) => filterSeriesNovels(items, isWatchedRef.current, authorRef.current),
+    deps: [props.seriesID, isAscending],
+    enabled: props.kind === "novel",
+    onBatchPublished: (_, pendingItems) =>
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
+  })
+
+  const illustPagedRef = useLatest(illustPaged)
+  const novelPagedRef = useLatest(novelPaged)
 
   async function toggleWatchlist() {
     if (watchLoading) return
@@ -427,11 +404,15 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
       if (nextState) {
         await session.call((token) => addWatchlistSeries(props.seriesID, props.kind, token))
         setIsWatched(true)
-        applyFilterAndSort(isAscending, true)
+        isWatchedRef.current = true
+        if (props.kind === "manga") illustPagedRef.current.reapplyFilter()
+        else novelPagedRef.current.reapplyFilter()
       } else {
         await session.call((token) => deleteWatchlistSeries(props.seriesID, props.kind, token))
         setIsWatched(false)
-        applyFilterAndSort(isAscending, false)
+        isWatchedRef.current = false
+        if (props.kind === "manga") illustPagedRef.current.reapplyFilter()
+        else novelPagedRef.current.reapplyFilter()
       }
     } catch {
       // 保持当前状态
@@ -441,38 +422,44 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
   }
 
   useEffect(() => {
-    load()
-  }, [props.kind, props.seriesID])
-
-  useEffect(() => {
     return onWatchlistChanged((changedID, watched) => {
       if (changedID === props.seriesID) {
         setIsWatched(watched)
-        applyFilterAndSort(isAscending, watched)
+        isWatchedRef.current = watched
+        if (props.kind === "manga") illustPagedRef.current.reapplyFilter()
+        else novelPagedRef.current.reapplyFilter()
       }
     })
-  }, [props.seriesID, isAscending])
+  }, [props.seriesID, props.kind])
 
   useEffect(() => {
     return onUserFollowChanged((changedUserID) => {
       if (authorRef.current?.id === changedUserID) {
-        applyFilterAndSort(isAscending, isWatchedRef.current)
+        if (props.kind === "manga") illustPagedRef.current.reapplyFilter()
+        else novelPagedRef.current.reapplyFilter()
       }
     })
-  }, [isAscending])
-
-
+  }, [props.kind])
 
   useEffect(() => {
     return onSettingsChanged(() => {
       const nextSettings = loadSettings()
       const targetAsc = nextSettings.watchlistSortOrder === "asc"
       setIsAscending(targetAsc)
-      applyFilterAndSort(targetAsc, isWatchedRef.current)
+      if (props.kind === "manga") illustPagedRef.current.reapplyFilter()
+      else novelPagedRef.current.reapplyFilter()
     })
   }, [props.kind])
 
-  if (loading) {
+  const paged = props.kind === "manga" ? illustPaged : novelPaged
+
+  const handleRefresh = async () => {
+    rawMappedIllustsRef.current = []
+    rawMappedNovelsRef.current = []
+    await paged.refresh()
+  }
+
+  if (paged.initialLoading) {
     return (
       <ScrollView
         navigationTitle="系列详情"
@@ -484,14 +471,14 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
     )
   }
 
-  if (error) {
+  if (paged.error) {
     return (
       <ScrollView
         navigationTitle="系列详情"
         navigationBarTitleDisplayMode="inline"
         toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
       >
-        <ErrorView message={error} onRetry={load} />
+        <ErrorView message={paged.error} onRetry={handleRefresh} />
       </ScrollView>
     )
   }
@@ -503,6 +490,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
       toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
       ignoresSafeArea={{ edges: ["top", "bottom"] }}
       background={ambientBackground}
+      refreshable={handleRefresh}
       toolbar={{
         topBarTrailing: [
           <Button
@@ -520,22 +508,6 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
               const nextAsc = !isAscending
               setIsAscending(nextAsc)
               updateSettings({ watchlistSortOrder: nextAsc ? "asc" : "desc" })
-              if (props.kind === "manga") {
-                const sorted = nextAsc ? allIllustsRef.current : [...allIllustsRef.current].reverse()
-                const pub = sorted.slice(0, UI_BATCH_SIZE)
-                const pend = sorted.slice(UI_BATCH_SIZE)
-                setPublishedIllusts(pub)
-                setPendingIllusts(pend)
-                prefetchTaskRef.current?.cancel()
-                prefetchTaskRef.current = prefetch([
-                  ...pub.map(cardThumbUrlOf),
-                  ...pend.slice(0, UI_BATCH_SIZE).map(cardThumbUrlOf),
-                ])
-              } else {
-                const sorted = nextAsc ? allNovelsRef.current : [...allNovelsRef.current].reverse()
-                setPublishedNovels(sorted.slice(0, UI_BATCH_SIZE))
-                setPendingNovels(sorted.slice(UI_BATCH_SIZE))
-              }
             }}
           >
             <Image systemName={isAscending ? "arrow.up" : "arrow.down"} />
@@ -627,45 +599,47 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
         {/* 章节列表 */}
         {props.kind === "novel" ? (
           <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10, top: 4 }}>
-            {publishedNovels.length === 0 ? (
+            {novelPaged.items.length === 0 && !novelPaged.initialLoading ? (
               <EmptyView
                 text="暂无可显示的小说章节"
                 systemImage="book"
               />
             ) : (
               <>
-                {publishedNovels.map((novel, index) => (
+                {novelPaged.items.map((novel, index) => (
                   <NovelCard key={novel.id} novel={novel} priority={index} />
                 ))}
-                <LoadMoreTrigger
-                  anchor={publishedNovels[publishedNovels.length - 1].id}
-                  onLoadMore={loadMore}
-                  hasMore={pendingNovels.length > 0}
-                  isLoading={loadingMore}
-                />
+                {novelPaged.items.length > 0 ? (
+                  <LoadMoreTrigger
+                    anchor={novelPaged.items[novelPaged.items.length - 1].id}
+                    onLoadMore={novelPaged.loadMore}
+                    hasMore={novelPaged.hasMore}
+                    isLoading={novelPaged.loadingMore}
+                  />
+                ) : null}
               </>
             )}
           </LazyVStack>
         ) : (
           <VStack alignment="leading" spacing={8} padding={{ top: 4 }} frame={{ maxWidth: "infinity" }}>
-            {publishedIllusts.length === 0 ? (
+            {illustPaged.items.length === 0 && !illustPaged.initialLoading ? (
               <EmptyView
                 text="暂无可显示的漫画章节"
                 systemImage="photo.on.rectangle"
               />
             ) : (
               <IllustFlowFeed
-                items={publishedIllusts}
-                onLoadMore={loadMore}
-                hasMore={pendingIllusts.length > 0}
-                isLoading={loadingMore}
+                items={illustPaged.items}
+                onLoadMore={illustPaged.loadMore}
+                hasMore={illustPaged.hasMore}
+                isLoading={illustPaged.loadingMore}
                 cornerBadgeOf={(illust, index) => (
                   <ImageNumberBadge
                     number={
                       illust.episode_number ??
                       (isAscending
                         ? index + 1
-                        : (workCount ?? allIllustsRef.current.length) - index)
+                        : (workCount ?? rawMappedIllustsRef.current.length) - index)
                     }
                   />
                 )}

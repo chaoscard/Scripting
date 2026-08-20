@@ -605,3 +605,32 @@ export function cardThumbUrlOf(
     ? (i.image_urls?.large ?? i.image_urls?.medium ?? i.image_urls?.square_medium ?? null)
     : (i.image_urls?.medium ?? i.image_urls?.large ?? i.image_urls?.square_medium ?? null)
 }
+
+/**
+ * 将 Pixiv 封面/插画缩略图 URL 升档为高清大图（master1200 / original）
+ * 针对小说封面、系列封面与插画背景横幅：
+ * 1. novel-cover-master: 去除 /c/<size>/ 裁剪缩放路径，并将 _square1200. / _custom1200. 替换为 _master1200.
+ * 2. img-master: 去除 /c/<size>/ 裁剪缩放路径，并将 _square1200. / _custom1200. 替换为 _master1200.
+ */
+export function upgradeHighQualityCoverUrl(
+  url: string | null | undefined
+): string | null {
+  if (!url || typeof url !== "string") return null
+  if (!url.includes("pximg.net")) return url
+
+  let upgraded = url
+  if (upgraded.includes("novel-cover-master")) {
+    upgraded = upgraded.replace(/\/c\/[^/]+\//, "/")
+    upgraded = upgraded.replace(/_(?:square|custom)1200\./, "_master1200.")
+    return upgraded
+  }
+
+  if (upgraded.includes("img-master")) {
+    upgraded = upgraded.replace(/\/c\/[^/]+\//, "/")
+    upgraded = upgraded.replace(/_(?:square|custom)1200\./, "_master1200.")
+    return upgraded
+  }
+
+  return upgraded
+}
+
