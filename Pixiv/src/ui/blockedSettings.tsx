@@ -17,26 +17,27 @@ import { session } from "../api/session"
 import {
   blockTag,
   blockUser,
-  loadSettings,
-  onSettingsChanged,
+  clearBlockedTags,
+  clearBlockedUsers,
+  loadBlocklist,
+  onBlocklistChanged,
   unblockTag,
   unblockUser,
-  updateSettings,
   type BlockedUser,
-} from "../store/settings"
+} from "../store/blocklist"
 import { AuthorRow, EmptyView } from "./components"
 
 type BlockedScope = "tag" | "user"
 
 export function BlockedSettingsView() {
   const [scope, setScope] = useState<BlockedScope>("tag")
-  const [settings, setSettings] = useState(loadSettings())
+  const [blocklist, setBlocklist] = useState(loadBlocklist())
   const [showInput, setShowInput] = useState(false)
   const [input, setInput] = useState("")
   const [adding, setAdding] = useState(false)
   const [inputError, setInputError] = useState<string | null>(null)
 
-  useEffect(() => onSettingsChanged(() => setSettings(loadSettings())), [])
+  useEffect(() => onBlocklistChanged(() => setBlocklist(loadBlocklist())), [])
 
   function openInput() {
     setInput("")
@@ -57,7 +58,7 @@ export function BlockedSettingsView() {
 
     if (scope === "tag") {
       const next = blockTag(value)
-      setSettings(next)
+      setBlocklist(next)
       closeInput()
       return
     }
@@ -71,7 +72,7 @@ export function BlockedSettingsView() {
     setAdding(true)
     try {
       const detail = await session.call((token) => userDetail(userID, token))
-      setSettings(blockUser(detail.user))
+      setBlocklist(blockUser(detail.user))
       closeInput()
     } catch (error: any) {
       setInputError(error?.message ?? "未找到该用户")
@@ -83,9 +84,9 @@ export function BlockedSettingsView() {
   function clearCurrent() {
     const next =
       scope === "tag"
-        ? updateSettings({ blockedTags: [] })
-        : updateSettings({ blockedUsers: [] })
-    setSettings(next)
+        ? clearBlockedTags()
+        : clearBlockedUsers()
+    setBlocklist(next)
   }
 
   const empty =
@@ -194,11 +195,11 @@ export function BlockedSettingsView() {
         </Picker>
 
           {scope === "tag" ? (
-            settings.blockedTags.length === 0 ? (
+            blocklist.blockedTags.length === 0 ? (
               <EmptyView text={empty.text} systemImage={empty.systemImage} />
             ) : (
               <VStack alignment="leading" spacing={8}>
-                {settings.blockedTags.map((tag) => (
+                {blocklist.blockedTags.map((tag) => (
                   <HStack
                     key={tag}
                     spacing={10}
@@ -216,7 +217,7 @@ export function BlockedSettingsView() {
                       frame={{ width: 28, height: 28 }}
                       clipShape={{ type: "rect", cornerRadius: 14 }}
                       contentShape="rect"
-                      action={() => setSettings(unblockTag(tag))}
+                      action={() => setBlocklist(unblockTag(tag))}
                     >
                       <Image systemName="xmark" foregroundStyle="systemRed" />
                     </Button>
@@ -224,15 +225,15 @@ export function BlockedSettingsView() {
                 ))}
               </VStack>
             )
-          ) : settings.blockedUsers.length === 0 ? (
+          ) : blocklist.blockedUsers.length === 0 ? (
             <EmptyView text={empty.text} systemImage={empty.systemImage} />
           ) : (
             <VStack alignment="leading" spacing={8}>
-              {settings.blockedUsers.map((user) => (
+              {blocklist.blockedUsers.map((user) => (
                 <BlockedUserRow
                   key={user.id}
                   user={user}
-                  onRemove={() => setSettings(unblockUser(user.id))}
+                  onRemove={() => setBlocklist(unblockUser(user.id))}
                 />
               ))}
             </VStack>
@@ -258,9 +259,8 @@ function BlockedUserRow(props: { user: BlockedUser; onRemove: () => void }) {
             id: user.id,
             name: user.name,
             account: user.account,
-            profile_image_urls: { medium: user.avatarURL },
+            profile_image_urls: user.avatarURL ? { medium: user.avatarURL } : { medium: "" },
           }}
-          size={28}
         />
       </NavigationLink>
       <Button

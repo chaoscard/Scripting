@@ -76,16 +76,12 @@ function loadHistoryNovels(): HistoryNovelItem[] {
 
 function filterHistoryIllusts(items: HistoryIllustItem[]): HistoryIllustItem[] {
   const settings = loadSettings()
-  return items.filter((item) =>
-    isIllustContentVisible(item, settings, { hasHistory: true })
-  )
+  return items.filter((item) => isIllustContentVisible(item, settings))
 }
 
 function filterHistoryNovels(items: HistoryNovelItem[]): HistoryNovelItem[] {
   const settings = loadSettings()
-  return items.filter((item) =>
-    isNovelContentVisible(item, settings, { hasHistory: true })
-  )
+  return items.filter((item) => isNovelContentVisible(item, settings))
 }
 
 export function HistoryView() {

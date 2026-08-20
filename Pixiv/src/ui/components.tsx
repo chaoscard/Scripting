@@ -49,7 +49,8 @@ import {
   removeNovelBookmark,
 } from "../api/pixiv"
 import { session } from "../api/session"
-import { blockTag, loadSettings } from "../store/settings"
+import { loadSettings } from "../store/settings"
+import { blockTag } from "../store/blocklist"
 import { cacheIllust, cacheIllusts } from "../store/illustCache"
 import { useLatest, useTimedFlag } from "./hooks"
 import { requestPixivRoute } from "./routeNavigation"

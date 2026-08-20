@@ -21,7 +21,6 @@ import type {
 } from "../types"
 import { API_BASE_URL } from "../config"
 import { notifyUserFollowChanged } from "../store/userFollow"
-import { recordWatchedSeries, recordWatchedSeriesIDs } from "../store/watchlist"
 import {
   apiGet,
   apiGetAbsolute,
@@ -41,7 +40,7 @@ export type UserConnectionKind = "following" | "follower"
 export interface SearchOptions {
   target: string
   sort: string
-  aiFilter: number
+  aiFilter?: number
   word: string
   startDate?: string
   endDate?: string
@@ -458,9 +457,6 @@ export async function watchlistManga(
 ): Promise<PixivPage<PixivWatchlistSeries>> {
   const json = await apiGet("/v1/watchlist/manga", {}, accessToken)
   const items = json?.series ?? []
-  if (Array.isArray(items) && items.length > 0) {
-    recordWatchedSeriesIDs(items.map((it: any) => it.id))
-  }
   return { items, nextURL: json?.next_url ?? null }
 }
 
@@ -469,9 +465,6 @@ export async function watchlistNovels(
 ): Promise<PixivPage<PixivWatchlistSeries>> {
   const json = await apiGet("/v1/watchlist/novel", {}, accessToken)
   const items = json?.series ?? []
-  if (Array.isArray(items) && items.length > 0) {
-    recordWatchedSeriesIDs(items.map((it: any) => it.id))
-  }
   return { items, nextURL: json?.next_url ?? null }
 }
 
@@ -486,7 +479,6 @@ export async function addWatchlistSeries(
       ? { illust_series_id: String(seriesID), series_id: String(seriesID) }
       : { novel_series_id: String(seriesID), series_id: String(seriesID) }
   await apiPost(endpoint, body, accessToken)
-  recordWatchedSeries(seriesID, true)
 }
 
 export async function deleteWatchlistSeries(
@@ -500,7 +492,6 @@ export async function deleteWatchlistSeries(
       ? { illust_series_id: String(seriesID), series_id: String(seriesID) }
       : { novel_series_id: String(seriesID), series_id: String(seriesID) }
   await apiPost(endpoint, body, accessToken)
-  recordWatchedSeries(seriesID, false)
 }
 
 // ---------- 收藏 ----------
@@ -600,8 +591,10 @@ export async function searchIllustrations(
     merge_plain_keyword_results: "true",
     search_target: options.target,
     sort: options.sort,
-    search_ai_type: String(options.aiFilter),
     word: options.word,
+  }
+  if (options.aiFilter != null) {
+    query["search_ai_type"] = String(options.aiFilter)
   }
   if (options.startDate) query["start_date"] = options.startDate
   if (options.endDate) query["end_date"] = options.endDate
@@ -683,13 +676,6 @@ export async function illustrationSeries(
     { filter: "for_ios", illust_series_id: String(id) },
     accessToken
   )
-  if (json?.illust_series_detail) {
-    const isWatched = Boolean(
-      json.illust_series_detail.watchlist_added ??
-      (json.illust_series_detail as any).is_watched
-    )
-    recordWatchedSeries(id, isWatched)
-  }
   return json
 }
 
@@ -708,13 +694,6 @@ export async function novelSeries(
     { series_id: String(id) },
     accessToken
   )
-  if (json?.novel_series_detail) {
-    const isWatched = Boolean(
-      json.novel_series_detail.watchlist_added ??
-      (json.novel_series_detail as any).is_watched
-    )
-    recordWatchedSeries(id, isWatched)
-  }
   return json
 }
 export async function nextNovelSeries(
@@ -943,6 +922,17 @@ export async function unfollowUser(
     accessToken
   )
   notifyUserFollowChanged(userID, false)
+}
+
+export async function editAIShowSettings(
+  showAI: boolean,
+  accessToken: string
+): Promise<any> {
+  return apiPost(
+    "/v1/user/ai-show-settings/edit",
+    { show_ai: showAI ? "true" : "false" },
+    accessToken
+  )
 }
 
 // ---------- 关注标签 ----------
@@ -1298,9 +1288,6 @@ export async function nextWatchlist(
 ): Promise<PixivPage<PixivWatchlistSeries>> {
   const json = await apiGetAbsolute(nextURL, accessToken)
   const items = json?.series ?? []
-  if (Array.isArray(items) && items.length > 0) {
-    recordWatchedSeriesIDs(items.map((it: any) => it.id))
-  }
   return { items, nextURL: json?.next_url ?? null }
 }
 

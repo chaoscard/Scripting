@@ -47,8 +47,6 @@ import {
 } from "../store/settings"
 import {
   isIllustContentVisible,
-  isIllustExempt,
-  isR18ContentVisible,
 } from "../store/contentFilter"
 import {
   hasHistory,
@@ -57,7 +55,6 @@ import {
   updateHistoryBookmark,
 } from "../store/history"
 import { onUserFollowChanged, recordUserFollowed } from "../store/userFollow"
-import { isSeriesWatched, onWatchlistChanged, recordWatchedSeries } from "../store/watchlist"
 import { cacheIllust, getCachedIllust } from "../store/illustCache"
 import { useAsyncGuard, useLatest, usePagedList, currentBatchSize } from "./hooks"
 import type { PixivIllustration } from "../types"
@@ -81,7 +78,7 @@ import { buildUgoira } from "../ugoira/ugoira"
 import { renderDestination } from "./routes"
 import { requestPixivRoute } from "./routeNavigation"
 
-const RESTRICTED_CONTENT_MESSAGE = "该作品已被内容分级设置隐藏"
+const BLOCKED_CONTENT_MESSAGE = "该作品已被屏蔽（标签或作者在黑名单中）"
 
 function getInitialIllustPalette(
   illust: PixivIllustration | null,
@@ -141,7 +138,6 @@ export function IllustDetailView(props: { illustID: number }) {
   const guard = useAsyncGuard()
   const illustRef = useLatest(illust)
   const errorRef = useLatest(error)
-  const restrictedLevelRef = useRef<number | null>(null)
   // 同一实例只记录一次浏览（下拉刷新/重试不重复刷新 viewedAt）；换作品时重置
   const recordedIDRef = useRef<number | null>(null)
 
@@ -162,31 +158,11 @@ export function IllustDetailView(props: { illustID: number }) {
         recordUserFollowed(detail.user.id, detail.user.is_followed ?? false)
       }
       const settings = loadSettings()
-      let isExempt = isIllustExempt(detail, settings, { isBookmarked: detail.is_bookmarked, isAuthorFollowed: detail.user.is_followed ?? false })
-      if (!isIllustContentVisible(detail, settings, isExempt)) {
-        if (settings.followFilterExempt && detail.series?.id != null && !isSeriesWatched(detail.series.id)) {
-          try {
-            const seriesData = await session.call((token) => illustrationSeries(detail.series!.id, token))
-            const seriesWatched = Boolean(
-              seriesData.illust_series_detail?.watchlist_added ??
-              (seriesData.illust_series_detail as any)?.is_watched
-            )
-            recordWatchedSeries(detail.series!.id, seriesWatched)
-            if (seriesWatched && isIllustContentVisible(detail, settings, true)) {
-              isExempt = true
-            }
-          } catch {}
-        }
-      }
-      if (
-        !isIllustContentVisible(detail, settings, isExempt)
-      ) {
-        restrictedLevelRef.current = detail.x_restrict
+      if (!isIllustContentVisible(detail, settings)) {
         setIllust(null)
-        setError(RESTRICTED_CONTENT_MESSAGE)
+        setError(BLOCKED_CONTENT_MESSAGE)
         return
       }
-      restrictedLevelRef.current = null
       setIllust(detail)
       setBookmarked(detail.is_bookmarked)
       setFollowed(detail.user.is_followed ?? false)
@@ -292,7 +268,7 @@ export function IllustDetailView(props: { illustID: number }) {
     }
   }, [illust?.id, quality, isDark, ambientEnabled, ambientIntensity])
 
-  // 设置变化时更新图片质量与沉浸式开关；关闭 R18 后立即撤下已打开的受限内容。
+  // 设置变化时更新图片质量与沉浸式开关；屏蔽黑名单变化时撤下或恢复已打开的内容。
   useEffect(() => {
     return onSettingsChanged(() => {
       const settings = loadSettings()
@@ -301,54 +277,20 @@ export function IllustDetailView(props: { illustID: number }) {
       setAmbientIntensity(settings.ambientIntensity)
       const current = illustRef.current
       if (current) {
-        const isExempt = isIllustExempt(current, settings, { isBookmarked: bookmarked, isAuthorFollowed: followed })
-        if (
-          !isIllustContentVisible(current, settings, isExempt)
-        ) {
-          restrictedLevelRef.current = current.x_restrict
+        if (!isIllustContentVisible(current, settings)) {
           guard()
           setIllust(null)
-          setError(RESTRICTED_CONTENT_MESSAGE)
+          setError(BLOCKED_CONTENT_MESSAGE)
           setLoading(false)
         }
       } else if (
         !current &&
-        errorRef.current === RESTRICTED_CONTENT_MESSAGE
+        errorRef.current === BLOCKED_CONTENT_MESSAGE
       ) {
         load()
       }
     })
   }, [bookmarked, followed])
-
-  useEffect(() => {
-    return onWatchlistChanged((seriesID) => {
-      const current = illustRef.current
-      if (current?.series?.id === seriesID) {
-        const settings = loadSettings()
-        const isExempt = isIllustExempt(current, settings, { isBookmarked: bookmarked, isAuthorFollowed: followed })
-        if (!isIllustContentVisible(current, settings, isExempt)) {
-          restrictedLevelRef.current = current.x_restrict
-          guard()
-          setIllust(null)
-          setError(RESTRICTED_CONTENT_MESSAGE)
-          setLoading(false)
-        }
-      } else if (!current && errorRef.current === RESTRICTED_CONTENT_MESSAGE) {
-        load()
-      }
-    })
-  }, [bookmarked, followed])
-
-  useEffect(() => {
-    return onHistoryChanged(() => {
-      if (!illustRef.current && errorRef.current === RESTRICTED_CONTENT_MESSAGE) {
-        const settings = loadSettings()
-        if (settings.libraryFilterExempt && hasHistory(illustID, "illust")) {
-          load()
-        }
-      }
-    })
-  }, [illustID])
 
   if (loading && !illust) {
     return (

@@ -32,7 +32,6 @@ import {
   isIllustContentVisible,
   isNovelContentVisible,
 } from "../store/contentFilter"
-import { refreshWatchlistFromCloud } from "../store/watchlist"
 import { destinationElement } from "./routes"
 import { useLatest, usePagedList, currentBatchSize } from "./hooks"
 import type {
@@ -300,10 +299,7 @@ function WatchlistFeed(props: {
   const { enabled = true, kind, onRegisterRefresh } = props
 
   const mangaPaged = usePagedList<PixivWatchlistSeries>({
-    first: async (token) => {
-      await refreshWatchlistFromCloud()
-      return watchlistManga(token)
-    },
+    first: (token) => watchlistManga(token),
     more: (nextURL, token) => nextWatchlist(nextURL, token),
     filter: (items) => filterWatchlistItems(items, "manga"),
     deps: ["watchlist", "manga"],
@@ -313,10 +309,7 @@ function WatchlistFeed(props: {
   })
 
   const novelPaged = usePagedList<PixivWatchlistSeries>({
-    first: async (token) => {
-      await refreshWatchlistFromCloud()
-      return watchlistNovels(token)
-    },
+    first: (token) => watchlistNovels(token),
     more: (nextURL, token) => nextWatchlist(nextURL, token),
     filter: (items) => filterWatchlistItems(items, "novel"),
     deps: ["watchlist", "novel"],
@@ -468,16 +461,12 @@ function useSettingsFilter(paged: ReturnType<typeof usePagedList<any>>) {
 
 function filterFollowingIllustrationItems(items: PixivIllustration[]): PixivIllustration[] {
   const settings = loadSettings()
-  return items.filter((item) =>
-    isIllustContentVisible(item, settings, { isAuthorFollowed: true, isAuthorFriend: true })
-  )
+  return items.filter((item) => isIllustContentVisible(item, settings))
 }
 
 function filterFollowingNovelItems(items: PixivNovel[]): PixivNovel[] {
   const settings = loadSettings()
-  return items.filter((novel) =>
-    isNovelContentVisible(novel, settings, { isAuthorFollowed: true, isAuthorFriend: true })
-  )
+  return items.filter((novel) => isNovelContentVisible(novel, settings))
 }
 
 function filterWatchlistItems(

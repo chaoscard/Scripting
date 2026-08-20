@@ -46,12 +46,15 @@ import {
   prefetch,
 } from "../image/imageLoader"
 import {
-  blockUser,
-  isUserBlocked,
   loadSettings,
   onSettingsChanged,
-  unblockUser,
 } from "../store/settings"
+import {
+  blockUser,
+  isUserBlocked,
+  unblockUser,
+  onBlocklistChanged,
+} from "../store/blocklist"
 import {
   isIllustContentVisible,
   isNovelContentVisible,
@@ -419,8 +422,8 @@ function UserWorksFeedSection(props: {
   const illustPaged = usePagedList<PixivIllustration>({
     first: (token) => userWorks(userID, "illust", token),
     more: (nextURL, token) => nextIllustrations(nextURL, token),
-    filter: (items) => filterIllustrations(items, isAuthorFollowed),
-    deps: [userID, "illust", isAuthorFollowed],
+    filter: filterIllustrations,
+    deps: [userID, "illust"],
     enabled: kind === "illust",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
@@ -430,8 +433,8 @@ function UserWorksFeedSection(props: {
   const mangaPaged = usePagedList<PixivIllustration>({
     first: (token) => userWorks(userID, "manga", token),
     more: (nextURL, token) => nextIllustrations(nextURL, token),
-    filter: (items) => filterIllustrations(items, isAuthorFollowed),
-    deps: [userID, "manga", isAuthorFollowed],
+    filter: filterIllustrations,
+    deps: [userID, "manga"],
     enabled: kind === "manga",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
@@ -441,8 +444,8 @@ function UserWorksFeedSection(props: {
   const novelPaged = usePagedList<PixivNovel>({
     first: (token) => userNovels(userID, token),
     more: (nextURL, token) => nextNovels(nextURL, token),
-    filter: (items) => filterNovels(items, isAuthorFollowed),
-    deps: [userID, isAuthorFollowed],
+    filter: filterNovels,
+    deps: [userID],
     enabled: kind === "novel",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
@@ -1041,16 +1044,12 @@ function UserWorkPicker(props: {
   )
 }
 
-function filterIllustrations(items: PixivIllustration[], isAuthorFollowed = false): PixivIllustration[] {
+function filterIllustrations(items: PixivIllustration[]): PixivIllustration[] {
   const settings = loadSettings()
-  return items.filter((item) =>
-    isIllustContentVisible(item, settings, { isAuthorFollowed })
-  )
+  return items.filter((item) => isIllustContentVisible(item, settings))
 }
 
-function filterNovels(items: PixivNovel[], isAuthorFollowed = false): PixivNovel[] {
+function filterNovels(items: PixivNovel[]): PixivNovel[] {
   const settings = loadSettings()
-  return items.filter((item) =>
-    isNovelContentVisible(item, settings, { isAuthorFollowed })
-  )
+  return items.filter((item) => isNovelContentVisible(item, settings))
 }

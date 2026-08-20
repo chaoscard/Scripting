@@ -1,13 +1,5 @@
-import type { PixivUser } from "../types"
 import { pixivSettingsDirectory } from "./dataDirectory"
 import { recoverFile, writeTextSafely } from "./safeFile"
-
-export interface BlockedUser {
-  id: number
-  name: string
-  account: string
-  avatarURL?: string
-}
 
 export type FeedImageQuality = "medium" | "large"
 export type DetailImageQuality = "large" | "original"
@@ -27,10 +19,6 @@ export interface AppSettings {
   showR18: boolean
   showR18G: boolean
   showAI: boolean
-  followFilterExempt: boolean
-  libraryFilterExempt: boolean
-  blockedTags: string[]
-  blockedUsers: BlockedUser[]
   ambientImmersion: boolean
   ambientIntensity: AmbientIntensity
   watchlistSortOrder: WatchlistSortOrder
@@ -57,10 +45,6 @@ const DEFAULT_SETTINGS: AppSettings = {
   showR18: false,
   showR18G: false,
   showAI: false,
-  followFilterExempt: true,
-  libraryFilterExempt: true,
-  blockedTags: [],
-  blockedUsers: [],
   ambientImmersion: true,
   ambientIntensity: "medium",
   watchlistSortOrder: "asc",
@@ -233,25 +217,6 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
     showR18: boolOr(stored?.showR18, DEFAULT_SETTINGS.showR18),
     showR18G: boolOr(stored?.showR18G, DEFAULT_SETTINGS.showR18G),
     showAI: boolOr(stored?.showAI, DEFAULT_SETTINGS.showAI),
-    followFilterExempt: boolOr(stored?.followFilterExempt, DEFAULT_SETTINGS.followFilterExempt),
-    libraryFilterExempt: boolOr(
-      stored?.libraryFilterExempt ?? stored?.bookmarkFilterExempt ?? stored?.historyFilterExempt,
-      DEFAULT_SETTINGS.libraryFilterExempt
-    ),
-    blockedTags: Array.isArray(stored?.blockedTags)
-      ? stored.blockedTags.filter((tag): tag is string => typeof tag === "string" && tag.length > 0)
-      : DEFAULT_SETTINGS.blockedTags,
-    blockedUsers: Array.isArray(stored?.blockedUsers)
-      ? (stored.blockedUsers as unknown[])
-          .filter((user): user is Record<string, unknown> => typeof user === "object" && user != null)
-          .map((user): BlockedUser => ({
-            id: typeof user.id === "number" ? user.id : 0,
-            name: typeof user.name === "string" ? user.name : "",
-            account: typeof user.account === "string" ? user.account : "",
-            avatarURL: typeof user.avatarURL === "string" ? user.avatarURL : undefined,
-          }))
-          .filter((user) => user.id > 0 && user.name.length > 0)
-      : DEFAULT_SETTINGS.blockedUsers,
     ambientImmersion: boolOr(stored?.ambientImmersion, DEFAULT_SETTINGS.ambientImmersion),
     ambientIntensity: isOneOf(stored?.ambientIntensity, AMBIENT_INTENSITY_VALUES)
       ? stored.ambientIntensity
@@ -307,43 +272,12 @@ function persistSettings(settings: AppSettings): boolean {
   return true
 }
 
-export function isTagBlocked(tag: string, blockedTags = loadSettings().blockedTags): boolean {
-  return blockedTags.includes(tag)
-}
-
-export function blockTag(tag: string): AppSettings {
-  const name = tag.trim()
-  if (!name) return loadSettings()
-  const settings = loadSettings()
-  if (settings.blockedTags.includes(name)) return settings
-  return updateSettings({ blockedTags: [...settings.blockedTags, name] })
-}
-
-export function unblockTag(tag: string): AppSettings {
-  const settings = loadSettings()
-  return updateSettings({ blockedTags: settings.blockedTags.filter((item) => item !== tag) })
-}
-
-export function isUserBlocked(userID: number, blockedUsers = loadSettings().blockedUsers): boolean {
-  return blockedUsers.some((user) => user.id === userID)
-}
-
-export function blockUser(user: PixivUser): AppSettings {
-  const settings = loadSettings()
-  if (settings.blockedUsers.some((item) => item.id === user.id)) return settings
-  return updateSettings({
-    blockedUsers: [...settings.blockedUsers, {
-      id: user.id,
-      name: user.name,
-      account: user.account,
-      avatarURL: user.profile_image_urls?.medium,
-    }],
-  })
-}
-
-export function unblockUser(userID: number): AppSettings {
-  const settings = loadSettings()
-  return updateSettings({ blockedUsers: settings.blockedUsers.filter((user) => user.id !== userID) })
+export function resetSettings(): AppSettings {
+  const next = { ...DEFAULT_SETTINGS }
+  persistSettings(next)
+  cachedSettings = next
+  emitChanged()
+  return next
 }
 
 export function onSettingsChanged(fn: () => void): () => void {

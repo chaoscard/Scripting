@@ -23,6 +23,7 @@ import { clearHistory, historyCount, onHistoryChanged } from "../store/history"
 import {
   loadSettings,
   onSettingsChanged,
+  resetSettings,
   updateSettings,
   type LaunchPage,
   type ImageBatchConcurrency,
@@ -31,6 +32,9 @@ import {
   type LoadingAnimationDuration,
   type LaunchAnimationDuration,
 } from "../store/settings"
+import { loadBlocklist, onBlocklistChanged } from "../store/blocklist"
+import { editAIShowSettings } from "../api/pixiv"
+import { session } from "../api/session"
 import { clearUgoiraCache, ugoiraCacheUsageBytes } from "../ugoira/ugoira"
 import { useTimedFlag } from "./hooks"
 
@@ -38,6 +42,8 @@ const CACHE_LIMIT_OPTIONS = [300, 500, 1000, 2000] as const
 
 export function SettingsView() {
   const [settings, setSettings] = useState(loadSettings())
+  const [blocklist, setBlocklist] = useState(loadBlocklist())
+  const [settingsReset, setSettingsReset] = useTimedFlag()
   const [cacheSize, setCacheSize] = useState<number | null>(null)
   const [cacheCleared, setCacheCleared] = useTimedFlag()
   const [historyTotal, setHistoryTotal] = useState<number>(() => historyCount())
@@ -58,17 +64,27 @@ export function SettingsView() {
       setSettings(loadSettings())
       refreshCacheSize()
     })
+    const unsubscribeBlocklist = onBlocklistChanged(() => {
+      setBlocklist(loadBlocklist())
+    })
     const unsubscribeHistory = onHistoryChanged(() => {
       refreshHistoryTotal()
     })
     return () => {
       unsubscribeSettings()
+      unsubscribeBlocklist()
       unsubscribeHistory()
     }
   }, [])
 
   function update(patch: Partial<typeof settings>) {
     setSettings(updateSettings(patch))
+  }
+
+  function handleResetSettings() {
+    const next = resetSettings()
+    setSettings(next)
+    setSettingsReset()
   }
 
   function clearAllCaches() {
@@ -98,25 +114,77 @@ export function SettingsView() {
     <List
       navigationTitle="设置"
       navigationBarTitleDisplayMode="inline"
+      toolbar={{
+        topBarTrailing: [
+          <Button
+            action={() => {}}
+            contextMenu={{
+              menuItems: (
+                <Group>
+                  <Button
+                    title="重置为默认设置"
+                    systemImage="arrow.counterclockwise"
+                    role="destructive"
+                    action={handleResetSettings}
+                  />
+                </Group>
+              ),
+            }}
+          >
+            <Image
+              systemName={settingsReset ? "checkmark" : "arrow.counterclockwise"}
+              foregroundStyle={settingsReset ? "systemGreen" : undefined}
+            />
+          </Button>,
+        ],
+      }}
     >
-      <Section header={<Text>内容过滤</Text>}>
-        <Toggle title="显示 R18 作品" value={settings.showR18} onChanged={(value) => update({ showR18: value })} />
-        <Toggle title="显示 R18G 作品" value={settings.showR18G} onChanged={(value) => update({ showR18G: value })} />
-        <Toggle title="显示 AI 生成作品" value={settings.showAI} onChanged={(value) => update({ showAI: value })} />
-        <Toggle title="豁免关注、好友和追更" value={settings.followFilterExempt} onChanged={(value) => update({ followFilterExempt: value })} />
-        <Toggle title="豁免收藏和记录" value={settings.libraryFilterExempt} onChanged={(value) => update({ libraryFilterExempt: value })} />
+      <Section
+        header={<Text>内容过滤</Text>}
+        footer={<Text font="caption" foregroundStyle="secondaryLabel">AI 设置切换时将自动同步至 Pixiv 服务端账号设置。</Text>}
+      >
+        <Toggle
+          title="显示 R18 作品"
+          value={settings.showR18}
+          onChanged={(value) => update({ showR18: value })}
+        />
+        <Toggle
+          title="显示 R18G 作品"
+          value={settings.showR18G}
+          onChanged={(value) => update({ showR18G: value })}
+        />
+        <Toggle
+          title="显示 AI 生成作品"
+          value={settings.showAI}
+          onChanged={async (value) => {
+            update({ showAI: value })
+            try {
+              const token = await session.getValidToken()
+              if (token) {
+                await editAIShowSettings(value, token)
+              }
+            } catch (e: any) {
+              console.log("editAIShowSettings error:", e?.message ?? e)
+            }
+          }}
+        />
         <NavigationLink value="blockedSettings">
           <HStack spacing={8}>
             <Text font="body">屏蔽设置</Text>
             <Spacer />
             <Text font="caption" foregroundStyle="secondaryLabel">
-              标签 {settings.blockedTags.length} · 用户 {settings.blockedUsers.length}
+              标签 {blocklist.blockedTags.length} · 用户 {blocklist.blockedUsers.length}
             </Text>
           </HStack>
         </NavigationLink>
       </Section>
 
       <Section header={<Text>功能</Text>}>
+        <Toggle
+          title="预取后续图片"
+          value={settings.prefetchEnabled}
+          onChanged={(value) => update({ prefetchEnabled: value })}
+        />
         <Picker
           title="启动页面"
           value={settings.launchPage}

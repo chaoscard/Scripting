@@ -36,7 +36,6 @@ import {
   updateNovelHistoryBookmark,
 } from "../store/history"
 import { onUserFollowChanged, recordUserFollowed } from "../store/userFollow"
-import { isSeriesWatched, onWatchlistChanged, recordWatchedSeries } from "../store/watchlist"
 import type { PixivNovel, PixivNovelDetail } from "../types"
 import {
   loadSettings,
@@ -45,8 +44,6 @@ import {
 } from "../store/settings"
 import {
   isNovelContentVisible,
-  isNovelExempt,
-  isR18ContentVisible,
 } from "../store/contentFilter"
 import {
   AvatarImage,
@@ -63,7 +60,7 @@ import { CommentsSheet } from "./comments"
 import { renderDestination } from "./routes"
 import { requestPixivRoute } from "./routeNavigation"
 
-const RESTRICTED_CONTENT_MESSAGE = "该小说已被内容分级设置隐藏"
+const BLOCKED_CONTENT_MESSAGE = "该小说已被屏蔽（标签或作者在黑名单中）"
 
 const TEXT_CHUNK_SIZE = 2000
 
@@ -97,7 +94,6 @@ export function NovelDetailView(props: { novelID: number }) {
   const guard = useAsyncGuard()
   const novelRef = useLatest(novel)
   const errorRef = useLatest(error)
-  const restrictedLevelRef = useRef<number | null>(null)
   const recordedIDRef = useRef<number | null>(null)
 
   async function load() {
@@ -111,35 +107,15 @@ export function NovelDetailView(props: { novelID: number }) {
         recordUserFollowed(detail.user.id, detail.user.is_followed ?? false)
       }
       const settings = loadSettings()
-      let isExempt = isNovelExempt(detail, settings, { isBookmarked: detail.is_bookmarked, isAuthorFollowed: detail.user?.is_followed ?? false })
-      if (!isNovelContentVisible(detail, settings, isExempt)) {
-        if (settings.followFilterExempt && detail.series?.id != null && !isSeriesWatched(detail.series.id)) {
-          try {
-            const seriesData = await session.call((token) => novelSeries(detail.series!.id, token))
-            const seriesWatched = Boolean(
-              seriesData.novel_series_detail?.watchlist_added ??
-              (seriesData.novel_series_detail as any)?.is_watched
-            )
-            recordWatchedSeries(detail.series!.id, seriesWatched)
-            if (seriesWatched && isNovelContentVisible(detail, settings, true)) {
-              isExempt = true
-            }
-          } catch {}
-        }
-      }
-      if (
-        !isNovelContentVisible(detail, settings, isExempt)
-      ) {
-        restrictedLevelRef.current = detail.x_restrict
+      if (!isNovelContentVisible(detail, settings)) {
         setNovel(null)
         setText("")
-        setError(RESTRICTED_CONTENT_MESSAGE)
+        setError(BLOCKED_CONTENT_MESSAGE)
         return
       }
 
       const viewer = await session.call((token) => novelViewerData(novelID, token))
       if (!g.isCurrent()) return
-      restrictedLevelRef.current = null
       setNovel(detail)
       setBookmarked(detail.is_bookmarked)
       setFollowed(detail.user?.is_followed ?? false)
@@ -169,65 +145,27 @@ export function NovelDetailView(props: { novelID: number }) {
     })
   }, [])
 
+  // 屏蔽黑名单变化时撤下或恢复已打开的内容。
   useEffect(() => {
     return onSettingsChanged(() => {
       const settings = loadSettings()
       const current = novelRef.current
       if (current) {
-        const isExempt = isNovelExempt(current, settings, { isBookmarked: bookmarked, isAuthorFollowed: followed })
-        if (
-          !isNovelContentVisible(
-            current,
-            settings,
-            isExempt
-          )
-        ) {
-          restrictedLevelRef.current = current.x_restrict
+        if (!isNovelContentVisible(current, settings)) {
           guard()
           setNovel(null)
           setText("")
-          setError(RESTRICTED_CONTENT_MESSAGE)
+          setError(BLOCKED_CONTENT_MESSAGE)
           setLoading(false)
         }
       } else if (
         !current &&
-        errorRef.current === RESTRICTED_CONTENT_MESSAGE
+        errorRef.current === BLOCKED_CONTENT_MESSAGE
       ) {
         load()
       }
     })
   }, [bookmarked, followed])
-
-  useEffect(() => {
-    return onWatchlistChanged((seriesID) => {
-      const current = novelRef.current
-      if (current?.series?.id === seriesID) {
-        const settings = loadSettings()
-        const isExempt = isNovelExempt(current, settings, { isBookmarked: bookmarked, isAuthorFollowed: followed })
-        if (!isNovelContentVisible(current, settings, isExempt)) {
-          restrictedLevelRef.current = current.x_restrict
-          guard()
-          setNovel(null)
-          setText("")
-          setError(RESTRICTED_CONTENT_MESSAGE)
-          setLoading(false)
-        }
-      } else if (!current && errorRef.current === RESTRICTED_CONTENT_MESSAGE) {
-        load()
-      }
-    })
-  }, [bookmarked, followed])
-
-  useEffect(() => {
-    return onHistoryChanged(() => {
-      if (!novelRef.current && errorRef.current === RESTRICTED_CONTENT_MESSAGE) {
-        const settings = loadSettings()
-        if (settings.libraryFilterExempt && hasHistory(novelID, "novel")) {
-          load()
-        }
-      }
-    })
-  }, [novelID])
 
   async function toggleBookmark() {
     if (!novel || bookmarkLoading) return

@@ -106,8 +106,8 @@ function UserWorksFeed(props: {
   const illustPaged = usePagedList<PixivIllustration>({
     first: (token) => userWorks(userID, "illust", token),
     more: (nextURL, token) => nextIllustrations(nextURL, token),
-    filter: (items) => filterIllustrations(items, isFollowed),
-    deps: [userID, "illust", isFollowed],
+    filter: filterIllustrations,
+    deps: [userID, "illust"],
     enabled: tab === "illust",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
@@ -117,8 +117,8 @@ function UserWorksFeed(props: {
   const mangaPaged = usePagedList<PixivIllustration>({
     first: (token) => userWorks(userID, "manga", token),
     more: (nextURL, token) => nextIllustrations(nextURL, token),
-    filter: (items) => filterIllustrations(items, isFollowed),
-    deps: [userID, "manga", isFollowed],
+    filter: filterIllustrations,
+    deps: [userID, "manga"],
     enabled: tab === "manga",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
@@ -128,8 +128,8 @@ function UserWorksFeed(props: {
   const novelPaged = usePagedList<PixivNovel>({
     first: (token) => userNovels(userID, token),
     more: (nextURL, token) => nextNovels(nextURL, token),
-    filter: (items) => filterNovels(items, isFollowed),
-    deps: [userID, isFollowed],
+    filter: filterNovels,
+    deps: [userID],
     enabled: tab === "novel",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
@@ -222,16 +222,12 @@ function UserWorksFeed(props: {
   )
 }
 
-function filterIllustrations(items: PixivIllustration[], isAuthorFollowed = false): PixivIllustration[] {
+function filterIllustrations(items: PixivIllustration[]): PixivIllustration[] {
   const settings = loadSettings()
-  return items.filter((item) =>
-    isIllustContentVisible(item, settings, { isAuthorFollowed })
-  )
+  return items.filter((item) => isIllustContentVisible(item, settings))
 }
 
-function filterNovels(items: PixivNovel[], isAuthorFollowed = false): PixivNovel[] {
+function filterNovels(items: PixivNovel[]): PixivNovel[] {
   const settings = loadSettings()
-  return items.filter((item) =>
-    isNovelContentVisible(item, settings, { isAuthorFollowed })
-  )
+  return items.filter((item) => isNovelContentVisible(item, settings))
 }

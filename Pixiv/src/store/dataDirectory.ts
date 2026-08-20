@@ -40,7 +40,8 @@ export function pixivSettingsDirectory(): string {
   return pixivCloudDirectory("Settings")
 }
 
-// 追更列表 ID 保存在 iCloud Documents，以便多设备间同步追更状态。
-export function pixivWatchlistDirectory(): string {
-  return pixivCloudDirectory("Watchlist")
+// 黑名单独立保存在 iCloud Documents，支持跨设备同步。
+export function pixivBlocklistDirectory(): string {
+  return pixivCloudDirectory("Blocklist")
 }
+

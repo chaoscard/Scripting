@@ -42,7 +42,6 @@ export function TagFeedView(props: { tag: string }) {
           word: tag,
           target: "exact_match_for_tags",
           sort: "date_desc",
-          aiFilter: loadSettings().showAI ? 0 : 1,
         },
         token
       ),
@@ -53,7 +52,7 @@ export function TagFeedView(props: { tag: string }) {
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel
   })
 
-  // 设置变更（R18/AI 开关）后立即重新加载过滤（与其他列表页一致）
+  // 设置变更（屏蔽标签/用户）后立即重新加载过滤
   const pagedRef = useLatest(paged)
   useEffect(() => {
     return onSettingsChanged(() => {
@@ -128,7 +127,7 @@ export function TagFeedView(props: { tag: string }) {
   )
 }
 
-// 标签流过滤：屏蔽标签、R18/R18G 与 AI 设置均在翻页时生效。
+// 标签流过滤：屏蔽标签与用户黑名单在翻页时生效。
 function filterTagItems(items: PixivIllustration[]): PixivIllustration[] {
   const settings = loadSettings()
   return items.filter((item) => isIllustContentVisible(item, settings))

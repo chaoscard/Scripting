@@ -32,11 +32,7 @@ export function NovelLibraryView() {
     filter: (items) => {
       const settings = loadSettings()
       return items.filter((item) =>
-        isNovelContentVisible(
-          item.novel,
-          settings,
-          { isBookmarked: true }
-        )
+        isNovelContentVisible(item.novel, settings)
       )
     },
     deps: [],

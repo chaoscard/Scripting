@@ -40,8 +40,6 @@ import {
   isIllustContentVisible,
   isNovelContentVisible,
 } from "../store/contentFilter"
-import { isUserFollowed, onUserFollowChanged } from "../store/userFollow"
-import { onWatchlistChanged } from "../store/watchlist"
 import { cacheIllusts } from "../store/illustCache"
 import type {
   PixivIllustration,
@@ -119,36 +117,14 @@ function seriesIllust(
   }
 }
 
-function filterSeriesIllusts(
-  items: PixivIllustration[],
-  isSeriesWatched = false,
-  author?: PixivUser | null
-): PixivIllustration[] {
+function filterSeriesIllusts(items: PixivIllustration[]): PixivIllustration[] {
   const settings = loadSettings()
-  const isAuthorFollowed =
-    author?.is_followed ?? (author?.id ? isUserFollowed(author.id) : false)
-  return items.filter((item) =>
-    isIllustContentVisible(item, settings, {
-      isSeriesWatched,
-      isAuthorFollowed,
-    })
-  )
+  return items.filter((item) => isIllustContentVisible(item, settings))
 }
 
-function filterSeriesNovels(
-  items: PixivNovel[],
-  isSeriesWatched = false,
-  author?: PixivUser | null
-): PixivNovel[] {
+function filterSeriesNovels(items: PixivNovel[]): PixivNovel[] {
   const settings = loadSettings()
-  const isAuthorFollowed =
-    author?.is_followed ?? (author?.id ? isUserFollowed(author.id) : false)
-  return items.filter((item) =>
-    isNovelContentVisible(item, settings, {
-      isSeriesWatched,
-      isAuthorFollowed,
-    })
-  )
+  return items.filter((item) => isNovelContentVisible(item, settings))
 }
 
 function candidateUrlOf(item: any): string | null {
@@ -259,9 +235,8 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
       const detail = result.illust_series_detail
       setTitle(detail.title || "漫画系列")
       setCaption(detail.caption || "")
-      const isExempt = Boolean(detail.watchlist_added ?? (detail as any).is_watched)
-      setIsWatched(isExempt)
-      isWatchedRef.current = isExempt
+      const watched = Boolean(detail.watchlist_added ?? (detail as any).is_watched)
+      setIsWatched(watched)
 
       const seriesAuthor =
         detail.user ??
@@ -308,7 +283,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
       const sorted = isAscendingRef.current ? mappedIllusts : [...mappedIllusts].reverse()
       return { items: sorted, nextURL: null }
     },
-    filter: (items) => filterSeriesIllusts(items, isWatchedRef.current, authorRef.current),
+    filter: (items) => filterSeriesIllusts(items),
     deps: [props.seriesID, isAscending],
     enabled: props.kind === "manga",
     onBatchPublished: (_, pendingItems) =>
@@ -330,9 +305,8 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
       const detail = result.novel_series_detail
       setTitle(detail.title || "小说系列")
       setCaption(detail.caption || "")
-      const isExempt = Boolean(detail.watchlist_added ?? (detail as any).is_watched)
-      setIsWatched(isExempt)
-      isWatchedRef.current = isExempt
+      const watched = Boolean(detail.watchlist_added ?? (detail as any).is_watched)
+      setIsWatched(watched)
 
       const seriesAuthor =
         detail.user ??
@@ -378,7 +352,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
       const sorted = isAscendingRef.current ? mappedNovels : [...mappedNovels].reverse()
       return { items: sorted, nextURL: null }
     },
-    filter: (items) => filterSeriesNovels(items, isWatchedRef.current, authorRef.current),
+    filter: (items) => filterSeriesNovels(items),
     deps: [props.seriesID, isAscending],
     enabled: props.kind === "novel",
     onBatchPublished: (_, pendingItems) =>
@@ -397,15 +371,9 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
       if (nextState) {
         await session.call((token) => addWatchlistSeries(props.seriesID, props.kind, token))
         setIsWatched(true)
-        isWatchedRef.current = true
-        if (props.kind === "manga") illustPagedRef.current.reapplyFilter()
-        else novelPagedRef.current.reapplyFilter()
       } else {
         await session.call((token) => deleteWatchlistSeries(props.seriesID, props.kind, token))
         setIsWatched(false)
-        isWatchedRef.current = false
-        if (props.kind === "manga") illustPagedRef.current.reapplyFilter()
-        else novelPagedRef.current.reapplyFilter()
       }
     } catch {
       // 保持当前状态
@@ -413,26 +381,6 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
       setWatchLoading(false)
     }
   }
-
-  useEffect(() => {
-    return onWatchlistChanged((changedID, watched) => {
-      if (changedID === props.seriesID) {
-        setIsWatched(watched)
-        isWatchedRef.current = watched
-        if (props.kind === "manga") illustPagedRef.current.reapplyFilter()
-        else novelPagedRef.current.reapplyFilter()
-      }
-    })
-  }, [props.seriesID, props.kind])
-
-  useEffect(() => {
-    return onUserFollowChanged((changedUserID) => {
-      if (authorRef.current?.id === changedUserID) {
-        if (props.kind === "manga") illustPagedRef.current.reapplyFilter()
-        else novelPagedRef.current.reapplyFilter()
-      }
-    })
-  }, [props.kind])
 
   useEffect(() => {
     return onSettingsChanged(() => {

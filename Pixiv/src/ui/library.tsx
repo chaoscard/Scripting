@@ -297,14 +297,10 @@ function LibraryFeed(props: {
 
 export function filterIllustrationBookmarks(items: PixivIllustration[]): PixivIllustration[] {
   const settings = loadSettings()
-  return items.filter((item) =>
-    isIllustContentVisible(item, settings, { isBookmarked: true })
-  )
+  return items.filter((item) => isIllustContentVisible(item, settings))
 }
 
 export function filterNovelBookmarks(items: PixivNovel[]): PixivNovel[] {
   const settings = loadSettings()
-  return items.filter((item) =>
-    isNovelContentVisible(item, settings, { isBookmarked: true })
-  )
+  return items.filter((item) => isNovelContentVisible(item, settings))
 }

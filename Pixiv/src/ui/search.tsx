@@ -32,10 +32,14 @@ import {
   thumbUrlOf,
 } from "../image/imageLoader"
 import {
-  isUserBlocked,
   loadSettings,
   onSettingsChanged,
 } from "../store/settings"
+import {
+  isUserBlocked,
+  loadBlocklist,
+  onBlocklistChanged,
+} from "../store/blocklist"
 import {
   isIllustContentVisible,
   isNovelContentVisible,
@@ -102,12 +106,7 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
           word: submitted,
           target: "partial_match_for_tags",
           sort,
-          aiFilter:
-            settings.showAI ||
-            settings.followFilterExempt ||
-            settings.libraryFilterExempt
-              ? 0
-              : 1,
+          aiFilter: settings.showAI ? undefined : 0,
         },
         token
       )
@@ -159,15 +158,14 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
     },
     filter: (items) => {
       const settings = loadSettings()
+      const blocklist = loadBlocklist()
       return items
-        .filter((preview) => !isUserBlocked(preview.user.id, settings.blockedUsers))
+        .filter((preview) => !isUserBlocked(preview.user.id, blocklist.blockedUsers))
         .map((preview) => ({
           ...preview,
           illusts: dedupeByID(
             preview.illusts.filter((illust) =>
-              isIllustContentVisible(illust, settings, {
-                isAuthorFollowed: preview.user.is_followed,
-              })
+              isIllustContentVisible(illust, settings, blocklist)
             )
           ),
         }))
