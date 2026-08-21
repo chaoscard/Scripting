@@ -22,7 +22,6 @@ import {
   novelBookmarkDetail,
   novelBookmarkTags,
   novelDetail,
-  novelSeries,
   novelViewerData,
   removeNovelBookmark,
   unfollowUser,
@@ -30,8 +29,6 @@ import {
 import { session } from "../api/session"
 import { useAsyncGuard, useLatest } from "./hooks"
 import {
-  hasHistory,
-  onHistoryChanged,
   recordNovelHistory,
   updateNovelHistoryBookmark,
 } from "../store/history"
@@ -40,7 +37,6 @@ import type { PixivNovel, PixivNovelDetail } from "../types"
 import {
   loadSettings,
   onSettingsChanged,
-  type AppSettings,
 } from "../store/settings"
 import {
   isNovelContentVisible,
@@ -52,7 +48,6 @@ import {
   ExpandableIntroduction,
   formatDate,
   formatNumber,
-  LinkedDescription,
   LoadingView,
   TagChip,
 } from "./components"

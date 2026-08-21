@@ -1,6 +1,4 @@
 import {
-  Button,
-  HStack,
   Image,
   Label,
   LazyVStack,
@@ -333,7 +331,7 @@ function MangaRankingFeed(props: {
   const dayPaged = usePagedList<PixivIllustration>({
     first: (token) => ranking("day_manga", null, token),
     more: (nextURL, token) => nextIllustrations(nextURL, token),
-    filter: filterMangaRankingItems,
+    filter: filterRankingItems,
     deps: ["manga", "day_manga"],
     enabled: enabled && mode === "day_manga",
     onBatchPublished: (_, pendingItems) =>
@@ -344,7 +342,7 @@ function MangaRankingFeed(props: {
   const weekPaged = usePagedList<PixivIllustration>({
     first: (token) => ranking("week_manga", null, token),
     more: (nextURL, token) => nextIllustrations(nextURL, token),
-    filter: filterMangaRankingItems,
+    filter: filterRankingItems,
     deps: ["manga", "week_manga"],
     enabled: enabled && mode === "week_manga",
     onBatchPublished: (_, pendingItems) =>
@@ -355,7 +353,7 @@ function MangaRankingFeed(props: {
   const monthPaged = usePagedList<PixivIllustration>({
     first: (token) => ranking("month_manga", null, token),
     more: (nextURL, token) => nextIllustrations(nextURL, token),
-    filter: filterMangaRankingItems,
+    filter: filterRankingItems,
     deps: ["manga", "month_manga"],
     enabled: enabled && mode === "month_manga",
     onBatchPublished: (_, pendingItems) =>
@@ -366,7 +364,7 @@ function MangaRankingFeed(props: {
   const rookiePaged = usePagedList<PixivIllustration>({
     first: (token) => ranking("week_rookie_manga", null, token),
     more: (nextURL, token) => nextIllustrations(nextURL, token),
-    filter: filterMangaRankingItems,
+    filter: filterRankingItems,
     deps: ["manga", "week_rookie_manga"],
     enabled: enabled && mode === "week_rookie_manga",
     onBatchPublished: (_, pendingItems) =>
@@ -552,11 +550,6 @@ function AdvancedSearchPlaceholder() {
 }
 
 function filterRankingItems(items: PixivIllustration[]): PixivIllustration[] {
-  const settings = loadSettings()
-  return items.filter((item) => isIllustContentVisible(item, settings))
-}
-
-function filterMangaRankingItems(items: PixivIllustration[]): PixivIllustration[] {
   const settings = loadSettings()
   return items.filter((item) => isIllustContentVisible(item, settings))
 }

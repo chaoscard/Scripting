@@ -1,13 +1,11 @@
 import {
   Button,
-  Divider,
   FlowLayout,
   Group,
   HStack,
   Image,
   LazyVStack,
   LongPressGesture,
-  Navigation,
   NavigationLink,
   NavigationStack,
   ProgressView,
@@ -18,7 +16,6 @@ import {
   Text,
   TextField,
   Toggle,
-  WebView,
   useCallback,
   useEffect,
   useMemo,
@@ -52,7 +49,7 @@ import { session } from "../api/session"
 import { loadSettings } from "../store/settings"
 import { blockTag } from "../store/blocklist"
 import { cacheIllust, cacheIllusts } from "../store/illustCache"
-import { useLatest, useTimedFlag } from "./hooks"
+import { useLatest } from "./hooks"
 import { requestPixivRoute } from "./routeNavigation"
 import type {
   PixivIllustration,
@@ -577,10 +574,6 @@ function formatWatchlistDate(dateStr?: string | null): string {
   return dateStr.slice(0, 10)
 }
 
-// 漫画追更卡片（复用小说标准卡片样式并定制）：
-// 1. 第一行文本：系列作品
-// 2. 第二行标题：与小说卡片一致
-// 3. 第三行作者：同小说卡片
 // 追更列表标准卡片：漫画与小说统一采用液态玻璃规范
 export function WatchlistSeriesCard(props: {
   item: PixivWatchlistSeries
@@ -697,13 +690,6 @@ export function WatchlistSeriesCard(props: {
       </NavigationLink>
     </ZStack>
   )
-}
-
-export function MangaWatchlistCard(props: {
-  item: PixivWatchlistSeries
-  onAppear?: () => void
-}) {
-  return <WatchlistSeriesCard item={props.item} kind="manga" onAppear={props.onAppear} />
 }
 
 // 小说标准卡片：推荐页与收藏页共用，保持封面、标签和统计信息一致。
@@ -965,7 +951,7 @@ export function AvatarImage(props: {
 
 // 网格作品卡片（列表页共用）：玻璃卡片 + 缩略图 + 标题 + 作者/收藏数/浏览数
 // 多页作品在图片左下角显示 rectangle.stack.fill + 纯数字页数。
-// conerBadge 为图片左上角非交互角标；footerText 用于补充信息。
+// cornerBadge 为图片左上角非交互角标；footerText 用于补充信息。
 // topTrailingAction 只传操作语义，按钮布局与命中区域由统一卡片模板负责。
 // 注意：属性名不能叫 badge，那是 SwiftUI 保留修饰符名（只接受 string|number），
 // 会导致 JSX 类型检查报错。
@@ -996,7 +982,6 @@ export function IllustCard(props: {
   flow?: boolean
   priority?: number
   cornerBadge?: any
-  conerBadge?: any
   footerText?: string
   topTrailingAction?: IllustCardAction
 }) {
@@ -1005,7 +990,7 @@ export function IllustCard(props: {
     onAppear,
     flow = false,
     priority,
-    cornerBadge = props.conerBadge,
+    cornerBadge,
     footerText,
     topTrailingAction,
   } = props
@@ -1929,14 +1914,6 @@ function htmlFragmentToPlainText(html: string | undefined | null): string {
   return decodeHtmlEntities(stripped)
 }
 
-export function makeBreakableText(text: string): string {
-  if (!text) return ""
-  // 在 URL/英文长单词常见的分隔符（/ ? = & _ - . : # % @ ~）后面插入零宽空格 \u200B，
-  // 允许 iOS / SwiftUI 文本引擎在屏幕窄边处自然折行，而不会撑爆页面容器宽度。
-  // 若字符后已有空白字符或已有 \u200B，则不重复插入。
-  return text.replace(/([/?=&_\-.:#%@~])(?!\s|\u200b|$)/g, "$1\u200B")
-}
-
 export function LinkedDescription(props: {
   html: string
   routeDestination?: (route: string) => any
@@ -2193,88 +2170,6 @@ export function formatDate(iso: string | undefined | null): string {
   }
 }
 
-// ---------- 流式标签布局（一行多个自动换行，单个标签文本不换行） ----------
-
-// 估算文本渲染宽度（pt）：中文/全角字符按 12pt，ASCII 按 7pt（近似 mini 字号）
-export function estimateTextWidth(text: string): number {
-  let w = 0
-  for (const ch of text) {
-    w += ch.charCodeAt(0) > 255 ? 12 : 7
-  }
-  return w
-}
-
-// 标签芯片估算宽度：左右内边距 14pt + 文本宽度
-export function estimateChipWidth(text: string): number {
-  return 28 + estimateTextWidth(text)
-}
-
-// 流式分组：按估算宽度把条目排成多行，每行不超过 maxWidth（含 spacing 间隔）
-export function wrapTags<T>(
-  items: T[],
-  maxWidth: number,
-  widthOf: (item: T) => number,
-  spacing = 6
-): T[][] {
-  const rows: T[][] = []
-  let row: T[] = []
-  let used = 0
-  for (const item of items) {
-    const w = widthOf(item)
-    if (row.length > 0 && used + spacing + w > maxWidth) {
-      rows.push(row)
-      row = [item]
-      used = w
-    } else {
-      row.push(item)
-      used += (row.length > 1 ? spacing : 0) + w
-    }
-  }
-  if (row.length > 0) rows.push(row)
-  return rows
-}
-
-// 信息卡片（作品/小说详情页标签上方）：完全照标签样式 ——
-// 每个字段是一个 glass 胶囊按钮，一个字段一行；点击复制该字段内容
-export function InfoCard(props: {
-  title?: string
-  fields: { label: string; value: string | number }[]
-}) {
-  const { title = "信息", fields } = props
-  const [copied, setCopiedOn] = useTimedFlag(2000)
-
-  function copyField(f: { label: string; value: string | number }) {
-    Pasteboard.setString(`${f.label}：${f.value}`)
-    setCopiedOn()
-  }
-
-  return (
-    <VStack alignment="leading" spacing={6}>
-      <HStack spacing={8} alignment="center">
-        <Text font="footnote" fontWeight="semibold" foregroundStyle="secondaryLabel">
-          {title}
-        </Text>
-        {copied ? (
-          <Text font="caption2" fontWeight="medium" foregroundStyle="#34C759">
-            已复制 ✓
-          </Text>
-        ) : null}
-      </HStack>
-      <VStack alignment="leading" spacing={6}>
-        {fields.map((f) => (
-          <Button
-            key={f.label}
-            title={`${f.label}：${f.value}`}
-            buttonStyle="glass"
-            controlSize="mini"
-            action={() => copyField(f)}
-          />
-        ))}
-      </VStack>
-    </VStack>
-  )
-}
-
 // 作品标签徽章（详情页可用紧凑尺寸降低高密度标签区的视觉重量）
 export function TagChip(props: {
   name: string
@@ -2506,16 +2401,6 @@ export function EmptyView(props: { text?: string; systemImage?: string }) {
         </Text>
       </VStack>
     </ZStack>
-  )
-}
-
-// 作品底部信息行（收藏数/浏览数）
-export function IllustStats(props: { illust: PixivIllustration }) {
-  const { illust } = props
-  return (
-    <Text font="caption" foregroundStyle="secondaryLabel">
-      👁 {formatNumber(illust.total_view)} · ♥ {formatNumber(illust.total_bookmarks)}
-    </Text>
   )
 }
 

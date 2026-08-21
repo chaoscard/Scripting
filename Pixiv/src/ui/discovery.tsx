@@ -1,6 +1,4 @@
 import {
-  Button,
-  HStack,
   Image,
   Label,
   LazyVStack,
@@ -53,7 +51,6 @@ import {
 type ExploreMode = "recommended" | "latest" | "vision"
 type FeedMode = Exclude<ExploreMode, "vision">
 type FeedKind = "illustration" | "manga" | "novel"
-type IllustrationKind = Exclude<FeedKind, "novel">
 
 export function DiscoveryView(props: { onClose: () => void }) {
   const isLaunchTab = useRef(loadSettings().launchPage === "discovery").current
@@ -322,10 +319,6 @@ function FeedKindPicker(props: {
       <Text tag="novel">小说</Text>
     </Picker>
   )
-}
-
-function feedLabel(mode: FeedMode): string {
-  return mode === "recommended" ? "推荐" : "最新作品"
 }
 
 function IllustFeedContent(props: {

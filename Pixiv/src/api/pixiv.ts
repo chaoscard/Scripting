@@ -63,17 +63,6 @@ export async function recommendations(
   return { items: json?.illusts ?? [], nextURL: json?.next_url ?? null }
 }
 
-export async function recommendedUsers(
-  accessToken: string
-): Promise<PixivPage<PixivUserPreview>> {
-  const json = await apiGet(
-    "/v1/user/recommended",
-    { filter: "for_ios" },
-    accessToken
-  )
-  return { items: json?.user_previews ?? [], nextURL: json?.next_url ?? null }
-}
-
 // 小说推荐（/v1/novel/recommended，无需 filter=for_ios）
 export async function recommendedNovels(
   accessToken: string
@@ -824,28 +813,6 @@ export async function userNovelBookmarks(
     accessToken
   )
   return { items: json?.novels ?? [], nextURL: json?.next_url ?? null }
-}
-
-export async function countUserNovelBookmarks(
-  id: number,
-  restrict: Visibility,
-  accessToken: string
-): Promise<number> {
-  let json = await apiGet(
-    "/v1/user/bookmarks/novel",
-    { user_id: String(id), restrict },
-    accessToken
-  )
-  let count = Array.isArray(json?.novels) ? json.novels.length : 0
-  let nextURL = json?.next_url ?? null
-
-  while (nextURL) {
-    json = await apiGetAbsolute(nextURL, accessToken)
-    count += Array.isArray(json?.novels) ? json.novels.length : 0
-    nextURL = json?.next_url ?? null
-  }
-
-  return count
 }
 
 export async function userBookmarks(

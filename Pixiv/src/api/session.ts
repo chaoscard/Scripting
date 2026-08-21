@@ -56,11 +56,6 @@ export class Session {
     }
   }
 
-  // 供 UI 使用的公开事件入口
-  notifyAuthChanged(): void {
-    this.emitAuthChanged()
-  }
-
   get isAuthenticated(): boolean {
     return this.creds != null
   }
@@ -193,8 +188,3 @@ export class Session {
 }
 
 export const session = new Session()
-
-// 供 UI 使用的便捷事件入口
-export function notifyAuthChanged(): void {
-  session.notifyAuthChanged()
-}

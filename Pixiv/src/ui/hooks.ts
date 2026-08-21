@@ -91,16 +91,7 @@ export function useLatest<T>(value: T) {
   return ref
 }
 
-// 防竞态守卫：每次调用返回一个新的"序号令牌"，异步回调返回后
-// 调用 isCurrent() 判断自己是否仍是最近一次发起者，否则丢弃结果。
-// 用法：
-//   const guard = useAsyncGuard()
-//   async function load() {
-//     const g = guard()
-//     const page = await fetch()
-//     if (!g.isCurrent()) return   // 已被更新的请求取代
-//     setItems(page.items)
-//   }
+// 防竞态守卫：每次调用返回一个新的"序号令牌"，异步回调返回后调用 isCurrent() 判断自己是否仍是最近一次发起者
 export function useAsyncGuard() {
   const seqRef = useRef(0)
   return useCallback(() => {
@@ -178,13 +169,6 @@ export function mergeUniqueByKey<T>(
   return result
 }
 
-export function dedupeByKey<T>(
-  items: T[],
-  keyOf: (item: T) => number | string
-): T[] {
-  return mergeUniqueByKey([], items, keyOf)
-}
-
 export function mergeUniqueByID<T extends { id: number | string }>(
   base: T[],
   incoming: T[]
@@ -194,18 +178,6 @@ export function mergeUniqueByID<T extends { id: number | string }>(
 
 export function dedupeByID<T extends { id: number | string }>(items: T[]): T[] {
   return mergeUniqueByID([], items)
-}
-
-// 仅保留最近使用的完整视图树。调用方仍可保留自身 Hook 状态，
-// 但超过上限的流会卸载 ScrollView/卡片，防止大量隐藏原生列表持续驻留。
-export function useRetainedKeys(currentKey: string, limit: number): ReadonlySet<string> {
-  const [keys, setKeys] = useState<string[]>([currentKey])
-  useEffect(() => {
-    setKeys((current) =>
-      [currentKey, ...current.filter((key) => key !== currentKey)].slice(0, limit)
-    )
-  }, [currentKey, limit])
-  return new Set(keys)
 }
 
 // ---------- 分页列表 hook ----------
@@ -298,15 +270,6 @@ export function usePagedList<T extends { id: number | string }>(
   const applyFilter = (list: T[]): T[] => {
     const f = filterRef.current
     return f ? f(list) : list
-  }
-
-  const splitPage = (incoming: T[], existing: T[] = []) => {
-    const batchSize = currentBatchSize()
-    const candidates = mergeUniqueByID(existing, applyFilter(incoming)).slice(existing.length)
-    return {
-      published: candidates.slice(0, batchSize),
-      pending: candidates.slice(batchSize),
-    }
   }
 
   // 核心加载逻辑：clear=true 时清空旧数据并显示全屏加载（首次/参数切换）；

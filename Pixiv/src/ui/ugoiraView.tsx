@@ -1,6 +1,5 @@
 import {
   Button,
-  HStack,
   Image,
   ProgressView,
   Text,

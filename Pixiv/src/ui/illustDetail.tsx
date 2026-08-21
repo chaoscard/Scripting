@@ -26,7 +26,6 @@ import {
   followDetail,
   followUser,
   illustrationDetail,
-  illustrationSeries,
   nextIllustrations,
   relatedIllustrations,
   removeBookmark,
@@ -43,14 +42,11 @@ import {
   loadSettings,
   onSettingsChanged,
   type AmbientIntensity,
-  type AppSettings,
 } from "../store/settings"
 import {
   isIllustContentVisible,
 } from "../store/contentFilter"
 import {
-  hasHistory,
-  onHistoryChanged,
   recordHistory,
   updateHistoryBookmark,
 } from "../store/history"
@@ -67,8 +63,6 @@ import {
   IllustFlowFeed,
   formatDate,
   formatNumber,
-  htmlToPlainText,
-  LinkedDescription,
   LoadingView,
   TagChip,
 } from "./components"

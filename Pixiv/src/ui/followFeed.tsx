@@ -1,8 +1,6 @@
 import {
   Button,
-  HStack,
   Image,
-  Label,
   LazyVStack,
   Menu,
   Picker,
@@ -51,13 +49,10 @@ import {
   WatchlistSeriesCard,
 } from "./components"
 
-export type FollowMode = "following" | "watchlist" | "friends"
-export type FollowScope = "all" | "private"
+type FollowMode = "following" | "watchlist" | "friends"
+type FollowScope = "all" | "private"
 type WorkKind = "illust" | "novel"
 type WatchKind = "manga" | "novel"
-
-const WATCH_KINDS: WatchKind[] = ["manga", "novel"]
-const WORK_KINDS: WorkKind[] = ["illust", "novel"]
 
 export function FollowFeedView(props: {
   initialMode?: FollowMode
@@ -301,7 +296,7 @@ function WatchlistFeed(props: {
   const mangaPaged = usePagedList<PixivWatchlistSeries>({
     first: (token) => watchlistManga(token),
     more: (nextURL, token) => nextWatchlist(nextURL, token),
-    filter: (items) => filterWatchlistItems(items, "manga"),
+    filter: filterWatchlistItems,
     deps: ["watchlist", "manga"],
     enabled: enabled && kind === "manga",
     onBatchPublished: (_, pendingItems) =>
@@ -311,7 +306,7 @@ function WatchlistFeed(props: {
   const novelPaged = usePagedList<PixivWatchlistSeries>({
     first: (token) => watchlistNovels(token),
     more: (nextURL, token) => nextWatchlist(nextURL, token),
-    filter: (items) => filterWatchlistItems(items, "novel"),
+    filter: filterWatchlistItems,
     deps: ["watchlist", "novel"],
     enabled: enabled && kind === "novel",
     onBatchPublished: (_, pendingItems) =>
@@ -470,14 +465,9 @@ function filterFollowingNovelItems(items: PixivNovel[]): PixivNovel[] {
 }
 
 function filterWatchlistItems(
-  items: PixivWatchlistSeries[],
-  kind: WatchKind
+  items: PixivWatchlistSeries[]
 ): PixivWatchlistSeries[] {
-  return items.filter((item) => {
-    // 隐藏 Pixiv 返回的无权限阅读的作品（如带 mask_text 等限制的作品）
-    if (item.mask_text) return false
-    return true
-  })
+  return items.filter((item) => !item.mask_text)
 }
 
 function watchlistThumbUrlOf(item: PixivWatchlistSeries): string | null {

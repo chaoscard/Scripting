@@ -293,13 +293,6 @@ export interface PixivIllustrationSeriesResponse {
   next_url?: string | null
 }
 
-export interface PixivNovelSeriesItem {
-  id: number
-  title: string
-  create_date?: string
-  image_urls?: PixivImageUrls
-}
-
 export interface PixivNovelSeriesDetail {
   id: number
   title: string

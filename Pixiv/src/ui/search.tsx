@@ -38,7 +38,6 @@ import {
 import {
   isUserBlocked,
   loadBlocklist,
-  onBlocklistChanged,
 } from "../store/blocklist"
 import {
   isIllustContentVisible,

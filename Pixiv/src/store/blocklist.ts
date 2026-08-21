@@ -106,10 +106,6 @@ export function loadBlocklist(): BlocklistData {
   return cachedBlocklist
 }
 
-export function getBlocklist(): BlocklistData {
-  return loadBlocklist()
-}
-
 function emitChanged(): void {
   for (const fn of listeners) {
     try {
@@ -137,13 +133,6 @@ export function onBlocklistChanged(fn: () => void): () => void {
   return () => {
     listeners.delete(fn)
   }
-}
-
-export async function refreshBlocklistFromCloud(): Promise<void> {
-  await prepareBlocklistStorage()
-  cachedBlocklist = null
-  loadBlocklist()
-  emitChanged()
 }
 
 export function isTagBlocked(tag: string, blockedTags = loadBlocklist().blockedTags): boolean {

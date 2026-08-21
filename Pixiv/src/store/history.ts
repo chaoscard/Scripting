@@ -146,15 +146,6 @@ export function historyCount(): number {
   return loadEntries().length
 }
 
-export function hasHistory(id: number, kind: "illust" | "novel"): boolean {
-  if (!id || id <= 0) return false
-  const list = loadEntries()
-  if (kind === "illust") {
-    return list.some((e) => e.kind === "illust" && e.illustration.id === id)
-  }
-  return list.some((e) => e.kind === "novel" && e.novel.id === id)
-}
-
 function recordEntry(entry: HistoryEntry): void {
   if (!loadSettings().recordHistory) return
   const list = [...loadEntries()]

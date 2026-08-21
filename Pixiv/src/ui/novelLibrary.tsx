@@ -1,8 +1,6 @@
 import {
   LazyVStack,
-  Text,
   useEffect,
-  VStack,
 } from "scripting"
 import { nextNovelMarkers, novelMarkers } from "../api/pixiv"
 import { novelThumbUrlOf, prefetch } from "../image/imageLoader"

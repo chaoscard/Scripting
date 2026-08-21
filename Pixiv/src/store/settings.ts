@@ -282,11 +282,6 @@ export function loadSettings(): AppSettings {
   return merged
 }
 
-export function saveSettings(settings: AppSettings): void {
-  cachedSettings = settings
-  persistSettings(settings)
-}
-
 export function updateSettings(patch: Partial<AppSettings>): AppSettings {
   const next = { ...loadSettings(), ...patch }
   cachedSettings = next
@@ -295,9 +290,3 @@ export function updateSettings(patch: Partial<AppSettings>): AppSettings {
   return next
 }
 
-export async function refreshSettingsFromCloud(): Promise<void> {
-  await prepareSettingsStorage()
-  cachedSettings = null
-  loadSettings()
-  emitChanged()
-}

@@ -10,10 +10,8 @@ import {
   NavigationLink,
   Picker,
   ScrollView,
-  Spacer,
   Text,
   useCallback,
-  useColorScheme,
   useEffect,
   useMemo,
   useRef,
@@ -21,11 +19,7 @@ import {
   VStack,
   ZStack,
 } from "scripting"
-import {
-  extractUserAmbientPalette,
-  getCachedUserAmbientPalette,
-  type UserAmbientPalette,
-} from "../image/colorExtractor"
+import type { UserAmbientPalette } from "../image/colorExtractor"
 import {
   fetchWebUserDetail,
   followDetail,
@@ -53,7 +47,6 @@ import {
   blockUser,
   isUserBlocked,
   unblockUser,
-  onBlocklistChanged,
 } from "../store/blocklist"
 import {
   isIllustContentVisible,
@@ -74,9 +67,6 @@ import {
   EmptyView,
   ErrorView,
   ExpandableIntroduction,
-  htmlToPlainText,
-  ImmersiveHeaderBanner,
-  LinkedDescription,
   LoadingView,
   LoadMoreTrigger,
   IllustFlowFeed,

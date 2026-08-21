@@ -110,16 +110,12 @@ export function RootView() {
       {/* 底层：主界面在第 0 毫秒即挂载并全力在后台请求数据与预载图片 */}
       <MainTabView onClose={dismiss} />
 
-      {/* 顶层：启动动画遮罩，动画期间遮挡并给首屏预热留出 2 秒时间，就绪后移开 */}
+      {/* 顶层：启动动画遮罩，根据调试设置自定义时长（默认 1500ms）平滑过渡 */}
       {!isReady ? (
         <LaunchExperienceView />
       ) : null}
     </ZStack>
   )
-}
-
-export function TabNavigationStack(props: { children: any }) {
-  return <NavigationStack>{props.children}</NavigationStack>
 }
 
 function MainTabView(props: {
