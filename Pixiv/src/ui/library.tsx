@@ -32,6 +32,10 @@ import {
   isIllustContentVisible,
   isNovelContentVisible,
 } from "../store/contentFilter"
+import {
+  getCachedIllustBookmark,
+  getCachedNovelBookmark,
+} from "../store/bookmarkSync"
 import { useAsyncGuard, useLatest, usePagedList, currentBatchSize } from "./hooks"
 import type { PixivBookmarkTag, PixivIllustration, PixivNovel } from "../types"
 import {
@@ -297,10 +301,16 @@ function LibraryFeed(props: {
 
 export function filterIllustrationBookmarks(items: PixivIllustration[]): PixivIllustration[] {
   const settings = loadSettings()
-  return items.filter((item) => isIllustContentVisible(item, settings))
+  return items.filter((item) => {
+    if (getCachedIllustBookmark(item.id) === false) return false
+    return isIllustContentVisible(item, settings)
+  })
 }
 
 export function filterNovelBookmarks(items: PixivNovel[]): PixivNovel[] {
   const settings = loadSettings()
-  return items.filter((item) => isNovelContentVisible(item, settings))
+  return items.filter((item) => {
+    if (getCachedNovelBookmark(item.id) === false) return false
+    return isNovelContentVisible(item, settings)
+  })
 }

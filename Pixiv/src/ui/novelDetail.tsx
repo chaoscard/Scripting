@@ -27,7 +27,7 @@ import {
   unfollowUser,
 } from "../api/pixiv"
 import { session } from "../api/session"
-import { useAsyncGuard, useLatest } from "./hooks"
+import { useAsyncGuard, useLatest, useNovelBookmark } from "./hooks"
 import {
   recordNovelHistory,
   updateNovelHistoryBookmark,
@@ -78,7 +78,7 @@ export function NovelDetailView(props: { novelID: number }) {
   const [textError, setTextError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [bookmarked, setBookmarked] = useState(false)
+  const [bookmarked, setBookmarked] = useNovelBookmark(novelID, false)
   const [bookmarkLoading, setBookmarkLoading] = useState(false)
   const [bookmarkLongPressLocked, setBookmarkLongPressLocked] = useState(false)
   const [showBookmarkDetail, setShowBookmarkDetail] = useState(false)

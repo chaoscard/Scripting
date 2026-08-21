@@ -36,8 +36,7 @@ import {
   RefreshableScrollView,
 } from "./components"
 import { novelThumbUrlOf, prefetch, thumbUrlOf } from "../image/imageLoader"
-import { onUserFollowChanged } from "../store/userFollow"
-import { usePagedList, currentBatchSize } from "./hooks"
+import { usePagedList, currentBatchSize, useUserFollow } from "./hooks"
 
 export type ConnectionRouteKind = "following" | "follower" | "mypixiv"
 type ConnectionVisibility = Extract<Visibility, "public" | "private">
@@ -199,18 +198,8 @@ function ConnectionRow(props: {
   previewSide: number
 }) {
   const { preview } = props
-  const [followed, setFollowed] = useState(preview.user.is_followed ?? true)
+  const [followed, setFollowed] = useUserFollow(preview.user.id, preview.user.is_followed ?? true)
   const [followBusy, setFollowBusy] = useState(false)
-  useEffect(() => {
-    setFollowed(preview.user.is_followed ?? true)
-  }, [preview.user.id, preview.user.is_followed])
-  useEffect(() => {
-    return onUserFollowChanged((changedUserID, nextFollowed) => {
-      if (changedUserID === preview.user.id) {
-        setFollowed(nextFollowed)
-      }
-    })
-  }, [preview.user.id])
   const previewItems = [
     ...preview.illusts.map((illustration) => ({ kind: "illust" as const, item: illustration })),
     ...(preview.novels ?? []).map((novel) => ({ kind: "novel" as const, item: novel })),

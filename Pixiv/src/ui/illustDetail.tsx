@@ -52,7 +52,7 @@ import {
 } from "../store/history"
 import { onUserFollowChanged, recordUserFollowed } from "../store/userFollow"
 import { cacheIllust, getCachedIllust } from "../store/illustCache"
-import { useAsyncGuard, useLatest, usePagedList, currentBatchSize } from "./hooks"
+import { useAsyncGuard, useIllustBookmark, useLatest, usePagedList, currentBatchSize } from "./hooks"
 import type { PixivIllustration } from "../types"
 import {
   AvatarImage,
@@ -120,7 +120,10 @@ export function IllustDetailView(props: { illustID: number }) {
   })
   const [loading, setLoading] = useState(() => !getCachedIllust(illustID))
   const [error, setError] = useState<string | null>(null)
-  const [bookmarked, setBookmarked] = useState(() => getCachedIllust(illustID)?.is_bookmarked ?? false)
+  const [bookmarked, setBookmarked] = useIllustBookmark(
+    illustID,
+    getCachedIllust(illustID)?.is_bookmarked ?? false
+  )
   const [bookmarkLoading, setBookmarkLoading] = useState(false)
   const [bookmarkLongPressLocked, setBookmarkLongPressLocked] = useState(false)
   const [showBookmarkDetail, setShowBookmarkDetail] = useState(false)

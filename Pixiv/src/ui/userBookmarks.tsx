@@ -18,6 +18,10 @@ import {
 import { session } from "../api/session"
 import { cardThumbUrlOf, novelThumbUrlOf, prefetch } from "../image/imageLoader"
 import { onSettingsChanged } from "../store/settings"
+import {
+  onIllustBookmarkChanged,
+  onNovelBookmarkChanged,
+} from "../store/bookmarkSync"
 import { useAsyncGuard, useLatest, usePagedList, currentBatchSize } from "./hooks"
 import type { PixivBookmarkTag, PixivIllustration, PixivNovel } from "../types"
 import {
@@ -113,10 +117,25 @@ function UserBookmarksFeed(props: {
   const novelPagedRef = useLatest(novelPaged)
 
   useEffect(() => {
-    return onSettingsChanged(() => {
-      illustPagedRef.current.reapplyFilter()
-      novelPagedRef.current.reapplyFilter()
-    })
+    const unsubs = [
+      onSettingsChanged(() => {
+        illustPagedRef.current.reapplyFilter()
+        novelPagedRef.current.reapplyFilter()
+      }),
+      onIllustBookmarkChanged((_, bookmarked) => {
+        if (!bookmarked) {
+          illustPagedRef.current.reapplyFilter()
+        }
+      }),
+      onNovelBookmarkChanged((_, bookmarked) => {
+        if (!bookmarked) {
+          novelPagedRef.current.reapplyFilter()
+        }
+      }),
+    ]
+    return () => {
+      for (const unsub of unsubs) unsub()
+    }
   }, [])
 
   const activeRefresh = useCallback(async () => {

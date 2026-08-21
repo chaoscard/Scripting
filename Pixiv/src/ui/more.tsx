@@ -51,70 +51,40 @@ export function MoreView(props: { onClose: () => void }) {
     >
       <Section header={<Text>浏览</Text>}>
         <NavigationLink value="library">
-          <HStack spacing={8}>
-            <Image systemName="heart.fill" foregroundStyle="#FF375F" />
-            <Text font="body">我的收藏</Text>
-          </HStack>
+          <MoreRow icon="heart.fill" iconColor="#FF375F" title="我的收藏" />
         </NavigationLink>
         <NavigationLink value="history">
-          <HStack spacing={8}>
-            <Image systemName="clock.fill" foregroundStyle="#FF9F0A" />
-            <Text font="body">浏览记录</Text>
-          </HStack>
+          <MoreRow icon="clock.fill" iconColor="#FF9F0A" title="浏览记录" />
         </NavigationLink>
         <NavigationLink value="novelBookmarks">
-          <HStack spacing={8}>
-            <Image systemName="bookmark.fill" foregroundStyle="#0096FA" />
-            <Text font="body">阅读书签</Text>
-          </HStack>
+          <MoreRow icon="bookmark.fill" iconColor="#0096FA" title="阅读书签" />
         </NavigationLink>
       </Section>
 
       <Section header={<Text>关联</Text>}>
         <NavigationLink value="connections:following">
-          <HStack spacing={8}>
-            <Image systemName="person.2.fill" foregroundStyle="#007AFF" />
-            <Text font="body">我的关注</Text>
-          </HStack>
+          <MoreRow icon="person.2.fill" iconColor="#007AFF" title="我的关注" />
         </NavigationLink>
         <NavigationLink value="connections:follower">
-          <HStack spacing={8}>
-            <Image systemName="person.2.badge.plus" foregroundStyle="#34C759" />
-            <Text font="body">我的粉丝</Text>
-          </HStack>
+          <MoreRow icon="person.2.badge.plus" iconColor="#34C759" title="我的粉丝" />
         </NavigationLink>
         <NavigationLink value="friends">
-          <HStack spacing={8}>
-            <Image systemName="person.2.badge.gearshape" foregroundStyle="#AF52DE" />
-            <Text font="body">我的好友</Text>
-          </HStack>
+          <MoreRow icon="person.2.badge.gearshape" iconColor="#AF52DE" title="我的好友" />
         </NavigationLink>
         <NavigationLink value="myWorks">
-          <HStack spacing={8}>
-            <Image systemName="photo.stack.fill" foregroundStyle="#FF9500" />
-            <Text font="body">我的作品</Text>
-          </HStack>
+          <MoreRow icon="photo.stack.fill" iconColor="#FF9500" title="我的作品" />
         </NavigationLink>
         <NavigationLink value="notifications">
-          <HStack spacing={8}>
-            <Image systemName="bell.fill" foregroundStyle="#FF375F" />
-            <Text font="body">我的通知</Text>
-          </HStack>
+          <MoreRow icon="bell.fill" iconColor="#FF375F" title="我的通知" />
         </NavigationLink>
       </Section>
 
       <Section header={<Text>其他</Text>}>
         <NavigationLink value="settings">
-          <HStack spacing={8}>
-            <Image systemName="gearshape.fill" foregroundStyle="secondaryLabel" />
-            <Text font="body">设置</Text>
-          </HStack>
+          <MoreRow icon="gearshape.fill" iconColor="secondaryLabel" title="设置" />
         </NavigationLink>
         <NavigationLink value="about">
-          <HStack spacing={8}>
-            <Image systemName="info.circle.fill" foregroundStyle="#007AFF" />
-            <Text font="body">关于</Text>
-          </HStack>
+          <MoreRow icon="info.circle.fill" iconColor="#007AFF" title="关于" />
         </NavigationLink>
         <Button
           buttonStyle="plain"
@@ -123,8 +93,11 @@ export function MoreView(props: { onClose: () => void }) {
             session.signOut()
           }}
         >
-          <HStack spacing={8} frame={{ maxWidth: "infinity" }}>
-            <Image systemName="rectangle.portrait.and.arrow.right" />
+          <HStack spacing={12} frame={{ maxWidth: "infinity" }}>
+            <Image
+              systemName="rectangle.portrait.and.arrow.right"
+              frame={{ width: 24 }}
+            />
             <Text font="body">注销</Text>
             <Spacer />
             <Image
@@ -137,5 +110,22 @@ export function MoreView(props: { onClose: () => void }) {
         </Button>
       </Section>
     </List>
+  )
+}
+
+function MoreRow(props: {
+  icon: string
+  iconColor?: any
+  title: string
+}) {
+  return (
+    <HStack spacing={12}>
+      <Image
+        systemName={props.icon}
+        foregroundStyle={props.iconColor}
+        frame={{ width: 24 }}
+      />
+      <Text font="body">{props.title}</Text>
+    </HStack>
   )
 }

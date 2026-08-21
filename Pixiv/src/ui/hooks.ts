@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useRef, useState, useColorScheme, type Color } from "scripting"
 import { session } from "../api/session"
 import { getImageBatchSize, loadSettings, onSettingsChanged, type AmbientIntensity } from "../store/settings"
+import { onBlocklistChanged } from "../store/blocklist"
+import {
+  getCachedIllustBookmark,
+  getCachedNovelBookmark,
+  getCachedWatchlist,
+  onIllustBookmarkChanged,
+  onNovelBookmarkChanged,
+  onWatchlistChanged,
+} from "../store/bookmarkSync"
+import { isUserFollowed, onUserFollowChanged } from "../store/userFollow"
 import {
   extractUserAmbientPalette,
   getCachedUserAmbientPalette,
@@ -202,6 +212,8 @@ export interface UsePagedListOptions<T> {
   deps: unknown[]
   // 仅在激活时触发首次加载；用于保留隐藏列表的已加载状态和滚动位置。
   enabled?: boolean
+  // 黑名单或内容设置变更时自动重过滤当前列表（默认 true）
+  autoReapplyOnFilterChange?: boolean
   // 每次发布 UI 批次后通知调用方；pendingItems 是紧随本批的待展示项目，
   // 用于只预取下一批缩略图。返回的 cleanup 会在下一批、刷新或失活时调用。
   onBatchPublished?: (items: T[], pendingItems: T[]) => void | (() => void)
@@ -212,7 +224,15 @@ export interface UsePagedListOptions<T> {
 export function usePagedList<T extends { id: number | string }>(
   opts: UsePagedListOptions<T>
 ) {
-  const { first, more, filter, deps, enabled = true, onBatchPublished } = opts
+  const {
+    first,
+    more,
+    filter,
+    deps,
+    enabled = true,
+    autoReapplyOnFilterChange = true,
+    onBatchPublished,
+  } = opts
   const [items, setItems] = useState<T[]>([])
   const [pendingItems, setPendingItems] = useState<T[]>([])
   const [nextURL, setNextURL] = useState<string | null>(null)
@@ -515,6 +535,18 @@ export function usePagedList<T extends { id: number | string }>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, enabled])
 
+  // 监听黑名单与设置变更：即时就地重新过滤当前已加载卡片
+  useEffect(() => {
+    if (!autoReapplyOnFilterChange) return
+    const unsubs = [
+      onBlocklistChanged(reapplyFilter),
+      onSettingsChanged(reapplyFilter),
+    ]
+    return () => {
+      for (const unsub of unsubs) unsub()
+    }
+  }, [autoReapplyOnFilterChange, reapplyFilter])
+
   useEffect(() => {
     return () => {
       invalidateInactiveWork()
@@ -534,3 +566,112 @@ export function usePagedList<T extends { id: number | string }>(
     hasMore: pendingItems.length > 0 || nextURL != null,
   }
 }
+
+// ---------- 响应式状态同步 Hooks ----------
+
+/**
+ * 响应式同步插画/漫画的收藏状态
+ */
+export function useIllustBookmark(
+  illustID: number,
+  initialBookmarked = false
+): [boolean, (bookmarked: boolean) => void] {
+  const [bookmarked, setBookmarked] = useState<boolean>(() => {
+    return getCachedIllustBookmark(illustID) ?? initialBookmarked
+  })
+
+  useEffect(() => {
+    // 挂载时若无缓存则补录入初值
+    const cached = getCachedIllustBookmark(illustID)
+    if (cached !== undefined) {
+      setBookmarked(cached)
+    }
+    return onIllustBookmarkChanged((changedID, nextBookmarked) => {
+      if (changedID === illustID) {
+        setBookmarked(nextBookmarked)
+      }
+    })
+  }, [illustID])
+
+  return [bookmarked, setBookmarked]
+}
+
+/**
+ * 响应式同步小说的收藏状态
+ */
+export function useNovelBookmark(
+  novelID: number,
+  initialBookmarked = false
+): [boolean, (bookmarked: boolean) => void] {
+  const [bookmarked, setBookmarked] = useState<boolean>(() => {
+    return getCachedNovelBookmark(novelID) ?? initialBookmarked
+  })
+
+  useEffect(() => {
+    const cached = getCachedNovelBookmark(novelID)
+    if (cached !== undefined) {
+      setBookmarked(cached)
+    }
+    return onNovelBookmarkChanged((changedID, nextBookmarked) => {
+      if (changedID === novelID) {
+        setBookmarked(nextBookmarked)
+      }
+    })
+  }, [novelID])
+
+  return [bookmarked, setBookmarked]
+}
+
+/**
+ * 响应式同步画师的关注状态
+ */
+export function useUserFollow(
+  userID: number,
+  initialFollowed = false
+): [boolean, (followed: boolean) => void] {
+  const [followed, setFollowed] = useState<boolean>(() => {
+    return isUserFollowed(userID) ?? initialFollowed
+  })
+
+  useEffect(() => {
+    const cached = isUserFollowed(userID)
+    if (cached !== undefined) {
+      setFollowed(cached)
+    }
+    return onUserFollowChanged((changedID, nextFollowed) => {
+      if (changedID === userID) {
+        setFollowed(nextFollowed)
+      }
+    })
+  }, [userID])
+
+  return [followed, setFollowed]
+}
+
+/**
+ * 响应式同步系列的追更状态
+ */
+export function useSeriesWatchlist(
+  seriesID: number,
+  kind: "manga" | "novel",
+  initialWatched = false
+): [boolean, (watched: boolean) => void] {
+  const [watched, setWatched] = useState<boolean>(() => {
+    return getCachedWatchlist(seriesID, kind) ?? initialWatched
+  })
+
+  useEffect(() => {
+    const cached = getCachedWatchlist(seriesID, kind)
+    if (cached !== undefined) {
+      setWatched(cached)
+    }
+    return onWatchlistChanged((changedID, changedKind, nextWatched) => {
+      if (changedID === seriesID && changedKind === kind) {
+        setWatched(nextWatched)
+      }
+    })
+  }, [seriesID, kind])
+
+  return [watched, setWatched]
+}
+

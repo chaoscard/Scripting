@@ -182,11 +182,11 @@ async function rawRequest(
   return { status: response.status, data }
 }
 
-export async function apiGet(
+export async function apiGet<T = any>(
   path: string,
   query: Record<string, string>,
   accessToken: string | null
-): Promise<any> {
+): Promise<T> {
   const params = new URLSearchParams(query).toString()
   const url = `${API_BASE_URL}${path}${params ? `?${params}` : ""}`
   const { status, data } = await rawRequest(url, "GET", {
@@ -195,17 +195,17 @@ export async function apiGet(
   })
   if (status >= 200 && status < 300) {
     if (!data) throw new PixivError(status, "空响应")
-    return JSON.parse(data.toRawString() ?? "")
+    return JSON.parse(data.toRawString() ?? "") as T
   }
   const message = await parseError(data)
   throw new PixivError(status, message || `请求失败（${status}）`)
 }
 
-export async function apiPost(
+export async function apiPost<T = any>(
   path: string,
   form: Record<string, string>,
   accessToken: string | null
-): Promise<any> {
+): Promise<T> {
   const url = `${API_BASE_URL}${path}`
   const { status, data } = await rawRequest(url, "POST", {
     headers: {
@@ -216,26 +216,26 @@ export async function apiPost(
     allowedOrigin: new URL(API_BASE_URL).origin,
   })
   if (status >= 200 && status < 300) {
-    if (!data) return null
+    if (!data) return null as T
     const text = data.toRawString() ?? ""
-    if (!text.trim()) return null
+    if (!text.trim()) return null as T
     try {
-      return JSON.parse(text)
+      return JSON.parse(text) as T
     } catch {
       // Pixiv 的收藏写入接口可能返回空文本或非 JSON 成功体；
       // HTTP 2xx 已表示服务端接受，不能把响应解析失败误报为保存失败。
-      return null
+      return null as T
     }
   }
   const message = await parseError(data)
   throw new PixivError(status, message || `请求失败（${status}）`)
 }
 
-export async function apiGetAbsolute(
+export async function apiGetAbsolute<T = any>(
   url: string,
   accessToken: string | null,
   extraHeaders?: Record<string, string>
-): Promise<any> {
+): Promise<T> {
   const apiOrigin = new URL(API_BASE_URL).origin
   const { status, data } = await rawRequest(url, "GET", {
     headers: { ...standardHeaders(accessToken), ...(extraHeaders ?? {}) },
@@ -243,16 +243,16 @@ export async function apiGetAbsolute(
   })
   if (status >= 200 && status < 300) {
     if (!data) throw new PixivError(status, "空响应")
-    return JSON.parse(data.toRawString() ?? "")
+    return JSON.parse(data.toRawString() ?? "") as T
   }
   const message = await parseError(data)
   throw new PixivError(status, message || `请求失败（${status}）`)
 }
 
 // OAuth token 端点
-export async function oauthTokenRequest(
+export async function oauthTokenRequest<T = any>(
   values: Record<string, string>
-): Promise<any> {
+): Promise<T> {
   const url = `${OAUTH_BASE_URL}/auth/token`
   const { status, data } = await rawRequest(url, "POST", {
     headers: {
@@ -267,7 +267,7 @@ export async function oauthTokenRequest(
     const text = data.toRawString() ?? ""
     const json = JSON.parse(text)
     // 兼容两种包装：{response: {...}} 或直接 {...}
-    return json?.response ?? json
+    return (json?.response ?? json) as T
   }
   const message = await parseError(data)
   throw new PixivError(status, message || `登录失败（${status}）`)

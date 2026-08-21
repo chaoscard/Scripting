@@ -49,7 +49,7 @@ import { session } from "../api/session"
 import { loadSettings } from "../store/settings"
 import { blockTag } from "../store/blocklist"
 import { cacheIllust, cacheIllusts } from "../store/illustCache"
-import { useLatest } from "./hooks"
+import { useIllustBookmark, useLatest, useNovelBookmark } from "./hooks"
 import { requestPixivRoute } from "./routeNavigation"
 import type {
   PixivIllustration,
@@ -204,12 +204,12 @@ export function RefreshableScrollView(props: {
 // 异步图片加载状态（CachedImage / AvatarImage 共用）：
 // cancelled 标志防止 url 切换后旧结果覆盖新状态；支持 priority 优先级调度
 function imageFadeDurationSec(): number {
-  const ms = loadSettings().imageFadeInDuration ?? 200
+  const ms = loadSettings().imageFadeInDuration ?? 150
   return Math.max(0.001, Math.min(0.5, ms / 1000))
 }
 
 function blurCrossFadeDurationSec(): number {
-  const ms = loadSettings().blurCrossFadeDuration ?? 100
+  const ms = loadSettings().blurCrossFadeDuration ?? 150
   return Math.max(0, Math.min(0.25, ms / 1000))
 }
 
@@ -487,7 +487,7 @@ export function CachedImage(props: {
 
   // 首帧已命中缓存时直接硬切呈现（0ms 动画），秒开无延时无白闪；
   // 异步加载完成后：
-  // 1. 有本地模糊预览图垫底时，采用配置的模糊消融（0-250ms，默认 100ms），平滑过渡；
+  // 1. 有本地模糊预览图垫底时，采用配置的模糊消融（0-250ms，默认 150ms），平滑过渡；
   // 2. 无本地预览图垫底时（如多页漫画后续页/冷启动），使用标准设置淡入，避免在灰色底色上误触发消融产生灰白闪屏。
   const imageTransition = disableFadeIn || initialHitRef.current
     ? undefined
@@ -709,7 +709,7 @@ export function NovelCard(props: {
     markerPage,
     topTrailingAction,
   } = props
-  const [bookmarked, setBookmarked] = useState(novel.is_bookmarked)
+  const [bookmarked, setBookmarked] = useNovelBookmark(novel.id, novel.is_bookmarked)
   const [bookmarkBusy, setBookmarkBusy] = useState(false)
   const [showBookmarkDetail, setShowBookmarkDetail] = useState(false)
 
@@ -995,7 +995,7 @@ export function IllustCard(props: {
     topTrailingAction,
   } = props
   cacheIllust(illust)
-  const [bookmarked, setBookmarked] = useState(illust.is_bookmarked)
+  const [bookmarked, setBookmarked] = useIllustBookmark(illust.id, illust.is_bookmarked)
   const [bookmarkBusy, setBookmarkBusy] = useState(false)
   const [showBookmarkDetail, setShowBookmarkDetail] = useState(false)
   // 流式卡片只在进入原生可见区后请求图片；骨架尺寸仍由作品元数据提前固定。

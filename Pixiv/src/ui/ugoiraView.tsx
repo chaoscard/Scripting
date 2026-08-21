@@ -19,7 +19,7 @@ import { buildUgoira, cachedUgoira } from "../ugoira/ugoira"
 import type { UgoiraResult } from "../ugoira/ugoira"
 
 function blurCrossFadeDurationSec(): number {
-  const ms = loadSettings().blurCrossFadeDuration ?? 100
+  const ms = loadSettings().blurCrossFadeDuration ?? 150
   return Math.max(0, Math.min(0.25, ms / 1000))
 }
 

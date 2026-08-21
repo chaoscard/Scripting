@@ -107,6 +107,11 @@ function VersionRow(props: {
       clickCountRef.current = 0
       props.onUnlock()
       void Haptics.transient(1.0, 1.0)
+      void Dialog.alert({
+        title: "提示",
+        message: "已解锁调试功能，请前往设置查看",
+        buttonLabel: "好",
+      })
     } else {
       void Haptics.transient(0.4, 0.4)
       timerRef.current = setTimeout(() => {

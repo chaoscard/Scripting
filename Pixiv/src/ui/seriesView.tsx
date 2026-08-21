@@ -59,6 +59,7 @@ import {
   currentBatchSize,
   useLatest,
   usePagedList,
+  useSeriesWatchlist,
   useUserAmbientPalette,
 } from "./hooks"
 
@@ -195,7 +196,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
   const authorRef = useRef<PixivUser | null>(null)
   authorRef.current = author
   const [workCount, setWorkCount] = useState<number | null>(null)
-  const [isWatched, setIsWatched] = useState(false)
+  const [isWatched, setIsWatched] = useSeriesWatchlist(props.seriesID, props.kind, false)
   const isWatchedRef = useRef(isWatched)
   isWatchedRef.current = isWatched
   const [watchLoading, setWatchLoading] = useState(false)

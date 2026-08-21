@@ -59,24 +59,24 @@ export async function exchangeCode(
   code: string,
   verifier: string
 ): Promise<AuthTokenResponse> {
-  return (await oauthTokenRequest({
+  return await oauthTokenRequest<AuthTokenResponse>({
     grant_type: "authorization_code",
     code,
     code_verifier: verifier,
     redirect_uri: OAUTH_REDIRECT_URI,
     include_policy: "true",
-  })) as AuthTokenResponse
+  })
 }
 
 // 用 refresh_token 刷新（token 会轮换）
 export async function refreshToken(
   refreshToken: string
 ): Promise<AuthTokenResponse> {
-  return (await oauthTokenRequest({
+  return await oauthTokenRequest<AuthTokenResponse>({
     grant_type: "refresh_token",
     refresh_token: refreshToken,
     include_policy: "true",
-  })) as AuthTokenResponse
+  })
 }
 
 // 凭证持久化（Keychain + Storage 双重保障）

@@ -1,26 +1,46 @@
 import type {
+  PixivAutocompleteResponse,
   PixivBookmarkDetail,
+  PixivBookmarkDetailResponse,
   PixivBookmarkTag,
+  PixivBookmarkTagListResponse,
   PixivComment,
+  PixivCommentsResponse,
   PixivFollowDetail,
+  PixivFollowDetailResponse,
   PixivIllustration,
+  PixivIllustDetailResponse,
+  PixivIllustListResponse,
   PixivIllustrationSeriesResponse,
   PixivNovel,
-  PixivNovelMarker,
   PixivNovelDetail,
+  PixivNovelDetailResponse,
+  PixivNovelListResponse,
+  PixivNovelMarker,
+  PixivNovelMarkersResponse,
   PixivNovelSeriesResponse,
+  PixivNotification,
+  PixivNotificationListResponse,
   PixivVisionArticle,
   PixivVisionDetail,
   PixivPage,
   PixivWatchlistSeries,
+  PixivWatchlistResponse,
   PixivTrendingTag,
+  PixivTrendingTagsResponse,
   PixivUserDetail,
   PixivUserPreview,
+  PixivUserPreviewListResponse,
   PixivWebUserDetail,
   UgoiraMetadataResponse,
 } from "../types"
 import { API_BASE_URL } from "../config"
 import { notifyUserFollowChanged } from "../store/userFollow"
+import {
+  notifyIllustBookmarkChanged,
+  notifyNovelBookmarkChanged,
+  notifyWatchlistChanged,
+} from "../store/bookmarkSync"
 import {
   apiGet,
   apiGetAbsolute,
@@ -55,7 +75,7 @@ export async function recommendations(
 ): Promise<PixivPage<PixivIllustration>> {
   const path =
     kind === "illustration" ? "/v1/illust/recommended" : "/v1/manga/recommended"
-  const json = await apiGet(
+  const json = await apiGet<PixivIllustListResponse>(
     path,
     { filter: "for_ios", include_ranking_label: "true" },
     accessToken
@@ -67,7 +87,7 @@ export async function recommendations(
 export async function recommendedNovels(
   accessToken: string
 ): Promise<PixivPage<PixivNovel>> {
-  const json = await apiGet(
+  const json = await apiGet<PixivNovelListResponse>(
     "/v1/novel/recommended",
     { include_ranking_label: "true" },
     accessToken
@@ -82,7 +102,7 @@ export async function newIllustrations(
   accessToken: string
 ): Promise<PixivPage<PixivIllustration>> {
   const contentType = kind === "illustration" ? "illust" : "manga"
-  const json = await apiGet(
+  const json = await apiGet<PixivIllustListResponse>(
     "/v1/illust/new",
     { filter: "for_ios", content_type: contentType },
     accessToken
@@ -93,7 +113,7 @@ export async function newIllustrations(
 export async function newNovels(
   accessToken: string
 ): Promise<PixivPage<PixivNovel>> {
-  const json = await apiGet("/v1/novel/new", {}, accessToken)
+  const json = await apiGet<PixivNovelListResponse>("/v1/novel/new", {}, accessToken)
   return { items: json?.novels ?? [], nextURL: json?.next_url ?? null }
 }
 
@@ -386,7 +406,7 @@ export async function ranking(
 ): Promise<PixivPage<PixivIllustration>> {
   const query: Record<string, string> = { filter: "for_ios", mode }
   if (date) query["date"] = date
-  const json = await apiGet("/v1/illust/ranking", query, accessToken)
+  const json = await apiGet<PixivIllustListResponse>("/v1/illust/ranking", query, accessToken)
   return { items: json?.illusts ?? [], nextURL: json?.next_url ?? null }
 }
 
@@ -397,7 +417,7 @@ export async function novelRanking(
 ): Promise<PixivPage<PixivNovel>> {
   const query: Record<string, string> = { mode }
   if (date) query["date"] = date
-  const json = await apiGet("/v1/novel/ranking", query, accessToken)
+  const json = await apiGet<PixivNovelListResponse>("/v1/novel/ranking", query, accessToken)
   return { items: json?.novels ?? [], nextURL: json?.next_url ?? null }
 }
 
@@ -407,7 +427,7 @@ export async function followingNovels(
   restrict: FollowRestriction,
   accessToken: string
 ): Promise<PixivPage<PixivNovel>> {
-  const json = await apiGet(
+  const json = await apiGet<PixivNovelListResponse>(
     "/v1/novel/follow",
     { restrict },
     accessToken
@@ -419,7 +439,7 @@ export async function followingFeed(
   restrict: FollowRestriction,
   accessToken: string
 ): Promise<PixivPage<PixivIllustration>> {
-  const json = await apiGet(
+  const json = await apiGet<PixivIllustListResponse>(
     "/v2/illust/follow",
     { filter: "for_ios", restrict },
     accessToken
@@ -430,21 +450,21 @@ export async function followingFeed(
 export async function myPixivFeed(
   accessToken: string
 ): Promise<PixivPage<PixivIllustration>> {
-  const json = await apiGet("/v2/illust/mypixiv", { filter: "for_ios" }, accessToken)
+  const json = await apiGet<PixivIllustListResponse>("/v2/illust/mypixiv", { filter: "for_ios" }, accessToken)
   return { items: json?.illusts ?? [], nextURL: json?.next_url ?? null }
 }
 
 export async function myPixivNovels(
   accessToken: string
 ): Promise<PixivPage<PixivNovel>> {
-  const json = await apiGet("/v1/novel/mypixiv", {}, accessToken)
+  const json = await apiGet<PixivNovelListResponse>("/v1/novel/mypixiv", {}, accessToken)
   return { items: json?.novels ?? [], nextURL: json?.next_url ?? null }
 }
 
 export async function watchlistManga(
   accessToken: string
 ): Promise<PixivPage<PixivWatchlistSeries>> {
-  const json = await apiGet("/v1/watchlist/manga", {}, accessToken)
+  const json = await apiGet<PixivWatchlistResponse>("/v1/watchlist/manga", {}, accessToken)
   const items = json?.series ?? []
   return { items, nextURL: json?.next_url ?? null }
 }
@@ -452,7 +472,7 @@ export async function watchlistManga(
 export async function watchlistNovels(
   accessToken: string
 ): Promise<PixivPage<PixivWatchlistSeries>> {
-  const json = await apiGet("/v1/watchlist/novel", {}, accessToken)
+  const json = await apiGet<PixivWatchlistResponse>("/v1/watchlist/novel", {}, accessToken)
   const items = json?.series ?? []
   return { items, nextURL: json?.next_url ?? null }
 }
@@ -468,6 +488,7 @@ export async function addWatchlistSeries(
       ? { illust_series_id: String(seriesID), series_id: String(seriesID) }
       : { novel_series_id: String(seriesID), series_id: String(seriesID) }
   await apiPost(endpoint, body, accessToken)
+  notifyWatchlistChanged(seriesID, kind, true)
 }
 
 export async function deleteWatchlistSeries(
@@ -481,6 +502,7 @@ export async function deleteWatchlistSeries(
       ? { illust_series_id: String(seriesID), series_id: String(seriesID) }
       : { novel_series_id: String(seriesID), series_id: String(seriesID) }
   await apiPost(endpoint, body, accessToken)
+  notifyWatchlistChanged(seriesID, kind, false)
 }
 
 // ---------- 收藏 ----------
@@ -496,7 +518,7 @@ export async function bookmarks(
     restrict,
   }
   if (tag) query["tag"] = tag
-  const json = await apiGet("/v1/user/bookmarks/illust", query, accessToken)
+  const json = await apiGet<PixivIllustListResponse>("/v1/user/bookmarks/illust", query, accessToken)
   return { items: json?.illusts ?? [], nextURL: json?.next_url ?? null }
 }
 
@@ -505,7 +527,7 @@ export async function bookmarkTags(
   restrict: Visibility,
   accessToken: string
 ): Promise<PixivPage<PixivBookmarkTag>> {
-  const json = await apiGet(
+  const json = await apiGet<PixivBookmarkTagListResponse>(
     "/v1/user/bookmark-tags/illust",
     { user_id: String(userID), restrict },
     accessToken
@@ -517,7 +539,7 @@ export async function bookmarkDetail(
   id: number,
   accessToken: string
 ): Promise<PixivBookmarkDetail> {
-  const json = await apiGet(
+  const json = await apiGet<PixivBookmarkDetailResponse>(
     "/v2/illust/bookmark/detail",
     { illust_id: String(id) },
     accessToken
@@ -556,6 +578,7 @@ export async function addBookmark(
     form["tags[]"] = clean.join(" ")
   }
   await apiPost("/v2/illust/bookmark/add", form, accessToken)
+  notifyIllustBookmarkChanged(id, true, restrict, clean)
 }
 
 export async function removeBookmark(
@@ -567,6 +590,7 @@ export async function removeBookmark(
     { illust_id: String(id) },
     accessToken
   )
+  notifyIllustBookmarkChanged(id, false)
 }
 
 // ---------- 搜索 ----------
@@ -590,7 +614,7 @@ export async function searchIllustrations(
   if (options.bookmarkThreshold && options.bookmarkThreshold > 0) {
     query["word"] = `${options.word} ${options.bookmarkThreshold}users入り`
   }
-  const json = await apiGet("/v1/search/illust", query, accessToken)
+  const json = await apiGet<PixivIllustListResponse>("/v1/search/illust", query, accessToken)
   return { items: json?.illusts ?? [], nextURL: json?.next_url ?? null }
 }
 
@@ -598,7 +622,7 @@ export async function searchAutocomplete(
   word: string,
   accessToken: string
 ): Promise<{ name: string; translated_name?: string | null }[]> {
-  const json = await apiGet(
+  const json = await apiGet<PixivAutocompleteResponse>(
     "/v2/search/autocomplete",
     { merge_plain_keyword_results: "true", word },
     accessToken
@@ -610,7 +634,7 @@ export async function searchUsers(
   word: string,
   accessToken: string
 ): Promise<PixivPage<PixivUserPreview>> {
-  const json = await apiGet(
+  const json = await apiGet<PixivUserPreviewListResponse>(
     "/v1/search/user",
     { filter: "for_ios", word },
     accessToken
@@ -621,7 +645,7 @@ export async function searchUsers(
 export async function trendingTags(
   accessToken: string
 ): Promise<PixivTrendingTag[]> {
-  const json = await apiGet(
+  const json = await apiGet<PixivTrendingTagsResponse>(
     "/v1/trending-tags/illust",
     { filter: "for_ios" },
     accessToken
@@ -635,7 +659,7 @@ export async function illustrationDetail(
   id: number,
   accessToken: string
 ): Promise<PixivIllustration> {
-  const json = await apiGet(
+  const json = await apiGet<PixivIllustDetailResponse>(
     "/v1/illust/detail",
     { filter: "for_ios", illust_id: String(id) },
     accessToken
@@ -648,7 +672,7 @@ export async function relatedIllustrations(
   id: number,
   accessToken: string
 ): Promise<PixivPage<PixivIllustration>> {
-  const json = await apiGet(
+  const json = await apiGet<PixivIllustListResponse>(
     "/v2/illust/related",
     { filter: "for_ios", illust_id: String(id) },
     accessToken
@@ -660,7 +684,7 @@ export async function illustrationSeries(
   id: number,
   accessToken: string
 ): Promise<PixivIllustrationSeriesResponse> {
-  const json = await apiGet(
+  const json = await apiGet<PixivIllustrationSeriesResponse>(
     "/v1/illust/series",
     { filter: "for_ios", illust_series_id: String(id) },
     accessToken
@@ -672,13 +696,13 @@ export async function nextIllustrationSeries(
   nextURL: string,
   accessToken: string
 ): Promise<PixivIllustrationSeriesResponse> {
-  return await apiGetAbsolute(nextURL, accessToken)
+  return await apiGetAbsolute<PixivIllustrationSeriesResponse>(nextURL, accessToken)
 }
 export async function novelSeries(
   id: number,
   accessToken: string
 ): Promise<PixivNovelSeriesResponse> {
-  const json = await apiGet(
+  const json = await apiGet<PixivNovelSeriesResponse>(
     "/v2/novel/series",
     { series_id: String(id) },
     accessToken
@@ -689,13 +713,13 @@ export async function nextNovelSeries(
   nextURL: string,
   accessToken: string
 ): Promise<PixivNovelSeriesResponse> {
-  return await apiGetAbsolute(nextURL, accessToken)
+  return await apiGetAbsolute<PixivNovelSeriesResponse>(nextURL, accessToken)
 }
 export async function comments(
   illustID: number,
   accessToken: string
 ): Promise<PixivPage<PixivComment>> {
-  const json = await apiGet(
+  const json = await apiGet<PixivCommentsResponse>(
     "/v3/illust/comments",
     { illust_id: String(illustID) },
     accessToken
@@ -707,7 +731,7 @@ export async function commentReplies(
   commentID: number,
   accessToken: string
 ): Promise<PixivPage<PixivComment>> {
-  const json = await apiGet(
+  const json = await apiGet<PixivCommentsResponse>(
     "/v2/illust/comment/replies",
     { comment_id: String(commentID) },
     accessToken
@@ -748,7 +772,7 @@ export async function fetchWebUserDetail(
 ): Promise<PixivWebUserDetail | null> {
   const url = `${WEB_BASE_ORIGIN}/ajax/user/${userID}?full=1`
   try {
-    const json = await apiGetPublicJson<any>(url, WEB_BASE_ORIGIN, {
+    const json = await apiGetPublicJson<{ error: boolean; body?: PixivWebUserDetail }>(url, WEB_BASE_ORIGIN, {
       "User-Agent": WEB_USER_AGENT,
       Referer: `${WEB_BASE_ORIGIN}/users/${userID}`,
     })
@@ -766,7 +790,7 @@ export async function userDetail(
   id: number,
   accessToken: string
 ): Promise<PixivUserDetail> {
-  const json = await apiGet(
+  const json = await apiGet<PixivUserDetail>(
     "/v1/user/detail",
     { filter: "for_ios", user_id: String(id) },
     accessToken
@@ -779,7 +803,7 @@ export async function userWorks(
   type: "illust" | "manga",
   accessToken: string
 ): Promise<PixivPage<PixivIllustration>> {
-  const json = await apiGet(
+  const json = await apiGet<PixivIllustListResponse>(
     "/v1/user/illusts",
     { filter: "for_ios", user_id: String(id), type },
     accessToken
@@ -791,7 +815,7 @@ export async function userNovels(
   id: number,
   accessToken: string
 ): Promise<PixivPage<PixivNovel>> {
-  const json = await apiGet(
+  const json = await apiGet<PixivNovelListResponse>(
     "/v1/user/novels",
     { user_id: String(id) },
     accessToken
@@ -807,7 +831,7 @@ export async function userNovelBookmarks(
 ): Promise<PixivPage<PixivNovel>> {
   const query: Record<string, string> = { user_id: String(id), restrict }
   if (tag) query["tag"] = tag
-  const json = await apiGet(
+  const json = await apiGet<PixivNovelListResponse>(
     "/v1/user/bookmarks/novel",
     query,
     accessToken
@@ -823,7 +847,7 @@ export async function userBookmarks(
 ): Promise<PixivPage<PixivIllustration>> {
   const query: Record<string, string> = { user_id: String(id), restrict }
   if (tag) query["tag"] = tag
-  const json = await apiGet("/v1/user/bookmarks/illust", query, accessToken)
+  const json = await apiGet<PixivIllustListResponse>("/v1/user/bookmarks/illust", query, accessToken)
   return { items: json?.illusts ?? [], nextURL: json?.next_url ?? null }
 }
 
@@ -834,7 +858,7 @@ export async function userConnections(
   accessToken: string
 ): Promise<PixivPage<PixivUserPreview>> {
   const path = kind === "following" ? "/v1/user/following" : "/v1/user/follower"
-  const json = await apiGet(
+  const json = await apiGet<PixivUserPreviewListResponse>(
     path,
     { filter: "for_ios", user_id: String(userID), restrict },
     accessToken
@@ -846,7 +870,7 @@ export async function myPixivUsers(
   userID: number,
   accessToken: string
 ): Promise<PixivPage<PixivUserPreview>> {
-  const json = await apiGet(
+  const json = await apiGet<PixivUserPreviewListResponse>(
     "/v1/user/mypixiv",
     { user_id: String(userID) },
     accessToken
@@ -858,7 +882,7 @@ export async function followDetail(
   userID: number,
   accessToken: string
 ): Promise<PixivFollowDetail> {
-  const json = await apiGet(
+  const json = await apiGet<PixivFollowDetailResponse>(
     "/v1/user/follow/detail",
     { user_id: String(userID) },
     accessToken
@@ -929,7 +953,7 @@ export async function ugoiraMetadata(
   id: number,
   accessToken: string
 ): Promise<UgoiraMetadataResponse["ugoira_metadata"]> {
-  const json = await apiGet(
+  const json = await apiGet<UgoiraMetadataResponse>(
     "/v1/ugoira/metadata",
     { illust_id: String(id) },
     accessToken
@@ -946,7 +970,7 @@ export async function novelDetail(
   id: number,
   accessToken: string
 ): Promise<PixivNovelDetail> {
-  const json = await apiGet(
+  const json = await apiGet<PixivNovelDetailResponse>(
     "/v2/novel/detail",
     { novel_id: String(id) },
     accessToken
@@ -1031,7 +1055,7 @@ function extractNovelJson(html: string): any | null {
 export async function novelMarkers(
   accessToken: string
 ): Promise<PixivPage<PixivNovelMarker>> {
-  const json = await apiGet("/v2/novel/markers", {}, accessToken)
+  const json = await apiGet<PixivNovelMarkersResponse>("/v2/novel/markers", {}, accessToken)
   const items = Array.isArray(json?.marked_novels)
     ? json.marked_novels
       .filter((item: any) => item?.novel?.id != null)
@@ -1044,7 +1068,7 @@ export async function nextNovelMarkers(
   nextURL: string,
   accessToken: string
 ): Promise<PixivPage<PixivNovelMarker>> {
-  const json = await apiGetAbsolute(nextURL, accessToken)
+  const json = await apiGetAbsolute<PixivNovelMarkersResponse>(nextURL, accessToken)
   const items = Array.isArray(json?.marked_novels)
     ? json.marked_novels
       .filter((item: any) => item?.novel?.id != null)
@@ -1058,7 +1082,7 @@ export async function searchNovels(
   sort: "date_desc" | "popular_desc" | "date_asc",
   accessToken: string
 ): Promise<PixivPage<PixivNovel>> {
-  const json = await apiGet(
+  const json = await apiGet<PixivNovelListResponse>(
     "/v1/search/novel",
     { search_target: "partial_match_for_tags", sort, word },
     accessToken
@@ -1070,7 +1094,7 @@ export async function novelComments(
   id: number,
   accessToken: string
 ): Promise<PixivPage<PixivComment>> {
-  const json = await apiGet(
+  const json = await apiGet<PixivCommentsResponse>(
     "/v3/novel/comments",
     { novel_id: String(id) },
     accessToken
@@ -1104,7 +1128,7 @@ export async function novelCommentReplies(
   commentID: number,
   accessToken: string
 ): Promise<PixivPage<PixivComment>> {
-  const json = await apiGet(
+  const json = await apiGet<PixivCommentsResponse>(
     "/v2/novel/comment/replies",
     { comment_id: String(commentID) },
     accessToken
@@ -1116,7 +1140,7 @@ export async function novelBookmarkTags(
   restrict: Visibility,
   accessToken: string
 ): Promise<PixivPage<PixivBookmarkTag>> {
-  const json = await apiGet(
+  const json = await apiGet<PixivBookmarkTagListResponse>(
     "/v1/user/bookmark-tags/novel",
     { restrict },
     accessToken
@@ -1128,7 +1152,7 @@ export async function novelBookmarkDetail(
   id: number,
   accessToken: string
 ): Promise<PixivBookmarkDetail> {
-  const json = await apiGet(
+  const json = await apiGet<PixivBookmarkDetailResponse>(
     "/v2/novel/bookmark/detail",
     { novel_id: String(id) },
     accessToken
@@ -1165,6 +1189,7 @@ export async function addNovelBookmark(
   const clean = tags.map((tag) => tag.trim()).filter((tag) => tag.length > 0)
   if (clean.length > 0) form["tags[]"] = clean.join(" ")
   await apiPost("/v2/novel/bookmark/add", form, accessToken)
+  notifyNovelBookmarkChanged(id, true, restrict, clean)
 }
 
 export async function removeNovelBookmark(
@@ -1176,37 +1201,17 @@ export async function removeNovelBookmark(
     { novel_id: String(id) },
     accessToken
   )
+  notifyNovelBookmarkChanged(id, false)
 }
 
 // ---------- 通知 ----------
 
-export interface PixivNotificationContent {
-  text: string
-  left_icon: string | null
-  left_image: string | null
-  right_icon: string | null
-  right_image: string | null
-}
-
-export interface PixivNotificationViewMore {
-  unread_exists: boolean
-  title: string
-}
-
-export interface PixivNotification {
-  id: number
-  created_datetime: string
-  type: number
-  content: PixivNotificationContent
-  view_more: PixivNotificationViewMore | null
-  target_url: string
-  is_read: boolean
-}
+export type { PixivNotification, PixivNotificationContent, PixivNotificationViewMore } from "../types"
 
 export async function notifications(
   accessToken: string
 ): Promise<{ items: PixivNotification[]; nextURL: string | null }> {
-  const json = await apiGet("/v1/notification/list", {}, accessToken)
+  const json = await apiGet<PixivNotificationListResponse>("/v1/notification/list", {}, accessToken)
   return {
     items: json?.notifications ?? [],
     nextURL: json?.next_url ?? null,
@@ -1217,7 +1222,7 @@ export async function nextNotifications(
   nextURL: string,
   accessToken: string
 ): Promise<{ items: PixivNotification[]; nextURL: string | null }> {
-  const json = await apiGetAbsolute(nextURL, accessToken)
+  const json = await apiGetAbsolute<PixivNotificationListResponse>(nextURL, accessToken)
   return {
     items: json?.notifications ?? [],
     nextURL: json?.next_url ?? null,
@@ -1228,7 +1233,7 @@ export async function notificationViewMore(
   notificationID: number,
   accessToken: string
 ): Promise<{ items: PixivNotification[]; nextURL: string | null }> {
-  const json = await apiGet(
+  const json = await apiGet<PixivNotificationListResponse>(
     "/v1/notification/view-more",
     { notification_id: String(notificationID) },
     accessToken
@@ -1245,7 +1250,7 @@ export async function nextIllustrations(
   nextURL: string,
   accessToken: string
 ): Promise<PixivPage<PixivIllustration>> {
-  const json = await apiGetAbsolute(nextURL, accessToken)
+  const json = await apiGetAbsolute<PixivIllustListResponse>(nextURL, accessToken)
   return { items: json?.illusts ?? [], nextURL: json?.next_url ?? null }
 }
 
@@ -1253,7 +1258,7 @@ export async function nextWatchlist(
   nextURL: string,
   accessToken: string
 ): Promise<PixivPage<PixivWatchlistSeries>> {
-  const json = await apiGetAbsolute(nextURL, accessToken)
+  const json = await apiGetAbsolute<PixivWatchlistResponse>(nextURL, accessToken)
   const items = json?.series ?? []
   return { items, nextURL: json?.next_url ?? null }
 }
@@ -1262,7 +1267,7 @@ export async function nextUsers(
   nextURL: string,
   accessToken: string
 ): Promise<PixivPage<PixivUserPreview>> {
-  const json = await apiGetAbsolute(nextURL, accessToken)
+  const json = await apiGetAbsolute<PixivUserPreviewListResponse>(nextURL, accessToken)
   return { items: json?.user_previews ?? [], nextURL: json?.next_url ?? null }
 }
 
@@ -1270,7 +1275,7 @@ export async function nextComments(
   nextURL: string,
   accessToken: string
 ): Promise<PixivPage<PixivComment>> {
-  const json = await apiGetAbsolute(nextURL, accessToken)
+  const json = await apiGetAbsolute<PixivCommentsResponse>(nextURL, accessToken)
   return { items: json?.comments ?? [], nextURL: json?.next_url ?? null }
 }
 
@@ -1278,6 +1283,6 @@ export async function nextNovels(
   nextURL: string,
   accessToken: string
 ): Promise<PixivPage<PixivNovel>> {
-  const json = await apiGetAbsolute(nextURL, accessToken)
+  const json = await apiGetAbsolute<PixivNovelListResponse>(nextURL, accessToken)
   return { items: json?.novels ?? [], nextURL: json?.next_url ?? null }
 }

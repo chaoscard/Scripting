@@ -218,7 +218,7 @@ export function SettingsView() {
       </Section>
 
       <Section header={<Text>图片质量</Text>}>
-        <Picker title="信息流" value={settings.feedImageQuality} onChanged={(value: string) => update({ feedImageQuality: value as "medium" | "large" })}>
+        <Picker title="瀑布流" value={settings.feedImageQuality} onChanged={(value: string) => update({ feedImageQuality: value as "medium" | "large" })}>
           <Text tag="medium">中等</Text>
           <Text tag="large">大图</Text>
         </Picker>
@@ -336,7 +336,7 @@ export function SettingsView() {
             title="淡入动画时长"
             unit="ms"
             value={settings.imageFadeInDuration}
-            defaultValue={200}
+            defaultValue={150}
             min={1}
             max={500}
             onSave={(val) => update({ imageFadeInDuration: val })}
@@ -345,7 +345,7 @@ export function SettingsView() {
             title="模糊消融时长"
             unit="ms"
             value={settings.blurCrossFadeDuration}
-            defaultValue={100}
+            defaultValue={150}
             min={0}
             max={250}
             onSave={(val) => update({ blurCrossFadeDuration: val })}

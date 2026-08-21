@@ -30,6 +30,7 @@ import {
   isIllustContentVisible,
   isNovelContentVisible,
 } from "../store/contentFilter"
+import { onWatchlistChanged } from "../store/bookmarkSync"
 import { destinationElement } from "./routes"
 import { useLatest, usePagedList, currentBatchSize } from "./hooks"
 import type {
@@ -237,9 +238,6 @@ function FollowingFeed(props: {
       prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
   })
 
-  useSettingsFilter(illustPaged)
-  useSettingsFilter(novelPaged)
-
   const activeRefresh = kind === "illust" ? illustPaged.refresh : novelPaged.refresh
   useEffect(() => {
     onRegisterRefresh?.(activeRefresh)
@@ -313,13 +311,18 @@ function WatchlistFeed(props: {
       prefetch(pendingItems.slice(0, currentBatchSize()).map(watchlistThumbUrlOf)).cancel,
   })
 
-  useSettingsFilter(mangaPaged)
-  useSettingsFilter(novelPaged)
-
   const activeRefresh = kind === "manga" ? mangaPaged.refresh : novelPaged.refresh
   useEffect(() => {
     onRegisterRefresh?.(activeRefresh)
   }, [activeRefresh, onRegisterRefresh])
+
+  useEffect(() => {
+    return onWatchlistChanged((_, changedKind) => {
+      if (changedKind === kind) {
+        activeRefresh()
+      }
+    })
+  }, [activeRefresh, kind])
 
   const currentPaged = kind === "manga" ? mangaPaged : novelPaged
 
@@ -374,9 +377,6 @@ function FriendsFeed(props: {
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
   })
-
-  useSettingsFilter(illustPaged)
-  useSettingsFilter(novelPaged)
 
   const activeRefresh = kind === "illust" ? illustPaged.refresh : novelPaged.refresh
   useEffect(() => {
@@ -443,15 +443,6 @@ function NovelFeedItems(props: {
       />
     </LazyVStack>
   )
-}
-
-function useSettingsFilter(paged: ReturnType<typeof usePagedList<any>>) {
-  const pagedRef = useLatest(paged)
-  useEffect(() => {
-    return onSettingsChanged(() => {
-      pagedRef.current.reapplyFilter()
-    })
-  }, [])
 }
 
 function filterFollowingIllustrationItems(items: PixivIllustration[]): PixivIllustration[] {

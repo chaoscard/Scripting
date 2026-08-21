@@ -403,3 +403,111 @@ export interface AuthTokenResponse {
   refresh_token: string
   user: AuthUser
 }
+
+// ---------- API 响应结构类型 ----------
+
+export interface PixivIllustListResponse {
+  illusts: PixivIllustration[]
+  next_url?: string | null
+}
+
+export interface PixivNovelListResponse {
+  novels: PixivNovel[]
+  next_url?: string | null
+}
+
+export interface PixivWatchlistResponse {
+  series: PixivWatchlistSeries[]
+  next_url?: string | null
+}
+
+export interface PixivUserPreviewListResponse {
+  user_previews: PixivUserPreview[]
+  next_url?: string | null
+}
+
+export interface PixivBookmarkTagListResponse {
+  bookmark_tags: PixivBookmarkTag[]
+  next_url?: string | null
+}
+
+export interface PixivTrendingTagsResponse {
+  trend_tags: PixivTrendingTag[]
+}
+
+export interface PixivCommentsResponse {
+  comments: PixivComment[]
+  next_url?: string | null
+}
+
+export interface PixivIllustDetailResponse {
+  illust: PixivIllustration
+}
+
+export interface PixivNovelDetailResponse {
+  novel: PixivNovelDetail
+}
+
+export interface PixivBookmarkDetailRawTag {
+  name?: string
+  is_registered?: boolean
+}
+
+export interface PixivBookmarkDetailResponse {
+  bookmark_detail: {
+    is_bookmarked: boolean
+    tags?: Array<PixivBookmarkDetailRawTag | string>
+    restrict?: "public" | "private" | string
+  }
+}
+
+export interface PixivFollowDetailResponse {
+  follow_detail: PixivFollowDetail
+}
+
+export interface PixivNovelMarkerItem {
+  novel: PixivNovel
+  novel_marker: {
+    page: number
+  }
+}
+
+export interface PixivNovelMarkersResponse {
+  marked_novels: PixivNovelMarkerItem[]
+  next_url?: string | null
+}
+
+export interface PixivAutocompleteResponse {
+  tags: Array<{
+    name: string
+    translated_name?: string | null
+  }>
+}
+
+export interface PixivNotificationContent {
+  text: string
+  left_icon: string | null
+  left_image: string | null
+  right_icon: string | null
+  right_image: string | null
+}
+
+export interface PixivNotificationViewMore {
+  unread_exists: boolean
+  title: string
+}
+
+export interface PixivNotification {
+  id: number
+  created_datetime: string
+  type: number
+  content: PixivNotificationContent
+  view_more: PixivNotificationViewMore | null
+  target_url: string
+  is_read: boolean
+}
+
+export interface PixivNotificationListResponse {
+  notifications: PixivNotification[]
+  next_url?: string | null
+}
