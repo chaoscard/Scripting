@@ -307,9 +307,6 @@ export function UserDetailView(props: { userID: number }) {
             <NavigationLink value={`userConnections:following:${userID}`}>
               <Label title="查看关注" systemImage="person.2" />
             </NavigationLink>
-            <NavigationLink value={`userConnections:follower:${userID}`}>
-              <Label title="查看粉丝" systemImage="person.2.badge.plus" />
-            </NavigationLink>
             <NavigationLink value={`userConnections:mypixiv:${userID}`}>
               <Label title="查看好友" systemImage="person.2.badge.gearshape" />
             </NavigationLink>

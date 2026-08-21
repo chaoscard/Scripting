@@ -478,10 +478,13 @@ export function CachedImage(props: {
     }
   }, [showBlurPreview, previewPath, centerCropSquare, centerCropAspect, blurPreviewRadius])
 
+  // 优先使用已就绪的图片文件（高清大图优先，缩略图即时兜底）提取真实物理宽高比，
+  // 确保多页作品各页在缩略图就绪的瞬间即可提前校准为真实比例，彻底消除大图下载完成时的二次外框尺寸跳变（Zero Layout Shift）：
+  const activeMeasurePath = path ?? previewPath
   const intrinsicAspect = useMemo(() => {
-    if (!path || !useIntrinsicAspectRatio) return null
+    if (!activeMeasurePath || !useIntrinsicAspectRatio) return null
     try {
-      const image = UIImage.fromFile(path)
+      const image = UIImage.fromFile(activeMeasurePath)
       if (image && image.width > 0 && image.height > 0) {
         return image.width / image.height
       }
@@ -489,7 +492,7 @@ export function CachedImage(props: {
       return null
     }
     return null
-  }, [path, useIntrinsicAspectRatio])
+  }, [activeMeasurePath, useIntrinsicAspectRatio])
 
   // 当传入了有效且明确的 aspectRatioValue 且与图片真实比例差异极小（< 2% 浮点/整数缩放舍入误差）时，
   // 保持 aspectRatioValue，防止大图解码完成瞬间由于微小亚像素差异触发外层容器二次重新排版（Layout Shift）；
@@ -546,7 +549,7 @@ export function CachedImage(props: {
         <Image
           image={previewBlurredImage}
           resizable={true}
-          aspectRatio={{ value: effectiveRatio, contentMode: "fill" }}
+          aspectRatio={{ value: effectiveRatio, contentMode }}
           frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
         />
       ) : null}

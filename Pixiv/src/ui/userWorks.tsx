@@ -2,7 +2,9 @@ import {
   LazyVStack,
   Picker,
   Text,
+  useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   VStack,
@@ -10,6 +12,7 @@ import {
 import {
   nextIllustrations,
   nextNovels,
+  userDetail,
   userNovels,
   userWorks,
 } from "../api/pixiv"
@@ -24,8 +27,8 @@ import {
   isNovelContentVisible,
 } from "../store/contentFilter"
 import { isUserFollowed, onUserFollowChanged } from "../store/userFollow"
-import { useLatest, usePagedList, currentBatchSize } from "./hooks"
-import type { PixivIllustration, PixivNovel } from "../types"
+import { useAsyncGuard, useLatest, usePagedList, currentBatchSize } from "./hooks"
+import type { PixivIllustration, PixivNovel, PixivUserDetail } from "../types"
 import {
   EmptyView,
   ErrorView,
@@ -40,8 +43,69 @@ export type WorkTab = "illust" | "manga" | "novel"
 
 export function UserWorksView(props: { userID?: number; title?: string }) {
   const currentUserID = props.userID ?? session.userID ?? null
+  const [detail, setDetail] = useState<PixivUserDetail | null>(null)
+  const [detailLoading, setDetailLoading] = useState(true)
+  const [detailError, setDetailError] = useState<string | null>(null)
   const [tab, setTab] = useState<WorkTab>("illust")
-  const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
+  const [emptyKinds, setEmptyKinds] = useState<Partial<Record<WorkTab, boolean>>>({})
+  const guard = useAsyncGuard()
+  const worksRefreshRef = useRef<() => Promise<void>>(() => Promise.resolve())
+
+  const loadDetail = useCallback(async () => {
+    if (currentUserID == null) return
+    const g = guard()
+    setDetailError(null)
+    try {
+      const result = await session.call((token) => userDetail(currentUserID, token))
+      if (!g.isCurrent()) return
+      setDetail(result)
+    } catch (e) {
+      if (!g.isCurrent()) return
+      setDetailError(e instanceof Error ? e.message : "获取用户信息失败")
+    } finally {
+      if (g.isCurrent()) setDetailLoading(false)
+    }
+  }, [currentUserID, guard])
+
+  useEffect(() => {
+    void loadDetail()
+  }, [loadDetail])
+
+  const baseKinds = useMemo<WorkTab[]>(() => {
+    if (!detail) return []
+    const kinds: WorkTab[] = []
+    if ((detail.profile.total_illusts ?? 0) > 0) kinds.push("illust")
+    if ((detail.profile.total_manga ?? 0) > 0) kinds.push("manga")
+    if ((detail.profile.total_novels ?? 0) > 0) kinds.push("novel")
+    return kinds
+  }, [
+    detail?.profile.total_illusts,
+    detail?.profile.total_manga,
+    detail?.profile.total_novels,
+  ])
+
+  const availableKinds = useMemo<WorkTab[]>(() => {
+    return baseKinds.filter((k) => !emptyKinds[k])
+  }, [baseKinds, emptyKinds])
+
+  const activeTab: WorkTab = useMemo(() => {
+    if (availableKinds.length === 0) return baseKinds[0] ?? "illust"
+    if (availableKinds.includes(tab)) return tab
+    return availableKinds[0]
+  }, [availableKinds, baseKinds, tab])
+
+  useEffect(() => {
+    if (availableKinds.length > 0 && !availableKinds.includes(tab)) {
+      setTab(availableKinds[0])
+    }
+  }, [availableKinds, tab])
+
+  const handleKindEmpty = useCallback((targetKind: WorkTab, isEmpty: boolean) => {
+    setEmptyKinds((prev) => {
+      if (prev[targetKind] === isEmpty) return prev
+      return { ...prev, [targetKind]: isEmpty }
+    })
+  }, [])
 
   if (currentUserID == null) {
     return (
@@ -55,43 +119,94 @@ export function UserWorksView(props: { userID?: number; title?: string }) {
     )
   }
 
+  if (detailLoading && !detail) {
+    return (
+      <RefreshableScrollView
+        navigationTitle={props.title ?? "作品"}
+        navigationBarTitleDisplayMode="inline"
+        refreshable={loadDetail}
+      >
+        <LoadingView />
+      </RefreshableScrollView>
+    )
+  }
+
+  if (detailError && !detail) {
+    return (
+      <RefreshableScrollView
+        navigationTitle={props.title ?? "作品"}
+        navigationBarTitleDisplayMode="inline"
+        refreshable={loadDetail}
+      >
+        <ErrorView message={detailError} onRetry={loadDetail} />
+      </RefreshableScrollView>
+    )
+  }
+
   return (
     <RefreshableScrollView
       navigationTitle={props.title ?? "作品"}
       navigationBarTitleDisplayMode="inline"
-      refreshable={() => refreshHandlerRef.current()}
+      refreshable={async () => {
+        await Promise.all([loadDetail(), worksRefreshRef.current()])
+      }}
     >
       <VStack alignment="leading" spacing={8}>
-        <Picker
-          title="作品类型"
-          value={tab}
-          onChanged={(value: string) => setTab(value as WorkTab)}
-          pickerStyle="segmented"
-          padding={{ horizontal: 14 }}
-        >
-          <Text tag="illust">插画</Text>
-          <Text tag="manga">漫画</Text>
-          <Text tag="novel">小说</Text>
-        </Picker>
-
-        <UserWorksFeed
-          userID={currentUserID}
-          tab={tab}
-          onRegisterRefresh={(fn) => {
-            refreshHandlerRef.current = fn
-          }}
+        <UserWorkPicker
+          availableKinds={availableKinds}
+          kind={activeTab}
+          onChanged={setTab}
         />
+
+        {availableKinds.length === 0 ? (
+          <EmptyView text="暂无作品投稿" systemImage="photo.on.rectangle.angled" />
+        ) : (
+          <UserWorksFeed
+            userID={currentUserID}
+            tab={activeTab}
+            onKindEmpty={handleKindEmpty}
+            onRegisterRefresh={(fn) => {
+              worksRefreshRef.current = fn
+            }}
+          />
+        )}
       </VStack>
     </RefreshableScrollView>
+  )
+}
+
+function UserWorkPicker(props: {
+  availableKinds: WorkTab[]
+  kind: WorkTab
+  onChanged: (kind: WorkTab) => void
+}) {
+  const { availableKinds, kind, onChanged } = props
+  if (availableKinds.length <= 1) return null
+
+  return (
+    <Picker
+      title="作品类型"
+      value={kind}
+      onChanged={(value: string) => onChanged(value as WorkTab)}
+      pickerStyle="segmented"
+      padding={{ horizontal: 14 }}
+    >
+      {availableKinds.map((k) => (
+        <Text key={k} tag={k}>
+          {k === "illust" ? "插画" : k === "manga" ? "漫画" : "小说"}
+        </Text>
+      ))}
+    </Picker>
   )
 }
 
 function UserWorksFeed(props: {
   userID: number
   tab: WorkTab
+  onKindEmpty?: (kind: WorkTab, isEmpty: boolean) => void
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { userID, tab, onRegisterRefresh } = props
+  const { userID, tab, onKindEmpty, onRegisterRefresh } = props
   const [isFollowed, setIsFollowed] = useState(() => isUserFollowed(userID) ?? false)
 
   useEffect(() => {
@@ -138,6 +253,66 @@ function UserWorksFeed(props: {
   const illustPagedRef = useLatest(illustPaged)
   const mangaPagedRef = useLatest(mangaPaged)
   const novelPagedRef = useLatest(novelPaged)
+
+  useEffect(() => {
+    if (
+      tab === "illust" &&
+      illustPaged.hasLoaded &&
+      !illustPaged.initialLoading &&
+      !illustPaged.loadingMore &&
+      !illustPaged.error
+    ) {
+      onKindEmpty?.("illust", illustPaged.items.length === 0)
+    }
+  }, [
+    tab,
+    illustPaged.hasLoaded,
+    illustPaged.initialLoading,
+    illustPaged.loadingMore,
+    illustPaged.error,
+    illustPaged.items.length,
+    onKindEmpty,
+  ])
+
+  useEffect(() => {
+    if (
+      tab === "manga" &&
+      mangaPaged.hasLoaded &&
+      !mangaPaged.initialLoading &&
+      !mangaPaged.loadingMore &&
+      !mangaPaged.error
+    ) {
+      onKindEmpty?.("manga", mangaPaged.items.length === 0)
+    }
+  }, [
+    tab,
+    mangaPaged.hasLoaded,
+    mangaPaged.initialLoading,
+    mangaPaged.loadingMore,
+    mangaPaged.error,
+    mangaPaged.items.length,
+    onKindEmpty,
+  ])
+
+  useEffect(() => {
+    if (
+      tab === "novel" &&
+      novelPaged.hasLoaded &&
+      !novelPaged.initialLoading &&
+      !novelPaged.loadingMore &&
+      !novelPaged.error
+    ) {
+      onKindEmpty?.("novel", novelPaged.items.length === 0)
+    }
+  }, [
+    tab,
+    novelPaged.hasLoaded,
+    novelPaged.initialLoading,
+    novelPaged.loadingMore,
+    novelPaged.error,
+    novelPaged.items.length,
+    onKindEmpty,
+  ])
 
   useEffect(() => {
     return onSettingsChanged(() => {
