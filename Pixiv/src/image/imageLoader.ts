@@ -606,6 +606,51 @@ export function cardThumbUrlOf(
     : (i.image_urls?.medium ?? i.image_urls?.large ?? i.image_urls?.square_medium ?? null)
 }
 
+// 多页插画与漫画的中等缩略图获取与推导函数（等比例缩放，严禁使用方形裁剪的 square_medium 以免消融时发生比例跳变）：
+// 1. 第 0 页：优先复用中等比例的 cardThumbUrlOf / medium / large。
+// 2. 第 1 页及后续页：优先从 meta_pages[pageIndex] 取保持原图纵横比的 medium 缩略图；若无则回退 large。
+// 3. 若 meta_pages 缺失或长度不足：通过第一页中等缩略图的 URL 规则算法推导 _p${pageIndex} 对应页的中图。
+export function pageThumbUrlOf(
+  i: {
+    width?: number
+    height?: number
+    image_urls?: PixivImageUrls | { square_medium?: string; medium?: string; large?: string; original?: string }
+    meta_pages?: { image_urls: PixivImageUrls }[]
+    meta_single_page?: { original_image_url?: string }
+  },
+  pageIndex: number
+): string | null {
+  if (!i) return null
+  if (pageIndex === 0) {
+    return (
+      cardThumbUrlOf(i) ||
+      i.image_urls?.medium ||
+      i.image_urls?.large ||
+      i.image_urls?.square_medium ||
+      null
+    )
+  }
+  // 多页作品：优先使用 meta_pages 中该页保持原始比例的中等缩略图（medium），避免方形裁切导致的比例跳变
+  if (i.meta_pages && i.meta_pages.length > pageIndex) {
+    const page = i.meta_pages[pageIndex]
+    if (page?.image_urls) {
+      return (
+        page.image_urls.medium ??
+        page.image_urls.large ??
+        page.image_urls.square_medium ??
+        null
+      )
+    }
+  }
+  // 若 meta_pages 未返回（如单页数据进入多页长图模式）：以第一页的保持比例中图推导
+  const baseThumb =
+    i.image_urls?.medium ??
+    i.image_urls?.large ??
+    i.image_urls?.square_medium ??
+    null
+  return derivePageURL(baseThumb, pageIndex)
+}
+
 /**
  * 将 Pixiv 封面/插画缩略图 URL 升档为高清大图（master1200 / original）
  * 针对小说封面、系列封面与插画背景横幅：

@@ -32,7 +32,7 @@ import {
   unfollowUser,
 } from "../api/pixiv"
 import { session } from "../api/session"
-import { cardThumbUrlOf, imageUrlOf, loadImage, prefetch } from "../image/imageLoader"
+import { cardThumbUrlOf, imageUrlOf, loadImage, pageThumbUrlOf, prefetch } from "../image/imageLoader"
 import {
   extractIllustAmbientPalette,
   getCachedIllustAmbientPalette,
@@ -606,7 +606,7 @@ export function IllustDetailView(props: { illustID: number }) {
           {current.type === "ugoira" ? (
             <UgoiraPlayerView
               illustID={current.id}
-              previewUrl={cardThumbUrlOf(current) || current.image_urls?.medium || current.image_urls?.square_medium || null}
+              previewUrl={pageThumbUrlOf(current, 0)}
               aspectRatioValue={pageAspect}
               cornerRadius={8}
               onLoaded={() => setMediaReady(true)}
@@ -614,9 +614,7 @@ export function IllustDetailView(props: { illustID: number }) {
           ) : pageCount > 1 ? (
             <LazyVStack spacing={4} alignment="center">
               {pageURLs.map((url, idx) => {
-                const preview = idx === 0
-                  ? (cardThumbUrlOf(current) || current.image_urls?.medium || current.image_urls?.square_medium || null)
-                  : imageUrlOf(current, idx, "medium")
+                const preview = pageThumbUrlOf(current, idx)
                 return (
                   <CachedImage
                     key={`illust-page-${current.id}-${idx}`}
@@ -637,7 +635,7 @@ export function IllustDetailView(props: { illustID: number }) {
             <CachedImage
               key={`illust-single-${current.id}`}
               url={pageURLs[0] ?? null}
-              previewUrl={cardThumbUrlOf(current) || current.image_urls?.medium || current.image_urls?.square_medium || null}
+              previewUrl={pageThumbUrlOf(current, 0)}
               aspectRatioValue={pageAspect}
               useIntrinsicAspectRatio={true}
               cornerRadius={8}

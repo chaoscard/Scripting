@@ -309,7 +309,7 @@ function useCachedImage(
     }
   }, [url, cacheRevision, cachedPath, onLoadedRef, priority])
 
-  return { path, isTargetLoaded: Boolean(targetPath), failed }
+  return { path, isTargetLoaded: Boolean(targetPath), failed, cacheRevision }
 }
 
 // 异步图片（对标 Hanairo RemoteImageView 设计与 Telegram 渐进式模糊预览）：
@@ -345,14 +345,38 @@ export function CachedImage(props: {
     onLoaded,
     priority,
   } = props
-  const { path, isTargetLoaded, failed } = useCachedImage(url, onLoaded, priority)
+  const { path, isTargetLoaded, failed, cacheRevision } = useCachedImage(url, onLoaded, priority)
   const initialHitRef = useRef(Boolean(path))
-  // 若提供了 previewUrl，缩略图在本地命中时垫底；
-  // 但若本地尚未下载 previewUrl，或 previewPath 与最终大图 path 完全相同，或首帧已命中大图，则不渲染模糊层，避免重叠抽搐与白闪。
-  const previewPath = useMemo(() => {
-    if (!previewUrl) return null
-    return cachedFilePath(previewUrl)
-  }, [previewUrl])
+
+  // 缩略图主动就绪与模糊占位机制：
+  // 1. 若大图首帧未命中且提供了 previewUrl，本地未缓存时立即在组件内主动请求 previewUrl（体积极小，毫秒级就绪）；
+  // 2. 缩略图下载完成后即刻构建预模糊位图（previewBlurredImage）作为底图占位；
+  // 3. 高清大图下载完成后平滑消融呈现（Blur Cross-Fade）；首帧已命中大图时则直接硬切秒开并跳过缩略图请求。
+  const previewCached = useMemo(() => (previewUrl ? cachedFilePath(previewUrl) : null), [previewUrl, cacheRevision])
+  const [previewLoadedPath, setPreviewLoadedPath] = useState<string | null>(() => previewCached)
+
+  useEffect(() => {
+    if (initialHitRef.current || !previewUrl) return
+    if (previewCached) {
+      if (previewLoadedPath !== previewCached) {
+        setPreviewLoadedPath(previewCached)
+      }
+      return
+    }
+    let active = true
+    loadImage(previewUrl, priority)
+      .then((p) => {
+        if (active && p) {
+          setPreviewLoadedPath(p)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [previewUrl, previewCached, priority])
+
+  const previewPath = previewCached ?? previewLoadedPath
 
   const showBlurPreview = Boolean(
     !initialHitRef.current && previewPath && previewPath !== path
