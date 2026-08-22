@@ -300,12 +300,17 @@ function IllustHistoryContent(props: {
     return viewedAt ? formatDate(new Date(viewedAt).toISOString()) : undefined
   }, [])
 
-  const topTrailingActionOf = useCallback((illust: PixivIllustration) => ({
-    title: "移除",
-    systemImage: "trash",
-    tint: "#FF3B30",
-    foregroundStyle: "systemRed",
-    action: () => removeHistoryEntry("illust", illust.id),
+  const contextMenuOf = useCallback((illust: PixivIllustration) => ({
+    menuItems: (
+      <Group>
+        <Button
+          title="删除记录"
+          systemImage="trash"
+          role="destructive"
+          action={() => removeHistoryEntry("illust", illust.id)}
+        />
+      </Group>
+    ),
   }), [])
 
   if (paged.items.length === 0 && !paged.initialLoading) {
@@ -334,7 +339,7 @@ function IllustHistoryContent(props: {
         hasMore={paged.hasMore}
         isLoading={paged.loadingMore}
         footerTextOf={footerTextOf}
-        topTrailingActionOf={topTrailingActionOf}
+        contextMenuOf={contextMenuOf}
       />
     </VStack>
   )
@@ -376,12 +381,17 @@ function NovelHistoryContent(props: {
             novel={entry}
             priority={index}
             footerText={formatDate(new Date(entry.viewedAt).toISOString())}
-            topTrailingAction={{
-              title: "移除",
-              systemImage: "trash",
-              tint: "#FF3B30",
-              foregroundStyle: "systemRed",
-              action: () => removeHistoryEntry("novel", entry.id),
+            contextMenu={{
+              menuItems: (
+                <Group>
+                  <Button
+                    title="删除记录"
+                    systemImage="trash"
+                    role="destructive"
+                    action={() => removeHistoryEntry("novel", entry.id)}
+                  />
+                </Group>
+              ),
             }}
           />
         ))}

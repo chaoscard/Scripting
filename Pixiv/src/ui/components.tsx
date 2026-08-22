@@ -746,6 +746,7 @@ export function NovelCard(props: {
   footerText?: string
   markerPage?: number
   topTrailingAction?: IllustCardAction
+  contextMenu?: any
 }) {
   const {
     novel,
@@ -754,6 +755,7 @@ export function NovelCard(props: {
     footerText,
     markerPage,
     topTrailingAction,
+    contextMenu,
   } = props
   const [bookmarked, setBookmarked] = useNovelBookmark(novel.id, novel.is_bookmarked)
   const [bookmarkBusy, setBookmarkBusy] = useState(false)
@@ -813,7 +815,11 @@ export function NovelCard(props: {
     null
 
   return (
-    <ZStack alignment="topTrailing" frame={{ maxWidth: "infinity" }}>
+    <ZStack
+      alignment="topTrailing"
+      frame={{ maxWidth: "infinity" }}
+      contextMenu={contextMenu}
+    >
       <ZStack alignment="bottomTrailing" frame={{ maxWidth: "infinity" }}>
         <NavigationLink value={`novel:${novel.id}`}>
           <HStack
@@ -1030,6 +1036,7 @@ export function IllustCard(props: {
   cornerBadge?: any
   footerText?: string
   topTrailingAction?: IllustCardAction
+  contextMenu?: any
 }) {
   const {
     illust,
@@ -1039,6 +1046,7 @@ export function IllustCard(props: {
     cornerBadge,
     footerText,
     topTrailingAction,
+    contextMenu,
   } = props
   cacheIllust(illust)
   const [bookmarked, setBookmarked] = useIllustBookmark(illust.id, illust.is_bookmarked)
@@ -1109,6 +1117,7 @@ export function IllustCard(props: {
     <ZStack
       alignment="topTrailing"
       frame={flowCardFrame}
+      contextMenu={contextMenu}
     >
       <VStack
         alignment="leading"
@@ -1312,6 +1321,10 @@ export function IllustFlowFeed(props: {
     illust: PixivIllustration,
     index: number,
   ) => IllustCardAction | undefined
+  contextMenuOf?: (
+    illust: PixivIllustration,
+    index: number,
+  ) => any
 }) {
   cacheIllusts(props.items)
   const [leading, trailing] = useMemo(
@@ -1333,6 +1346,7 @@ export function IllustFlowFeed(props: {
           cornerBadge={props.cornerBadgeOf?.(illust, index)}
           footerText={props.footerTextOf?.(illust, index)}
           topTrailingAction={props.topTrailingActionOf?.(illust, index)}
+          contextMenu={props.contextMenuOf?.(illust, index)}
         />
       )
       const triggerView = props.hasMore && triggerAnchor ? (
@@ -1372,6 +1386,7 @@ export function IllustFlowFeed(props: {
       props.cornerBadgeOf,
       props.footerTextOf,
       props.topTrailingActionOf,
+      props.contextMenuOf,
     ]
   )
 
