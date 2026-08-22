@@ -672,12 +672,7 @@ function RelatedNovelsSection(props: {
       {showLoading ? (
         <HStack spacing={0} frame={{ maxWidth: "infinity", height: 100 }}>
           <Spacer />
-          <VStack alignment="center" spacing={8}>
-            <ProgressView progressViewStyle="circular" />
-            <Text font="caption" foregroundStyle="secondaryLabel">
-              正在加载相关作品...
-            </Text>
-          </VStack>
+          <ProgressView progressViewStyle="circular" />
           <Spacer />
         </HStack>
       ) : paged.error && paged.items.length === 0 ? (

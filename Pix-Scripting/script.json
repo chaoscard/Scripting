@@ -1,0 +1,29 @@
+{
+  "version": "0.8.66",
+  "remoteResource": {
+    "url": "https://raw.githubusercontent.com/chaoscard/Scripting/main/Release/Pix-Scripting.scripting",
+    "hash": "18f8e17f098f57e2fd3fa4fda15eae30",
+    "autoUpdateInterval": null
+  },
+  "contributors": [],
+  "icon": "paintpalette",
+  "author": {
+    "homepage": "https://github.com/chaoscard/Scripting",
+    "name": "chaoscard",
+    "email": null
+  },
+  "iconImage": null,
+  "permissions": null,
+  "intentInputTypes": [],
+  "color": "rgba(0, 150, 250, 1)",
+  "name": "Pix-Scripting",
+  "runInApp": true,
+  "entry": "index.tsx",
+  "localizedNames": {
+    "zh": "Pix-Scripting"
+  },
+  "description": "Liquid Glass Pixiv Client",
+  "localizedDescriptions": {
+    "zh": "液态玻璃风格 Pixiv 客户端"
+  }
+}
