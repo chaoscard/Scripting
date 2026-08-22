@@ -2200,7 +2200,7 @@ export function routeForDescriptionLink(value: string): string | null {
     }
   }
 
-  // 4. legacy novel show: pixiv.net/novel/show.php?id=123
+  // 4. legacy novel show & member links: pixiv.net/novel/show.php?id=123, pixiv.net/member.php?id=123, pixiv.net/member_illust.php?illust_id=123
   const novelShow = decoded.match(
     /^(?:https?:\/\/)?(?:www\.)?pixiv\.net\/(?:en\/)?novel\/show\.php\?[^#]*\bid=(\d+)/i
   ) ?? decoded.match(
@@ -2209,6 +2209,38 @@ export function routeForDescriptionLink(value: string): string | null {
   if (novelShow) {
     const id = Number(novelShow[1])
     if (Number.isFinite(id) && id > 0) return `novel:${id}`
+  }
+
+  const legacyMember = decoded.match(
+    /^(?:https?:\/\/)?(?:www\.)?pixiv\.net\/(?:en\/)?member\.php\?[^#]*\bid=(\d+)/i
+  ) ?? decoded.match(
+    /^\/?(?:en\/)?member\.php\?[^#]*\bid=(\d+)/i
+  )
+  if (legacyMember) {
+    const id = Number(legacyMember[1])
+    if (Number.isFinite(id) && id > 0) return `user:${id}`
+  }
+
+  const legacyIllust = decoded.match(
+    /^(?:https?:\/\/)?(?:www\.)?pixiv\.net\/(?:en\/)?member_illust\.php\?[^#]*\billust_id=(\d+)/i
+  ) ?? decoded.match(
+    /^\/?(?:en\/)?member_illust\.php\?[^#]*\billust_id=(\d+)/i
+  )
+  if (legacyIllust) {
+    const id = Number(legacyIllust[1])
+    if (Number.isFinite(id) && id > 0) return `illust:${id}`
+  }
+
+  const shortPrefix = decoded.match(
+    /(?:https?:\/\/(?:www\.)?pixiv\.net)?\/?(?:en\/)?([iun])\/(\d+)(?:[/?#].*)?$/i
+  )
+  if (shortPrefix && (!hasURLScheme || isPixivURL)) {
+    const id = Number(shortPrefix[2])
+    if (Number.isFinite(id) && id > 0) {
+      if (shortPrefix[1].toLowerCase() === "i") return `illust:${id}`
+      if (shortPrefix[1].toLowerCase() === "u") return `user:${id}`
+      if (shortPrefix[1].toLowerCase() === "n") return `novel:${id}`
+    }
   }
 
   // 5. uid: 123, pid: 123, nid: 123
@@ -2388,7 +2420,27 @@ export function ImmersiveHeaderBanner(props: {
   )
 }
 
-// 可折叠展开的富文本简介卡片（多行超过 5 行或 220 字时显示展开/收起）
+// 估算多行文本在移动端竖屏下的视觉行数（综合考虑硬换行与段落自动折行）
+// 按照 footnote 13pt 在常用 iPhone 宽度下可用排版区域（约 337pt），单行全角中文字符容量约 24 字
+function estimateVisualLines(text: string, charsPerLine = 24): number {
+  if (!text) return 0
+  const paragraphs = text.split(/\r?\n/)
+  let totalLines = 0
+  for (const para of paragraphs) {
+    if (!para) {
+      totalLines += 1
+      continue
+    }
+    let visualWeight = 0
+    for (let i = 0; i < para.length; i++) {
+      visualWeight += para.charCodeAt(i) > 255 ? 1 : 0.55
+    }
+    totalLines += Math.max(1, Math.ceil(visualWeight / charsPerLine))
+  }
+  return totalLines
+}
+
+// 可折叠展开的富文本简介卡片（视觉行数超过 5 行时显示展开/收起）
 export function ExpandableIntroduction(props: {
   commentHtml?: string
   rawComment?: string
@@ -2404,8 +2456,8 @@ export function ExpandableIntroduction(props: {
     [rawComment, caption, commentHtml]
   )
 
-  const lines = useMemo(() => plainText.split(/\r?\n/), [plainText])
-  const exceedsFiveLines = lines.length > 5 || plainText.length > 220
+  const visualLines = useMemo(() => estimateVisualLines(plainText), [plainText])
+  const exceedsFiveLines = visualLines > 5
 
   if (!plainText) return null
 
@@ -2449,7 +2501,7 @@ export function ExpandableIntroduction(props: {
             padding={{ top: 4, bottom: 2 }}
           >
             <Text font="caption2" foregroundStyle="secondaryLabel">
-              {expanded ? "点击收起" : "点击展开全文"}
+              {expanded ? "点击收起" : "点击展开"}
             </Text>
             <Image
               systemName={expanded ? "chevron.up" : "chevron.down"}

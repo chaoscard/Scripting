@@ -107,6 +107,62 @@ async function parseError(data: Data | null): Promise<string> {
   return ""
 }
 
+// 安全 JSON 解析器：捕获语法错误（如网络流截断引起的 Unterminated string）并转换为友好提示
+function parseApiResponseJson<T>(
+  rawText: string | null | undefined,
+  fallbackStatus = 0
+): T {
+  const text = rawText ?? ""
+  if (!text.trim()) {
+    throw new PixivError(fallbackStatus, "响应内容为空")
+  }
+  try {
+    return JSON.parse(text) as T
+  } catch (err: any) {
+    const rawMsg = String(err?.message ?? "")
+    if (/unterminated|unexpected end|end of json|truncated/i.test(rawMsg)) {
+      throw new PixivError(
+        fallbackStatus,
+        "响应数据不完整，网络可能中断，请重试"
+      )
+    }
+    throw new PixivError(
+      fallbackStatus,
+      `数据解析失败：${rawMsg || "响应格式异常"}`
+    )
+  }
+}
+
+// 瞬态网络波动与流截断快速重试包装器（针对 GET 幂等请求与 Token 交换）
+async function withTransientRetry<T>(
+  action: () => Promise<T>,
+  retries = 1,
+  backoffMs = 350
+): Promise<T> {
+  let lastError: any
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await action()
+    } catch (err: any) {
+      lastError = err
+      const isTransient =
+        err instanceof PixivError &&
+        (err.status === 0 ||
+          err.status === 502 ||
+          err.status === 503 ||
+          err.status === 504)
+      if (attempt < retries && isTransient) {
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, backoffMs)
+        })
+        continue
+      }
+      throw err
+    }
+  }
+  throw lastError
+}
+
 export interface RequestOptions {
   headers?: Record<string, string>
   body?: string
@@ -189,16 +245,18 @@ export async function apiGet<T = any>(
 ): Promise<T> {
   const params = new URLSearchParams(query).toString()
   const url = `${API_BASE_URL}${path}${params ? `?${params}` : ""}`
-  const { status, data } = await rawRequest(url, "GET", {
-    headers: standardHeaders(accessToken),
-    allowedOrigin: new URL(API_BASE_URL).origin,
+  return withTransientRetry(async () => {
+    const { status, data } = await rawRequest(url, "GET", {
+      headers: standardHeaders(accessToken),
+      allowedOrigin: new URL(API_BASE_URL).origin,
+    })
+    if (status >= 200 && status < 300) {
+      if (!data) throw new PixivError(status, "空响应")
+      return parseApiResponseJson<T>(data.toRawString(), status)
+    }
+    const message = await parseError(data)
+    throw new PixivError(status, message || `请求失败（${status}）`)
   })
-  if (status >= 200 && status < 300) {
-    if (!data) throw new PixivError(status, "空响应")
-    return JSON.parse(data.toRawString() ?? "") as T
-  }
-  const message = await parseError(data)
-  throw new PixivError(status, message || `请求失败（${status}）`)
 }
 
 export async function apiPost<T = any>(
@@ -237,16 +295,18 @@ export async function apiGetAbsolute<T = any>(
   extraHeaders?: Record<string, string>
 ): Promise<T> {
   const apiOrigin = new URL(API_BASE_URL).origin
-  const { status, data } = await rawRequest(url, "GET", {
-    headers: { ...standardHeaders(accessToken), ...(extraHeaders ?? {}) },
-    allowedOrigin: apiOrigin,
+  return withTransientRetry(async () => {
+    const { status, data } = await rawRequest(url, "GET", {
+      headers: { ...standardHeaders(accessToken), ...(extraHeaders ?? {}) },
+      allowedOrigin: apiOrigin,
+    })
+    if (status >= 200 && status < 300) {
+      if (!data) throw new PixivError(status, "空响应")
+      return parseApiResponseJson<T>(data.toRawString(), status)
+    }
+    const message = await parseError(data)
+    throw new PixivError(status, message || `请求失败（${status}）`)
   })
-  if (status >= 200 && status < 300) {
-    if (!data) throw new PixivError(status, "空响应")
-    return JSON.parse(data.toRawString() ?? "") as T
-  }
-  const message = await parseError(data)
-  throw new PixivError(status, message || `请求失败（${status}）`)
 }
 
 // OAuth token 端点
@@ -254,23 +314,24 @@ export async function oauthTokenRequest<T = any>(
   values: Record<string, string>
 ): Promise<T> {
   const url = `${OAUTH_BASE_URL}/auth/token`
-  const { status, data } = await rawRequest(url, "POST", {
-    headers: {
-      ...standardHeaders(),
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: formBody({ client_id: CLIENT_ID, client_secret: CLIENT_SECRET, ...values }),
-    allowedOrigin: new URL(OAUTH_BASE_URL).origin,
+  return withTransientRetry(async () => {
+    const { status, data } = await rawRequest(url, "POST", {
+      headers: {
+        ...standardHeaders(),
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: formBody({ client_id: CLIENT_ID, client_secret: CLIENT_SECRET, ...values }),
+      allowedOrigin: new URL(OAUTH_BASE_URL).origin,
+    })
+    if (status >= 200 && status < 300) {
+      if (!data) throw new PixivError(status, "空响应")
+      const json = parseApiResponseJson<any>(data.toRawString(), status)
+      // 兼容两种包装：{response: {...}} 或直接 {...}
+      return (json?.response ?? json) as T
+    }
+    const message = await parseError(data)
+    throw new PixivError(status, message || `登录失败（${status}）`)
   })
-  if (status >= 200 && status < 300) {
-    if (!data) throw new PixivError(status, "空响应")
-    const text = data.toRawString() ?? ""
-    const json = JSON.parse(text)
-    // 兼容两种包装：{response: {...}} 或直接 {...}
-    return (json?.response ?? json) as T
-  }
-  const message = await parseError(data)
-  throw new PixivError(status, message || `登录失败（${status}）`)
 }
 
 // 请求 App API 域内 HTML 文本（小说阅读器页面等），带认证头。
@@ -280,19 +341,21 @@ export async function apiGetText(
   accept = "text/html",
   extraHeaders?: Record<string, string>
 ): Promise<string> {
-  const { status, data } = await rawRequest(url, "GET", {
-    headers: {
-      ...standardHeaders(accessToken),
-      Accept: accept,
-      ...(extraHeaders ?? {}),
-    },
-    allowedOrigin: new URL(API_BASE_URL).origin,
+  return withTransientRetry(async () => {
+    const { status, data } = await rawRequest(url, "GET", {
+      headers: {
+        ...standardHeaders(accessToken),
+        Accept: accept,
+        ...(extraHeaders ?? {}),
+      },
+      allowedOrigin: new URL(API_BASE_URL).origin,
+    })
+    if (status < 200 || status >= 300) {
+      const message = await parseError(data)
+      throw new PixivError(status, message || `请求失败（${status}）`)
+    }
+    return data?.toRawString() ?? ""
   })
-  if (status < 200 || status >= 300) {
-    const message = await parseError(data)
-    throw new PixivError(status, message || `请求失败（${status}）`)
-  }
-  return data?.toRawString() ?? ""
 }
 
 // 请求公开网页文本，不携带 Pixiv Authorization，并限制首跳及重定向 Origin。
@@ -302,18 +365,20 @@ export async function apiGetPublicText(
   accept = "text/html",
   extraHeaders?: Record<string, string>
 ): Promise<string> {
-  const { status, data } = await rawRequest(url, "GET", {
-    headers: {
-      Accept: accept,
-      ...(extraHeaders ?? {}),
-    },
-    allowedOrigin,
+  return withTransientRetry(async () => {
+    const { status, data } = await rawRequest(url, "GET", {
+      headers: {
+        Accept: accept,
+        ...(extraHeaders ?? {}),
+      },
+      allowedOrigin,
+    })
+    if (status < 200 || status >= 300) {
+      const message = await parseError(data)
+      throw new PixivError(status, message || `请求失败（${status}）`)
+    }
+    return data?.toRawString() ?? ""
   })
-  if (status < 200 || status >= 300) {
-    const message = await parseError(data)
-    throw new PixivError(status, message || `请求失败（${status}）`)
-  }
-  return data?.toRawString() ?? ""
 }
 
 // 请求公开网页 JSON，不携带 Pixiv Authorization，并限制首跳及重定向 Origin。
@@ -322,20 +387,22 @@ export async function apiGetPublicJson<T = any>(
   allowedOrigin: string,
   extraHeaders?: Record<string, string>
 ): Promise<T> {
-  const { status, data } = await rawRequest(url, "GET", {
-    headers: {
-      Accept: "application/json",
-      "User-Agent": IMAGE_USER_AGENT,
-      ...(extraHeaders ?? {}),
-    },
-    allowedOrigin,
+  return withTransientRetry(async () => {
+    const { status, data } = await rawRequest(url, "GET", {
+      headers: {
+        Accept: "application/json",
+        "User-Agent": IMAGE_USER_AGENT,
+        ...(extraHeaders ?? {}),
+      },
+      allowedOrigin,
+    })
+    if (status < 200 || status >= 300) {
+      const message = await parseError(data)
+      throw new PixivError(status, message || `请求失败（${status}）`)
+    }
+    if (!data) throw new PixivError(status, "空响应")
+    return parseApiResponseJson<T>(data.toRawString(), status)
   })
-  if (status < 200 || status >= 300) {
-    const message = await parseError(data)
-    throw new PixivError(status, message || `请求失败（${status}）`)
-  }
-  if (!data) throw new PixivError(status, "空响应")
-  return JSON.parse(data.toRawString() ?? "")
 }
 
 // 下载二进制（图片等），带 Referer；跳过 API 限速（图片 CDN 并发下载）

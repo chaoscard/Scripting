@@ -13,6 +13,7 @@ import {
   VStack,
   WebView,
 } from "scripting"
+import type { StyledText } from "scripting"
 import { requestPixivRoute } from "./routeNavigation"
 import { CachedImage, presentExternalURL, routeForDescriptionLink } from "./components"
 import { session } from "../api/session"
@@ -37,6 +38,65 @@ export function formatPixivRubyText(rawText: string): string {
     /\[\[rb:\s*([^\r\n>]+?)\s*(?:>|&gt;)\s*([^\r\n\]]+?)\s*\]\]/g,
     (_, kanji: string, ruby: string) => `${kanji.trim()}(${ruby.trim()})`
   )
+}
+
+const URL_CHAR = "[a-zA-Z0-9\\-._~:/?#\\[\\]@!$&'()*+,;%=]"
+const INLINE_LINK_PATTERN = new RegExp(
+  "(?:https?:\\/\\/|www\\.)" + URL_CHAR + "+|" +
+  "(?:https?:\\/\\/)?(?:www\\.)?pixiv\\.net\\/(?:users?|user|artworks|novels?|novel|manga|illusts?|illust)" + URL_CHAR + "*|" +
+  "\\/?(?:users?|user|artworks|novels?|novel|manga|illusts?|illust)\\/" + URL_CHAR + "+|" +
+  "(?:pixiv\\.net\\/|\\/)?novel\\/show\\.php\\?[^#\\s<>\"]+|" +
+  "(?:pixiv\\.net\\/|\\/)?member\\.php\\?[^#\\s<>\"]+|" +
+  "(?:pixiv\\.net\\/|\\/)?member_illust\\.php\\?[^#\\s<>\"]+|" +
+  "\\b(?:uid|pid|nid)\\s*[:：#=]?\\s*\\d+\\b|" +
+  "pixiv:\\/\\/" + URL_CHAR + "+",
+  "gi"
+)
+
+export function linkifyPlainTextToHtml(text: string): string {
+  if (!text) return ""
+  let result = ""
+  let cursor = 0
+  let match: RegExpExecArray | null
+  INLINE_LINK_PATTERN.lastIndex = 0
+
+  while ((match = INLINE_LINK_PATTERN.exec(text)) != null) {
+    result += text.slice(cursor, match.index)
+    const raw = match[0]
+    const link = raw.replace(/[),.，。！!？?;；）】》」』、]+$/, "")
+    const trailingPunct = raw.slice(link.length)
+    if (link) {
+      const encodedUrl = encodeURIComponent(link)
+      result += `<a class="novel-link" href="javascript:void(0)" onclick="handleAction({type:'openLink',url:decodeURIComponent('${encodedUrl}')})">${link}</a>`
+    }
+    result += trailingPunct
+    cursor = match.index + raw.length
+  }
+  result += text.slice(cursor)
+  return result
+}
+
+export function linkifyHtmlLine(line: string): string {
+  const parts = line.split(/(<[^>]+>)/g)
+  let insideAnchor = false
+  const out: string[] = []
+
+  for (const part of parts) {
+    if (!part) continue
+    if (part.startsWith("<")) {
+      if (/^<a\b/i.test(part)) insideAnchor = true
+      if (/^<\/a>/i.test(part)) insideAnchor = false
+      out.push(part)
+    } else {
+      if (insideAnchor) {
+        out.push(part)
+      } else {
+        out.push(linkifyPlainTextToHtml(part))
+      }
+    }
+  }
+
+  return out.join("")
 }
 
 /**
@@ -72,8 +132,9 @@ export function parsePixivNovelToHtml(rawText: string): string {
   escaped = escaped.replace(
     /\[\[jumpuri:\s*([^\r\n>]+?)\s*(?:>|&gt;)\s*([^\r\n\]]+?)\s*\]\]/g,
     (_, label: string, url: string) => {
-      const cleanUrl = url.trim().replace(/"/g, "&quot;")
-      return `<a class="novel-link" href="javascript:void(0)" onclick="handleAction({type:'openLink',url:'${cleanUrl}'})">${label.trim()}</a>`
+      const cleanUrl = url.trim()
+      const encodedUrl = encodeURIComponent(cleanUrl)
+      return `<a class="novel-link" href="javascript:void(0)" onclick="handleAction({type:'openLink',url:decodeURIComponent('${encodedUrl}')})">${label.trim()}</a>`
     }
   )
 
@@ -135,7 +196,8 @@ export function parsePixivNovelToHtml(rawText: string): string {
     ) {
       htmlLines.push(trimmed)
     } else {
-      htmlLines.push(`<p class="novel-p">${trimmed}</p>`)
+      const linkedLine = linkifyHtmlLine(trimmed)
+      htmlLines.push(`<p class="novel-p">${linkedLine}</p>`)
     }
   }
 
@@ -438,11 +500,12 @@ export function NovelReaderWebView(props: {
           } else if (payload?.type === "openIllust" && payload.id) {
             requestPixivRoute(`illust:${payload.id}`)
           } else if (payload?.type === "openLink" && payload.url) {
-            const pixivRoute = routeForDescriptionLink(payload.url)
-            if (pixivRoute) {
-              requestPixivRoute(pixivRoute)
+            const rawUrl = String(payload.url).trim()
+            const target = routeForDescriptionLink(rawUrl) ?? rawUrl
+            if (target.startsWith("http://") || target.startsWith("https://")) {
+              void presentExternalURL(target)
             } else {
-              void presentExternalURL(payload.url)
+              requestPixivRoute(target)
             }
           } else if (payload?.type === "jumpPage" && payload.page) {
             void controller.evaluateJavaScript(`scrollToPage(${Number(payload.page)})`)
@@ -541,6 +604,106 @@ export function parseNativeTextBlocks(rawText: string): NativeTextBlock[] {
   return blocks
 }
 
+export function parseNovelParagraphSegments(
+  rawText: string,
+  onNavigate: (url: string) => void
+): (string | any)[] {
+  let text = formatPixivRubyText(rawText)
+
+  const jumpuris: { label: string; url: string }[] = []
+  text = text.replace(
+    /\[\[jumpuri:\s*([^\r\n>]+?)\s*(?:>|&gt;)\s*([^\r\n\]]+?)\s*\]\]/g,
+    (_, label: string, url: string) => {
+      const idx = jumpuris.length
+      jumpuris.push({ label: label.trim(), url: url.trim() })
+      return `\uE000JUMPURI_${idx}\uE001`
+    }
+  )
+
+  const items: (string | any)[] = []
+  const jumpParts = text.split(/(\uE000JUMPURI_\d+\uE001)/g)
+
+  for (const part of jumpParts) {
+    if (!part) continue
+    const jMatch = part.match(/^\uE000JUMPURI_(\d+)\uE001$/)
+    if (jMatch) {
+      const jItem = jumpuris[Number(jMatch[1])]
+      if (jItem) {
+        items.push({
+          content: jItem.label,
+          foregroundColor: "#007AFF",
+          underlineStyle: "single",
+          onTapGesture: () => onNavigate(jItem.url),
+        })
+      }
+      continue
+    }
+
+    let cursor = 0
+    let match: RegExpExecArray | null
+    INLINE_LINK_PATTERN.lastIndex = 0
+
+    while ((match = INLINE_LINK_PATTERN.exec(part)) != null) {
+      if (match.index > cursor) {
+        items.push(part.slice(cursor, match.index))
+      }
+      const raw = match[0]
+      const link = raw.replace(/[),.，。！!？?;；）】》」』、]+$/, "")
+      const trailingPunct = raw.slice(link.length)
+      if (link) {
+        items.push({
+          content: link,
+          foregroundColor: "#007AFF",
+          underlineStyle: "single",
+          onTapGesture: () => onNavigate(link),
+        })
+      }
+      if (trailingPunct) {
+        items.push(trailingPunct)
+      }
+      cursor = match.index + raw.length
+    }
+    if (cursor < part.length) {
+      items.push(part.slice(cursor))
+    }
+  }
+
+  return items.length > 0 ? items : [text]
+}
+
+function NovelParagraphView(props: { text: string }) {
+  const { text } = props
+  const styledText = useMemo<StyledText>(() => {
+    const items = parseNovelParagraphSegments(text, (rawUrl) => {
+      const target = routeForDescriptionLink(rawUrl) ?? rawUrl
+      if (target.startsWith("http://") || target.startsWith("https://")) {
+        void presentExternalURL(target)
+      } else {
+        requestPixivRoute(target)
+      }
+    })
+
+    return {
+      font: "body",
+      paragraphStyle: {
+        alignment: "left",
+        lineBreakMode: "byCharWrapping",
+        lineSpacing: 6,
+      },
+      content: items,
+    }
+  }, [text])
+
+  return (
+    <Text
+      styledText={styledText}
+      textSelection={true}
+      multilineTextAlignment="leading"
+      frame={{ maxWidth: "infinity", alignment: "leading" }}
+    />
+  )
+}
+
 /**
  * 图文混排小说中的原生文本段落渲染组件（零延迟、零跳变、支持全局精准选词）
  */
@@ -561,18 +724,11 @@ export function NovelNativeTextSegment(props: {
     >
       {blocks.map((block, idx) => {
         if (block.type === "paragraph" && block.text) {
-          const cleanText = formatPixivRubyText(block.text)
           return (
-            <Text
+            <NovelParagraphView
               key={`p-${idx}`}
-              font="body"
-              lineSpacing={6}
-              textSelection={true}
-              multilineTextAlignment="leading"
-              frame={{ maxWidth: "infinity", alignment: "leading" }}
-            >
-              {cleanText}
-            </Text>
+              text={block.text}
+            />
           )
         }
 
@@ -960,9 +1116,9 @@ function NovelImagesBlockView(props: {
 }
 
 /**
- * 小说正文复合阅读组件：
- * - 纯文本小说：采用标准 WebView 渲染完整排版与跨段落长文选择
- * - 图文混排小说：采用高流畅度 Native Segment + 高清原比例插图流式排版，彻底解决多 WebView 性能卡顿与排版塌陷
+ * 小说正文流式渲染组件：
+ * 全量采用高流畅度 Native Segment + 高清原比例插图流式排版，
+ * 彻底杜绝 WKWebView 跨进程瓦片渲染延迟导致的滚动白屏、高度重排跳动与内存开销。
  */
 export function NovelReaderView(props: {
   text: string
@@ -970,30 +1126,15 @@ export function NovelReaderView(props: {
   textEmbeddedImages?: Record<string, TextEmbeddedImage>
   onReady?: () => void
 }) {
-  const { text, title, textEmbeddedImages, onReady } = props
+  const { text, textEmbeddedImages, onReady } = props
   const segments = useMemo(
     () => parseNovelContentSegments(text, textEmbeddedImages),
     [text, textEmbeddedImages]
   )
 
-  const firstSeg = segments[0]
-  const isPureText = segments.length === 1 && firstSeg?.type === "text"
-
   useEffect(() => {
-    if (!isPureText) {
-      onReady?.()
-    }
-  }, [isPureText, onReady])
-
-  if (isPureText && firstSeg?.type === "text") {
-    return (
-      <NovelReaderWebView
-        text={firstSeg.text}
-        title={title}
-        onReady={onReady}
-      />
-    )
-  }
+    onReady?.()
+  }, [onReady])
 
   return (
     <VStack alignment="leading" spacing={0} frame={{ maxWidth: "infinity" }}>

@@ -165,7 +165,8 @@ export function clearCredentials(): void {
 }
 
 export function needsRefresh(creds: StoredCredentials): boolean {
-  return creds.expiresAt - Date.now() < 60_000
+  // 提前 5 分钟刷新，避免临界点并发请求命中 401 争抢刷新
+  return creds.expiresAt - Date.now() < 300_000
 }
 
 export function buildCredentialsFromResponse(
