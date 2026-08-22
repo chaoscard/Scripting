@@ -9,6 +9,7 @@ import {
   LongPressGesture,
   Menu,
   NavigationLink,
+  ProgressView,
   ScrollView,
   Spacer,
   Text,
@@ -20,21 +21,30 @@ import {
 import {
   addNovelBookmark,
   followUser,
+  nextNovels,
   novelBookmarkDetail,
   novelBookmarkTags,
   novelDetail,
   novelViewerData,
+  relatedNovels,
   removeNovelBookmark,
   unfollowUser,
 } from "../api/pixiv"
 import { session } from "../api/session"
-import { useAsyncGuard, useLatest, useNovelBookmark } from "./hooks"
+import {
+  currentBatchSize,
+  useAsyncGuard,
+  useLatest,
+  useNovelBookmark,
+  usePagedList,
+} from "./hooks"
+import { novelThumbUrlOf, prefetch } from "../image/imageLoader"
 import {
   recordNovelHistory,
   updateNovelHistoryBookmark,
 } from "../store/history"
 import { onUserFollowChanged, recordUserFollowed } from "../store/userFollow"
-import type { PixivNovel, PixivNovelDetail } from "../types"
+import type { PixivNovel, PixivNovelDetail, TextEmbeddedImage } from "../types"
 import {
   loadSettings,
   onSettingsChanged,
@@ -50,23 +60,16 @@ import {
   formatDate,
   formatNumber,
   LoadingView,
+  LoadMoreTrigger,
+  NovelCard,
   TagChip,
 } from "./components"
+import { NovelReaderView, NovelReaderWebView } from "./novelReader"
 import { CommentsSheet } from "./comments"
 import { renderDestination } from "./routes"
 import { requestPixivRoute } from "./routeNavigation"
 
 const BLOCKED_CONTENT_MESSAGE = "该小说已被屏蔽（标签或作者在黑名单中）"
-
-const TEXT_CHUNK_SIZE = 2000
-
-function chunkText(text: string, size = TEXT_CHUNK_SIZE): string[] {
-  const chunks: string[] = []
-  for (let i = 0; i < text.length; i += size) {
-    chunks.push(text.slice(i, i + size))
-  }
-  return chunks
-}
 
 function historyNovelFromDetail(detail: PixivNovelDetail): PixivNovel {
   return { ...detail, is_muted: false, visible: true }
@@ -76,6 +79,7 @@ export function NovelDetailView(props: { novelID: number }) {
   const { novelID } = props
   const [novel, setNovel] = useState<PixivNovelDetail | null>(null)
   const [text, setText] = useState("")
+  const [textEmbeddedImages, setTextEmbeddedImages] = useState<Record<string, TextEmbeddedImage> | undefined>(undefined)
   const [textError, setTextError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -120,6 +124,7 @@ export function NovelDetailView(props: { novelID: number }) {
         recordNovelHistory(historyNovelFromDetail(detail))
       }
       setText(viewer.text)
+      setTextEmbeddedImages(viewer.textEmbeddedImages)
       setTextError(null)
     } catch (err: any) {
       if (g.isCurrent()) setError(err?.message ?? "加载失败")
@@ -151,6 +156,7 @@ export function NovelDetailView(props: { novelID: number }) {
           guard()
           setNovel(null)
           setText("")
+          setTextEmbeddedImages(undefined)
           setError(BLOCKED_CONTENT_MESSAGE)
           setLoading(false)
         }
@@ -516,21 +522,24 @@ export function NovelDetailView(props: { novelID: number }) {
         </VStack>
 
         {/* 正文 */}
-        <VStack alignment="leading" spacing={0} padding={{ horizontal: 14, top: 4, bottom: 32 }}>
+        <VStack alignment="leading" spacing={0} padding={{ top: 4, bottom: 16 }} frame={{ maxWidth: "infinity" }}>
           {text ? (
-            <LazyVStack alignment="leading" spacing={12}>
-              {chunkText(text).map((chunk, i) => (
-                <Text key={i} font="body" lineSpacing={6}>
-                  {chunk}
-                </Text>
-              ))}
-            </LazyVStack>
+            <NovelReaderView
+              text={text}
+              title={current.title}
+              textEmbeddedImages={textEmbeddedImages}
+            />
           ) : (
-            <Text font="footnote" foregroundStyle="secondaryLabel">
-              {textError ?? "（正文为空）"}
-            </Text>
+            <VStack padding={{ horizontal: 14 }}>
+              <Text font="footnote" foregroundStyle="secondaryLabel">
+                {textError ?? "（正文为空）"}
+              </Text>
+            </VStack>
           )}
         </VStack>
+
+        {/* 相关作品 */}
+        <RelatedNovelsSection novelID={current.id} />
       </VStack>
 
       <VStack
@@ -565,5 +574,98 @@ export function NovelDetailView(props: { novelID: number }) {
         }}
       />
     </ScrollView>
+  )
+}
+
+function RelatedNovelsSection(props: {
+  novelID: number
+  enabled?: boolean
+}) {
+  const { enabled = true } = props
+  const paged = usePagedList<PixivNovel>({
+    first: (token) => relatedNovels(props.novelID, token),
+    more: (nextURL, token) => nextNovels(nextURL, token),
+    filter: (items) => filterRelatedNovels(items, props.novelID),
+    deps: [props.novelID],
+    enabled,
+    onBatchPublished: (_, pendingItems) =>
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
+  })
+  const pagedRef = useLatest(paged)
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      pagedRef.current.reapplyFilter()
+    })
+  }, [])
+
+  if (paged.initialLoading && !enabled) {
+    return null
+  }
+
+  return (
+    <VStack
+      alignment="leading"
+      spacing={8}
+      padding={{ top: 4, bottom: 32 }}
+      frame={{ maxWidth: "infinity", alignment: "leading" }}
+    >
+      <Text
+        font="subheadline"
+        fontWeight="semibold"
+        foregroundStyle="secondaryLabel"
+        padding={{ horizontal: 14 }}
+      >
+        相关作品
+      </Text>
+      {paged.initialLoading ? (
+        <HStack spacing={0} frame={{ maxWidth: "infinity", height: 80 }}>
+          <Spacer />
+          <ProgressView progressViewStyle="circular" />
+          <Spacer />
+        </HStack>
+      ) : paged.error && paged.items.length === 0 ? (
+        <VStack alignment="center" spacing={8} padding={16} frame={{ maxWidth: "infinity" }}>
+          <Text font="footnote" foregroundStyle="secondaryLabel">
+            相关作品加载失败
+          </Text>
+          <Button
+            title="重试"
+            buttonStyle="glass"
+            action={() => paged.refresh()}
+          />
+        </VStack>
+      ) : paged.items.length > 0 ? (
+        <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
+          {paged.items.map((novel, index) => (
+            <NovelCard key={novel.id} novel={novel} priority={index} />
+          ))}
+          <LoadMoreTrigger
+            anchor={paged.items[paged.items.length - 1].id}
+            onLoadMore={paged.loadMore}
+            hasMore={paged.hasMore}
+            isLoading={paged.loadingMore}
+          />
+        </LazyVStack>
+      ) : (
+        <HStack spacing={0} padding={{ horizontal: 14, vertical: 8 }} frame={{ maxWidth: "infinity", alignment: "leading" }}>
+          <Text font="footnote" foregroundStyle="secondaryLabel">
+            暂无相关作品
+          </Text>
+        </HStack>
+      )}
+    </VStack>
+  )
+}
+
+function filterRelatedNovels(
+  items: PixivNovel[],
+  currentNovelID?: number
+): PixivNovel[] {
+  const settings = loadSettings()
+  return items.filter(
+    (item) =>
+      item.id !== currentNovelID &&
+      isNovelContentVisible(item, settings)
   )
 }

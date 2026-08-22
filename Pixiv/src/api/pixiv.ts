@@ -32,6 +32,7 @@ import type {
   PixivUserPreview,
   PixivUserPreviewListResponse,
   PixivWebUserDetail,
+  TextEmbeddedImage,
   UgoiraMetadataResponse,
 } from "../types"
 import { API_BASE_URL } from "../config"
@@ -978,6 +979,18 @@ export async function novelDetail(
   return json?.novel
 }
 
+export async function relatedNovels(
+  id: number,
+  accessToken: string
+): Promise<PixivPage<PixivNovel>> {
+  const json = await apiGet<PixivNovelListResponse>(
+    "/v1/novel/related",
+    { novel_id: String(id) },
+    accessToken
+  )
+  return { items: json?.novels ?? [], nextURL: json?.next_url ?? null }
+}
+
 // ---------- 小说正文（官方阅读器页面） ----------
 
 // 官方 iOS app 的正文获取方式：请求 /webview/v2/novel（阅读器 HTML 页面），
@@ -988,6 +1001,7 @@ export interface NovelViewerData {
   text: string
   coverUrl?: string
   title?: string
+  textEmbeddedImages?: Record<string, TextEmbeddedImage>
 }
 
 export async function novelViewerData(
@@ -1003,10 +1017,38 @@ export async function novelViewerData(
     "&viewer_version=20260126_viewer_comments&view_name=HomeNovel"
   const html = await apiGetText(url, accessToken)
   const novel = extractNovelJson(html)
+
+  let textEmbeddedImages: Record<string, TextEmbeddedImage> | undefined =
+    novel?.textEmbeddedImages ||
+    novel?.images ||
+    novel?.embedded_images ||
+    novel?.text_embedded_images ||
+    undefined
+
+  const text = novel?.text ?? ""
+
+  if (!textEmbeddedImages && /\[uploadedimage:\s*\d+\s*\]/.test(text)) {
+    try {
+      const webData = await apiGetPublicJson<{
+        body?: { textEmbeddedImages?: Record<string, TextEmbeddedImage> }
+      }>(
+        `${WEB_BASE_ORIGIN}/ajax/novel/${id}`,
+        WEB_BASE_ORIGIN,
+        { Referer: `${WEB_BASE_ORIGIN}/novel/show.php?id=${id}` }
+      )
+      if (webData?.body?.textEmbeddedImages) {
+        textEmbeddedImages = webData.body.textEmbeddedImages
+      }
+    } catch {
+      // 降级处理
+    }
+  }
+
   return {
-    text: novel?.text ?? "",
+    text,
     coverUrl: novel?.coverUrl,
     title: novel?.title,
+    textEmbeddedImages,
   }
 }
 

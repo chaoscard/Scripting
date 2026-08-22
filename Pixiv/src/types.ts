@@ -351,6 +351,18 @@ export interface PixivNovelMarker {
   }
 }
 
+export interface TextEmbeddedImage {
+  novelImageId?: string
+  sl?: string
+  urls: {
+    "128x128"?: string
+    "240mw"?: string
+    "480mw"?: string
+    "1200x1200"?: string
+    original?: string
+  }
+}
+
 export interface PixivNovelDetail {
   id: number
   title: string
@@ -367,6 +379,7 @@ export interface PixivNovelDetail {
   total_comments: number
   cover?: { urls?: { "240mw"?: string; "480mw"?: string; "1200x1200"?: string } }
   image_urls?: PixivImageUrls | null
+  textEmbeddedImages?: Record<string, TextEmbeddedImage>
   content: string
   series?: {
     id: number

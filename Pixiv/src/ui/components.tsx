@@ -2132,7 +2132,7 @@ function appendPlainDescriptionSegment(segments: DescriptionSegment[], text: str
   }
 }
 
-function routeForDescriptionLink(value: string): string | null {
+export function routeForDescriptionLink(value: string): string | null {
   const decoded = decodeDescriptionLink(value)
     .replace(/[\u200B-\u200D\uFEFF]/g, "")
     .replace(/／/g, "/")
