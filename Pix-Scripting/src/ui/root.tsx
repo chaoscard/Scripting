@@ -44,7 +44,7 @@ function LaunchExperienceView() {
             foregroundStyle="#0096FA"
           />
           <Text font="title2" fontWeight="bold">
-            Pixiv
+            Pix-Scripting
           </Text>
         </VStack>
         <ProgressView progressViewStyle="circular" />
