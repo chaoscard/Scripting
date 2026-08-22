@@ -31,6 +31,7 @@ import {
   isNovelContentVisible,
 } from "../store/contentFilter"
 import { onWatchlistChanged } from "../store/bookmarkSync"
+import { recordWorkSeriesAssociation } from "../store/seriesCache"
 import { destinationElement } from "./routes"
 import { useLatest, usePagedList, currentBatchSize } from "./hooks"
 import type {
@@ -297,8 +298,14 @@ function WatchlistFeed(props: {
     filter: filterWatchlistItems,
     deps: ["watchlist", "manga"],
     enabled: enabled && kind === "manga",
-    onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, currentBatchSize()).map(watchlistThumbUrlOf)).cancel,
+    onBatchPublished: (_, pendingItems) => {
+      for (const it of pendingItems) {
+        if (it.latest_content_id) {
+          recordWorkSeriesAssociation(it.latest_content_id, "manga", it.id, it.title, it.published_content_count)
+        }
+      }
+      return prefetch(pendingItems.slice(0, currentBatchSize()).map(watchlistThumbUrlOf)).cancel
+    },
   })
 
   const novelPaged = usePagedList<PixivWatchlistSeries>({
@@ -307,8 +314,14 @@ function WatchlistFeed(props: {
     filter: filterWatchlistItems,
     deps: ["watchlist", "novel"],
     enabled: enabled && kind === "novel",
-    onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, currentBatchSize()).map(watchlistThumbUrlOf)).cancel,
+    onBatchPublished: (_, pendingItems) => {
+      for (const it of pendingItems) {
+        if (it.latest_content_id) {
+          recordWorkSeriesAssociation(it.latest_content_id, "novel", it.id, it.title, it.published_content_count)
+        }
+      }
+      return prefetch(pendingItems.slice(0, currentBatchSize()).map(watchlistThumbUrlOf)).cancel
+    },
   })
 
   const activeRefresh = kind === "manga" ? mangaPaged.refresh : novelPaged.refresh

@@ -45,6 +45,7 @@ import {
   recordNovelHistory,
   updateNovelHistoryBookmark,
 } from "../store/history"
+import { getSeriesByWorkID, recordWorkSeriesAssociation } from "../store/seriesCache"
 import { onUserFollowChanged, recordUserFollowed } from "../store/userFollow"
 import type { PixivNovel, PixivNovelDetail, TextEmbeddedImage } from "../types"
 import {
@@ -64,6 +65,7 @@ import {
   LoadingView,
   LoadMoreTrigger,
   NovelCard,
+  SeriesEpisodePager,
   TagChip,
 } from "./components"
 import { NovelReaderView, NovelReaderWebView } from "./novelReader"
@@ -290,6 +292,16 @@ export function NovelDetailView(props: { novelID: number }) {
   }
 
   const current = novel
+  const rawSeries = current.series ?? (current as any).novel_series
+  const rawSeriesObj = Array.isArray(rawSeries) ? rawSeries[0] : rawSeries
+  const associatedRef = getSeriesByWorkID(current.id, "novel")
+  const resolvedSeriesID = rawSeriesObj?.id ?? associatedRef?.seriesID ?? null
+  const resolvedSeriesTitle = rawSeriesObj?.title ?? associatedRef?.seriesTitle ?? null
+  const resolvedEpisodeNumber = current.episode_number ?? associatedRef?.episodeNumber ?? null
+
+  if (resolvedSeriesID) {
+    recordWorkSeriesAssociation(current.id, "novel", resolvedSeriesID, resolvedSeriesTitle, resolvedEpisodeNumber)
+  }
 
   return (
     <ScrollView
@@ -339,11 +351,11 @@ export function NovelDetailView(props: { novelID: number }) {
               systemImage="bubble.left"
               action={() => setShowComments(true)}
             />
-            {Boolean(current.series?.id) && (
+            {Boolean(resolvedSeriesID) && (
               <Button
                 title="系列"
                 systemImage="books.vertical"
-                action={() => requestPixivRoute(`novelSeries:${current.series!.id}`)}
+                action={() => requestPixivRoute(`novelSeries:${resolvedSeriesID}`)}
               />
             )}
             <Button
@@ -369,16 +381,16 @@ export function NovelDetailView(props: { novelID: number }) {
                 title={`NID：${current.id}`}
                 action={() => Pasteboard.setString(String(current.id))}
               />
-              {Boolean(current.series?.id) && (
+              {Boolean(resolvedSeriesID) && (
                 <Button
-                  title={`系列：${current.series?.title || "未命名系列"}`}
-                  action={() => Pasteboard.setString(current.series?.title ?? "")}
+                  title={`系列：${resolvedSeriesTitle || "未命名系列"}`}
+                  action={() => Pasteboard.setString(resolvedSeriesTitle ?? "")}
                 />
               )}
-              {Boolean(current.series?.id) && (
+              {Boolean(resolvedSeriesID) && (
                 <Button
-                  title={`SID：${current.series?.id}`}
-                  action={() => Pasteboard.setString(String(current.series?.id))}
+                  title={`SID：${resolvedSeriesID}`}
+                  action={() => Pasteboard.setString(String(resolvedSeriesID))}
                 />
               )}
               {Boolean(current.page_count && current.page_count > 1) && (
@@ -440,7 +452,7 @@ export function NovelDetailView(props: { novelID: number }) {
           </HStack>
 
           {/* 系列 */}
-          {Boolean(current.series?.id) || Boolean(current.series_prev?.id) || Boolean(current.series_next?.id) ? (
+          {Boolean(resolvedSeriesID) || Boolean(current.series_prev?.id) || Boolean(current.series_next?.id) ? (
             <VStack alignment="leading" spacing={6} frame={{ maxWidth: "infinity" }}>
               <Text font="subheadline" fontWeight="semibold" foregroundStyle="secondaryLabel">
                 系列
@@ -453,9 +465,9 @@ export function NovelDetailView(props: { novelID: number }) {
                 frame={{ maxWidth: "infinity" }}
                 contentShape="rect"
               >
-                {Boolean(current.series?.id) && current.series ? (
+                {Boolean(resolvedSeriesID) ? (
                   <NavigationLink
-                    value={`novelSeries:${current.series.id}`}
+                    value={`novelSeries:${resolvedSeriesID}`}
                     frame={{ maxWidth: "infinity" }}
                   >
                     <HStack alignment="center" spacing={8} frame={{ maxWidth: "infinity" }}>
@@ -465,7 +477,7 @@ export function NovelDetailView(props: { novelID: number }) {
                         foregroundStyle="#007AFF"
                         lineLimit={2}
                       >
-                        {current.series.title || "系列详情"}
+                        {resolvedSeriesTitle || "系列详情"}
                       </Text>
                       <Spacer />
                       <Image
@@ -479,7 +491,7 @@ export function NovelDetailView(props: { novelID: number }) {
                 ) : null}
 
                 {(Boolean(current.series_prev?.id) || Boolean(current.series_next?.id)) &&
-                Boolean(current.series?.id) ? (
+                Boolean(resolvedSeriesID) ? (
                   <Divider />
                 ) : null}
 
@@ -548,6 +560,17 @@ export function NovelDetailView(props: { novelID: number }) {
             </VStack>
           )}
         </VStack>
+
+        {/* 话数翻页器 */}
+        <SeriesEpisodePager
+          workID={current.id}
+          seriesID={resolvedSeriesID}
+          seriesTitle={resolvedSeriesTitle}
+          kind="novel"
+          seriesPrev={current.series_prev}
+          seriesNext={current.series_next}
+          episodeNumber={resolvedEpisodeNumber}
+        />
 
         {/* 相关作品 */}
         <RelatedNovelsSection

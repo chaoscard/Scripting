@@ -381,6 +381,7 @@ export interface PixivNovelDetail {
   image_urls?: PixivImageUrls | null
   textEmbeddedImages?: Record<string, TextEmbeddedImage>
   content: string
+  episode_number?: number
   series?: {
     id: number
     title?: string

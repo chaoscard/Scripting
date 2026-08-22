@@ -325,6 +325,7 @@ export async function apiGetPublicJson<T = any>(
   const { status, data } = await rawRequest(url, "GET", {
     headers: {
       Accept: "application/json",
+      "User-Agent": IMAGE_USER_AGENT,
       ...(extraHeaders ?? {}),
     },
     allowedOrigin,

@@ -38,6 +38,7 @@ import {
   isNovelContentVisible,
 } from "../store/contentFilter"
 import { cacheIllusts } from "../store/illustCache"
+import { cacheSeriesNav } from "../store/seriesCache"
 import type {
   PixivIllustration,
   PixivIllustrationSeriesItem,
@@ -69,6 +70,8 @@ type SeriesKind = "manga" | "novel"
 
 function seriesIllust(
   item: PixivIllustrationSeriesItem,
+  seriesID?: number | null,
+  seriesTitle?: string | null,
   authorFallback: PixivUser | null = null,
   episodeNumber?: number
 ): PixivIllustration {
@@ -98,6 +101,7 @@ function seriesIllust(
     width: item.width ?? 0,
     height: item.height ?? 0,
     x_restrict: item.x_restrict ?? raw.x_restrict ?? raw.xRestrict ?? 0,
+    series: seriesID ? { id: seriesID, title: seriesTitle ?? "漫画系列" } : undefined,
     episode_number: episodeNumber,
     meta_single_page: item.meta_single_page ?? {},
     meta_pages: item.meta_pages ?? (raw.meta_pages ? raw.meta_pages : []),
@@ -277,10 +281,21 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
       }
 
       const rawAscending = [...allRawIllusts].reverse()
+      const seriesTitle = detail.title || "漫画系列"
       const mappedIllusts = rawAscending.map((it, idx) =>
-        seriesIllust(it, seriesAuthor, idx + 1)
+        seriesIllust(it, props.seriesID, seriesTitle, seriesAuthor, idx + 1)
       )
       cacheIllusts(mappedIllusts)
+      cacheSeriesNav(
+        props.seriesID,
+        "manga",
+        detail.title || "漫画系列",
+        mappedIllusts.map((it) => ({
+          id: it.id,
+          title: it.title,
+          episodeNumber: it.episode_number,
+        }))
+      )
       rawMappedIllustsRef.current = mappedIllusts
       setWorkCount(detail.series_work_count ?? allRawIllusts.length)
 
@@ -356,10 +371,22 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
         }
       }
 
+      const novelSeriesTitle = detail.title || "小说系列"
       const mappedNovels = allRawNovels.map((novel, idx) => ({
         ...novel,
+        series: { id: props.seriesID, title: novelSeriesTitle },
         episode_number: idx + 1,
       }))
+      cacheSeriesNav(
+        props.seriesID,
+        "novel",
+        detail.title || "小说系列",
+        mappedNovels.map((it) => ({
+          id: it.id,
+          title: it.title,
+          episodeNumber: it.episode_number,
+        }))
+      )
       rawMappedNovelsRef.current = mappedNovels
       setWorkCount(detail.content_count ?? allRawNovels.length)
 

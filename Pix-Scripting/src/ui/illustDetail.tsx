@@ -53,6 +53,7 @@ import {
 } from "../store/history"
 import { onUserFollowChanged, recordUserFollowed } from "../store/userFollow"
 import { cacheIllust, getCachedIllust } from "../store/illustCache"
+import { getSeriesByWorkID, recordWorkSeriesAssociation } from "../store/seriesCache"
 import { useAsyncGuard, useIllustBookmark, useLatest, usePagedList, currentBatchSize } from "./hooks"
 import type { PixivIllustration } from "../types"
 import {
@@ -65,6 +66,7 @@ import {
   formatDate,
   formatNumber,
   LoadingView,
+  SeriesEpisodePager,
   TagChip,
 } from "./components"
 import { CommentsSheet } from "./comments"
@@ -313,6 +315,17 @@ export function IllustDetailView(props: { illustID: number }) {
   }
 
   const current = illust
+  const rawSeries = current.series ?? (current as any).illust_series
+  const rawSeriesObj = Array.isArray(rawSeries) ? rawSeries[0] : rawSeries
+  const associatedRef = getSeriesByWorkID(current.id, "manga")
+  const resolvedSeriesID = rawSeriesObj?.id ?? associatedRef?.seriesID ?? null
+  const resolvedSeriesTitle = rawSeriesObj?.title ?? associatedRef?.seriesTitle ?? null
+  const resolvedEpisodeNumber = current.episode_number ?? associatedRef?.episodeNumber ?? null
+
+  if (resolvedSeriesID) {
+    recordWorkSeriesAssociation(current.id, "manga", resolvedSeriesID, resolvedSeriesTitle, resolvedEpisodeNumber)
+  }
+
   const pageCount = Math.max(1, current.page_count || current.meta_pages.length || 1)
   // 无限滚动：一次性生成所有页的图片 URL（meta_pages 缺失时由 imageUrlOf 推导）
   const pageURLs: (string | null)[] = []
@@ -554,11 +567,11 @@ export function IllustDetailView(props: { illustID: number }) {
               systemImage="bubble.left"
               action={() => setShowComments(true)}
             />
-            {Boolean(current.series?.id) && (
+            {Boolean(resolvedSeriesID) && (
               <Button
                 title="系列"
                 systemImage="books.vertical"
-                action={() => requestPixivRoute(`mangaSeries:${current.series!.id}`)}
+                action={() => requestPixivRoute(`mangaSeries:${resolvedSeriesID}`)}
               />
             )}
             <Button
@@ -589,16 +602,16 @@ export function IllustDetailView(props: { illustID: number }) {
                 title={`PID：${current.id}`}
                 action={() => Pasteboard.setString(String(current.id))}
               />
-              {Boolean(current.series?.id) && (
+              {Boolean(resolvedSeriesID) && (
                 <Button
-                  title={`系列：${current.series?.title || "未命名系列"}`}
-                  action={() => Pasteboard.setString(current.series?.title ?? "")}
+                  title={`系列：${resolvedSeriesTitle || "未命名系列"}`}
+                  action={() => Pasteboard.setString(resolvedSeriesTitle ?? "")}
                 />
               )}
-              {Boolean(current.series?.id) && (
+              {Boolean(resolvedSeriesID) && (
                 <Button
-                  title={`SID：${current.series?.id}`}
-                  action={() => Pasteboard.setString(String(current.series?.id))}
+                  title={`SID：${resolvedSeriesID}`}
+                  action={() => Pasteboard.setString(String(resolvedSeriesID))}
                 />
               )}
               {pageCount > 1 && (
@@ -718,44 +731,6 @@ export function IllustDetailView(props: { illustID: number }) {
             </Text>
           </HStack>
 
-          {/* 系列 */}
-          {Boolean(current.series?.id) && current.series ? (
-            <VStack alignment="leading" spacing={6} frame={{ maxWidth: "infinity" }}>
-              <Text font="subheadline" fontWeight="semibold" foregroundStyle="secondaryLabel">
-                系列
-              </Text>
-              <NavigationLink
-                value={`mangaSeries:${current.series.id}`}
-                frame={{ maxWidth: "infinity" }}
-              >
-                <HStack
-                  alignment="center"
-                  spacing={8}
-                  padding={{ top: 12, horizontal: 12, bottom: 12 }}
-                  glassEffect={{ type: "rect", cornerRadius: 14 }}
-                  frame={{ maxWidth: "infinity" }}
-                  contentShape="rect"
-                >
-                  <Text
-                    font="subheadline"
-                    fontWeight="semibold"
-                    foregroundStyle="#007AFF"
-                    lineLimit={2}
-                  >
-                    {current.series.title || "系列详情"}
-                  </Text>
-                  <Spacer />
-                  <Image
-                    systemName="chevron.right"
-                    font="footnote"
-                    fontWeight="semibold"
-                    foregroundStyle="secondaryLabel"
-                  />
-                </HStack>
-              </NavigationLink>
-            </VStack>
-          ) : null}
-
           {/* 简介 */}
           <ExpandableIntroduction
             title="简介"
@@ -784,6 +759,15 @@ export function IllustDetailView(props: { illustID: number }) {
             </VStack>
           ) : null}
         </VStack>
+
+        {/* 话数翻页器 */}
+        <SeriesEpisodePager
+          workID={current.id}
+          seriesID={resolvedSeriesID}
+          seriesTitle={resolvedSeriesTitle}
+          kind="manga"
+          episodeNumber={resolvedEpisodeNumber}
+        />
 
         <RelatedIllustrationsSection
           illustID={current.id}

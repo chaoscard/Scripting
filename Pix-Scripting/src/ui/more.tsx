@@ -1,5 +1,6 @@
 import {
   Button,
+  Group,
   HStack,
   Image,
   List,
@@ -89,8 +90,20 @@ export function MoreView(props: { onClose: () => void }) {
         <Button
           buttonStyle="plain"
           foregroundStyle="systemRed"
-          action={() => {
-            session.signOut()
+          action={() => {}}
+          contextMenu={{
+            menuItems: (
+              <Group>
+                <Button
+                  title="确认注销登录"
+                  systemImage="rectangle.portrait.and.arrow.right"
+                  role="destructive"
+                  action={() => {
+                    session.signOut()
+                  }}
+                />
+              </Group>
+            ),
           }}
         >
           <HStack spacing={12} frame={{ maxWidth: "infinity" }}>

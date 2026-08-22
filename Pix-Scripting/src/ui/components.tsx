@@ -49,6 +49,7 @@ import { session } from "../api/session"
 import { loadSettings } from "../store/settings"
 import { blockTag } from "../store/blocklist"
 import { cacheIllust, cacheIllusts } from "../store/illustCache"
+import { recordWorkSeriesAssociation } from "../store/seriesCache"
 import { useIllustBookmark, useLatest, useNovelBookmark } from "./hooks"
 import { requestPixivRoute } from "./routeNavigation"
 import type {
@@ -629,6 +630,15 @@ export function WatchlistSeriesCard(props: {
 }) {
   const { item, kind = "manga", priority, onAppear } = props
   const isNovel = kind === "novel"
+  if (item.latest_content_id) {
+    recordWorkSeriesAssociation(
+      item.latest_content_id,
+      kind,
+      item.id,
+      item.title,
+      item.published_content_count
+    )
+  }
   const seriesRoute = isNovel ? `novelSeries:${item.id}` : `mangaSeries:${item.id}`
   const targetRoute = item.latest_content_id != null
     ? (isNovel ? `novel:${item.latest_content_id}` : `illust:${item.latest_content_id}`)
@@ -2498,3 +2508,6 @@ export function AuthorRow(props: {
     </VStack>
   )
 }
+
+export { SeriesEpisodePager, useSeriesEpisodeNav } from "./seriesEpisodePager"
+

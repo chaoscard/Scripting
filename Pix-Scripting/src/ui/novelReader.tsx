@@ -1,5 +1,6 @@
 import {
   Button,
+  Divider,
   HStack,
   Image,
   ProgressView,
@@ -26,6 +27,16 @@ export function escapeHtml(text: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;")
+}
+
+/**
+ * 将 Pixiv 小说注音 [[rb: 汉字 > 假名]] 转换为标准文本 汉字(假名)
+ */
+export function formatPixivRubyText(rawText: string): string {
+  return rawText.replace(
+    /\[\[rb:\s*([^\r\n>]+?)\s*(?:>|&gt;)\s*([^\r\n\]]+?)\s*\]\]/g,
+    (_, kanji: string, ruby: string) => `${kanji.trim()}(${ruby.trim()})`
+  )
 }
 
 /**
@@ -353,7 +364,14 @@ export function buildNovelHtmlDocument(parsedContentHtml: string, title?: string
     }
 
     function reportHeight() {
-      var height = Math.ceil(document.body.scrollHeight || document.documentElement.scrollHeight || 0);
+      var root = document.getElementById("novel-root");
+      var height = 0;
+      if (root) {
+        height = Math.ceil(root.getBoundingClientRect().height);
+      }
+      if (!height || height < 10) {
+        height = Math.ceil(document.body.scrollHeight || document.documentElement.scrollHeight || 0);
+      }
       handleAction({ type: "resize", height: height });
     }
 
@@ -368,7 +386,8 @@ export function buildNovelHtmlDocument(parsedContentHtml: string, title?: string
       var ro = new ResizeObserver(function() {
         reportHeight();
       });
-      ro.observe(document.body);
+      var root = document.getElementById("novel-root") || document.body;
+      ro.observe(root);
     }
 
     function scrollToPage(pageIndex) {
@@ -383,11 +402,7 @@ export function buildNovelHtmlDocument(parsedContentHtml: string, title?: string
 }
 
 /**
- * 小说正文专用内嵌式 WebView 组件
- * 具备：
- * 1. 原生级长文连续精准文本选择与拷贝
- * 2. 自动测量正文高度并无缝融入外层 ScrollView
- * 3. 拦截处理插画跳转、站内外链接与章节页码滚动
+ * 小说正文专用内嵌式 WebView 组件（纯文本小说全量排版）
  */
 export function NovelReaderWebView(props: {
   text: string
@@ -397,11 +412,8 @@ export function NovelReaderWebView(props: {
   const { text, title, onReady } = props
   const controller = useMemo(() => new WebViewController({ ephemeral: true }), [])
   const [contentHeight, setContentHeight] = useState<number>(() => {
-    // 中文移动排版预估：16.5px 字体、1.85 行高、每行约 20-24 字符，平均每个字符约占 1.4 像素高度
-    // 合理预估初始高度，绝不人为截断到较小值，防止正文末尾哨兵在首屏被提前误判进入视口
-    return Math.max(360, Math.ceil((text.length || 500) * 1.4))
+    return Math.max(60, Math.ceil((text.length || 200) * 0.9))
   })
-  const [loaded, setLoaded] = useState(false)
   const isMountedRef = useRef(true)
   const onReadyRef = useRef(onReady)
   onReadyRef.current = onReady
@@ -415,14 +427,13 @@ export function NovelReaderWebView(props: {
         await controller.addScriptMessageHandler("novelAction", (payload: any) => {
           if (!active || !isMountedRef.current) return
           if (payload?.type === "resize" && typeof payload.height === "number") {
-            const nextHeight = Math.max(120, payload.height)
+            const nextHeight = Math.max(20, Math.ceil(payload.height))
             setContentHeight((prev) => {
               if (Math.abs(prev - nextHeight) > 2) {
                 return nextHeight
               }
               return prev
             })
-            setLoaded(true)
             onReadyRef.current?.()
           } else if (payload?.type === "openIllust" && payload.id) {
             requestPixivRoute(`illust:${payload.id}`)
@@ -440,7 +451,7 @@ export function NovelReaderWebView(props: {
 
         const parsedHtml = parsePixivNovelToHtml(text)
         const documentHtml = buildNovelHtmlDocument(parsedHtml, title)
-        await controller.loadHTML(documentHtml)
+        await controller.loadHTML(documentHtml, "https://www.pixiv.net")
       } catch {
         // ignore
       }
@@ -468,6 +479,167 @@ export function NovelReaderWebView(props: {
   )
 }
 
+export interface NativeTextBlock {
+  type: "paragraph" | "chapter" | "newpage" | "jump"
+  text?: string
+  title?: string
+  page?: number
+}
+
+/**
+ * 将连续文本块解析为结构化的原子段落与标记列表
+ */
+export function parseNativeTextBlocks(rawText: string): NativeTextBlock[] {
+  if (!rawText) return []
+  const lines = rawText.split(/\r?\n/)
+  const blocks: NativeTextBlock[] = []
+  let currentParagraphLines: string[] = []
+
+  const flushParagraph = () => {
+    if (currentParagraphLines.length > 0) {
+      const pText = currentParagraphLines.join("\n").trim()
+      if (pText.length > 0) {
+        blocks.push({ type: "paragraph", text: pText })
+      }
+      currentParagraphLines = []
+    }
+  }
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i]
+    const trimmed = rawLine.trim()
+
+    if (!trimmed) {
+      flushParagraph()
+      continue
+    }
+
+    const chapterMatch = trimmed.match(/^\[chapter:\s*([^\]]+)\]$/i)
+    if (chapterMatch) {
+      flushParagraph()
+      blocks.push({ type: "chapter", title: chapterMatch[1].trim() })
+      continue
+    }
+
+    if (/^\[newpage\]$/i.test(trimmed)) {
+      flushParagraph()
+      blocks.push({ type: "newpage" })
+      continue
+    }
+
+    const jumpMatch = trimmed.match(/^\[jump:\s*(\d+)\]$/i)
+    if (jumpMatch) {
+      flushParagraph()
+      blocks.push({ type: "jump", page: Number(jumpMatch[1]) })
+      continue
+    }
+
+    currentParagraphLines.push(rawLine)
+  }
+
+  flushParagraph()
+  return blocks
+}
+
+/**
+ * 图文混排小说中的原生文本段落渲染组件（零延迟、零跳变、支持全局精准选词）
+ */
+export function NovelNativeTextSegment(props: {
+  text: string
+}) {
+  const { text } = props
+  const blocks = useMemo(() => parseNativeTextBlocks(text), [text])
+
+  if (blocks.length === 0) return null
+
+  return (
+    <VStack
+      alignment="leading"
+      spacing={12}
+      padding={{ horizontal: 14, vertical: 6 }}
+      frame={{ maxWidth: "infinity", alignment: "leading" }}
+    >
+      {blocks.map((block, idx) => {
+        if (block.type === "paragraph" && block.text) {
+          const cleanText = formatPixivRubyText(block.text)
+          return (
+            <Text
+              key={`p-${idx}`}
+              font="body"
+              lineSpacing={6}
+              textSelection={true}
+              multilineTextAlignment="leading"
+              frame={{ maxWidth: "infinity", alignment: "leading" }}
+            >
+              {cleanText}
+            </Text>
+          )
+        }
+
+        if (block.type === "chapter" && block.title) {
+          return (
+            <VStack
+              key={`ch-${idx}`}
+              alignment="leading"
+              spacing={4}
+              padding={{ top: 16, bottom: 4 }}
+              frame={{ maxWidth: "infinity", alignment: "leading" }}
+            >
+              <Text font="caption2" fontWeight="bold" foregroundStyle="#007AFF">
+                CHAPTER
+              </Text>
+              <Text font="title3" fontWeight="bold">
+                {block.title}
+              </Text>
+              <Divider />
+            </VStack>
+          )
+        }
+
+        if (block.type === "newpage") {
+          return (
+            <HStack
+              key={`page-${idx}`}
+              spacing={10}
+              padding={{ vertical: 10 }}
+              alignment="center"
+              frame={{ maxWidth: "infinity" }}
+            >
+              <Divider />
+              <Text font="caption" foregroundStyle="secondaryLabel">
+                下一页
+              </Text>
+              <Divider />
+            </HStack>
+          )
+        }
+
+        if (block.type === "jump" && block.page) {
+          return (
+            <HStack
+              key={`jump-${idx}`}
+              padding={{ vertical: 2 }}
+              frame={{ maxWidth: "infinity", alignment: "leading" }}
+            >
+              <HStack
+                spacing={6}
+                padding={{ horizontal: 10, vertical: 6 }}
+                glassEffect={{ type: "rect", cornerRadius: 8 }}
+              >
+                <Text font="subheadline" foregroundStyle="#007AFF">
+                  📄 跳转至第 {block.page} 页
+                </Text>
+              </HStack>
+            </HStack>
+          )
+        }
+
+        return null
+      })}
+    </VStack>
+  )
+}
+
 export type NovelImageItem =
   | {
       type: "uploadedimage"
@@ -483,18 +655,6 @@ export type NovelImageItem =
 export type NovelSegment =
   | { type: "text"; text: string }
   | { type: "images"; images: NovelImageItem[] }
-
-/**
- * 判断文本块是否包含真实可读的正文文字（排除空白换行、分页符 [newpage]、跳转符 [jump:xxx] 等结构标记）
- */
-export function isMeaningfulText(text: string): boolean {
-  if (!text) return false
-  const cleaned = text
-    .replace(/\[newpage\]/gi, "")
-    .replace(/\[jump:\s*\d+\s*\]/gi, "")
-    .replace(/[\s\u3000\u200B\uFEFF\u00A0\r\n]+/g, "")
-  return cleaned.length > 0
-}
 
 /**
  * 将小说正文拆解为连续文字块与连续插图组序列
@@ -527,12 +687,10 @@ export function parseNovelContentSegments(
 
     if (start > lastIndex) {
       const textChunk = rawText.slice(lastIndex, start)
-      // 只有当两张插图之间存在真实实质正文时，才打断插图组并生成独立的文字块
-      if (isMeaningfulText(textChunk)) {
+      if (textChunk.trim().length > 0) {
         flushImages()
-        segments.push({ type: "text", text: textChunk.trim() })
+        segments.push({ type: "text", text: textChunk })
       }
-      // 若插图之间只有换行、空白符或 [newpage]，则视为连续插图，继续聚合在同一个插图组中
     }
 
     if (kind === "uploadedimage") {
@@ -559,10 +717,9 @@ export function parseNovelContentSegments(
 
   if (lastIndex < rawText.length) {
     const trailing = rawText.slice(lastIndex)
-    // 只有当末尾插图之后存在真实正文文字时，才在末尾生成文字块
-    if (isMeaningfulText(trailing)) {
+    if (trailing.trim().length > 0) {
       flushImages()
-      segments.push({ type: "text", text: trailing.trim() })
+      segments.push({ type: "text", text: trailing })
     }
   }
 
@@ -583,8 +740,8 @@ function NovelUploadedImageItemView(props: {
 
   const highResUrl =
     imageInfo?.urls?.["1200x1200"] ||
-    imageInfo?.urls?.["480mw"] ||
     imageInfo?.urls?.original ||
+    imageInfo?.urls?.["480mw"] ||
     null
 
   const previewUrl =
@@ -755,8 +912,8 @@ function NovelImagesBlockView(props: {
       frame={{ maxWidth: "infinity" }}
       padding={{
         horizontal: 14,
-        top: isFirstInArticle ? 0 : 4,
-        bottom: isLastInArticle ? 0 : 4,
+        top: isFirstInArticle ? 0 : 6,
+        bottom: isLastInArticle ? 0 : 6,
       }}
     >
       <VStack spacing={0} alignment="center" frame={{ maxWidth: "infinity" }}>
@@ -803,7 +960,9 @@ function NovelImagesBlockView(props: {
 }
 
 /**
- * 小说正文复合阅读组件：支持多段精准选词文本与原生高清插画大图无缝混排
+ * 小说正文复合阅读组件：
+ * - 纯文本小说：采用标准 WebView 渲染完整排版与跨段落长文选择
+ * - 图文混排小说：采用高流畅度 Native Segment + 高清原比例插图流式排版，彻底解决多 WebView 性能卡顿与排版塌陷
  */
 export function NovelReaderView(props: {
   text: string
@@ -817,16 +976,33 @@ export function NovelReaderView(props: {
     [text, textEmbeddedImages]
   )
 
+  const firstSeg = segments[0]
+  const isPureText = segments.length === 1 && firstSeg?.type === "text"
+
+  useEffect(() => {
+    if (!isPureText) {
+      onReady?.()
+    }
+  }, [isPureText, onReady])
+
+  if (isPureText && firstSeg?.type === "text") {
+    return (
+      <NovelReaderWebView
+        text={firstSeg.text}
+        title={title}
+        onReady={onReady}
+      />
+    )
+  }
+
   return (
     <VStack alignment="leading" spacing={0} frame={{ maxWidth: "infinity" }}>
       {segments.map((segment, index) => {
         if (segment.type === "text") {
           return (
-            <NovelReaderWebView
+            <NovelNativeTextSegment
               key={`text-${index}`}
               text={segment.text}
-              title={title}
-              onReady={onReady}
             />
           )
         }
