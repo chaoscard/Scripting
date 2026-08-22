@@ -13,6 +13,7 @@ export type ImageFadeInDuration = number
 export type BlurCrossFadeDuration = number
 export type BackgroundPreheatDuration = number
 export type LoadingAnimationDuration = number
+export type NovelLoadingDuration = number
 export type LaunchAnimationDuration = number
 
 export interface AppSettings {
@@ -38,6 +39,7 @@ export interface AppSettings {
   blurCrossFadeDuration: BlurCrossFadeDuration
   backgroundPreheatDuration: BackgroundPreheatDuration
   loadingAnimationDuration: LoadingAnimationDuration
+  novelLoadingDuration: NovelLoadingDuration
   launchAnimationDuration: LaunchAnimationDuration
   advancedSettingsUnlocked: boolean
 }
@@ -65,6 +67,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   blurCrossFadeDuration: 150,
   backgroundPreheatDuration: 1000,
   loadingAnimationDuration: 400,
+  novelLoadingDuration: 1000,
   launchAnimationDuration: 1500,
   advancedSettingsUnlocked: false,
 }
@@ -169,6 +172,13 @@ function parseLoadingDuration(value: unknown): number {
   return DEFAULT_SETTINGS.loadingAnimationDuration
 }
 
+function parseNovelLoadingDuration(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+    return Math.max(0, Math.min(5000, Math.round(value)))
+  }
+  return DEFAULT_SETTINGS.novelLoadingDuration
+}
+
 function parseLaunchDuration(value: unknown): number {
   if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
     return Math.max(0, Math.min(30000, Math.round(value)))
@@ -223,6 +233,7 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
     blurCrossFadeDuration: parseBlurCrossFadeDuration(stored?.blurCrossFadeDuration),
     backgroundPreheatDuration: parseBackgroundPreheatDuration(stored?.backgroundPreheatDuration),
     loadingAnimationDuration: parseLoadingDuration(stored?.loadingAnimationDuration),
+    novelLoadingDuration: parseNovelLoadingDuration(stored?.novelLoadingDuration),
     launchAnimationDuration: parseLaunchDuration(stored?.launchAnimationDuration),
     advancedSettingsUnlocked: boolOr(stored?.advancedSettingsUnlocked, DEFAULT_SETTINGS.advancedSettingsUnlocked),
   }

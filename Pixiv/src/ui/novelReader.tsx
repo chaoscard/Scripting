@@ -392,15 +392,19 @@ export function buildNovelHtmlDocument(parsedContentHtml: string, title?: string
 export function NovelReaderWebView(props: {
   text: string
   title?: string
+  onReady?: () => void
 }) {
-  const { text, title } = props
+  const { text, title, onReady } = props
   const controller = useMemo(() => new WebViewController({ ephemeral: true }), [])
   const [contentHeight, setContentHeight] = useState<number>(() => {
-    // 根据字数初步估算高度，避免挂载瞬间高度塌陷
-    return Math.max(320, Math.min(2400, Math.ceil((text.length || 1000) * 0.85)))
+    // 中文移动排版预估：16.5px 字体、1.85 行高、每行约 20-24 字符，平均每个字符约占 1.4 像素高度
+    // 合理预估初始高度，绝不人为截断到较小值，防止正文末尾哨兵在首屏被提前误判进入视口
+    return Math.max(360, Math.ceil((text.length || 500) * 1.4))
   })
   const [loaded, setLoaded] = useState(false)
   const isMountedRef = useRef(true)
+  const onReadyRef = useRef(onReady)
+  onReadyRef.current = onReady
 
   useEffect(() => {
     isMountedRef.current = true
@@ -419,6 +423,7 @@ export function NovelReaderWebView(props: {
               return prev
             })
             setLoaded(true)
+            onReadyRef.current?.()
           } else if (payload?.type === "openIllust" && payload.id) {
             requestPixivRoute(`illust:${payload.id}`)
           } else if (payload?.type === "openLink" && payload.url) {
@@ -463,13 +468,36 @@ export function NovelReaderWebView(props: {
   )
 }
 
+export type NovelImageItem =
+  | {
+      type: "uploadedimage"
+      imageId: string
+      info?: TextEmbeddedImage
+    }
+  | {
+      type: "pixivimage"
+      illustId: number
+      page?: number
+    }
+
 export type NovelSegment =
   | { type: "text"; text: string }
-  | { type: "uploadedimage"; imageId: string; info?: TextEmbeddedImage }
-  | { type: "pixivimage"; illustId: number; page?: number }
+  | { type: "images"; images: NovelImageItem[] }
 
 /**
- * 将小说正文拆解为连续文字块与内嵌大图块序列
+ * 判断文本块是否包含真实可读的正文文字（排除空白换行、分页符 [newpage]、跳转符 [jump:xxx] 等结构标记）
+ */
+export function isMeaningfulText(text: string): boolean {
+  if (!text) return false
+  const cleaned = text
+    .replace(/\[newpage\]/gi, "")
+    .replace(/\[jump:\s*\d+\s*\]/gi, "")
+    .replace(/[\s\u3000\u200B\uFEFF\u00A0\r\n]+/g, "")
+  return cleaned.length > 0
+}
+
+/**
+ * 将小说正文拆解为连续文字块与连续插图组序列
  */
 export function parseNovelContentSegments(
   rawText: string,
@@ -481,6 +509,14 @@ export function parseNovelContentSegments(
   const pattern = /\[(uploadedimage|pixivimage):\s*(\d+)(?:-(\d+))?\s*\]/gi
   let lastIndex = 0
   let match: RegExpExecArray | null
+  let currentImages: NovelImageItem[] = []
+
+  const flushImages = () => {
+    if (currentImages.length > 0) {
+      segments.push({ type: "images", images: currentImages })
+      currentImages = []
+    }
+  }
 
   while ((match = pattern.exec(rawText)) !== null) {
     const start = match.index
@@ -490,15 +526,18 @@ export function parseNovelContentSegments(
     const pageStr = match[3]
 
     if (start > lastIndex) {
-      const textChunk = rawText.slice(lastIndex, start).replace(/\s+$/, "")
-      if (textChunk.trim().length > 0) {
-        segments.push({ type: "text", text: textChunk })
+      const textChunk = rawText.slice(lastIndex, start)
+      // 只有当两张插图之间存在真实实质正文时，才打断插图组并生成独立的文字块
+      if (isMeaningfulText(textChunk)) {
+        flushImages()
+        segments.push({ type: "text", text: textChunk.trim() })
       }
+      // 若插图之间只有换行、空白符或 [newpage]，则视为连续插图，继续聚合在同一个插图组中
     }
 
     if (kind === "uploadedimage") {
       const info = textEmbeddedImages?.[idStr]
-      segments.push({
+      currentImages.push({
         type: "uploadedimage",
         imageId: idStr,
         info,
@@ -507,7 +546,7 @@ export function parseNovelContentSegments(
       const illustId = Number(idStr)
       const page = pageStr ? Number(pageStr) : undefined
       if (illustId > 0) {
-        segments.push({
+        currentImages.push({
           type: "pixivimage",
           illustId,
           page,
@@ -519,23 +558,28 @@ export function parseNovelContentSegments(
   }
 
   if (lastIndex < rawText.length) {
-    const trailing = rawText.slice(lastIndex).replace(/^\s+/, "")
-    if (trailing.trim().length > 0 || segments.length === 0) {
-      segments.push({ type: "text", text: trailing })
+    const trailing = rawText.slice(lastIndex)
+    // 只有当末尾插图之后存在真实正文文字时，才在末尾生成文字块
+    if (isMeaningfulText(trailing)) {
+      flushImages()
+      segments.push({ type: "text", text: trailing.trim() })
     }
   }
+
+  flushImages()
 
   return segments.length > 0 ? segments : [{ type: "text", text: rawText }]
 }
 
 /**
- * 作者上传的正文插图大图渲染组件（复用 CachedImage 原生渐进模糊过渡效果）
+ * 作者上传的正文插图大图项
  */
-function NovelUploadedImageView(props: {
+function NovelUploadedImageItemView(props: {
   imageId: string
   imageInfo?: TextEmbeddedImage
+  cornerRadius?: any
 }) {
-  const { imageId, imageInfo } = props
+  const { imageId, imageInfo, cornerRadius = 8 } = props
 
   const highResUrl =
     imageInfo?.urls?.["1200x1200"] ||
@@ -552,7 +596,7 @@ function NovelUploadedImageView(props: {
     return (
       <HStack
         spacing={8}
-        padding={{ horizontal: 14, vertical: 8 }}
+        padding={{ horizontal: 0, vertical: 4 }}
         frame={{ maxWidth: "infinity" }}
       >
         <HStack
@@ -571,32 +615,27 @@ function NovelUploadedImageView(props: {
   }
 
   return (
-    <VStack
-      spacing={0}
-      alignment="center"
+    <CachedImage
+      url={highResUrl}
+      previewUrl={previewUrl}
+      useIntrinsicAspectRatio={true}
+      cornerRadius={cornerRadius}
+      contentMode="fit"
       frame={{ maxWidth: "infinity" }}
-      padding={{ horizontal: 14, top: 4, bottom: 6 }}
-    >
-      <CachedImage
-        url={highResUrl}
-        previewUrl={previewUrl}
-        useIntrinsicAspectRatio={true}
-        cornerRadius={8}
-        contentMode="fit"
-        frame={{ maxWidth: "infinity" }}
-      />
-    </VStack>
+    />
   )
 }
 
 /**
- * 正文引用的 Pixiv 插画大图渲染组件（带模糊过渡及点击路由跳转）
+ * 正文引用的 Pixiv 插画大图项
  */
-function NovelPixivImageView(props: {
+function NovelPixivImageItemView(props: {
   illustId: number
   page?: number
+  cornerRadius?: any
+  showBottomLink?: boolean
 }) {
-  const { illustId, page = 0 } = props
+  const { illustId, page = 0, cornerRadius = 8, showBottomLink = true } = props
   const [illust, setIllust] = useState<PixivIllustration | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -634,7 +673,7 @@ function NovelPixivImageView(props: {
         action={() => requestPixivRoute(`illust:${illustId}`)}
         buttonStyle="plain"
         frame={{ maxWidth: "infinity" }}
-        padding={{ horizontal: 14, vertical: 8 }}
+        padding={{ vertical: 4 }}
       >
         <HStack
           spacing={8}
@@ -659,12 +698,7 @@ function NovelPixivImageView(props: {
   const aspect = illust.width && illust.height ? illust.width / illust.height : undefined
 
   return (
-    <VStack
-      spacing={4}
-      alignment="center"
-      frame={{ maxWidth: "infinity" }}
-      padding={{ horizontal: 14, top: 4, bottom: 6 }}
-    >
+    <VStack spacing={2} alignment="center" frame={{ maxWidth: "infinity" }}>
       <Button
         action={() => requestPixivRoute(`illust:${illustId}`)}
         buttonStyle="plain"
@@ -675,25 +709,95 @@ function NovelPixivImageView(props: {
           previewUrl={previewUrl}
           aspectRatioValue={aspect}
           useIntrinsicAspectRatio={true}
-          cornerRadius={8}
+          cornerRadius={cornerRadius}
           contentMode="fit"
           frame={{ maxWidth: "infinity" }}
         />
       </Button>
-      <Button
-        action={() => requestPixivRoute(`illust:${illustId}`)}
-        buttonStyle="plain"
-      >
-        <HStack spacing={4} alignment="center">
-          <Text font="caption" foregroundStyle="#007AFF" lineLimit={1}>
-            {illust.title}
-          </Text>
-          <Text font="caption" foregroundStyle="secondaryLabel" lineLimit={1}>
-            · by {illust.user?.name}
-          </Text>
-          <Image systemName="chevron.right" font="caption2" foregroundStyle="secondaryLabel" />
-        </HStack>
-      </Button>
+      {showBottomLink ? (
+        <Button
+          action={() => requestPixivRoute(`illust:${illustId}`)}
+          buttonStyle="plain"
+          padding={{ top: 2, bottom: 2 }}
+        >
+          <HStack spacing={4} alignment="center">
+            <Text font="caption" foregroundStyle="#007AFF" lineLimit={1}>
+              {illust.title}
+            </Text>
+            <Text font="caption" foregroundStyle="secondaryLabel" lineLimit={1}>
+              · by {illust.user?.name}
+            </Text>
+            <Image systemName="chevron.right" font="caption2" foregroundStyle="secondaryLabel" />
+          </HStack>
+        </Button>
+      ) : null}
+    </VStack>
+  )
+}
+
+/**
+ * 连续插图组渲染组件：
+ * 支持单图四角圆角、多图顶部/底部圆角且图间 0 间距无缝贴合（参考插画详情页）
+ */
+function NovelImagesBlockView(props: {
+  images: NovelImageItem[]
+  isFirstInArticle?: boolean
+  isLastInArticle?: boolean
+}) {
+  const { images, isFirstInArticle = false, isLastInArticle = false } = props
+  const count = images.length
+  if (count === 0) return null
+
+  return (
+    <VStack
+      spacing={0}
+      alignment="center"
+      frame={{ maxWidth: "infinity" }}
+      padding={{
+        horizontal: 14,
+        top: isFirstInArticle ? 0 : 4,
+        bottom: isLastInArticle ? 0 : 4,
+      }}
+    >
+      <VStack spacing={0} alignment="center" frame={{ maxWidth: "infinity" }}>
+        {images.map((item, idx) => {
+          const isFirst = idx === 0
+          const isLast = idx === count - 1
+          const cornerRadii =
+            count === 1
+              ? 8
+              : isFirst
+                ? { topLeading: 8, topTrailing: 8, bottomLeading: 0, bottomTrailing: 0 }
+                : isLast
+                  ? { topLeading: 0, topTrailing: 0, bottomLeading: 8, bottomTrailing: 8 }
+                  : 0
+
+          if (item.type === "uploadedimage") {
+            return (
+              <NovelUploadedImageItemView
+                key={`uploaded-${item.imageId}-${idx}`}
+                imageId={item.imageId}
+                imageInfo={item.info}
+                cornerRadius={cornerRadii}
+              />
+            )
+          }
+
+          if (item.type === "pixivimage") {
+            return (
+              <NovelPixivImageItemView
+                key={`pixiv-${item.illustId}-${idx}`}
+                illustId={item.illustId}
+                page={item.page}
+                cornerRadius={cornerRadii}
+                showBottomLink={isLast}
+              />
+            )
+          }
+
+          return null
+        })}
+      </VStack>
     </VStack>
   )
 }
@@ -705,8 +809,9 @@ export function NovelReaderView(props: {
   text: string
   title?: string
   textEmbeddedImages?: Record<string, TextEmbeddedImage>
+  onReady?: () => void
 }) {
-  const { text, title, textEmbeddedImages } = props
+  const { text, title, textEmbeddedImages, onReady } = props
   const segments = useMemo(
     () => parseNovelContentSegments(text, textEmbeddedImages),
     [text, textEmbeddedImages]
@@ -721,24 +826,17 @@ export function NovelReaderView(props: {
               key={`text-${index}`}
               text={segment.text}
               title={title}
+              onReady={onReady}
             />
           )
         }
-        if (segment.type === "uploadedimage") {
+        if (segment.type === "images") {
           return (
-            <NovelUploadedImageView
-              key={`uploaded-${segment.imageId}-${index}`}
-              imageId={segment.imageId}
-              imageInfo={segment.info}
-            />
-          )
-        }
-        if (segment.type === "pixivimage") {
-          return (
-            <NovelPixivImageView
-              key={`pixiv-${segment.illustId}-${index}`}
-              illustId={segment.illustId}
-              page={segment.page}
+            <NovelImagesBlockView
+              key={`images-${index}`}
+              images={segment.images}
+              isFirstInArticle={index === 0}
+              isLastInArticle={index === segments.length - 1}
             />
           )
         }

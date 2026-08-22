@@ -26,6 +26,15 @@ export function waitForPaginationFeedback(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, paginationFeedbackDuration()))
 }
 
+// 小说正文触底加载缓冲：由调试设置独立配置（默认 1000ms，0-5000ms），与通用列表加载解耦
+export function novelLoadingDuration(): number {
+  return loadSettings().novelLoadingDuration ?? 1000
+}
+
+export function waitForNovelLoadingFeedback(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, novelLoadingDuration()))
+}
+
 // ---------- 氛围色 Hook ----------
 
 export function useUserAmbientPalette(imageUrl: string | null | undefined): {

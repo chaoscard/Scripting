@@ -13,6 +13,7 @@ import {
   ScrollView,
   Spacer,
   Text,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -37,6 +38,7 @@ import {
   useLatest,
   useNovelBookmark,
   usePagedList,
+  waitForNovelLoadingFeedback,
 } from "./hooks"
 import { novelThumbUrlOf, prefetch } from "../image/imageLoader"
 import {
@@ -81,6 +83,7 @@ export function NovelDetailView(props: { novelID: number }) {
   const [text, setText] = useState("")
   const [textEmbeddedImages, setTextEmbeddedImages] = useState<Record<string, TextEmbeddedImage> | undefined>(undefined)
   const [textError, setTextError] = useState<string | null>(null)
+  const [readerReady, setReaderReady] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [bookmarked, setBookmarked] = useNovelBookmark(novelID, false)
@@ -99,6 +102,7 @@ export function NovelDetailView(props: { novelID: number }) {
   async function load() {
     const g = guard()
     setLoading(true)
+    setReaderReady(false)
     setError(null)
     try {
       const detail = await session.call((token) => novelDetail(novelID, token))
@@ -126,8 +130,14 @@ export function NovelDetailView(props: { novelID: number }) {
       setText(viewer.text)
       setTextEmbeddedImages(viewer.textEmbeddedImages)
       setTextError(null)
+      if (!viewer.text) {
+        setReaderReady(true)
+      }
     } catch (err: any) {
-      if (g.isCurrent()) setError(err?.message ?? "加载失败")
+      if (g.isCurrent()) {
+        setError(err?.message ?? "加载失败")
+        setReaderReady(true)
+      }
     } finally {
       if (g.isCurrent()) setLoading(false)
     }
@@ -522,12 +532,13 @@ export function NovelDetailView(props: { novelID: number }) {
         </VStack>
 
         {/* 正文 */}
-        <VStack alignment="leading" spacing={0} padding={{ top: 4, bottom: 16 }} frame={{ maxWidth: "infinity" }}>
+        <VStack alignment="leading" spacing={0} padding={{ top: 4, bottom: 0 }} frame={{ maxWidth: "infinity" }}>
           {text ? (
             <NovelReaderView
               text={text}
               title={current.title}
               textEmbeddedImages={textEmbeddedImages}
+              onReady={() => setReaderReady(true)}
             />
           ) : (
             <VStack padding={{ horizontal: 14 }}>
@@ -539,7 +550,11 @@ export function NovelDetailView(props: { novelID: number }) {
         </VStack>
 
         {/* 相关作品 */}
-        <RelatedNovelsSection novelID={current.id} />
+        <RelatedNovelsSection
+          key={current.id}
+          novelID={current.id}
+          ready={!loading && readerReady}
+        />
       </VStack>
 
       <VStack
@@ -579,19 +594,26 @@ export function NovelDetailView(props: { novelID: number }) {
 
 function RelatedNovelsSection(props: {
   novelID: number
-  enabled?: boolean
+  ready?: boolean
 }) {
-  const { enabled = true } = props
+  const { novelID, ready = true } = props
+
+  // 1. 网络层：进入后立即后台请求相关作品，减少后续等待时间
   const paged = usePagedList<PixivNovel>({
-    first: (token) => relatedNovels(props.novelID, token),
+    first: (token) => relatedNovels(novelID, token),
     more: (nextURL, token) => nextNovels(nextURL, token),
-    filter: (items) => filterRelatedNovels(items, props.novelID),
-    deps: [props.novelID],
-    enabled,
+    filter: (items) => filterRelatedNovels(items, novelID),
+    deps: [novelID],
+    enabled: true,
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
   })
   const pagedRef = useLatest(paged)
+
+  // 2. UI交互层：正文末尾触底后播放加载动画，人为提供缓冲防止手势滚过
+  const [revealed, setRevealed] = useState(false)
+  const [animating, setAnimating] = useState(false)
+  const animatingTaskRef = useRef<number>(0)
 
   useEffect(() => {
     return onSettingsChanged(() => {
@@ -599,9 +621,38 @@ function RelatedNovelsSection(props: {
     })
   }, [])
 
-  if (paged.initialLoading && !enabled) {
+  const handleBottomAppear = useCallback(() => {
+    if (revealed || animating) return
+    const taskId = ++animatingTaskRef.current
+    setAnimating(true)
+    void waitForNovelLoadingFeedback().then(() => {
+      if (animatingTaskRef.current === taskId) {
+        setAnimating(false)
+        setRevealed(true)
+      }
+    })
+  }, [revealed, animating])
+
+  if (!ready) {
     return null
   }
+
+  // 尚未触底：正文末尾放置 LazyVStack 触底哨兵，不提前渲染卡片列表，防止用户惯性滚过
+  if (!revealed && !animating) {
+    return (
+      <LazyVStack alignment="leading" spacing={0} frame={{ maxWidth: "infinity" }}>
+        <VStack
+          key={`novel-related-trigger:${novelID}`}
+          spacing={0}
+          frame={{ height: 44, maxWidth: "infinity" }}
+          onAppear={handleBottomAppear}
+        />
+      </LazyVStack>
+    )
+  }
+
+  // 触底动画播放中（展示设置中的 novelLoadingDuration，默认 2000ms）或数据仍在后台加载中
+  const showLoading = animating || paged.initialLoading
 
   return (
     <VStack
@@ -618,10 +669,15 @@ function RelatedNovelsSection(props: {
       >
         相关作品
       </Text>
-      {paged.initialLoading ? (
-        <HStack spacing={0} frame={{ maxWidth: "infinity", height: 80 }}>
+      {showLoading ? (
+        <HStack spacing={0} frame={{ maxWidth: "infinity", height: 100 }}>
           <Spacer />
-          <ProgressView progressViewStyle="circular" />
+          <VStack alignment="center" spacing={8}>
+            <ProgressView progressViewStyle="circular" />
+            <Text font="caption" foregroundStyle="secondaryLabel">
+              正在加载相关作品...
+            </Text>
+          </VStack>
           <Spacer />
         </HStack>
       ) : paged.error && paged.items.length === 0 ? (
@@ -632,7 +688,10 @@ function RelatedNovelsSection(props: {
           <Button
             title="重试"
             buttonStyle="glass"
-            action={() => paged.refresh()}
+            action={() => {
+              handleBottomAppear()
+              paged.refresh()
+            }}
           />
         </VStack>
       ) : paged.items.length > 0 ? (

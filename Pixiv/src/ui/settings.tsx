@@ -369,6 +369,15 @@ export function SettingsView() {
             onSave={(val) => update({ loadingAnimationDuration: val })}
           />
           <AdvancedNumberRow
+            title="小说加载时长"
+            unit="ms"
+            value={settings.novelLoadingDuration}
+            defaultValue={1000}
+            min={0}
+            max={5000}
+            onSave={(val) => update({ novelLoadingDuration: val })}
+          />
+          <AdvancedNumberRow
             title="启动动画时长"
             unit="ms"
             value={settings.launchAnimationDuration}
