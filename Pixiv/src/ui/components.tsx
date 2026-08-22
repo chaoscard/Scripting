@@ -320,7 +320,12 @@ export function CachedImage(props: {
   previewUrl?: string | null
   blurPreviewRadius?: number
   aspectRatioValue?: number // 宽/高
-  cornerRadius?: number
+  cornerRadius?: number | {
+    topLeading?: number
+    topTrailing?: number
+    bottomLeading?: number
+    bottomTrailing?: number
+  }
   contentMode?: "fit" | "fill"
   centerCropSquare?: boolean
   centerCropAspect?: number
@@ -334,7 +339,7 @@ export function CachedImage(props: {
     url,
     previewUrl,
     blurPreviewRadius = 8,
-    aspectRatioValue = 1,
+    aspectRatioValue,
     cornerRadius = 10,
     contentMode = "fill",
     centerCropSquare = false,
@@ -364,7 +369,8 @@ export function CachedImage(props: {
       return
     }
     let active = true
-    loadImage(previewUrl, priority)
+    const thumbPriority = Math.min(-1000, (priority ?? 0) - 1000)
+    loadImage(previewUrl, thumbPriority)
       .then((p) => {
         if (active && p) {
           setPreviewLoadedPath(p)
@@ -498,8 +504,8 @@ export function CachedImage(props: {
   // 保持 aspectRatioValue，防止大图解码完成瞬间由于微小亚像素差异触发外层容器二次重新排版（Layout Shift）；
   // 仅在未指定比例或真实比例与占位比例存在显著差异（如多页漫画不同横竖跨页）时采用真实比例。
   const stableAspect = useMemo(() => {
-    if (intrinsicAspect == null) return aspectRatioValue
-    if (aspectRatioValue > 0 && Math.abs(intrinsicAspect - aspectRatioValue) / aspectRatioValue < 0.02) {
+    if (intrinsicAspect == null) return aspectRatioValue ?? 1
+    if (aspectRatioValue != null && aspectRatioValue > 0 && Math.abs(intrinsicAspect - aspectRatioValue) / aspectRatioValue < 0.02) {
       return aspectRatioValue
     }
     return intrinsicAspect
@@ -507,10 +513,23 @@ export function CachedImage(props: {
 
   const effectiveRatio = croppedImage
     ? (centerCropAspect ?? 1)
-    : (stableAspect ?? aspectRatioValue)
+    : (stableAspect ?? aspectRatioValue ?? 1)
   const containerFrame = frame ?? { maxWidth: "infinity" }
   const fadeDuration = imageFadeDurationSec()
   const crossFadeDuration = blurCrossFadeDurationSec()
+
+  const resolvedClipShape = useMemo(() => {
+    if (typeof cornerRadius === "object" && cornerRadius != null) {
+      return {
+        type: "rect" as const,
+        cornerRadii: cornerRadius,
+      }
+    }
+    return {
+      type: "rect" as const,
+      cornerRadius: typeof cornerRadius === "number" ? cornerRadius : 10,
+    }
+  }, [cornerRadius])
 
   // 首帧已命中缓存时直接硬切呈现（0ms 动画），秒开无延时无白闪；
   // 异步加载完成后：
@@ -525,7 +544,7 @@ export function CachedImage(props: {
   return (
     <ZStack
       aspectRatio={{ value: effectiveRatio, contentMode: "fit" }}
-      clipShape={{ type: "rect", cornerRadius }}
+      clipShape={resolvedClipShape}
       clipped={true}
       frame={containerFrame}
     >
@@ -549,7 +568,7 @@ export function CachedImage(props: {
         <Image
           image={previewBlurredImage}
           resizable={true}
-          aspectRatio={{ value: effectiveRatio, contentMode }}
+          aspectRatio={{ value: effectiveRatio, contentMode: "fill" }}
           frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
         />
       ) : null}
@@ -570,7 +589,7 @@ export function CachedImage(props: {
             key={path}
             filePath={path}
             resizable={true}
-            aspectRatio={{ value: effectiveRatio, contentMode }}
+            aspectRatio={{ value: effectiveRatio, contentMode: "fill" }}
             frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
             transition={imageTransition}
           />
@@ -1938,6 +1957,9 @@ function htmlFragmentToPlainText(html: string | undefined | null): string {
       /\n\s*\/\s*(?=[A-Za-z0-9\u4e00-\u9fa5\uac00-\ud7af\u3040-\u30ff])/g,
       "\n"
     )
+    // 清除换行后的前导空白（半角空格、制表符、全角空格），确保换行后首个字符严格靠左对齐
+    .replace(/\n[ \t\u3000]+/g, "\n")
+    .replace(/^[ \t\u3000]+/g, "")
   return decodeHtmlEntities(stripped)
 }
 
@@ -1988,6 +2010,7 @@ export function LinkedDescription(props: {
       font: props.font ?? "footnote",
       foregroundColor: props.foregroundStyle,
       paragraphStyle: {
+        alignment: "left",
         lineBreakMode: "byCharWrapping",
         lineSpacing: 4,
       },
@@ -2021,6 +2044,9 @@ function descriptionSegments(html: string): DescriptionSegment[] {
       /\n\s*\/\s*(?=[A-Za-z0-9\u4e00-\u9fa5\uac00-\ud7af\u3040-\u30ff])/g,
       "\n"
     )
+    // 清除换行后的前导空白（半角空格、制表符、全角空格），确保换行后首个字符严格靠左对齐
+    .replace(/\n[ \t\u3000]+/g, "\n")
+    .replace(/^[ \t\u3000]+/g, "")
   const segments: DescriptionSegment[] = []
   const anchorPatten = /<a\b[^>]*\bhref\s*=\s*(["'])(.*?)\1[^>]*>([\s\S]*?)<\/a\s*>/gi
   let cursor = 0
@@ -2046,7 +2072,9 @@ function appendDescriptionTextSegments(
   const lines = text.split(/(\n+)/)
   for (const line of lines) {
     if (!line) continue
-    appendInlineDescriptionSegments(segments, line)
+    const normalized = line.startsWith("\n") ? line : line.replace(/^[ \t\u3000]+/, "")
+    if (!normalized) continue
+    appendInlineDescriptionSegments(segments, normalized)
   }
 }
 
@@ -2069,7 +2097,7 @@ function appendInlineDescriptionSegments(
   while ((match = patten.exec(text)) != null) {
     appendPlainDescriptionSegment(segments, text.slice(cursor, match.index))
     const raw = match[0]
-    const link = raw.replace(/[),.，。！!？?;；]+$/, "")
+    const link = raw.replace(/[),.，。！!？?;；）】》」』]+$/, "")
     if (link) segments.push({ label: link, href: link })
     if (raw.length > link.length) {
       appendPlainDescriptionSegment(segments, raw.slice(link.length))
@@ -2117,7 +2145,7 @@ function routeForDescriptionLink(value: string): string | null {
 
   // 2. novel series / manga series: pixiv.net/novel/series/123 or pixiv.net/user/123/series/456 or pixiv.net/manga/series/123
   const novelSeriesMatch = decoded.match(
-    /(?:https?:\/\/(?:www\.)?pixiv\.net)?\/(?:en\/)?novel\/series\/(\d+)(?:[/?#].*)?$/i
+    /(?:https?:\/\/(?:www\.)?pixiv\.net)?\/?(?:en\/)?novel\/series\/(\d+)(?:[/?#].*)?$/i
   )
   if (novelSeriesMatch && (!hasURLScheme || isPixivURL)) {
     const id = Number(novelSeriesMatch[1])
@@ -2125,18 +2153,18 @@ function routeForDescriptionLink(value: string): string | null {
   }
 
   const mangaSeriesMatch = decoded.match(
-    /(?:https?:\/\/(?:www\.)?pixiv\.net)?\/(?:en\/)?(?:users?|user)\/\d+\/series\/(\d+)(?:[/?#].*)?$/i
+    /(?:https?:\/\/(?:www\.)?pixiv\.net)?\/?(?:en\/)?(?:users?|user)\/\d+\/series\/(\d+)(?:[/?#].*)?$/i
   ) ?? decoded.match(
-    /(?:https?:\/\/(?:www\.)?pixiv\.net)?\/(?:en\/)?(?:manga|illust|illusts)\/series\/(\d+)(?:[/?#].*)?$/i
+    /(?:https?:\/\/(?:www\.)?pixiv\.net)?\/?(?:en\/)?(?:manga|illust|illusts)\/series\/(\d+)(?:[/?#].*)?$/i
   )
   if (mangaSeriesMatch && (!hasURLScheme || isPixivURL)) {
     const id = Number(mangaSeriesMatch[1])
     if (Number.isFinite(id) && id > 0) return `mangaSeries:${id}`
   }
 
-  // 3. user / novel / illust: pixiv.net/users/123, pixiv.net/artworks/123, pixiv.net/novel/123
+  // 3. user / novel / illust: pixiv.net/users/123, pixiv.net/artworks/123, pixiv.net/novel/123, users/123, artworks/123
   const pathMatch = decoded.match(
-    /(?:https?:\/\/(?:www\.)?pixiv\.net)?\/(?:en\/)?(users?|user|artworks|novels?|novel|illusts?|illust)\/(\d+)(?:[/?#].*)?$/i
+    /(?:https?:\/\/(?:www\.)?pixiv\.net)?\/?(?:en\/)?(users?|user|artworks|novels?|novel|illusts?|illust)\/(\d+)(?:[/?#].*)?$/i
   )
   if (pathMatch && (!hasURLScheme || isPixivURL)) {
     const id = Number(pathMatch[2])
@@ -2159,7 +2187,7 @@ function routeForDescriptionLink(value: string): string | null {
   }
 
   // 5. uid: 123, pid: 123, nid: 123
-  const idReference = decoded.match(/^(?:uid|pid|nid)\s*[:：#=]?\s*(\d+)$/i)
+  const idReference = decoded.match(/^(uid|pid|nid)\s*[:：#=]?\s*(\d+)$/i)
   if (idReference) {
     const kind = idReference[1].toLowerCase()
     const id = idReference[2]

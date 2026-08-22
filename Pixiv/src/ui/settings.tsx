@@ -351,6 +351,15 @@ export function SettingsView() {
             onSave={(val) => update({ blurCrossFadeDuration: val })}
           />
           <AdvancedNumberRow
+            title="背景预热时长"
+            unit="ms"
+            value={settings.backgroundPreheatDuration}
+            defaultValue={1000}
+            min={0}
+            max={2000}
+            onSave={(val) => update({ backgroundPreheatDuration: val })}
+          />
+          <AdvancedNumberRow
             title="加载动画时长"
             unit="ms"
             value={settings.loadingAnimationDuration}

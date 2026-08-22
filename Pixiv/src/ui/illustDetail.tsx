@@ -15,6 +15,7 @@ import {
   Text,
   useColorScheme,
   useEffect,
+  useMemo,
   useRef,
   useState,
   VStack,
@@ -32,7 +33,7 @@ import {
   unfollowUser,
 } from "../api/pixiv"
 import { session } from "../api/session"
-import { cardThumbUrlOf, imageUrlOf, loadImage, pageThumbUrlOf, prefetch } from "../image/imageLoader"
+import { cachedFilePath, cardThumbUrlOf, imageUrlOf, loadImage, pageThumbUrlOf, prefetch } from "../image/imageLoader"
 import {
   extractIllustAmbientPalette,
   getCachedIllustAmbientPalette,
@@ -168,11 +169,11 @@ export function IllustDetailView(props: { illustID: number }) {
         recordedIDRef.current = detail.id
         recordHistory(detail)
       }
-      // 预取前几页图片（由 imageUrlOf 统一处理画质设置与 1:3 极窄长图原图兜底）
+      // 预取后续几页大图（从第 1 页开始预取；第 0 页由前台 CachedImage 赋予最高优先级 -5000 极速直出）
       const prefetchURLs: (string | null | undefined)[] = []
       const detailQuality = loadSettings().detailImageQuality
       const total = Math.min(4, detail.page_count || detail.meta_pages?.length || 1)
-      for (let k = 0; k < total; k++) {
+      for (let k = 1; k < total; k++) {
         prefetchURLs.push(imageUrlOf(detail, k, detailQuality))
       }
       prefetch(prefetchURLs)
@@ -318,8 +319,37 @@ export function IllustDetailView(props: { illustID: number }) {
   for (let k = 0; k < pageCount; k++) {
     pageURLs.push(imageUrlOf(current, k, quality))
   }
-  const pageAspect =
-    current.width && current.height ? current.width / current.height : 0.75
+  const pageAspect = useMemo(() => {
+    if (current.width && current.height && current.width > 0 && current.height > 0) {
+      return current.width / current.height
+    }
+    const thumb0 = pageThumbUrlOf(current, 0)
+    if (thumb0) {
+      const cached = cachedFilePath(thumb0)
+      if (cached) {
+        try {
+          const img = UIImage.fromFile(cached)
+          if (img && img.width > 0 && img.height > 0) {
+            return img.width / img.height
+          }
+        } catch {
+        }
+      }
+    }
+    return 0.75
+  }, [current.id, current.width, current.height])
+
+  // 当为多页作品时，在详情页挂载的第一时间高优先级并发预热所有页面的中等缩略图（每张仅约 15KB），
+  // 确保用户滚动到后续各页之前所有缩略图已写入本地磁盘，首帧 0 延迟命中真实物理比例与模糊底图
+  useEffect(() => {
+    if (!current || pageCount <= 1) return
+    for (let idx = 0; idx < pageCount; idx++) {
+      const thumb = pageThumbUrlOf(current, idx)
+      if (thumb && !cachedFilePath(thumb)) {
+        void loadImage(thumb, idx === 0 ? -6000 : -1000 + idx)
+      }
+    }
+  }, [current, pageCount])
 
   async function toggleBookmark() {
     if (bookmarkLoading) return
@@ -612,9 +642,16 @@ export function IllustDetailView(props: { illustID: number }) {
               onLoaded={() => setMediaReady(true)}
             />
           ) : pageCount > 1 ? (
-            <LazyVStack spacing={4} alignment="center">
+            <LazyVStack spacing={0} alignment="center">
               {pageURLs.map((url, idx) => {
                 const preview = pageThumbUrlOf(current, idx)
+                const isFirst = idx === 0
+                const isLast = idx === pageCount - 1
+                const cornerRadii = isFirst
+                  ? { topLeading: 8, topTrailing: 8, bottomLeading: 0, bottomTrailing: 0 }
+                  : isLast
+                    ? { topLeading: 0, topTrailing: 0, bottomLeading: 8, bottomTrailing: 8 }
+                    : 0
                 return (
                   <CachedImage
                     key={`illust-page-${current.id}-${idx}`}
@@ -622,10 +659,10 @@ export function IllustDetailView(props: { illustID: number }) {
                     previewUrl={preview}
                     aspectRatioValue={pageAspect}
                     useIntrinsicAspectRatio={true}
-                    cornerRadius={6}
+                    cornerRadius={cornerRadii}
                     contentMode="fit"
                     frame={{ maxWidth: "infinity" }}
-                    priority={idx}
+                    priority={idx === 0 ? -5000 : idx}
                     onLoaded={idx === 0 ? () => setMediaReady(true) : undefined}
                   />
                 )
@@ -641,7 +678,7 @@ export function IllustDetailView(props: { illustID: number }) {
               cornerRadius={8}
               contentMode="fit"
               frame={{ maxWidth: "infinity" }}
-              priority={0}
+              priority={-5000}
               onLoaded={() => setMediaReady(true)}
             />
           )}
@@ -683,14 +720,38 @@ export function IllustDetailView(props: { illustID: number }) {
 
           {/* 系列 */}
           {Boolean(current.series?.id) && current.series ? (
-            <VStack alignment="leading" spacing={4}>
+            <VStack alignment="leading" spacing={6} frame={{ maxWidth: "infinity" }}>
               <Text font="subheadline" fontWeight="semibold" foregroundStyle="secondaryLabel">
                 系列
               </Text>
-              <NavigationLink value={`mangaSeries:${current.series.id}`}>
-                <Text font="footnote" foregroundStyle="#007AFF">
-                  {current.series.title || "系列详情"}
-                </Text>
+              <NavigationLink
+                value={`mangaSeries:${current.series.id}`}
+                frame={{ maxWidth: "infinity" }}
+              >
+                <HStack
+                  alignment="center"
+                  spacing={8}
+                  padding={{ top: 12, horizontal: 12, bottom: 12 }}
+                  glassEffect={{ type: "rect", cornerRadius: 14 }}
+                  frame={{ maxWidth: "infinity" }}
+                  contentShape="rect"
+                >
+                  <Text
+                    font="subheadline"
+                    fontWeight="semibold"
+                    foregroundStyle="#007AFF"
+                    lineLimit={2}
+                  >
+                    {current.series.title || "系列详情"}
+                  </Text>
+                  <Spacer />
+                  <Image
+                    systemName="chevron.right"
+                    font="footnote"
+                    fontWeight="semibold"
+                    foregroundStyle="secondaryLabel"
+                  />
+                </HStack>
               </NavigationLink>
             </VStack>
           ) : null}

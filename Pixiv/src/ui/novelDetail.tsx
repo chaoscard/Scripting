@@ -10,6 +10,7 @@ import {
   Menu,
   NavigationLink,
   ScrollView,
+  Spacer,
   Text,
   useEffect,
   useRef,
@@ -424,31 +425,64 @@ export function NovelDetailView(props: { novelID: number }) {
 
           {/* 系列 */}
           {Boolean(current.series?.id) || Boolean(current.series_prev?.id) || Boolean(current.series_next?.id) ? (
-            <VStack alignment="leading" spacing={4}>
+            <VStack alignment="leading" spacing={6} frame={{ maxWidth: "infinity" }}>
               <Text font="subheadline" fontWeight="semibold" foregroundStyle="secondaryLabel">
                 系列
               </Text>
-              {Boolean(current.series?.id) && current.series ? (
-                <NavigationLink value={`novelSeries:${current.series.id}`}>
-                  <Text font="footnote" foregroundStyle="#007AFF">
-                    {current.series.title || "系列详情"}
-                  </Text>
-                </NavigationLink>
-              ) : null}
-              {Boolean(current.series_prev?.id) && current.series_prev ? (
-                <NavigationLink value={`novel:${current.series_prev.id}`}>
-                  <Text font="footnote" foregroundStyle="#007AFF">
-                    ← 上一话：{current.series_prev.title || "上一话"}
-                  </Text>
-                </NavigationLink>
-              ) : null}
-              {Boolean(current.series_next?.id) && current.series_next ? (
-                <NavigationLink value={`novel:${current.series_next.id}`}>
-                  <Text font="footnote" foregroundStyle="#007AFF">
-                    下一话：{current.series_next.title || "下一话"} →
-                  </Text>
-                </NavigationLink>
-              ) : null}
+              <VStack
+                alignment="leading"
+                spacing={10}
+                padding={{ top: 12, horizontal: 12, bottom: 12 }}
+                glassEffect={{ type: "rect", cornerRadius: 14 }}
+                frame={{ maxWidth: "infinity" }}
+                contentShape="rect"
+              >
+                {Boolean(current.series?.id) && current.series ? (
+                  <NavigationLink
+                    value={`novelSeries:${current.series.id}`}
+                    frame={{ maxWidth: "infinity" }}
+                  >
+                    <HStack alignment="center" spacing={8} frame={{ maxWidth: "infinity" }}>
+                      <Text
+                        font="subheadline"
+                        fontWeight="semibold"
+                        foregroundStyle="#007AFF"
+                        lineLimit={2}
+                      >
+                        {current.series.title || "系列详情"}
+                      </Text>
+                      <Spacer />
+                      <Image
+                        systemName="chevron.right"
+                        font="footnote"
+                        fontWeight="semibold"
+                        foregroundStyle="secondaryLabel"
+                      />
+                    </HStack>
+                  </NavigationLink>
+                ) : null}
+
+                {(Boolean(current.series_prev?.id) || Boolean(current.series_next?.id)) &&
+                Boolean(current.series?.id) ? (
+                  <Divider />
+                ) : null}
+
+                {Boolean(current.series_prev?.id) && current.series_prev ? (
+                  <NavigationLink value={`novel:${current.series_prev.id}`}>
+                    <Text font="subheadline" foregroundStyle="#007AFF" lineLimit={1}>
+                      ← 上一话：{current.series_prev.title || "上一话"}
+                    </Text>
+                  </NavigationLink>
+                ) : null}
+
+                {Boolean(current.series_next?.id) && current.series_next ? (
+                  <NavigationLink value={`novel:${current.series_next.id}`}>
+                    <Text font="subheadline" foregroundStyle="#007AFF" lineLimit={1}>
+                      下一话：{current.series_next.title || "下一话"} →
+                    </Text>
+                  </NavigationLink>
+                ) : null}
+              </VStack>
             </VStack>
           ) : null}
 

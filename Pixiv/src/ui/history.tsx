@@ -6,7 +6,9 @@ import {
   LazyVStack,
   Picker,
   Text,
+  useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   VStack,
@@ -22,6 +24,7 @@ import {
 import {
   clearHistoryKind,
   getHistory,
+  historyKindCount,
   onHistoryChanged,
   refreshHistoryFromCloud,
   removeHistoryEntry,
@@ -220,8 +223,11 @@ function HistoryFeed(props: {
   const mangaPagedRef = useLatest(mangaPaged)
   const novelPagedRef = useLatest(novelPaged)
 
+  const [historyVersion, setHistoryVersion] = useState(0)
+
   useEffect(() => {
     const handleHistoryChange = () => {
+      setHistoryVersion((v) => v + 1)
       illustPagedRef.current.refresh()
       mangaPagedRef.current.refresh()
       novelPagedRef.current.refresh()
@@ -238,6 +244,11 @@ function HistoryFeed(props: {
       unsubscribeSettings()
     }
   }, [])
+
+  const currentCount = useMemo(() => {
+    void historyVersion
+    return historyKindCount(kind)
+  }, [kind, historyVersion])
 
   const activeRefresh =
     kind === "illustration"
@@ -259,18 +270,18 @@ function HistoryFeed(props: {
         <IllustHistoryContent
           paged={illustPaged}
           kind="illustration"
-          totalCount={loadHistoryIllusts("illustration").length}
+          totalCount={currentCount}
         />
       ) : kind === "manga" ? (
         <IllustHistoryContent
           paged={mangaPaged}
           kind="manga"
-          totalCount={loadHistoryIllusts("manga").length}
+          totalCount={currentCount}
         />
       ) : (
         <NovelHistoryContent
           paged={novelPaged}
-          totalCount={loadHistoryNovels().length}
+          totalCount={currentCount}
         />
       )}
     </VStack>
@@ -283,6 +294,19 @@ function IllustHistoryContent(props: {
   totalCount: number
 }) {
   const { paged, kind, totalCount } = props
+
+  const footerTextOf = useCallback((illust: PixivIllustration) => {
+    const viewedAt = (illust as HistoryIllustItem).viewedAt
+    return viewedAt ? formatDate(new Date(viewedAt).toISOString()) : undefined
+  }, [])
+
+  const topTrailingActionOf = useCallback((illust: PixivIllustration) => ({
+    title: "移除",
+    systemImage: "trash",
+    tint: "#FF3B30",
+    foregroundStyle: "systemRed",
+    action: () => removeHistoryEntry("illust", illust.id),
+  }), [])
 
   if (paged.items.length === 0 && !paged.initialLoading) {
     const text =
@@ -309,18 +333,8 @@ function IllustHistoryContent(props: {
         onLoadMore={paged.loadMore}
         hasMore={paged.hasMore}
         isLoading={paged.loadingMore}
-        footerTextOf={(_, index) =>
-          paged.items[index]
-            ? formatDate(new Date(paged.items[index].viewedAt).toISOString())
-            : undefined
-        }
-        topTrailingActionOf={(illust) => ({
-          title: "移除",
-          systemImage: "trash",
-          tint: "#FF3B30",
-          foregroundStyle: "systemRed",
-          action: () => removeHistoryEntry("illust", illust.id),
-        })}
+        footerTextOf={footerTextOf}
+        topTrailingActionOf={topTrailingActionOf}
       />
     </VStack>
   )

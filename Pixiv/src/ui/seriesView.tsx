@@ -12,7 +12,9 @@ import {
   VStack,
 } from "scripting"
 import {
+  cachedFileExists,
   cardThumbUrlOf,
+  loadImage,
   novelThumbUrlOf,
   prefetch,
   upgradeHighQualityCoverUrl,
@@ -247,6 +249,16 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
       setCoverPreviewUrl(rawCover)
       setCoverUrl(cover)
 
+      // 预热封面背景图，防止首次渲染时高度跳动
+      const targetPreheatUrl = rawCover || cover
+      const preheatDuration = loadSettings().backgroundPreheatDuration ?? 1000
+      if (targetPreheatUrl && !cachedFileExists(targetPreheatUrl) && preheatDuration > 0) {
+        await Promise.race([
+          loadImage(targetPreheatUrl, 0),
+          new Promise((resolve) => setTimeout(() => resolve(null), preheatDuration)),
+        ])
+      }
+
       const allRawIllusts: PixivIllustrationSeriesItem[] = Array.isArray(result.illusts) ? [...result.illusts] : []
       let currentNextURL = result.next_url ?? null
 
@@ -316,6 +328,16 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
       const cover = upgradeHighQualityCoverUrl(rawCover)
       setCoverPreviewUrl(rawCover)
       setCoverUrl(cover)
+
+      // 预热封面背景图，防止首次渲染时高度跳动
+      const targetPreheatUrl = rawCover || cover
+      const preheatDuration = loadSettings().backgroundPreheatDuration ?? 1000
+      if (targetPreheatUrl && !cachedFileExists(targetPreheatUrl) && preheatDuration > 0) {
+        await Promise.race([
+          loadImage(targetPreheatUrl, 0),
+          new Promise((resolve) => setTimeout(() => resolve(null), preheatDuration)),
+        ])
+      }
 
       const allRawNovels: PixivNovel[] = Array.isArray(result.novels) ? [...result.novels] : []
       let currentNextURL = result.next_url ?? null

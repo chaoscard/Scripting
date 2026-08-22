@@ -11,6 +11,7 @@ export type LaunchPage = "discovery" | "ranking" | "following"
 export type ImageBatchConcurrency = number
 export type ImageFadeInDuration = number
 export type BlurCrossFadeDuration = number
+export type BackgroundPreheatDuration = number
 export type LoadingAnimationDuration = number
 export type LaunchAnimationDuration = number
 
@@ -35,6 +36,7 @@ export interface AppSettings {
   imagePrefetchConcurrencyRatio: number
   imageFadeInDuration: ImageFadeInDuration
   blurCrossFadeDuration: BlurCrossFadeDuration
+  backgroundPreheatDuration: BackgroundPreheatDuration
   loadingAnimationDuration: LoadingAnimationDuration
   launchAnimationDuration: LaunchAnimationDuration
   advancedSettingsUnlocked: boolean
@@ -61,6 +63,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   imagePrefetchConcurrencyRatio: 100,
   imageFadeInDuration: 150,
   blurCrossFadeDuration: 150,
+  backgroundPreheatDuration: 1000,
   loadingAnimationDuration: 400,
   launchAnimationDuration: 1500,
   advancedSettingsUnlocked: false,
@@ -152,6 +155,13 @@ function parseBlurCrossFadeDuration(value: unknown): number {
   return DEFAULT_SETTINGS.blurCrossFadeDuration
 }
 
+function parseBackgroundPreheatDuration(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+    return Math.max(0, Math.min(2000, Math.round(value)))
+  }
+  return DEFAULT_SETTINGS.backgroundPreheatDuration
+}
+
 function parseLoadingDuration(value: unknown): number {
   if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
     return Math.max(0, Math.min(30000, Math.round(value)))
@@ -211,6 +221,7 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
     ),
     imageFadeInDuration: parseFadeInDuration(stored?.imageFadeInDuration),
     blurCrossFadeDuration: parseBlurCrossFadeDuration(stored?.blurCrossFadeDuration),
+    backgroundPreheatDuration: parseBackgroundPreheatDuration(stored?.backgroundPreheatDuration),
     loadingAnimationDuration: parseLoadingDuration(stored?.loadingAnimationDuration),
     launchAnimationDuration: parseLaunchDuration(stored?.launchAnimationDuration),
     advancedSettingsUnlocked: boolOr(stored?.advancedSettingsUnlocked, DEFAULT_SETTINGS.advancedSettingsUnlocked),

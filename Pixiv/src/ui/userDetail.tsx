@@ -142,10 +142,11 @@ export function UserDetailView(props: { userID: number }) {
 
       // 优先预热背景图与头像，确保首次渲染即获得真实比例，防止头像位置跳动
       const bgUrl = result.profile.background_image_url
-      if (bgUrl && !cachedFileExists(bgUrl)) {
+      const preheatDuration = loadSettings().backgroundPreheatDuration ?? 1000
+      if (bgUrl && !cachedFileExists(bgUrl) && preheatDuration > 0) {
         await Promise.race([
           loadImage(bgUrl, 0),
-          new Promise((resolve) => setTimeout(() => resolve(null), 1000)),
+          new Promise((resolve) => setTimeout(() => resolve(null), preheatDuration)),
         ])
       }
 

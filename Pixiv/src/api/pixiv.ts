@@ -661,7 +661,7 @@ export async function illustrationDetail(
 ): Promise<PixivIllustration> {
   const json = await apiGet<PixivIllustDetailResponse>(
     "/v1/illust/detail",
-    { filter: "for_ios", illust_id: String(id) },
+    { illust_id: String(id) },
     accessToken
   )
   if (!json?.illust) throw new PixivError(404, "作品不存在")
@@ -674,7 +674,7 @@ export async function relatedIllustrations(
 ): Promise<PixivPage<PixivIllustration>> {
   const json = await apiGet<PixivIllustListResponse>(
     "/v2/illust/related",
-    { filter: "for_ios", illust_id: String(id) },
+    { illust_id: String(id) },
     accessToken
   )
   return { items: json?.illusts ?? [], nextURL: json?.next_url ?? null }
@@ -686,7 +686,7 @@ export async function illustrationSeries(
 ): Promise<PixivIllustrationSeriesResponse> {
   const json = await apiGet<PixivIllustrationSeriesResponse>(
     "/v1/illust/series",
-    { filter: "for_ios", illust_series_id: String(id) },
+    { illust_series_id: String(id) },
     accessToken
   )
   return json
@@ -792,7 +792,7 @@ export async function userDetail(
 ): Promise<PixivUserDetail> {
   const json = await apiGet<PixivUserDetail>(
     "/v1/user/detail",
-    { filter: "for_ios", user_id: String(id) },
+    { user_id: String(id) },
     accessToken
   )
   return json
@@ -805,7 +805,7 @@ export async function userWorks(
 ): Promise<PixivPage<PixivIllustration>> {
   const json = await apiGet<PixivIllustListResponse>(
     "/v1/user/illusts",
-    { filter: "for_ios", user_id: String(id), type },
+    { user_id: String(id), type },
     accessToken
   )
   return { items: json?.illusts ?? [], nextURL: json?.next_url ?? null }
@@ -860,7 +860,7 @@ export async function userConnections(
   const path = kind === "following" ? "/v1/user/following" : "/v1/user/follower"
   const json = await apiGet<PixivUserPreviewListResponse>(
     path,
-    { filter: "for_ios", user_id: String(userID), restrict },
+    { user_id: String(userID), restrict },
     accessToken
   )
   return { items: json?.user_previews ?? [], nextURL: json?.next_url ?? null }

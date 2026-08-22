@@ -146,6 +146,20 @@ export function historyCount(): number {
   return loadEntries().length
 }
 
+export function historyKindCount(kind: HistoryContentKind): number {
+  const list = loadEntries()
+  let count = 0
+  for (const entry of list) {
+    if (kind === "novel") {
+      if (entry.kind === "novel") count++
+    } else if (entry.kind === "illust") {
+      const isManga = entry.illustration?.type === "manga"
+      if (kind === "manga" ? isManga : !isManga) count++
+    }
+  }
+  return count
+}
+
 function recordEntry(entry: HistoryEntry): void {
   if (!loadSettings().recordHistory) return
   const list = [...loadEntries()]
