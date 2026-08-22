@@ -698,9 +698,7 @@ export function WatchlistSeriesCard(props: {
               font="subheadline"
               fontWeight="semibold"
               multilineTextAlignment="leading"
-              lineLimit={2}
               frame={{ maxWidth: "infinity", alignment: "leading" }}
-              padding={{ trailing: 36 }}
             >
               {item.title || "未命名系列"}
             </Text>
@@ -2009,7 +2007,7 @@ export function LinkedDescription(props: {
       if (target) {
         if (target.startsWith("http")) {
           items.push({
-            content: segment.label,
+            content: formatTextWithBreakOpportunities(segment.label, true),
             foregroundColor: "#007AFF",
             underlineStyle: "single",
             onTapGesture: () => {
@@ -2018,7 +2016,7 @@ export function LinkedDescription(props: {
           })
         } else {
           items.push({
-            content: segment.label,
+            content: formatTextWithBreakOpportunities(segment.label, true),
             foregroundColor: "#007AFF",
             underlineStyle: "single",
             onTapGesture: () => {
@@ -2027,7 +2025,7 @@ export function LinkedDescription(props: {
           })
         }
       } else {
-        items.push(segment.label)
+        items.push(formatTextWithBreakOpportunities(segment.label, false))
       }
     }
 
@@ -2047,6 +2045,7 @@ export function LinkedDescription(props: {
     <Text
       styledText={styledText}
       textSelection={true}
+      allowsTightening={true}
       lineLimit={props.lineLimit}
       multilineTextAlignment="leading"
       frame={{ maxWidth: "infinity", alignment: "leading" }}
@@ -2056,6 +2055,57 @@ export function LinkedDescription(props: {
 
 export function presentExternalURL(url: string): Promise<void> {
   return Safari.present(url, false)
+}
+
+function formatTextWithBreakOpportunities(text: string, isUrl = false): string {
+  if (!text) return ""
+  const noBreakBefore = new Set([
+    "，", "。", "、", "！", "？", "：", "；",
+    "）", "”", "’", "》", "】", "…", "—", "～", "·",
+    ",", ".", "!", "?", ":", ";", ")", "\"", "'", "]", ">", "}"
+  ])
+  const noBreakAfter = new Set([
+    "“", "‘", "（", "《", "【", "(", "[", "{", "<"
+  ])
+  const result: string[] = []
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    result.push(ch)
+
+    if (i < text.length - 1) {
+      const nextCh = text[i + 1]
+      if (
+        ch === "\n" || nextCh === "\n" ||
+        ch === "\r" || nextCh === "\r" ||
+        ch === "\t" || nextCh === "\t" ||
+        ch === " " || nextCh === " "
+      ) {
+        continue
+      }
+
+      if (isUrl) {
+        // 对于 URL 链接：在所有字符（含字母数字及 / ? & = - _ . : 等符号）间注入断行契机，防止 CoreText 将超长 URL 路径整块推至下一行
+        result.push("\u200B")
+      } else {
+        const isCjk = text.charCodeAt(i) > 255 || text.charCodeAt(i + 1) > 255
+        if (!noBreakBefore.has(nextCh) && !noBreakAfter.has(ch)) {
+          if (isCjk) {
+            // 中日韩文字与任意相邻字符之间注入零宽空格，避免 CoreText 词组级过度避让导致提前换行
+            result.push("\u200B")
+          } else if (
+            ch === "/" || ch === "-" || ch === "_" || ch === "@" ||
+            ch === "&" || ch === "=" || ch === "#" || ch === "~" ||
+            ch === "+" || ch === "%" || ch === "|" || ch === "\\"
+          ) {
+            result.push("\u200B")
+          }
+        }
+      }
+    }
+  }
+
+  return result.join("")
 }
 
 type DescriptionSegment = { label: string; href: string }
@@ -2430,10 +2480,17 @@ export function ImmersiveHeaderBanner(props: {
   )
 }
 
-// 估算多行文本在移动端竖屏下的视觉行数（综合考虑硬换行与段落自动折行）
-// 按照 footnote 13pt 在常用 iPhone 宽度下可用排版区域（约 337pt），单行全角中文字符容量约 24 字
-function estimateVisualLines(text: string, charsPerLine = 24): number {
+// 估算多行文本在移动端竖屏下的视觉行数（综合考虑硬换行、标点占宽与段落自动折行）
+// 按照 footnote 13pt 字体在当前设备屏幕排版区域（外层与卡片内边距 56pt）下的实际字符容量计算
+function estimateVisualLines(text: string): number {
   if (!text) return 0
+  const screenWidth =
+    typeof Device !== "undefined" && Device.screen?.width
+      ? Device.screen.width
+      : 390
+  const availableWidth = Math.max(280, screenWidth - 56)
+  const charsPerLine = availableWidth / 13
+
   const paragraphs = text.split(/\r?\n/)
   let totalLines = 0
   for (const para of paragraphs) {
@@ -2443,7 +2500,53 @@ function estimateVisualLines(text: string, charsPerLine = 24): number {
     }
     let visualWeight = 0
     for (let i = 0; i < para.length; i++) {
-      visualWeight += para.charCodeAt(i) > 255 ? 1 : 0.55
+      const code = para.charCodeAt(i)
+      const ch = para[i]
+      if (code > 255) {
+        // 全角标点符号（，。、！？：；“”‘’（）…）占宽稍窄于正方汉字（约 0.8 CJK）
+        if (
+          ch === "，" ||
+          ch === "。" ||
+          ch === "、" ||
+          ch === "！" ||
+          ch === "？" ||
+          ch === "：" ||
+          ch === "；" ||
+          ch === "“" ||
+          ch === "”" ||
+          ch === "‘" ||
+          ch === "’" ||
+          ch === "（" ||
+          ch === "）" ||
+          ch === "…"
+        ) {
+          visualWeight += 0.8
+        } else {
+          visualWeight += 1
+        }
+      } else if (code === 32 || code === 9) {
+        // 空格与制表符宽度较小（约 0.25 CJK）
+        visualWeight += 0.25
+      } else if (
+        code === 105 || // i
+        code === 108 || // l
+        code === 106 || // j
+        code === 73 || // I
+        code === 49 || // 1
+        code === 33 || // !
+        code === 44 || // ,
+        code === 46 || // .
+        code === 58 || // :
+        code === 59 || // ;
+        code === 39 || // '
+        code === 124 // |
+      ) {
+        // 极窄 ASCII 字符（约 0.3 CJK）
+        visualWeight += 0.3
+      } else {
+        // 常规半角 ASCII 字符（SF Pro 13pt 下约 0.46 CJK）
+        visualWeight += 0.46
+      }
     }
     totalLines += Math.max(1, Math.ceil(visualWeight / charsPerLine))
   }

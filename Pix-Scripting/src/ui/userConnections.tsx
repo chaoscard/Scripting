@@ -325,37 +325,32 @@ function ConnectionNovelThumbnail(props: {
       frame={{ width: props.side, height: props.side }}
     >
       <ZStack
+        alignment="bottom"
         background="systemGray6"
         clipShape={{ type: "rect", cornerRadius: 6 }}
         frame={{ width: props.side, height: props.side }}
       >
-        <ZStack
-          alignment="bottom"
-          clipShape={{ type: "rect", cornerRadius: 6 }}
+        <CachedImage
+          url={novelThumbUrlOf(props.novel)}
+          aspectRatioValue={NOVEL_PREVIEW_COVER_RATIO}
+          centerCropAspect={NOVEL_PREVIEW_COVER_RATIO}
+          useIntrinsicAspectRatio={false}
+          contentMode="fill"
+          cornerRadius={0}
           frame={{ width: coverWidth, height: props.side }}
+        />
+        <Text
+          font="caption2"
+          fontWeight="semibold"
+          foregroundStyle="white"
+          multilineTextAlignment="leading"
+          lineLimit={4}
+          padding={{ horizontal: 5, vertical: 3 }}
+          frame={{ width: props.side, alignment: "leading" }}
+          background="rgba(0, 0, 0, 0.58)"
         >
-          <CachedImage
-            url={novelThumbUrlOf(props.novel)}
-            aspectRatioValue={NOVEL_PREVIEW_COVER_RATIO}
-            useIntrinsicAspectRatio={false}
-            contentMode="fill"
-            cornerRadius={0}
-            frame={{ width: coverWidth, height: props.side }}
-          />
-          <Text
-            font="caption2"
-            fontWeight="semibold"
-            foregroundStyle="white"
-            lineLimit={5}
-            multilineTextAlignment="center"
-            fixedSize={{ horizontal: false, vertical: false }}
-            padding={{ horizontal: 5, vertical: 4 }}
-            frame={{ width: coverWidth, alignment: "center" }}
-            background="rgba(0, 0, 0, 0.58)"
-          >
-            {props.novel.title}
-          </Text>
-        </ZStack>
+          {props.novel.title}
+        </Text>
       </ZStack>
     </NavigationLink>
   )
