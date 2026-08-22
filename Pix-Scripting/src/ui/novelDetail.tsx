@@ -107,7 +107,10 @@ export function NovelDetailView(props: { novelID: number }) {
     setReaderReady(false)
     setError(null)
     try {
-      const detail = await session.call((token) => novelDetail(novelID, token))
+      const [detail, viewer] = await Promise.all([
+        session.call((token) => novelDetail(novelID, token)),
+        session.call((token) => novelViewerData(novelID, token)),
+      ])
       if (!g.isCurrent()) return
       if (detail.user?.id) {
         recordUserFollowed(detail.user.id, detail.user.is_followed ?? false)
@@ -120,8 +123,6 @@ export function NovelDetailView(props: { novelID: number }) {
         return
       }
 
-      const viewer = await session.call((token) => novelViewerData(novelID, token))
-      if (!g.isCurrent()) return
       setNovel(detail)
       setBookmarked(detail.is_bookmarked)
       setFollowed(detail.user?.is_followed ?? false)
@@ -621,13 +622,13 @@ function RelatedNovelsSection(props: {
 }) {
   const { novelID, ready = true } = props
 
-  // 1. 网络层：进入后立即后台请求相关作品，减少后续等待时间
+  // 1. 网络层：主正文就绪后后台请求相关作品，避免与正文抢占网络带宽和调度队列
   const paged = usePagedList<PixivNovel>({
     first: (token) => relatedNovels(novelID, token),
     more: (nextURL, token) => nextNovels(nextURL, token),
     filter: (items) => filterRelatedNovels(items, novelID),
     deps: [novelID],
-    enabled: true,
+    enabled: ready,
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
   })
