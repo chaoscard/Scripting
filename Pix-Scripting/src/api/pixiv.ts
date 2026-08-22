@@ -1023,11 +1023,19 @@ export async function novelViewerData(
     novel?.images ||
     novel?.embedded_images ||
     novel?.text_embedded_images ||
+    extractEmbeddedImagesFromHtml(html) ||
     undefined
 
   const text = novel?.text ?? ""
 
-  if (!textEmbeddedImages && /\[uploadedimage:\s*\d+\s*\]/.test(text)) {
+  // 检查已解析的图片字典中是否包含有效图片
+  const hasEmbeddedImages =
+    textEmbeddedImages != null &&
+    typeof textEmbeddedImages === "object" &&
+    Object.keys(textEmbeddedImages).length > 0
+
+  // 若正文包含 uploadedimage 标签但尚未取得有效图片字典，则从 Web 端点降级补充拉取
+  if (!hasEmbeddedImages && /\[uploadedimage:\s*[^\]]+\]/i.test(text)) {
     try {
       const webData = await apiGetPublicJson<{
         body?: { textEmbeddedImages?: Record<string, TextEmbeddedImage> }
@@ -1052,13 +1060,8 @@ export async function novelViewerData(
   }
 }
 
-// 从阅读器 HTML 中提取 window.pixiv.novel 对象（括号平衡解析，兼容字符串内的大括号/转义）
-function extractNovelJson(html: string): any | null {
-  const marker = "novel: {"
-  const idx = html.indexOf(marker)
-  if (idx < 0) return null
-  const start = html.indexOf("{", idx)
-  if (start < 0) return null
+// 括号平衡 JSON 对象提取器，兼容字符串内大括号与转义
+function extractBalancedJsonObject(html: string, start: number): any | null {
   let depth = 0
   let inStr = false
   let esc = false
@@ -1090,6 +1093,42 @@ function extractNovelJson(html: string): any | null {
     }
   }
   return null
+}
+
+// 从阅读器 HTML 中提取 window.pixiv.novel 对象
+function extractNovelJson(html: string): any | null {
+  const marker = "novel: {"
+  const idx = html.indexOf(marker)
+  if (idx < 0) return null
+  const start = html.indexOf("{", idx)
+  if (start < 0) return null
+  return extractBalancedJsonObject(html, start)
+}
+
+// 从阅读器 HTML 中尝试提取独立的 textEmbeddedImages 字典
+function extractEmbeddedImagesFromHtml(html: string): Record<string, TextEmbeddedImage> | undefined {
+  if (!html) return undefined
+  const markers = [
+    '"textEmbeddedImages":',
+    'textEmbeddedImages:',
+    '"text_embedded_images":',
+    'text_embedded_images:',
+    '"embedded_images":',
+    'embedded_images:',
+  ]
+  for (const marker of markers) {
+    const idx = html.indexOf(marker)
+    if (idx >= 0) {
+      const start = html.indexOf("{", idx)
+      if (start >= 0) {
+        const obj = extractBalancedJsonObject(html, start)
+        if (obj && typeof obj === "object" && Object.keys(obj).length > 0) {
+          return obj as Record<string, TextEmbeddedImage>
+        }
+      }
+    }
+  }
+  return undefined
 }
 
 // 小说阅读书签：iOS App 8.7.3 抓包确认。

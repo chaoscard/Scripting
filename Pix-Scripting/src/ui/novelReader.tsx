@@ -44,11 +44,11 @@ export function formatPixivRubyText(rawText: string): string {
 const URL_CHAR = "[a-zA-Z0-9\\-._~:/?#\\[\\]@!$&'()*+,;%=]"
 const INLINE_LINK_PATTERN = new RegExp(
   "(?:https?:\\/\\/|www\\.)" + URL_CHAR + "+|" +
-  "(?:https?:\\/\\/)?(?:www\\.)?pixiv\\.net\\/(?:users?|user|artworks|novels?|novel|manga|illusts?|illust)" + URL_CHAR + "*|" +
+  "(?:https?:\\/\\/)?(?:www\\.)?pixiv\\.net\\/(?:[a-zA-Z]{2}(?:-[a-zA-Z0-9]+)?\\/)?(?:users?|user|artworks|novels?|novel|manga|illusts?|illust|tags)" + URL_CHAR + "*|" +
   "\\/?(?:users?|user|artworks|novels?|novel|manga|illusts?|illust)\\/" + URL_CHAR + "+|" +
-  "(?:pixiv\\.net\\/|\\/)?novel\\/show\\.php\\?[^#\\s<>\"]+|" +
-  "(?:pixiv\\.net\\/|\\/)?member\\.php\\?[^#\\s<>\"]+|" +
-  "(?:pixiv\\.net\\/|\\/)?member_illust\\.php\\?[^#\\s<>\"]+|" +
+  "(?:pixiv\\.net\\/|\\/)?(?:[a-zA-Z]{2}(?:-[a-zA-Z0-9]+)?\\/)?novel\\/show\\.php\\?[^#\\s<>\"]+|" +
+  "(?:pixiv\\.net\\/|\\/)?(?:[a-zA-Z]{2}(?:-[a-zA-Z0-9]+)?\\/)?member\\.php\\?[^#\\s<>\"]+|" +
+  "(?:pixiv\\.net\\/|\\/)?(?:[a-zA-Z]{2}(?:-[a-zA-Z0-9]+)?\\/)?member_illust\\.php\\?[^#\\s<>\"]+|" +
   "\\b(?:uid|pid|nid)\\s*[:：#=]?\\s*\\d+\\b|" +
   "pixiv:\\/\\/" + URL_CHAR + "+",
   "gi"
@@ -69,6 +69,7 @@ function containsPotentialLink(text: string): boolean {
     text.includes("/novels/") ||
     text.includes("/illust/") ||
     text.includes("/illusts/") ||
+    text.includes("/tags/") ||
     text.includes(".php?") ||
     /\b(?:uid|pid|nid)\b/i.test(text)
   )
@@ -171,9 +172,141 @@ export type NovelChunkItem =
   | { type: "uploadedimage"; id: string; imageId: string; info?: TextEmbeddedImage }
   | { type: "pixivimage"; id: string; illustId: number; page?: number }
 
+// 全局小说标记匹配正则（兼容整行与行内插图/章节/翻页标记）
+const NOVEL_TAG_REGEX = /\[(chapter|newpage|jump|uploadedimage|pixivimage)(?::\s*([^\]]+?)\s*)?\]/gi
+
+interface NovelParserState {
+  pageIndex: number
+  chapterIndex: number
+  currentBuffer: string[]
+  currentBufferChars: number
+  items: NovelChunkItem[]
+}
+
+function processLineIntoNovelItems(
+  rawLine: string,
+  state: NovelParserState,
+  textEmbeddedImages?: Record<string, TextEmbeddedImage>
+): void {
+  const trimmed = rawLine.trim()
+
+  const flushBuffer = () => {
+    if (state.currentBuffer.length > 0) {
+      const combined = state.currentBuffer.join("\n").trim()
+      if (combined.length > 0) {
+        state.items.push({
+          type: "text",
+          id: `chunk-${state.items.length}`,
+          text: combined,
+        })
+      }
+      state.currentBuffer = []
+      state.currentBufferChars = 0
+    }
+  }
+
+  if (!trimmed) {
+    if (state.currentBuffer.length > 0) {
+      state.currentBuffer.push("")
+      state.currentBufferChars += 1
+    }
+    return
+  }
+
+  // 极速快路径：行内无 '[' 特殊标记字符时直接入缓冲区
+  if (!trimmed.includes("[")) {
+    state.currentBuffer.push(rawLine)
+    state.currentBufferChars += rawLine.length + 1
+    if (state.currentBufferChars >= 1200) {
+      flushBuffer()
+    }
+    return
+  }
+
+  let lastIdx = 0
+  let match: RegExpExecArray | null
+  NOVEL_TAG_REGEX.lastIndex = 0
+  let hasTag = false
+
+  while ((match = NOVEL_TAG_REGEX.exec(rawLine)) != null) {
+    hasTag = true
+    const beforeText = rawLine.slice(lastIdx, match.index)
+    if (beforeText.trim()) {
+      state.currentBuffer.push(beforeText)
+      state.currentBufferChars += beforeText.length + 1
+    }
+    lastIdx = match.index + match[0].length
+
+    const tagType = match[1].toLowerCase()
+    const tagArg = match[2]?.trim() || ""
+
+    flushBuffer()
+
+    if (tagType === "chapter") {
+      state.chapterIndex++
+      state.items.push({
+        type: "chapter",
+        id: `ch-${state.chapterIndex}-${state.items.length}`,
+        title: tagArg,
+        chapterIndex: state.chapterIndex,
+      })
+    } else if (tagType === "newpage") {
+      state.pageIndex++
+      state.items.push({
+        type: "newpage",
+        id: `page-${state.pageIndex}-${state.items.length}`,
+        page: state.pageIndex,
+      })
+    } else if (tagType === "jump") {
+      const p = Number(tagArg)
+      state.items.push({
+        type: "jump",
+        id: `jump-${state.items.length}`,
+        page: Number.isFinite(p) && p > 0 ? p : 1,
+      })
+    } else if (tagType === "uploadedimage") {
+      const imageId = tagArg
+      const info = textEmbeddedImages?.[imageId] ?? textEmbeddedImages?.[Number(imageId)]
+      state.items.push({
+        type: "uploadedimage",
+        id: `up-${imageId}-${state.items.length}`,
+        imageId,
+        info,
+      })
+    } else if (tagType === "pixivimage") {
+      const parts = tagArg.split("-")
+      const illustId = Number(parts[0])
+      const page = parts[1] ? Number(parts[1]) : undefined
+      if (Number.isFinite(illustId) && illustId > 0) {
+        state.items.push({
+          type: "pixivimage",
+          id: `px-${illustId}-${state.items.length}`,
+          illustId,
+          page,
+        })
+      }
+    }
+  }
+
+  if (!hasTag) {
+    state.currentBuffer.push(rawLine)
+    state.currentBufferChars += rawLine.length + 1
+  } else if (lastIdx < rawLine.length) {
+    const remaining = rawLine.slice(lastIdx)
+    if (remaining.trim()) {
+      state.currentBuffer.push(remaining)
+      state.currentBufferChars += remaining.length + 1
+    }
+  }
+
+  if (state.currentBufferChars >= 1200 && (!trimmed || state.currentBufferChars >= 2000)) {
+    flushBuffer()
+  }
+}
+
 /**
  * 异步时间预算协程分块解析器：
- * 采用帧时间预算（Frame Budget）调度，常规文本同步完成，超长篇仅在连续计算超过时间预算（12ms）时主动让出事件循环，兼顾 0ms 瞬间上屏与防掉帧。
+ * 采用帧时间预算（Frame Budget 12ms）调度，常规文本同步完成，超长篇仅在连续计算超过时间预算时主动让出事件循环，兼顾 0ms 瞬间上屏与防掉帧。
  */
 export async function parseNovelToChunksAsync(
   rawText: string,
@@ -182,31 +315,17 @@ export async function parseNovelToChunksAsync(
 ): Promise<NovelChunkItem[]> {
   if (!rawText) return []
   const lines = rawText.split(/\r?\n/)
-  const items: NovelChunkItem[] = []
-  let pageIndex = 1
-  let chapterIndex = 0
-  let currentBuffer: string[] = []
-  let currentBufferChars = 0
-
-  const flushBuffer = () => {
-    if (currentBuffer.length > 0) {
-      const combined = currentBuffer.join("\n").trim()
-      if (combined.length > 0) {
-        items.push({
-          type: "text",
-          id: `chunk-${items.length}`,
-          text: combined,
-        })
-      }
-      currentBuffer = []
-      currentBufferChars = 0
-    }
+  const state: NovelParserState = {
+    pageIndex: 1,
+    chapterIndex: 0,
+    currentBuffer: [],
+    currentBufferChars: 0,
+    items: [],
   }
 
   let sliceStart = Date.now()
 
   for (let i = 0; i < lines.length; i++) {
-    // 协程式分片：仅在批次计算超出时间预算（12ms）时主动让出事件循环
     if (i > 0 && i % 500 === 0) {
       const now = Date.now()
       if (now - sliceStart > timeBudgetMs) {
@@ -214,90 +333,21 @@ export async function parseNovelToChunksAsync(
         sliceStart = Date.now()
       }
     }
+    processLineIntoNovelItems(lines[i], state, textEmbeddedImages)
+  }
 
-    const rawLine = lines[i]
-    const trimmed = rawLine.trim()
-
-    // 1. Chapter
-    const chMatch = trimmed.match(/^\[chapter:\s*([^\]]+)\]$/i)
-    if (chMatch) {
-      flushBuffer()
-      chapterIndex++
-      items.push({
-        type: "chapter",
-        id: `ch-${chapterIndex}-${items.length}`,
-        title: chMatch[1].trim(),
-        chapterIndex,
+  if (state.currentBuffer.length > 0) {
+    const combined = state.currentBuffer.join("\n").trim()
+    if (combined.length > 0) {
+      state.items.push({
+        type: "text",
+        id: `chunk-${state.items.length}`,
+        text: combined,
       })
-      continue
-    }
-
-    // 2. Newpage
-    if (/^\[newpage\]$/i.test(trimmed)) {
-      flushBuffer()
-      pageIndex++
-      items.push({
-        type: "newpage",
-        id: `page-${pageIndex}-${items.length}`,
-        page: pageIndex,
-      })
-      continue
-    }
-
-    // 3. Jump
-    const jMatch = trimmed.match(/^\[jump:\s*(\d+)\]$/i)
-    if (jMatch) {
-      flushBuffer()
-      items.push({
-        type: "jump",
-        id: `jump-${items.length}`,
-        page: Number(jMatch[1]),
-      })
-      continue
-    }
-
-    // 4. Uploaded Image
-    const upMatch = trimmed.match(/^\[uploadedimage:\s*(\d+)\s*\]$/i)
-    if (upMatch) {
-      flushBuffer()
-      const imageId = upMatch[1]
-      items.push({
-        type: "uploadedimage",
-        id: `up-${imageId}-${items.length}`,
-        imageId,
-        info: textEmbeddedImages?.[imageId],
-      })
-      continue
-    }
-
-    // 5. Pixiv Illustration
-    const pxMatch = trimmed.match(/^\[pixivimage:\s*(\d+)(?:-(\d+))?\s*\]$/i)
-    if (pxMatch) {
-      flushBuffer()
-      const illustId = Number(pxMatch[1])
-      const page = pxMatch[2] ? Number(pxMatch[2]) : undefined
-      if (illustId > 0) {
-        items.push({
-          type: "pixivimage",
-          id: `px-${illustId}-${items.length}`,
-          illustId,
-          page,
-        })
-      }
-      continue
-    }
-
-    currentBuffer.push(rawLine)
-    currentBufferChars += rawLine.length + 1
-
-    // 文本块达到 ~1200 字时，在自然换行处分块；若持续无空行，达到 ~2000 字在行尾分块
-    if (currentBufferChars >= 1200 && (!trimmed || currentBufferChars >= 2000)) {
-      flushBuffer()
     }
   }
 
-  flushBuffer()
-  return items
+  return state.items
 }
 
 /**
@@ -309,111 +359,30 @@ export function parseNovelToChunks(
 ): NovelChunkItem[] {
   if (!rawText) return []
   const lines = rawText.split(/\r?\n/)
-  const items: NovelChunkItem[] = []
-  let pageIndex = 1
-  let chapterIndex = 0
-  let currentBuffer: string[] = []
-  let currentBufferChars = 0
-
-  const flushBuffer = () => {
-    if (currentBuffer.length > 0) {
-      const combined = currentBuffer.join("\n").trim()
-      if (combined.length > 0) {
-        items.push({
-          type: "text",
-          id: `chunk-${items.length}`,
-          text: combined,
-        })
-      }
-      currentBuffer = []
-      currentBufferChars = 0
-    }
+  const state: NovelParserState = {
+    pageIndex: 1,
+    chapterIndex: 0,
+    currentBuffer: [],
+    currentBufferChars: 0,
+    items: [],
   }
 
   for (let i = 0; i < lines.length; i++) {
-    const rawLine = lines[i]
-    const trimmed = rawLine.trim()
+    processLineIntoNovelItems(lines[i], state, textEmbeddedImages)
+  }
 
-    // 1. Chapter
-    const chMatch = trimmed.match(/^\[chapter:\s*([^\]]+)\]$/i)
-    if (chMatch) {
-      flushBuffer()
-      chapterIndex++
-      items.push({
-        type: "chapter",
-        id: `ch-${chapterIndex}-${items.length}`,
-        title: chMatch[1].trim(),
-        chapterIndex,
+  if (state.currentBuffer.length > 0) {
+    const combined = state.currentBuffer.join("\n").trim()
+    if (combined.length > 0) {
+      state.items.push({
+        type: "text",
+        id: `chunk-${state.items.length}`,
+        text: combined,
       })
-      continue
-    }
-
-    // 2. Newpage
-    if (/^\[newpage\]$/i.test(trimmed)) {
-      flushBuffer()
-      pageIndex++
-      items.push({
-        type: "newpage",
-        id: `page-${pageIndex}-${items.length}`,
-        page: pageIndex,
-      })
-      continue
-    }
-
-    // 3. Jump
-    const jMatch = trimmed.match(/^\[jump:\s*(\d+)\]$/i)
-    if (jMatch) {
-      flushBuffer()
-      items.push({
-        type: "jump",
-        id: `jump-${items.length}`,
-        page: Number(jMatch[1]),
-      })
-      continue
-    }
-
-    // 4. Uploaded Image
-    const upMatch = trimmed.match(/^\[uploadedimage:\s*(\d+)\s*\]$/i)
-    if (upMatch) {
-      flushBuffer()
-      const imageId = upMatch[1]
-      items.push({
-        type: "uploadedimage",
-        id: `up-${imageId}-${items.length}`,
-        imageId,
-        info: textEmbeddedImages?.[imageId],
-      })
-      continue
-    }
-
-    // 5. Pixiv Illustration
-    const pxMatch = trimmed.match(/^\[pixivimage:\s*(\d+)(?:-(\d+))?\s*\]$/i)
-    if (pxMatch) {
-      flushBuffer()
-      const illustId = Number(pxMatch[1])
-      const page = pxMatch[2] ? Number(pxMatch[2]) : undefined
-      if (illustId > 0) {
-        items.push({
-          type: "pixivimage",
-          id: `px-${illustId}-${items.length}`,
-          illustId,
-          page,
-        })
-      }
-      continue
-    }
-
-    currentBuffer.push(rawLine)
-    currentBufferChars += rawLine.length + 1
-
-    // 文本块达到 ~1200 字时，在自然换行处分块；若持续无空行，达到 ~2000 字在行尾分块
-    if (currentBufferChars >= 1200 && (!trimmed || currentBufferChars >= 2000)) {
-      flushBuffer()
     }
   }
 
-  flushBuffer()
-  return items
+  return state.items
 }
 
 /**

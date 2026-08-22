@@ -2168,9 +2168,12 @@ export function routeForDescriptionLink(value: string): string | null {
   const hasURLScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(decoded)
   const isPixivURL = /^(?:https?:\/\/)?(?:www\.)?pixiv\.net(?:\/|$)/i.test(decoded)
 
+  // 支持所有语言前缀，如 /en/, /zh/, /ja/, /zh-tw/, /zh-cn/, /ko/ 等
+  const LANG_PREFIX = "(?:[a-zA-Z]{2}(?:-[a-zA-Z0-9]+)?\\/)?"
+
   // 2. novel series / manga series: pixiv.net/novel/series/123 or pixiv.net/user/123/series/456 or pixiv.net/manga/series/123
   const novelSeriesMatch = decoded.match(
-    /(?:https?:\/\/(?:www\.)?pixiv\.net)?\/?(?:en\/)?novel\/series\/(\d+)(?:[/?#].*)?$/i
+    new RegExp(`^(?:https?:\\/\\/(?:www\\.)?pixiv\\.net)?\\/?${LANG_PREFIX}novel\\/series\\/(\\d+)(?:[/?#].*)?$`, "i")
   )
   if (novelSeriesMatch && (!hasURLScheme || isPixivURL)) {
     const id = Number(novelSeriesMatch[1])
@@ -2178,9 +2181,9 @@ export function routeForDescriptionLink(value: string): string | null {
   }
 
   const mangaSeriesMatch = decoded.match(
-    /(?:https?:\/\/(?:www\.)?pixiv\.net)?\/?(?:en\/)?(?:users?|user)\/\d+\/series\/(\d+)(?:[/?#].*)?$/i
+    new RegExp(`^(?:https?:\\/\\/(?:www\\.)?pixiv\\.net)?\\/?${LANG_PREFIX}(?:users?|user)\\/\\d+\\/series\\/(\\d+)(?:[/?#].*)?$`, "i")
   ) ?? decoded.match(
-    /(?:https?:\/\/(?:www\.)?pixiv\.net)?\/?(?:en\/)?(?:manga|illust|illusts)\/series\/(\d+)(?:[/?#].*)?$/i
+    new RegExp(`^(?:https?:\\/\\/(?:www\\.)?pixiv\\.net)?\\/?${LANG_PREFIX}(?:manga|illust|illusts)\\/series\\/(\\d+)(?:[/?#].*)?$`, "i")
   )
   if (mangaSeriesMatch && (!hasURLScheme || isPixivURL)) {
     const id = Number(mangaSeriesMatch[1])
@@ -2189,7 +2192,7 @@ export function routeForDescriptionLink(value: string): string | null {
 
   // 3. user / novel / illust: pixiv.net/users/123, pixiv.net/artworks/123, pixiv.net/novel/123, users/123, artworks/123
   const pathMatch = decoded.match(
-    /(?:https?:\/\/(?:www\.)?pixiv\.net)?\/?(?:en\/)?(users?|user|artworks|novels?|novel|illusts?|illust)\/(\d+)(?:[/?#].*)?$/i
+    new RegExp(`^(?:https?:\\/\\/(?:www\\.)?pixiv\\.net)?\\/?${LANG_PREFIX}(users?|user|artworks|novels?|novel|illusts?|illust)\\/(\\d+)(?:[/?#].*)?$`, "i")
   )
   if (pathMatch && (!hasURLScheme || isPixivURL)) {
     const id = Number(pathMatch[2])
@@ -2200,11 +2203,22 @@ export function routeForDescriptionLink(value: string): string | null {
     }
   }
 
-  // 4. legacy novel show & member links: pixiv.net/novel/show.php?id=123, pixiv.net/member.php?id=123, pixiv.net/member_illust.php?illust_id=123
+  // 4. tags: pixiv.net/tags/TAG or pixiv.net/tags/TAG/novels or pixiv.net/tags/TAG/artworks
+  const tagMatch = decoded.match(
+    new RegExp(`^(?:https?:\\/\\/(?:www\\.)?pixiv\\.net)?\\/?${LANG_PREFIX}tags\\/([^/?#]+)(?:[/?#].*)?$`, "i")
+  )
+  if (tagMatch && (!hasURLScheme || isPixivURL)) {
+    try {
+      const tag = decodeURIComponent(tagMatch[1])
+      if (tag.trim()) return `tag:${encodeURIComponent(tag.trim())}`
+    } catch {
+      return `tag:${tagMatch[1]}`
+    }
+  }
+
+  // 5. legacy novel show & member links: pixiv.net/novel/show.php?id=123, pixiv.net/member.php?id=123, pixiv.net/member_illust.php?illust_id=123
   const novelShow = decoded.match(
-    /^(?:https?:\/\/)?(?:www\.)?pixiv\.net\/(?:en\/)?novel\/show\.php\?[^#]*\bid=(\d+)/i
-  ) ?? decoded.match(
-    /^\/?(?:en\/)?novel\/show\.php\?[^#]*\bid=(\d+)/i
+    new RegExp(`^(?:https?:\\/\\/(?:www\\.)?pixiv\\.net)?\\/?${LANG_PREFIX}novel\\/show\\.php\\?[^#]*\\bid=(\\d+)`, "i")
   )
   if (novelShow) {
     const id = Number(novelShow[1])
@@ -2212,9 +2226,7 @@ export function routeForDescriptionLink(value: string): string | null {
   }
 
   const legacyMember = decoded.match(
-    /^(?:https?:\/\/)?(?:www\.)?pixiv\.net\/(?:en\/)?member\.php\?[^#]*\bid=(\d+)/i
-  ) ?? decoded.match(
-    /^\/?(?:en\/)?member\.php\?[^#]*\bid=(\d+)/i
+    new RegExp(`^(?:https?:\\/\\/(?:www\\.)?pixiv\\.net)?\\/?${LANG_PREFIX}member\\.php\\?[^#]*\\bid=(\\d+)`, "i")
   )
   if (legacyMember) {
     const id = Number(legacyMember[1])
@@ -2222,9 +2234,7 @@ export function routeForDescriptionLink(value: string): string | null {
   }
 
   const legacyIllust = decoded.match(
-    /^(?:https?:\/\/)?(?:www\.)?pixiv\.net\/(?:en\/)?member_illust\.php\?[^#]*\billust_id=(\d+)/i
-  ) ?? decoded.match(
-    /^\/?(?:en\/)?member_illust\.php\?[^#]*\billust_id=(\d+)/i
+    new RegExp(`^(?:https?:\\/\\/(?:www\\.)?pixiv\\.net)?\\/?${LANG_PREFIX}member_illust\\.php\\?[^#]*(?:\\billust_id=|\\bid=)(\\d+)`, "i")
   )
   if (legacyIllust) {
     const id = Number(legacyIllust[1])
@@ -2232,7 +2242,7 @@ export function routeForDescriptionLink(value: string): string | null {
   }
 
   const shortPrefix = decoded.match(
-    /(?:https?:\/\/(?:www\.)?pixiv\.net)?\/?(?:en\/)?([iun])\/(\d+)(?:[/?#].*)?$/i
+    new RegExp(`^(?:https?:\\/\\/(?:www\\.)?pixiv\\.net)?\\/?${LANG_PREFIX}([iun])\\/(\\d+)(?:[/?#].*)?$`, "i")
   )
   if (shortPrefix && (!hasURLScheme || isPixivURL)) {
     const id = Number(shortPrefix[2])
@@ -2243,7 +2253,7 @@ export function routeForDescriptionLink(value: string): string | null {
     }
   }
 
-  // 5. uid: 123, pid: 123, nid: 123
+  // 6. uid: 123, pid: 123, nid: 123
   const idReference = decoded.match(/^(uid|pid|nid)\s*[:：#=]?\s*(\d+)$/i)
   if (idReference) {
     const kind = idReference[1].toLowerCase()
@@ -2253,7 +2263,7 @@ export function routeForDescriptionLink(value: string): string | null {
     return `illust:${id}`
   }
 
-  // 6. Extenal http / www links
+  // 7. External http / www links
   if (/^www\./i.test(decoded)) return `https://${decoded}`
   if (/^https?:\/\//i.test(decoded)) return decoded
 

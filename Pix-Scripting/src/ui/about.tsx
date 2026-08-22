@@ -20,6 +20,7 @@ const HANA_IRO_AVATAR_URL = "https://github.com/youshen2.png?size=128"
 const NPM_ICON_URL = "https://static-production.npmjs.com/b0f1a8318363185cc2ea6a40ac23eeb2.png"
 const SCRIPTING_APP_ICON_URL = "https://www.scripting.fun/assets/imgs/Icon-App.png"
 const MINI_BILI_ICON_URL = "https://raw.githubusercontent.com/ResistanceTo/MiniBili-WEB/main/public/MiniBili.png"
+const KAZUMI_ICON_URL = "https://raw.githubusercontent.com/Predidit/Kazumi/main/assets/images/logo/logo_rounded.png"
 
 export function AboutView() {
   const [settings, setSettings] = useState(loadSettings)
@@ -77,6 +78,12 @@ export function AboutView() {
           title="MiniBili Group"
           url="https://t.me/MiniBiliGroup"
           avatarURL={MINI_BILI_ICON_URL}
+          avatarCornerRadius={6}
+        />
+        <ExternalLinkRow
+          title="Kazumi茶会"
+          url="https://t.me/kazumi_app"
+          avatarURL={KAZUMI_ICON_URL}
           avatarCornerRadius={6}
         />
       </Section>

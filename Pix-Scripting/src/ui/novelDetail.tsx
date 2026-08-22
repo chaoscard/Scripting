@@ -130,8 +130,13 @@ export function NovelDetailView(props: { novelID: number }) {
         recordedIDRef.current = detail.id
         recordNovelHistory(historyNovelFromDetail(detail))
       }
+      const resolvedEmbeddedImages =
+        viewer.textEmbeddedImages ??
+        (detail as any)?.textEmbeddedImages ??
+        (detail as any)?.text_embedded_images ??
+        undefined
       setText(viewer.text)
-      setTextEmbeddedImages(viewer.textEmbeddedImages)
+      setTextEmbeddedImages(resolvedEmbeddedImages)
       setTextError(null)
       if (!viewer.text) {
         setReaderReady(true)
