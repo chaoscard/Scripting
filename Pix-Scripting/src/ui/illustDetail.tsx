@@ -45,14 +45,23 @@ import {
   type AmbientIntensity,
 } from "../store/settings"
 import {
+  getIllustContentBlockReason,
   isIllustContentVisible,
 } from "../store/contentFilter"
 import {
   recordHistory,
   updateHistoryBookmark,
 } from "../store/history"
-import { onUserFollowChanged, recordUserFollowed } from "../store/userFollow"
-import { cacheIllust, getCachedIllust } from "../store/illustCache"
+import {
+  isUserFollowed,
+  onUserFollowChanged,
+  recordUserFollowed,
+} from "../store/userFollow"
+import {
+  cacheIllust,
+  getCachedIllust,
+} from "../store/illustCache"
+import { getCachedIllustBookmark } from "../store/bookmarkSync"
 import { getSeriesByWorkID, recordWorkSeriesAssociation } from "../store/seriesCache"
 import { useAsyncGuard, useIllustBookmark, useLatest, usePagedList, currentBatchSize } from "./hooks"
 import type { PixivIllustration } from "../types"
@@ -75,7 +84,8 @@ import { buildUgoira } from "../ugoira/ugoira"
 import { renderDestination } from "./routes"
 import { requestPixivRoute } from "./routeNavigation"
 
-const BLOCKED_CONTENT_MESSAGE = "该作品已被屏蔽（标签或作者在黑名单中）"
+const BLOCKED_BY_BLOCKLIST_MESSAGE = "该作品已被屏蔽（标签或作者在黑名单中）"
+const BLOCKED_BY_RESTRICTION_MESSAGE = "该作品被内容显示设置过滤，暂时无法显示"
 
 function getInitialIllustPalette(
   illust: PixivIllustration | null,
@@ -158,9 +168,24 @@ export function IllustDetailView(props: { illustID: number }) {
         recordUserFollowed(detail.user.id, detail.user.is_followed ?? false)
       }
       const settings = loadSettings()
-      if (!isIllustContentVisible(detail, settings)) {
+      const isExempt =
+        settings.exemptFilterForPersonal &&
+        (detail.user?.is_followed === true ||
+          (detail.user?.id != null && isUserFollowed(detail.user.id) === true) ||
+          detail.is_bookmarked === true ||
+          getCachedIllustBookmark(detail.id) === true ||
+          followed ||
+          bookmarked)
+      const blockReason = getIllustContentBlockReason(detail, settings, undefined, {
+        exemptRestrictions: isExempt,
+      })
+      if (blockReason !== null) {
         setIllust(null)
-        setError(BLOCKED_CONTENT_MESSAGE)
+        setError(
+          blockReason === "blocklist"
+            ? BLOCKED_BY_BLOCKLIST_MESSAGE
+            : BLOCKED_BY_RESTRICTION_MESSAGE
+        )
         return
       }
       setIllust(detail)
@@ -277,15 +302,31 @@ export function IllustDetailView(props: { illustID: number }) {
       setAmbientIntensity(settings.ambientIntensity)
       const current = illustRef.current
       if (current) {
-        if (!isIllustContentVisible(current, settings)) {
+        const isExempt =
+          settings.exemptFilterForPersonal &&
+          (current.user?.is_followed === true ||
+            (current.user?.id != null && isUserFollowed(current.user.id) === true) ||
+            current.is_bookmarked === true ||
+            getCachedIllustBookmark(current.id) === true ||
+            followed ||
+            bookmarked)
+        const blockReason = getIllustContentBlockReason(current, settings, undefined, {
+          exemptRestrictions: isExempt,
+        })
+        if (blockReason !== null) {
           guard()
           setIllust(null)
-          setError(BLOCKED_CONTENT_MESSAGE)
+          setError(
+            blockReason === "blocklist"
+              ? BLOCKED_BY_BLOCKLIST_MESSAGE
+              : BLOCKED_BY_RESTRICTION_MESSAGE
+          )
           setLoading(false)
         }
       } else if (
         !current &&
-        errorRef.current === BLOCKED_CONTENT_MESSAGE
+        (errorRef.current === BLOCKED_BY_BLOCKLIST_MESSAGE ||
+          errorRef.current === BLOCKED_BY_RESTRICTION_MESSAGE)
       ) {
         load()
       }

@@ -113,7 +113,14 @@ export function TagFeedView(props: { tag: string }) {
         ) : paged.error && paged.items.length === 0 ? (
           <ErrorView message={paged.error} onRetry={paged.refresh} />
         ) : paged.items.length === 0 ? (
-          <EmptyView text="该标签下暂无作品" />
+          <EmptyView
+            text={
+              paged.hasFilteredContent
+                ? "当前页面部分作品被内容显示设置过滤，暂时无法显示"
+                : "该标签下暂无作品"
+            }
+            systemImage={paged.hasFilteredContent ? "eye.slash" : undefined}
+          />
         ) : (
           <IllustFlowFeed
             items={paged.items}

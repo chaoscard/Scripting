@@ -13,6 +13,7 @@ import {
   Toggle,
   useEffect,
   useState,
+  VStack,
 } from "scripting"
 import {
   cacheUsageBytes,
@@ -134,7 +135,7 @@ export function SettingsView() {
         ],
       }}
     >
-      <Section header={<Text>内容过滤</Text>}>
+      <Section header={<Text>内容显示</Text>}>
         <Toggle
           title="显示 R18 作品"
           value={settings.showR18}
@@ -159,6 +160,22 @@ export function SettingsView() {
               console.log("editAIShowSettings error:", e?.message ?? e)
             }
           }}
+        />
+        <Toggle
+          value={settings.exemptFilterForPersonal}
+          onChanged={(value) => update({ exemptFilterForPersonal: value })}
+        >
+          <VStack alignment="leading" spacing={2}>
+            <Text font="body">豁免关注/追更/收藏/记录</Text>
+            <Text font="caption" foregroundStyle="secondaryLabel">
+              开启后R18/R18G/AI作品过滤对这些项目不再生效
+            </Text>
+          </VStack>
+        </Toggle>
+        <Toggle
+          title="我不看小说！"
+          value={settings.hideNovels}
+          onChanged={(value) => update({ hideNovels: value })}
         />
         <NavigationLink value="blockedSettings">
           <HStack spacing={8}>

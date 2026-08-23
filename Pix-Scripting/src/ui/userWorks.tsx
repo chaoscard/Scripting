@@ -47,9 +47,17 @@ export function UserWorksView(props: { userID?: number; title?: string }) {
   const [detailLoading, setDetailLoading] = useState(true)
   const [detailError, setDetailError] = useState<string | null>(null)
   const [tab, setTab] = useState<WorkTab>("illust")
+  const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
   const [emptyKinds, setEmptyKinds] = useState<Partial<Record<WorkTab, boolean>>>({})
   const guard = useAsyncGuard()
   const worksRefreshRef = useRef<() => Promise<void>>(() => Promise.resolve())
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      setHideNovels(loadSettings().hideNovels)
+      setEmptyKinds({})
+    })
+  }, [])
 
   const loadDetail = useCallback(async () => {
     if (currentUserID == null) return
@@ -76,12 +84,13 @@ export function UserWorksView(props: { userID?: number; title?: string }) {
     const kinds: WorkTab[] = []
     if ((detail.profile.total_illusts ?? 0) > 0) kinds.push("illust")
     if ((detail.profile.total_manga ?? 0) > 0) kinds.push("manga")
-    if ((detail.profile.total_novels ?? 0) > 0) kinds.push("novel")
+    if (!hideNovels && (detail.profile.total_novels ?? 0) > 0) kinds.push("novel")
     return kinds
   }, [
     detail?.profile.total_illusts,
     detail?.profile.total_manga,
     detail?.profile.total_novels,
+    hideNovels,
   ])
 
   const availableKinds = useMemo<WorkTab[]>(() => {
@@ -221,8 +230,19 @@ function UserWorksFeed(props: {
   const illustPaged = usePagedList<PixivIllustration>({
     first: (token) => userWorks(userID, "illust", token),
     more: (nextURL, token) => nextIllustrations(nextURL, token),
-    filter: filterIllustrations,
-    deps: [userID, "illust"],
+    filter: (items) => {
+      const settings = loadSettings()
+      const isOwn = userID === session.userID
+      const exempt =
+        settings.exemptFilterForPersonal &&
+        (isFollowed || isOwn || isUserFollowed(userID) === true)
+      return items.filter((item) =>
+        isIllustContentVisible(item, settings, undefined, {
+          exemptRestrictions: exempt,
+        })
+      )
+    },
+    deps: [userID, "illust", isFollowed],
     enabled: tab === "illust",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
@@ -232,8 +252,19 @@ function UserWorksFeed(props: {
   const mangaPaged = usePagedList<PixivIllustration>({
     first: (token) => userWorks(userID, "manga", token),
     more: (nextURL, token) => nextIllustrations(nextURL, token),
-    filter: filterIllustrations,
-    deps: [userID, "manga"],
+    filter: (items) => {
+      const settings = loadSettings()
+      const isOwn = userID === session.userID
+      const exempt =
+        settings.exemptFilterForPersonal &&
+        (isFollowed || isOwn || isUserFollowed(userID) === true)
+      return items.filter((item) =>
+        isIllustContentVisible(item, settings, undefined, {
+          exemptRestrictions: exempt,
+        })
+      )
+    },
+    deps: [userID, "manga", isFollowed],
     enabled: tab === "manga",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
@@ -243,8 +274,19 @@ function UserWorksFeed(props: {
   const novelPaged = usePagedList<PixivNovel>({
     first: (token) => userNovels(userID, token),
     more: (nextURL, token) => nextNovels(nextURL, token),
-    filter: filterNovels,
-    deps: [userID],
+    filter: (items) => {
+      const settings = loadSettings()
+      const isOwn = userID === session.userID
+      const exempt =
+        settings.exemptFilterForPersonal &&
+        (isFollowed || isOwn || isUserFollowed(userID) === true)
+      return items.filter((item) =>
+        isNovelContentVisible(item, settings, undefined, {
+          exemptRestrictions: exempt,
+        })
+      )
+    },
+    deps: [userID, isFollowed],
     enabled: tab === "novel",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,

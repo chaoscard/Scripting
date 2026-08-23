@@ -15,6 +15,7 @@ import {
 } from "scripting"
 import {
   EmptyView,
+  FilteredContentNotice,
   formatDate,
   IllustFlowFeed,
   LoadMoreTrigger,
@@ -79,17 +80,36 @@ function loadHistoryNovels(): HistoryNovelItem[] {
 
 function filterHistoryIllusts(items: HistoryIllustItem[]): HistoryIllustItem[] {
   const settings = loadSettings()
-  return items.filter((item) => isIllustContentVisible(item, settings))
+  return items.filter((item) =>
+    isIllustContentVisible(item, settings, undefined, {
+      exemptRestrictions: settings.exemptFilterForPersonal,
+    })
+  )
 }
 
 function filterHistoryNovels(items: HistoryNovelItem[]): HistoryNovelItem[] {
   const settings = loadSettings()
-  return items.filter((item) => isNovelContentVisible(item, settings))
+  return items.filter((item) =>
+    isNovelContentVisible(item, settings, undefined, {
+      exemptRestrictions: settings.exemptFilterForPersonal,
+    })
+  )
 }
 
 export function HistoryView() {
+  const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
   const [kind, setKind] = useState<HistoryKind>("illustration")
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      const next = loadSettings().hideNovels
+      setHideNovels(next)
+      if (next && kind === "novel") {
+        setKind("illustration")
+      }
+    })
+  }, [kind])
 
   function clearCurrentKind() {
     clearHistoryKind(kind)
@@ -103,7 +123,7 @@ export function HistoryView() {
       refreshable={() => refreshHandlerRef.current()}
     >
       <VStack alignment="leading" spacing={8}>
-        <HistoryKindPicker kind={kind} onKindChange={setKind} />
+        <HistoryKindPicker kind={kind} hideNovels={hideNovels} onKindChange={setKind} />
         <HistoryFeed
           kind={kind}
           onRegisterRefresh={(fn) => {
@@ -157,8 +177,18 @@ function historyKindTitle(kind: HistoryKind): string {
 
 function HistoryKindPicker(props: {
   kind: HistoryKind
+  hideNovels?: boolean
   onKindChange: (kind: HistoryKind) => void
 }) {
+  const kinds: { tag: HistoryKind; label: string }[] = [
+    { tag: "illustration", label: "插画" },
+    { tag: "manga", label: "漫画" },
+  ]
+  if (!props.hideNovels) {
+    kinds.push({ tag: "novel", label: "小说" })
+  }
+  if (kinds.length <= 1) return null
+
   return (
     <Picker
       title="浏览记录类型"
@@ -167,9 +197,11 @@ function HistoryKindPicker(props: {
       pickerStyle="segmented"
       padding={{ horizontal: 14 }}
     >
-      <Text tag="illustration">插画</Text>
-      <Text tag="manga">漫画</Text>
-      <Text tag="novel">小说</Text>
+      {kinds.map((item) => (
+        <Text key={item.tag} tag={item.tag}>
+          {item.label}
+        </Text>
+      ))}
     </Picker>
   )
 }
@@ -314,6 +346,14 @@ function IllustHistoryContent(props: {
   }), [])
 
   if (paged.items.length === 0 && !paged.initialLoading) {
+    if (paged.hasFilteredContent) {
+      return (
+        <EmptyView
+          text="当前页面部分作品被内容显示设置过滤，暂时无法显示"
+          systemImage="eye.slash"
+        />
+      )
+    }
     const text =
       kind === "manga"
         ? "暂无漫画浏览记录，打开作品后会自动记录"
@@ -323,6 +363,7 @@ function IllustHistoryContent(props: {
 
   return (
     <VStack alignment="leading" spacing={8}>
+      {paged.hasFilteredContent ? <FilteredContentNotice isNovel={false} /> : null}
       <HStack frame={{ maxWidth: "infinity", alignment: "center" }} padding={{ horizontal: 14 }}>
         <Text
           font="caption"
@@ -352,6 +393,14 @@ function NovelHistoryContent(props: {
   const { paged, totalCount } = props
 
   if (paged.items.length === 0 && !paged.initialLoading) {
+    if (paged.hasFilteredContent) {
+      return (
+        <EmptyView
+          text="当前页面部分小说被内容显示设置过滤，暂时无法显示"
+          systemImage="eye.slash"
+        />
+      )
+    }
     return (
       <EmptyView
         text="暂无小说浏览记录，打开小说后会自动记录"
@@ -364,6 +413,7 @@ function NovelHistoryContent(props: {
 
   return (
     <VStack alignment="leading" spacing={8}>
+      {paged.hasFilteredContent ? <FilteredContentNotice isNovel={true} /> : null}
       <HStack frame={{ maxWidth: "infinity", alignment: "center" }} padding={{ horizontal: 14 }}>
         <Text
           font="caption"

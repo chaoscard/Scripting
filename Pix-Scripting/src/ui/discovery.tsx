@@ -57,7 +57,18 @@ export function DiscoveryView(props: { onClose: () => void }) {
   const [activated, setActivated] = useState(isLaunchTab)
   const [mode, setMode] = useState<ExploreMode>("recommended")
   const [kind, setKind] = useState<FeedKind>("illustration")
+  const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      const next = loadSettings().hideNovels
+      setHideNovels(next)
+      if (next && kind === "novel") {
+        setKind("illustration")
+      }
+    })
+  }, [kind])
 
   return (
     <RefreshableScrollView
@@ -74,7 +85,7 @@ export function DiscoveryView(props: { onClose: () => void }) {
         }}
       >
         {mode === "vision" ? null : (
-          <FeedKindPicker kind={kind} onKindChange={setKind} />
+          <FeedKindPicker kind={kind} hideNovels={hideNovels} onKindChange={setKind} />
         )}
         {mode === "vision" ? (
           <VisionExploreFeed
@@ -304,8 +315,18 @@ function exploreToolbar(props: {
 
 function FeedKindPicker(props: {
   kind: FeedKind
+  hideNovels?: boolean
   onKindChange: (kind: FeedKind) => void
 }) {
+  const kinds: { tag: FeedKind; label: string }[] = [
+    { tag: "illustration", label: "插画" },
+    { tag: "manga", label: "漫画" },
+  ]
+  if (!props.hideNovels) {
+    kinds.push({ tag: "novel", label: "小说" })
+  }
+  if (kinds.length <= 1) return null
+
   return (
     <Picker
       title="作品类型"
@@ -314,9 +335,11 @@ function FeedKindPicker(props: {
       pickerStyle="segmented"
       padding={{ horizontal: 14 }}
     >
-      <Text tag="illustration">插画</Text>
-      <Text tag="manga">漫画</Text>
-      <Text tag="novel">小说</Text>
+      {kinds.map((item) => (
+        <Text key={item.tag} tag={item.tag}>
+          {item.label}
+        </Text>
+      ))}
     </Picker>
   )
 }
@@ -333,7 +356,14 @@ function IllustFeedContent(props: {
       ) : paged.error && paged.items.length === 0 ? (
         <ErrorView message={paged.error} onRetry={paged.refresh} />
       ) : paged.items.length === 0 ? (
-        <EmptyView text={`暂无${label}，下拉刷新试试`} systemImage="photo" />
+        <EmptyView
+          text={
+            paged.hasFilteredContent
+              ? "当前页面部分作品被内容显示设置过滤，暂时无法显示"
+              : `暂无${label}，下拉刷新试试`
+          }
+          systemImage={paged.hasFilteredContent ? "eye.slash" : "photo"}
+        />
       ) : (
         <IllustFlowFeed
           items={paged.items}
@@ -358,7 +388,14 @@ function NovelFeedContent(props: {
       ) : paged.error && paged.items.length === 0 ? (
         <ErrorView message={paged.error} onRetry={paged.refresh} />
       ) : paged.items.length === 0 ? (
-        <EmptyView text={`暂无${label}小说，下拉刷新试试`} systemImage="book" />
+        <EmptyView
+          text={
+            paged.hasFilteredContent
+              ? "当前页面部分小说被内容显示设置过滤，暂时无法显示"
+              : `暂无${label}小说，下拉刷新试试`
+          }
+          systemImage={paged.hasFilteredContent ? "eye.slash" : "book"}
+        />
       ) : (
         <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
           {paged.items.map((novel, index) => (

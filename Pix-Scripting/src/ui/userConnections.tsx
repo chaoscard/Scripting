@@ -25,6 +25,7 @@ import {
   type Visibility,
 } from "../api/pixiv"
 import { session } from "../api/session"
+import { loadSettings, onSettingsChanged } from "../store/settings"
 import type { PixivIllustration, PixivNovel, PixivUserPreview } from "../types"
 import {
   AvatarImage,
@@ -71,8 +72,15 @@ export function UserConnectionsView(props: {
           ? "粉丝"
           : "好友")
   const [restrict, setRestrict] = useState<ConnectionVisibility>("public")
+  const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
   const showVisibilityPicker =
     props.showVisibilityPicker ?? (props.kind === "following" && props.userID == null)
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      setHideNovels(loadSettings().hideNovels)
+    })
+  }, [])
   const paged = usePagedList<ConnectionPreview>({
     first: async (token) =>
       normalizePage(await loadConnections(userID, props.kind, restrict, token)),
@@ -125,6 +133,7 @@ export function UserConnectionsView(props: {
                     preview={preview}
                     showFollowControl={preview.user.id !== session.userID}
                     previewSide={previewSide}
+                    hideNovels={hideNovels}
                   />
                 ))}
                 <LoadMoreTrigger
@@ -186,9 +195,10 @@ function normalizePage(page: {
 }
 
 function connectionPreviewImageURLs(preview: ConnectionPreview): (string | null)[] {
+  const hideNovels = loadSettings().hideNovels
   return [
     ...preview.illusts.slice(0, 3).map(thumbUrlOf),
-    ...(preview.novels ?? []).slice(0, 3).map(novelThumbUrlOf),
+    ...(hideNovels ? [] : (preview.novels ?? []).slice(0, 3).map(novelThumbUrlOf)),
   ]
 }
 
@@ -196,13 +206,14 @@ function ConnectionRow(props: {
   preview: PixivUserPreview
   showFollowControl: boolean
   previewSide: number
+  hideNovels?: boolean
 }) {
-  const { preview } = props
+  const { preview, hideNovels = false } = props
   const [followed, setFollowed] = useUserFollow(preview.user.id, preview.user.is_followed ?? true)
   const [followBusy, setFollowBusy] = useState(false)
   const previewItems = [
     ...preview.illusts.map((illustration) => ({ kind: "illust" as const, item: illustration })),
-    ...(preview.novels ?? []).map((novel) => ({ kind: "novel" as const, item: novel })),
+    ...(hideNovels ? [] : (preview.novels ?? [])).map((novel) => ({ kind: "novel" as const, item: novel })),
   ].slice(0, 3)
 
   async function toggleFollow() {

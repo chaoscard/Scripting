@@ -1318,6 +1318,29 @@ export function LoadMoreTrigger(props: {
   )
 }
 
+export function FilteredContentNotice(props: {
+  isNovel?: boolean
+  padding?: any
+}) {
+  const text = props.isNovel
+    ? "当前页面部分小说被内容显示设置过滤，暂时无法显示"
+    : "当前页面部分作品被内容显示设置过滤，暂时无法显示"
+  return (
+    <HStack
+      spacing={6}
+      padding={props.padding ?? { horizontal: 14, vertical: 4 }}
+      frame={{ maxWidth: "infinity" }}
+    >
+      <Spacer />
+      <Image systemName="eye.slash" font="caption" foregroundStyle="secondaryLabel" />
+      <Text font="caption" foregroundStyle="secondaryLabel">
+        {text}
+      </Text>
+      <Spacer />
+    </HStack>
+  )
+}
+
 export function IllustFlowFeed(props: {
   items: PixivIllustration[]
   onLoadMore: (anchor: number | string) => void

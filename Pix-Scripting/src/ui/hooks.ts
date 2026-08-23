@@ -3,6 +3,10 @@ import { session } from "../api/session"
 import { getImageBatchSize, loadSettings, onSettingsChanged, type AmbientIntensity } from "../store/settings"
 import { onBlocklistChanged } from "../store/blocklist"
 import {
+  getIllustContentBlockReason,
+  getNovelContentBlockReason,
+} from "../store/contentFilter"
+import {
   getCachedIllustBookmark,
   getCachedNovelBookmark,
   getCachedWatchlist,
@@ -250,6 +254,7 @@ export function usePagedList<T extends { id: number | string }>(
   const [initialLoading, setInitialLoading] = useState(true)
   const [hasLoaded, setHasLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [hasFilteredContent, setHasFilteredContent] = useState(false)
 
   const seqRef = useRef(0)
   const moreTaskIDRef = useRef(0)
@@ -298,7 +303,29 @@ export function usePagedList<T extends { id: number | string }>(
 
   const applyFilter = (list: T[]): T[] => {
     const f = filterRef.current
-    return f ? f(list) : list
+    if (!f) return list
+    const filtered = f(list)
+    if (filtered.length < list.length) {
+      const filteredSet = new Set(filtered)
+      const settings = loadSettings()
+      for (const item of list) {
+        if (!filteredSet.has(item)) {
+          const raw = item as any
+          const isNovel =
+            raw.novel != null ||
+            typeof raw.text_length === "number" ||
+            typeof raw.novel_ai_type === "number"
+          const reason = isNovel
+            ? getNovelContentBlockReason(raw.novel ?? raw, settings)
+            : getIllustContentBlockReason(raw.illust ?? raw, settings)
+          if (reason === "restriction") {
+            setHasFilteredContent(true)
+            break
+          }
+        }
+      }
+    }
+    return filtered
   }
 
   // 核心加载逻辑：clear=true 时清空旧数据并显示全屏加载（首次/参数切换）；
@@ -314,6 +341,7 @@ export function usePagedList<T extends { id: number | string }>(
     if (clear) {
       setInitialLoading(true)
       setHasLoaded(false)
+      setHasFilteredContent(false)
       setItems([])
       setPendingItems([])
       setNextURL(null)
@@ -399,6 +427,7 @@ export function usePagedList<T extends { id: number | string }>(
 
   // 设置变化时先对已发布项和当前页缓冲立即重过滤，不能依赖后台刷新成功后才撤下受限内容。
   const reapplyFilter = useCallback(() => {
+    setHasFilteredContent(false)
     setItems((current) => dedupeByID(applyFilter(current)))
     setPendingItems((current) => dedupeByID(applyFilter(current)))
     consumedTailRef.current = null
@@ -573,6 +602,7 @@ export function usePagedList<T extends { id: number | string }>(
     reapplyFilter,
     loadMore,
     hasMore: pendingItems.length > 0 || nextURL != null,
+    hasFilteredContent,
   }
 }
 

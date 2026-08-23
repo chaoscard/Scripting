@@ -52,7 +52,11 @@ import {
   isIllustContentVisible,
   isNovelContentVisible,
 } from "../store/contentFilter"
-import { onUserFollowChanged, recordUserFollowed } from "../store/userFollow"
+import {
+  isUserFollowed,
+  onUserFollowChanged,
+  recordUserFollowed,
+} from "../store/userFollow"
 import { renderDestination } from "./routes"
 import { useAsyncGuard, useLatest, usePagedList, useUserAmbientPalette, currentBatchSize } from "./hooks"
 import type {
@@ -85,6 +89,7 @@ export function UserDetailView(props: { userID: number }) {
   const [detailError, setDetailError] = useState<string | null>(null)
   const [followBusy, setFollowBusy] = useState(false)
   const [kind, setKind] = useState<UserWorkKind>("illust")
+  const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
   const [emptyKinds, setEmptyKinds] = useState<Partial<Record<UserWorkKind, boolean>>>({})
   const { ambientBackground } = useUserAmbientPalette(detail?.profile.background_image_url)
 
@@ -93,12 +98,13 @@ export function UserDetailView(props: { userID: number }) {
     const kinds: UserWorkKind[] = []
     if ((detail.profile.total_illusts ?? 0) > 0) kinds.push("illust")
     if ((detail.profile.total_manga ?? 0) > 0) kinds.push("manga")
-    if ((detail.profile.total_novels ?? 0) > 0) kinds.push("novel")
+    if (!hideNovels && (detail.profile.total_novels ?? 0) > 0) kinds.push("novel")
     return kinds
   }, [
     detail?.profile.total_illusts,
     detail?.profile.total_manga,
     detail?.profile.total_novels,
+    hideNovels,
   ])
 
   const availableKinds = useMemo<UserWorkKind[]>(() => {
@@ -192,6 +198,7 @@ export function UserDetailView(props: { userID: number }) {
 
   useEffect(() => {
     return onSettingsChanged(() => {
+      setHideNovels(loadSettings().hideNovels)
       setEmptyKinds({})
     })
   }, [])
@@ -385,7 +392,7 @@ export function UserDetailView(props: { userID: number }) {
           <UserWorksFeedSection
             userID={userID}
             kind={activeKind}
-            isAuthorFollowed={followed}
+            isAuthorFollowed={followed || isOwnProfile}
             onKindEmpty={handleKindEmpty}
             onRegisterRefresh={(fn) => {
               worksRefreshRef.current = fn
@@ -410,8 +417,18 @@ function UserWorksFeedSection(props: {
   const illustPaged = usePagedList<PixivIllustration>({
     first: (token) => userWorks(userID, "illust", token),
     more: (nextURL, token) => nextIllustrations(nextURL, token),
-    filter: filterIllustrations,
-    deps: [userID, "illust"],
+    filter: (items) => {
+      const settings = loadSettings()
+      const exempt =
+        settings.exemptFilterForPersonal &&
+        (isAuthorFollowed || isUserFollowed(userID) === true)
+      return items.filter((item) =>
+        isIllustContentVisible(item, settings, undefined, {
+          exemptRestrictions: exempt,
+        })
+      )
+    },
+    deps: [userID, "illust", isAuthorFollowed],
     enabled: kind === "illust",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
@@ -421,8 +438,18 @@ function UserWorksFeedSection(props: {
   const mangaPaged = usePagedList<PixivIllustration>({
     first: (token) => userWorks(userID, "manga", token),
     more: (nextURL, token) => nextIllustrations(nextURL, token),
-    filter: filterIllustrations,
-    deps: [userID, "manga"],
+    filter: (items) => {
+      const settings = loadSettings()
+      const exempt =
+        settings.exemptFilterForPersonal &&
+        (isAuthorFollowed || isUserFollowed(userID) === true)
+      return items.filter((item) =>
+        isIllustContentVisible(item, settings, undefined, {
+          exemptRestrictions: exempt,
+        })
+      )
+    },
+    deps: [userID, "manga", isAuthorFollowed],
     enabled: kind === "manga",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
@@ -432,8 +459,18 @@ function UserWorksFeedSection(props: {
   const novelPaged = usePagedList<PixivNovel>({
     first: (token) => userNovels(userID, token),
     more: (nextURL, token) => nextNovels(nextURL, token),
-    filter: filterNovels,
-    deps: [userID],
+    filter: (items) => {
+      const settings = loadSettings()
+      const exempt =
+        settings.exemptFilterForPersonal &&
+        (isAuthorFollowed || isUserFollowed(userID) === true)
+      return items.filter((item) =>
+        isNovelContentVisible(item, settings, undefined, {
+          exemptRestrictions: exempt,
+        })
+      )
+    },
+    deps: [userID, isAuthorFollowed],
     enabled: kind === "novel",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
@@ -442,6 +479,27 @@ function UserWorksFeedSection(props: {
   const illustPagedRef = useLatest(illustPaged)
   const mangaPagedRef = useLatest(mangaPaged)
   const novelPagedRef = useLatest(novelPaged)
+
+  useEffect(() => {
+    const handleFollow = (changedUserID: number) => {
+      if (changedUserID === userID) {
+        illustPagedRef.current.reapplyFilter()
+        mangaPagedRef.current.reapplyFilter()
+        novelPagedRef.current.reapplyFilter()
+      }
+    }
+    const handleSettings = () => {
+      illustPagedRef.current.reapplyFilter()
+      mangaPagedRef.current.reapplyFilter()
+      novelPagedRef.current.reapplyFilter()
+    }
+    const unsubFollow = onUserFollowChanged(handleFollow)
+    const unsubSettings = onSettingsChanged(handleSettings)
+    return () => {
+      unsubFollow()
+      unsubSettings()
+    }
+  }, [userID])
 
   useEffect(() => {
     if (

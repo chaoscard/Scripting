@@ -46,13 +46,19 @@ import {
   updateNovelHistoryBookmark,
 } from "../store/history"
 import { getSeriesByWorkID, recordWorkSeriesAssociation } from "../store/seriesCache"
-import { onUserFollowChanged, recordUserFollowed } from "../store/userFollow"
+import {
+  isUserFollowed,
+  onUserFollowChanged,
+  recordUserFollowed,
+} from "../store/userFollow"
+import { getCachedNovelBookmark } from "../store/bookmarkSync"
 import type { PixivNovel, PixivNovelDetail, TextEmbeddedImage } from "../types"
 import {
   loadSettings,
   onSettingsChanged,
 } from "../store/settings"
 import {
+  getNovelContentBlockReason,
   isNovelContentVisible,
 } from "../store/contentFilter"
 import {
@@ -73,7 +79,8 @@ import { CommentsSheet } from "./comments"
 import { renderDestination } from "./routes"
 import { requestPixivRoute } from "./routeNavigation"
 
-const BLOCKED_CONTENT_MESSAGE = "该小说已被屏蔽（标签或作者在黑名单中）"
+const BLOCKED_BY_BLOCKLIST_MESSAGE = "该小说已被屏蔽（标签或作者在黑名单中）"
+const BLOCKED_BY_RESTRICTION_MESSAGE = "该小说被内容显示设置过滤，暂时无法显示"
 
 function historyNovelFromDetail(detail: PixivNovelDetail): PixivNovel {
   return { ...detail, is_muted: false, visible: true }
@@ -116,10 +123,25 @@ export function NovelDetailView(props: { novelID: number }) {
         recordUserFollowed(detail.user.id, detail.user.is_followed ?? false)
       }
       const settings = loadSettings()
-      if (!isNovelContentVisible(detail, settings)) {
+      const isExempt =
+        settings.exemptFilterForPersonal &&
+        (detail.user?.is_followed === true ||
+          (detail.user?.id != null && isUserFollowed(detail.user.id) === true) ||
+          detail.is_bookmarked === true ||
+          getCachedNovelBookmark(detail.id) === true ||
+          followed ||
+          bookmarked)
+      const blockReason = getNovelContentBlockReason(detail, settings, undefined, {
+        exemptRestrictions: isExempt,
+      })
+      if (blockReason !== null) {
         setNovel(null)
         setText("")
-        setError(BLOCKED_CONTENT_MESSAGE)
+        setError(
+          blockReason === "blocklist"
+            ? BLOCKED_BY_BLOCKLIST_MESSAGE
+            : BLOCKED_BY_RESTRICTION_MESSAGE
+        )
         return
       }
 
@@ -170,17 +192,33 @@ export function NovelDetailView(props: { novelID: number }) {
       const settings = loadSettings()
       const current = novelRef.current
       if (current) {
-        if (!isNovelContentVisible(current, settings)) {
+        const isExempt =
+          settings.exemptFilterForPersonal &&
+          (current.user?.is_followed === true ||
+            (current.user?.id != null && isUserFollowed(current.user.id) === true) ||
+            current.is_bookmarked === true ||
+            getCachedNovelBookmark(current.id) === true ||
+            followed ||
+            bookmarked)
+        const blockReason = getNovelContentBlockReason(current, settings, undefined, {
+          exemptRestrictions: isExempt,
+        })
+        if (blockReason !== null) {
           guard()
           setNovel(null)
           setText("")
           setTextEmbeddedImages(undefined)
-          setError(BLOCKED_CONTENT_MESSAGE)
+          setError(
+            blockReason === "blocklist"
+              ? BLOCKED_BY_BLOCKLIST_MESSAGE
+              : BLOCKED_BY_RESTRICTION_MESSAGE
+          )
           setLoading(false)
         }
       } else if (
         !current &&
-        errorRef.current === BLOCKED_CONTENT_MESSAGE
+        (errorRef.current === BLOCKED_BY_BLOCKLIST_MESSAGE ||
+          errorRef.current === BLOCKED_BY_RESTRICTION_MESSAGE)
       ) {
         load()
       }

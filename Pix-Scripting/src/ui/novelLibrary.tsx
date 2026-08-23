@@ -30,7 +30,9 @@ export function NovelLibraryView() {
     filter: (items) => {
       const settings = loadSettings()
       return items.filter((item) =>
-        isNovelContentVisible(item.novel, settings)
+        isNovelContentVisible(item.novel, settings, undefined, {
+          exemptRestrictions: settings.exemptFilterForPersonal,
+        })
       )
     },
     deps: [],

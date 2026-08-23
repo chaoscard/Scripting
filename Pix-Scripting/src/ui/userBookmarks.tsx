@@ -17,7 +17,7 @@ import {
 } from "../api/pixiv"
 import { session } from "../api/session"
 import { cardThumbUrlOf, novelThumbUrlOf, prefetch } from "../image/imageLoader"
-import { onSettingsChanged } from "../store/settings"
+import { loadSettings, onSettingsChanged } from "../store/settings"
 import {
   onIllustBookmarkChanged,
   onNovelBookmarkChanged,
@@ -42,8 +42,19 @@ import {
 type BookmarkKind = "illustration" | "novel"
 
 export function UserBookmarksView(props: { userID: number }) {
+  const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
   const [kind, setKind] = useState<BookmarkKind>("illustration")
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      const next = loadSettings().hideNovels
+      setHideNovels(next)
+      if (next && kind === "novel") {
+        setKind("illustration")
+      }
+    })
+  }, [kind])
 
   return (
     <RefreshableScrollView
@@ -52,7 +63,9 @@ export function UserBookmarksView(props: { userID: number }) {
       refreshable={() => refreshHandlerRef.current()}
     >
       <VStack alignment="leading" spacing={8}>
-        <BookmarkKindPicker kind={kind} onChanged={setKind} />
+        {hideNovels ? null : (
+          <BookmarkKindPicker kind={kind} onChanged={setKind} />
+        )}
         <UserBookmarksFeed
           userID={props.userID}
           kind={kind}
@@ -159,7 +172,14 @@ function UserBookmarksFeed(props: {
         ) : illustPaged.error && illustPaged.items.length === 0 ? (
           <ErrorView message={illustPaged.error} onRetry={illustPaged.refresh} />
         ) : illustPaged.items.length === 0 ? (
-          <EmptyView text="暂无公开收藏作品" systemImage="heart" />
+          <EmptyView
+            text={
+              illustPaged.hasFilteredContent
+                ? "当前页面部分作品被内容显示设置过滤，暂时无法显示"
+                : "暂无公开收藏作品"
+            }
+            systemImage={illustPaged.hasFilteredContent ? "eye.slash" : "heart"}
+          />
         ) : (
           <IllustFlowFeed
             items={illustPaged.items}
@@ -174,12 +194,20 @@ function UserBookmarksFeed(props: {
 
   return (
     <VStack alignment="leading" spacing={10}>
+      <BookmarkTags tags={tags} activeTag={activeTag} onTagChange={setActiveTag} />
       {novelPaged.initialLoading ? (
         <LoadingView />
       ) : novelPaged.error && novelPaged.items.length === 0 ? (
         <ErrorView message={novelPaged.error} onRetry={novelPaged.refresh} />
       ) : novelPaged.items.length === 0 ? (
-        <EmptyView text="暂无公开收藏小说" systemImage="book" />
+        <EmptyView
+          text={
+            novelPaged.hasFilteredContent
+              ? "当前页面部分小说被内容显示设置过滤，暂时无法显示"
+              : "暂无公开收藏小说"
+          }
+          systemImage={novelPaged.hasFilteredContent ? "eye.slash" : "book"}
+        />
       ) : (
         <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
           {novelPaged.items.map((novel, index) => (

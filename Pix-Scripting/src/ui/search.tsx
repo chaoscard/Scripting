@@ -86,6 +86,7 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
   const [scope, setScope] = useState<SearchScope>("illust")
   const [sort, setSort] = useState<SearchSort>("date_desc")
   const [mode, setMode] = useState<SearchMode>("results")
+  const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
   const [trending, setTrending] = useState<PixivTrendingTag[]>([])
   const [suggestions, setSuggestions] = useState<
     { name: string; translated_name?: string | null }[]
@@ -179,11 +180,16 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
 
   useEffect(() => {
     return onSettingsChanged(() => {
+      const next = loadSettings().hideNovels
+      setHideNovels(next)
+      if (next && scope === "novel") {
+        setScope("illust")
+      }
       illustPagedRef.current.reapplyFilter()
       novelPagedRef.current.reapplyFilter()
       userPagedRef.current.reapplyFilter()
     })
-  }, [])
+  }, [scope])
 
   useEffect(() => {
     session
@@ -278,7 +284,11 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
         <AdvancedSearchPlaceholder />
       ) : (
         <VStack alignment="leading" spacing={8}>
-          <SearchScopePicker scope={scope} onScopeChange={setScope} />
+          <SearchScopePicker
+            scope={scope}
+            hideNovels={hideNovels}
+            onScopeChange={setScope}
+          />
 
           {!submitted ? (
             <VStack alignment="leading" spacing={8} padding={{ horizontal: 14 }}>
@@ -313,7 +323,16 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
                 onRetry={activePaged.refresh}
               />
             ) : activePaged.items.length === 0 ? (
-              <EmptyView text="没有找到相关内容" systemImage="magnifyingglass" />
+              <EmptyView
+                text={
+                  activePaged.hasFilteredContent
+                    ? scope === "novel"
+                      ? "当前页面部分小说被内容显示设置过滤，暂时无法显示"
+                      : "当前页面部分作品被内容显示设置过滤，暂时无法显示"
+                    : "没有找到相关内容"
+                }
+                systemImage={activePaged.hasFilteredContent ? "eye.slash" : "magnifyingglass"}
+              />
             ) : scope === "illust" ? (
               <IllustFlowFeed
                 items={illustPaged.items}
@@ -377,8 +396,18 @@ function searchToolbar(props: {
 
 function SearchScopePicker(props: {
   scope: SearchScope
+  hideNovels?: boolean
   onScopeChange: (scope: SearchScope) => void
 }) {
+  const scopes: { tag: SearchScope; label: string }[] = [
+    { tag: "illust", label: "插画·漫画" },
+  ]
+  if (!props.hideNovels) {
+    scopes.push({ tag: "novel", label: "小说" })
+  }
+  scopes.push({ tag: "user", label: "用户" })
+  if (scopes.length <= 1) return null
+
   return (
     <Picker
       title="搜索范围"
@@ -387,9 +416,11 @@ function SearchScopePicker(props: {
       pickerStyle="segmented"
       padding={{ horizontal: 14 }}
     >
-      <Text tag="illust">插画·漫画</Text>
-      <Text tag="novel">小说</Text>
-      <Text tag="user">用户</Text>
+      {scopes.map((item) => (
+        <Text key={item.tag} tag={item.tag}>
+          {item.label}
+        </Text>
+      ))}
     </Picker>
   )
 }

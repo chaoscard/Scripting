@@ -85,7 +85,18 @@ export function RankingView(props: { onClose: () => void }) {
     useState<IllustrationRankingMode>("day")
   const [mangaMode, setMangaMode] = useState<MangaRankingMode>("day_manga")
   const [novelMode, setNovelMode] = useState<NovelRankingMode>("day")
+  const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      const next = loadSettings().hideNovels
+      setHideNovels(next)
+      if (next && kind === "novel") {
+        setKind("illustration")
+      }
+    })
+  }, [kind])
 
   const rootModes =
     kind === "illustration"
@@ -114,7 +125,12 @@ export function RankingView(props: { onClose: () => void }) {
     <RefreshableScrollView
       navigationBarTitleDisplayMode="inline"
       navigationDestination={destinationElement}
-      toolbar={rankingToolbar({ kind, onKindChange: setKind, onClose: props.onClose })}
+      toolbar={rankingToolbar({
+        kind,
+        hideNovels,
+        onKindChange: setKind,
+        onClose: props.onClose,
+      })}
       refreshable={() => refreshHandlerRef.current()}
     >
       <VStack
@@ -169,6 +185,7 @@ export function RankingView(props: { onClose: () => void }) {
 
 function rankingToolbar(props: {
   kind: RankingKind
+  hideNovels: boolean
   onKindChange: (kind: RankingKind) => void
   onClose: () => void
 }) {
@@ -191,7 +208,9 @@ function rankingToolbar(props: {
       >
         <Label tag="illustration" title="插画" systemImage="photo" />
         <Label tag="manga" title="漫画" systemImage="photo.on.rectangle" />
-        <Label tag="novel" title="小说" systemImage="book" />
+        {props.hideNovels ? null : (
+          <Label tag="novel" title="小说" systemImage="book" />
+        )}
         <Label
           tag="advanced"
           title="高级"
@@ -478,7 +497,14 @@ function NovelRankingFeedContent(props: {
       ) : paged.error && paged.items.length === 0 ? (
         <ErrorView message={paged.error} onRetry={paged.refresh} />
       ) : paged.items.length === 0 ? (
-        <EmptyView text="暂无小说排行，下拉刷新试试" systemImage="book" />
+        <EmptyView
+          text={
+            paged.hasFilteredContent
+              ? "当前页面部分小说被内容显示设置过滤，暂时无法显示"
+              : "暂无小说排行，下拉刷新试试"
+          }
+          systemImage={paged.hasFilteredContent ? "eye.slash" : "book"}
+        />
       ) : (
         <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
           {paged.items.map((novel, index) => (
@@ -519,8 +545,18 @@ function IllustRankingFeedContent(props: {
         <ErrorView message={paged.error} onRetry={paged.refresh} />
       ) : paged.items.length === 0 ? (
         <EmptyView
-          text={`暂无${label}排行，下拉刷新试试`}
-          systemImage={label.includes("漫画") ? "photo.on.rectangle" : "photo"}
+          text={
+            paged.hasFilteredContent
+              ? "当前页面部分作品被内容显示设置过滤，暂时无法显示"
+              : `暂无${label}排行，下拉刷新试试`
+          }
+          systemImage={
+            paged.hasFilteredContent
+              ? "eye.slash"
+              : label.includes("漫画")
+                ? "photo.on.rectangle"
+                : "photo"
+          }
         />
       ) : (
         <IllustFlowFeed

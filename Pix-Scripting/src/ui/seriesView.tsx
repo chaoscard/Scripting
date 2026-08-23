@@ -117,12 +117,20 @@ function seriesIllust(
 
 function filterSeriesIllusts(items: PixivIllustration[]): PixivIllustration[] {
   const settings = loadSettings()
-  return items.filter((item) => isIllustContentVisible(item, settings))
+  return items.filter((item) =>
+    isIllustContentVisible(item, settings, undefined, {
+      exemptRestrictions: settings.exemptFilterForPersonal,
+    })
+  )
 }
 
 function filterSeriesNovels(items: PixivNovel[]): PixivNovel[] {
   const settings = loadSettings()
-  return items.filter((item) => isNovelContentVisible(item, settings))
+  return items.filter((item) =>
+    isNovelContentVisible(item, settings, undefined, {
+      exemptRestrictions: settings.exemptFilterForPersonal,
+    })
+  )
 }
 
 function candidateUrlOf(item: any): string | null {
@@ -583,8 +591,12 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
           <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10, top: 4 }}>
             {novelPaged.items.length === 0 && !novelPaged.initialLoading ? (
               <EmptyView
-                text="暂无可显示的小说章节"
-                systemImage="book"
+                text={
+                  novelPaged.hasFilteredContent
+                    ? "当前页面部分小说被内容显示设置过滤，暂时无法显示"
+                    : "暂无可显示的小说章节"
+                }
+                systemImage={novelPaged.hasFilteredContent ? "eye.slash" : "book"}
               />
             ) : (
               <>
@@ -606,8 +618,12 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
           <VStack alignment="leading" spacing={8} padding={{ top: 4 }} frame={{ maxWidth: "infinity" }}>
             {illustPaged.items.length === 0 && !illustPaged.initialLoading ? (
               <EmptyView
-                text="暂无可显示的漫画章节"
-                systemImage="photo.on.rectangle"
+                text={
+                  illustPaged.hasFilteredContent
+                    ? "当前页面部分作品被内容显示设置过滤，暂时无法显示"
+                    : "暂无可显示的漫画章节"
+                }
+                systemImage={illustPaged.hasFilteredContent ? "eye.slash" : "photo.on.rectangle"}
               />
             ) : (
               <IllustFlowFeed

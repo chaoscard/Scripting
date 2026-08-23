@@ -67,7 +67,20 @@ export function FollowFeedView(props: {
   const [followingKind, setFollowingKind] = useState<WorkKind>("illust")
   const [watchKind, setWatchKind] = useState<WatchKind>("manga")
   const [friendKind, setFriendKind] = useState<WorkKind>("illust")
+  const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      const next = loadSettings().hideNovels
+      setHideNovels(next)
+      if (next) {
+        setFollowingKind("illust")
+        setWatchKind("manga")
+        setFriendKind("illust")
+      }
+    })
+  }, [])
 
   const segmentedValue =
     mode === "following"
@@ -101,11 +114,13 @@ export function FollowFeedView(props: {
           if (!activated) setActivated(true)
         }}
       >
-        <FollowKindPicker
-          mode={mode}
-          value={segmentedValue}
-          onChanged={selectSegmentedKind}
-        />
+        {hideNovels ? null : (
+          <FollowKindPicker
+            mode={mode}
+            value={segmentedValue}
+            onChanged={selectSegmentedKind}
+          />
+        )}
         {mode === "following" ? (
           <FollowingFeed
             key={`following:${scope}`}
@@ -240,9 +255,19 @@ function FollowingFeed(props: {
   })
 
   const activeRefresh = kind === "illust" ? illustPaged.refresh : novelPaged.refresh
+  const illustPagedRef = useLatest(illustPaged)
+  const novelPagedRef = useLatest(novelPaged)
+
   useEffect(() => {
     onRegisterRefresh?.(activeRefresh)
   }, [activeRefresh, onRegisterRefresh])
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      illustPagedRef.current.reapplyFilter()
+      novelPagedRef.current.reapplyFilter()
+    })
+  }, [])
 
   if (kind === "illust") {
     return (
@@ -252,7 +277,14 @@ function FollowingFeed(props: {
         ) : illustPaged.error && illustPaged.items.length === 0 ? (
           <ErrorView message={illustPaged.error} onRetry={illustPaged.refresh} />
         ) : illustPaged.items.length === 0 ? (
-          <EmptyView text="关注的人还没有新作品" systemImage="person.2" />
+          <EmptyView
+            text={
+              illustPaged.hasFilteredContent
+                ? "当前页面部分作品被内容显示设置过滤，暂时无法显示"
+                : "关注的人还没有新作品"
+            }
+            systemImage={illustPaged.hasFilteredContent ? "eye.slash" : "person.2"}
+          />
         ) : (
           <IllustFlowFeed
             items={illustPaged.items}
@@ -272,7 +304,14 @@ function FollowingFeed(props: {
       ) : novelPaged.error && novelPaged.items.length === 0 ? (
         <ErrorView message={novelPaged.error} onRetry={novelPaged.refresh} />
       ) : novelPaged.items.length === 0 ? (
-        <EmptyView text="关注的人还没有新小说" systemImage="book" />
+        <EmptyView
+          text={
+            novelPaged.hasFilteredContent
+              ? "当前页面部分小说被内容显示设置过滤，暂时无法显示"
+              : "关注的人还没有新小说"
+          }
+          systemImage={novelPaged.hasFilteredContent ? "eye.slash" : "book"}
+        />
       ) : (
         <NovelFeedItems
           items={novelPaged.items}
@@ -392,9 +431,19 @@ function FriendsFeed(props: {
   })
 
   const activeRefresh = kind === "illust" ? illustPaged.refresh : novelPaged.refresh
+  const illustPagedRef = useLatest(illustPaged)
+  const novelPagedRef = useLatest(novelPaged)
+
   useEffect(() => {
     onRegisterRefresh?.(activeRefresh)
   }, [activeRefresh, onRegisterRefresh])
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      illustPagedRef.current.reapplyFilter()
+      novelPagedRef.current.reapplyFilter()
+    })
+  }, [])
 
   if (kind === "illust") {
     return (
@@ -404,7 +453,14 @@ function FriendsFeed(props: {
         ) : illustPaged.error && illustPaged.items.length === 0 ? (
           <ErrorView message={illustPaged.error} onRetry={illustPaged.refresh} />
         ) : illustPaged.items.length === 0 ? (
-          <EmptyView text="好友还没有新作品" systemImage="person.2" />
+          <EmptyView
+            text={
+              illustPaged.hasFilteredContent
+                ? "当前页面部分作品被内容显示设置过滤，暂时无法显示"
+                : "好友还没有新作品"
+            }
+            systemImage={illustPaged.hasFilteredContent ? "eye.slash" : "person.2"}
+          />
         ) : (
           <IllustFlowFeed
             items={illustPaged.items}
@@ -424,7 +480,14 @@ function FriendsFeed(props: {
       ) : novelPaged.error && novelPaged.items.length === 0 ? (
         <ErrorView message={novelPaged.error} onRetry={novelPaged.refresh} />
       ) : novelPaged.items.length === 0 ? (
-        <EmptyView text="好友还没有新小说" systemImage="book" />
+        <EmptyView
+          text={
+            novelPaged.hasFilteredContent
+              ? "当前页面部分小说被内容显示设置过滤，暂时无法显示"
+              : "好友还没有新小说"
+          }
+          systemImage={novelPaged.hasFilteredContent ? "eye.slash" : "book"}
+        />
       ) : (
         <NovelFeedItems
           items={novelPaged.items}
@@ -460,12 +523,20 @@ function NovelFeedItems(props: {
 
 function filterFollowingIllustrationItems(items: PixivIllustration[]): PixivIllustration[] {
   const settings = loadSettings()
-  return items.filter((item) => isIllustContentVisible(item, settings))
+  return items.filter((item) =>
+    isIllustContentVisible(item, settings, undefined, {
+      exemptRestrictions: settings.exemptFilterForPersonal,
+    })
+  )
 }
 
 function filterFollowingNovelItems(items: PixivNovel[]): PixivNovel[] {
   const settings = loadSettings()
-  return items.filter((novel) => isNovelContentVisible(novel, settings))
+  return items.filter((novel) =>
+    isNovelContentVisible(novel, settings, undefined, {
+      exemptRestrictions: settings.exemptFilterForPersonal,
+    })
+  )
 }
 
 function filterWatchlistItems(

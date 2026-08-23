@@ -41,6 +41,7 @@ import type { PixivBookmarkTag, PixivIllustration, PixivNovel } from "../types"
 import {
   EmptyView,
   ErrorView,
+  FilteredContentNotice,
   LoadingView,
   LoadMoreTrigger,
   IllustFlowFeed,
@@ -54,9 +55,20 @@ type LibraryKind = "illustration" | "novel"
 const MAX_TAG_CHIPS = 20
 
 export function LibraryView() {
+  const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
   const [kind, setKind] = useState<LibraryKind>("illustration")
   const [restrict, setRestrict] = useState<Visibility>("public")
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      const next = loadSettings().hideNovels
+      setHideNovels(next)
+      if (next && kind === "novel") {
+        setKind("illustration")
+      }
+    })
+  }, [kind])
 
   return (
     <RefreshableScrollView
@@ -65,7 +77,9 @@ export function LibraryView() {
       refreshable={() => refreshHandlerRef.current()}
     >
       <VStack alignment="leading" spacing={8}>
-        <LibraryKindPicker kind={kind} onKindChange={setKind} />
+        {hideNovels ? null : (
+          <LibraryKindPicker kind={kind} onKindChange={setKind} />
+        )}
         <LibraryFeed
           key={restrict}
           kind={kind}
@@ -260,14 +274,24 @@ function LibraryFeed(props: {
         ) : illustPaged.error && illustPaged.items.length === 0 ? (
           <ErrorView message={illustPaged.error} onRetry={illustPaged.refresh} />
         ) : illustPaged.items.length === 0 ? (
-          <EmptyView text="暂无收藏作品" systemImage="heart" />
-        ) : (
-          <IllustFlowFeed
-            items={illustPaged.items}
-            onLoadMore={illustPaged.loadMore}
-            hasMore={illustPaged.hasMore}
-            isLoading={illustPaged.loadingMore}
+          <EmptyView
+            text={
+              illustPaged.hasFilteredContent
+                ? "当前页面部分作品被内容显示设置过滤，暂时无法显示"
+                : "暂无收藏作品"
+            }
+            systemImage={illustPaged.hasFilteredContent ? "eye.slash" : "heart"}
           />
+        ) : (
+          <VStack alignment="leading" spacing={6} frame={{ maxWidth: "infinity" }}>
+            {illustPaged.hasFilteredContent ? <FilteredContentNotice isNovel={false} /> : null}
+            <IllustFlowFeed
+              items={illustPaged.items}
+              onLoadMore={illustPaged.loadMore}
+              hasMore={illustPaged.hasMore}
+              isLoading={illustPaged.loadingMore}
+            />
+          </VStack>
         )}
       </VStack>
     )
@@ -281,9 +305,17 @@ function LibraryFeed(props: {
       ) : novelPaged.error && novelPaged.items.length === 0 ? (
         <ErrorView message={novelPaged.error} onRetry={novelPaged.refresh} />
       ) : novelPaged.items.length === 0 ? (
-        <EmptyView text="还没有收藏小说" systemImage="book" />
+        <EmptyView
+          text={
+            novelPaged.hasFilteredContent
+              ? "当前页面部分小说被内容显示设置过滤，暂时无法显示"
+              : "还没有收藏小说"
+          }
+          systemImage={novelPaged.hasFilteredContent ? "eye.slash" : "book"}
+        />
       ) : (
         <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
+          {novelPaged.hasFilteredContent ? <FilteredContentNotice isNovel={true} /> : null}
           {novelPaged.items.map((novel, index) => (
             <NovelCard key={novel.id} novel={novel} priority={index} />
           ))}
@@ -303,7 +335,9 @@ export function filterIllustrationBookmarks(items: PixivIllustration[]): PixivIl
   const settings = loadSettings()
   return items.filter((item) => {
     if (getCachedIllustBookmark(item.id) === false) return false
-    return isIllustContentVisible(item, settings)
+    return isIllustContentVisible(item, settings, undefined, {
+      exemptRestrictions: settings.exemptFilterForPersonal,
+    })
   })
 }
 
@@ -311,6 +345,8 @@ export function filterNovelBookmarks(items: PixivNovel[]): PixivNovel[] {
   const settings = loadSettings()
   return items.filter((item) => {
     if (getCachedNovelBookmark(item.id) === false) return false
-    return isNovelContentVisible(item, settings)
+    return isNovelContentVisible(item, settings, undefined, {
+      exemptRestrictions: settings.exemptFilterForPersonal,
+    })
   })
 }

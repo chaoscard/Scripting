@@ -21,6 +21,8 @@ export interface AppSettings {
   showR18: boolean
   showR18G: boolean
   showAI: boolean
+  exemptFilterForPersonal: boolean
+  hideNovels: boolean
   ambientImmersion: boolean
   ambientIntensity: AmbientIntensity
   watchlistSortOrder: WatchlistSortOrder
@@ -49,6 +51,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   showR18: false,
   showR18G: false,
   showAI: false,
+  exemptFilterForPersonal: false,
+  hideNovels: false,
   ambientImmersion: true,
   ambientIntensity: "medium",
   watchlistSortOrder: "asc",
@@ -195,6 +199,11 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
     showR18: boolOr(stored?.showR18, DEFAULT_SETTINGS.showR18),
     showR18G: boolOr(stored?.showR18G, DEFAULT_SETTINGS.showR18G),
     showAI: boolOr(stored?.showAI, DEFAULT_SETTINGS.showAI),
+    exemptFilterForPersonal: boolOr(
+      stored?.exemptFilterForPersonal,
+      DEFAULT_SETTINGS.exemptFilterForPersonal
+    ),
+    hideNovels: boolOr(stored?.hideNovels, DEFAULT_SETTINGS.hideNovels),
     ambientImmersion: boolOr(stored?.ambientImmersion, DEFAULT_SETTINGS.ambientImmersion),
     ambientIntensity: isOneOf(stored?.ambientIntensity, AMBIENT_INTENSITY_VALUES)
       ? stored.ambientIntensity
