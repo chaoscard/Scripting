@@ -32,6 +32,7 @@ import type { PixivIllustration, PixivNovel, PixivUserDetail } from "../types"
 import {
   EmptyView,
   ErrorView,
+  FilteredContentNotice,
   IllustFlowFeed,
   LoadingView,
   LoadMoreTrigger,
@@ -304,7 +305,7 @@ function UserWorksFeed(props: {
       !illustPaged.loadingMore &&
       !illustPaged.error
     ) {
-      onKindEmpty?.("illust", illustPaged.items.length === 0)
+      onKindEmpty?.("illust", illustPaged.items.length === 0 && !illustPaged.hasFilteredContent)
     }
   }, [
     tab,
@@ -313,6 +314,7 @@ function UserWorksFeed(props: {
     illustPaged.loadingMore,
     illustPaged.error,
     illustPaged.items.length,
+    illustPaged.hasFilteredContent,
     onKindEmpty,
   ])
 
@@ -324,7 +326,7 @@ function UserWorksFeed(props: {
       !mangaPaged.loadingMore &&
       !mangaPaged.error
     ) {
-      onKindEmpty?.("manga", mangaPaged.items.length === 0)
+      onKindEmpty?.("manga", mangaPaged.items.length === 0 && !mangaPaged.hasFilteredContent)
     }
   }, [
     tab,
@@ -333,6 +335,7 @@ function UserWorksFeed(props: {
     mangaPaged.loadingMore,
     mangaPaged.error,
     mangaPaged.items.length,
+    mangaPaged.hasFilteredContent,
     onKindEmpty,
   ])
 
@@ -344,7 +347,7 @@ function UserWorksFeed(props: {
       !novelPaged.loadingMore &&
       !novelPaged.error
     ) {
-      onKindEmpty?.("novel", novelPaged.items.length === 0)
+      onKindEmpty?.("novel", novelPaged.items.length === 0 && !novelPaged.hasFilteredContent)
     }
   }, [
     tab,
@@ -353,6 +356,7 @@ function UserWorksFeed(props: {
     novelPaged.loadingMore,
     novelPaged.error,
     novelPaged.items.length,
+    novelPaged.hasFilteredContent,
     onKindEmpty,
   ])
 
@@ -387,15 +391,27 @@ function UserWorksFeed(props: {
       return <ErrorView message={illustPaged.error} onRetry={illustPaged.refresh} />
     }
     if (illustPaged.items.length === 0) {
-      return <EmptyView text="暂无插画投稿" systemImage="photo" />
+      return (
+        <EmptyView
+          text={
+            illustPaged.hasFilteredContent
+              ? "当前页面部分作品被内容显示设置过滤，暂时无法显示"
+              : "暂无插画投稿"
+          }
+          systemImage={illustPaged.hasFilteredContent ? "eye.slash" : "photo"}
+        />
+      )
     }
     return (
-      <IllustFlowFeed
-        items={illustPaged.items}
-        onLoadMore={illustPaged.loadMore}
-        hasMore={illustPaged.hasMore}
-        isLoading={illustPaged.loadingMore}
-      />
+      <VStack alignment="leading" spacing={6} frame={{ maxWidth: "infinity" }}>
+        {illustPaged.hasFilteredContent ? <FilteredContentNotice isNovel={false} /> : null}
+        <IllustFlowFeed
+          items={illustPaged.items}
+          onLoadMore={illustPaged.loadMore}
+          hasMore={illustPaged.hasMore}
+          isLoading={illustPaged.loadingMore}
+        />
+      </VStack>
     )
   }
 
@@ -405,15 +421,27 @@ function UserWorksFeed(props: {
       return <ErrorView message={mangaPaged.error} onRetry={mangaPaged.refresh} />
     }
     if (mangaPaged.items.length === 0) {
-      return <EmptyView text="暂无漫画投稿" systemImage="photo.on.rectangle" />
+      return (
+        <EmptyView
+          text={
+            mangaPaged.hasFilteredContent
+              ? "当前页面部分作品被内容显示设置过滤，暂时无法显示"
+              : "暂无漫画投稿"
+          }
+          systemImage={mangaPaged.hasFilteredContent ? "eye.slash" : "photo.on.rectangle"}
+        />
+      )
     }
     return (
-      <IllustFlowFeed
-        items={mangaPaged.items}
-        onLoadMore={mangaPaged.loadMore}
-        hasMore={mangaPaged.hasMore}
-        isLoading={mangaPaged.loadingMore}
-      />
+      <VStack alignment="leading" spacing={6} frame={{ maxWidth: "infinity" }}>
+        {mangaPaged.hasFilteredContent ? <FilteredContentNotice isNovel={false} /> : null}
+        <IllustFlowFeed
+          items={mangaPaged.items}
+          onLoadMore={mangaPaged.loadMore}
+          hasMore={mangaPaged.hasMore}
+          isLoading={mangaPaged.loadingMore}
+        />
+      </VStack>
     )
   }
 
@@ -422,10 +450,20 @@ function UserWorksFeed(props: {
     return <ErrorView message={novelPaged.error} onRetry={novelPaged.refresh} />
   }
   if (novelPaged.items.length === 0) {
-    return <EmptyView text="暂无小说投稿" systemImage="book" />
+    return (
+      <EmptyView
+        text={
+          novelPaged.hasFilteredContent
+            ? "当前页面部分小说被内容显示设置过滤，暂时无法显示"
+            : "暂无小说投稿"
+        }
+        systemImage={novelPaged.hasFilteredContent ? "eye.slash" : "book"}
+      />
+    )
   }
   return (
     <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
+      {novelPaged.hasFilteredContent ? <FilteredContentNotice isNovel={true} /> : null}
       {novelPaged.items.map((novel, index) => (
         <NovelCard key={novel.id} novel={novel} priority={index} />
       ))}

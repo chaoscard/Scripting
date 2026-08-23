@@ -59,7 +59,16 @@ export function UgoiraPlayerView(props: {
 
   // 竞态防护：illustID 切换（或组件卸载）后，旧作品的合成结果直接丢弃
   const seqRef = useRef(0)
-  const initialHitRef = useRef(Boolean(cachedUgoira(illustID)))
+  const initialHitRef = useRef(Boolean(previewPath))
+  const [transitionCompleted, setTransitionCompleted] = useState(() => initialHitRef.current)
+
+  useEffect(() => {
+    if (initialHitRef.current) {
+      setTransitionCompleted(true)
+      return
+    }
+    setTransitionCompleted(false)
+  }, [previewUrl])
 
   useEffect(() => {
     if (!previewUrl) {
@@ -155,6 +164,18 @@ export function UgoiraPlayerView(props: {
   const containerFrame = frame ?? { maxWidth: "infinity" }
   const crossFadeDuration = blurCrossFadeDurationSec()
 
+  useEffect(() => {
+    if (transitionCompleted || !previewPath) return
+    if (initialHitRef.current) {
+      setTransitionCompleted(true)
+      return
+    }
+    const timer = setTimeout(() => {
+      setTransitionCompleted(true)
+    }, Math.max(50, crossFadeDuration * 1000 + 50))
+    return () => clearTimeout(timer)
+  }, [previewPath, crossFadeDuration, transitionCompleted])
+
   return (
     <VStack alignment="center" spacing={6} frame={{ maxWidth: "infinity" }}>
       <ZStack
@@ -169,8 +190,8 @@ export function UgoiraPlayerView(props: {
           background="tertiarySystemFill"
         />
 
-        {/* 2. 预模糊位图垫底层（位图直出，常驻底层，提供瞬间模糊底色；与播放器严格统一使用 fit 比例模式） */}
-        {previewBlurredImage ? (
+        {/* 2. 预模糊位图垫底层（位图直出，消融完成后自动卸载释放；与播放器严格统一使用 fit 比例模式） */}
+        {!transitionCompleted && previewBlurredImage ? (
           <Image
             image={previewBlurredImage}
             resizable={true}
@@ -179,7 +200,7 @@ export function UgoiraPlayerView(props: {
           />
         ) : null}
 
-        {/* 3. 高清静态海报层（由模糊预览消融至高清首帧静图，负责呈现完美的模糊消融过渡并为视频播放提供 100% 同像素静图承托） */}
+        {/* 3. 高清静态海报层（由模糊预览消融至高清首帧静图，消融完成后剥离 Transition 修饰符防止状态重绘闪屏） */}
         {previewPath ? (
           <Image
             key={`sharp-poster-${illustID}`}
@@ -187,7 +208,7 @@ export function UgoiraPlayerView(props: {
             resizable={true}
             aspectRatio={{ value: stableAspect, contentMode: "fit" }}
             frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-            transition={initialHitRef.current ? undefined : (crossFadeDuration > 0 ? Transition.fade(crossFadeDuration) : undefined)}
+            transition={initialHitRef.current || transitionCompleted ? undefined : (crossFadeDuration > 0 ? Transition.fade(crossFadeDuration) : undefined)}
           />
         ) : null}
 

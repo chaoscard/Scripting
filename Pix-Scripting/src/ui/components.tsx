@@ -352,7 +352,12 @@ export function CachedImage(props: {
     priority,
   } = props
   const { path, isTargetLoaded, failed, cacheRevision } = useCachedImage(url, onLoaded, priority)
-  const initialHitRef = useRef(Boolean(path))
+  const initialHitRef = useRef<boolean>(Boolean(url && cachedFilePath(url)))
+  const lastUrlRef = useRef<string | null>(url)
+  if (lastUrlRef.current !== url) {
+    lastUrlRef.current = url
+    initialHitRef.current = Boolean(url && cachedFilePath(url))
+  }
 
   // 缩略图主动就绪与模糊占位机制：
   // 1. 若大图首帧未命中且提供了 previewUrl，本地未缓存时立即在组件内主动请求 previewUrl（体积极小，毫秒级就绪）；
@@ -385,9 +390,59 @@ export function CachedImage(props: {
 
   const previewPath = previewCached ?? previewLoadedPath
 
-  const showBlurPreview = Boolean(
-    !initialHitRef.current && previewPath && previewPath !== path
+  // 追踪上一张已成功展示的图片路径（用于画质升级/切换时的平滑垫底直切消融）
+  const previousLoadedPathRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (isTargetLoaded && path) {
+      previousLoadedPathRef.current = path
+    }
+  }, [isTargetLoaded, path])
+
+  // 过渡动画状态管理：
+  // 1. 首帧命中或显式禁用淡入时，直接标记为已完成，不挂载任何 Transition 修饰符；
+  // 2. 异步大图下载并就绪时启动过渡，在消融/淡入动画结束（duration + 50ms 缓冲）后标记完成并剥离 Transition，
+  //    彻底杜绝后续父组件状态变化（如 mediaReady、ambientPalette、收藏操作、滚动）二次触发 Transition 导致消融后闪屏。
+  const [transitionCompleted, setTransitionCompleted] = useState(
+    () => initialHitRef.current || disableFadeIn
   )
+
+  useEffect(() => {
+    if (initialHitRef.current || disableFadeIn) {
+      setTransitionCompleted(true)
+      return
+    }
+    setTransitionCompleted(false)
+  }, [url, disableFadeIn])
+
+  const fadeDuration = imageFadeDurationSec()
+  const crossFadeDuration = blurCrossFadeDurationSec()
+
+  const underlayPath = (
+    !transitionCompleted &&
+    previousLoadedPathRef.current &&
+    previousLoadedPathRef.current !== path
+  ) ? previousLoadedPathRef.current : null
+
+  const showBlurPreview = Boolean(
+    !underlayPath &&
+    !transitionCompleted &&
+    !initialHitRef.current &&
+    previewPath &&
+    previewPath !== path
+  )
+
+  useEffect(() => {
+    if (transitionCompleted || !isTargetLoaded) return
+    if (initialHitRef.current || disableFadeIn) {
+      setTransitionCompleted(true)
+      return
+    }
+    const durationMs = (showBlurPreview || underlayPath ? crossFadeDuration : fadeDuration) * 1000
+    const timer = setTimeout(() => {
+      setTransitionCompleted(true)
+    }, Math.max(50, durationMs + 50))
+    return () => clearTimeout(timer)
+  }, [isTargetLoaded, showBlurPreview, underlayPath, crossFadeDuration, fadeDuration, transitionCompleted, disableFadeIn])
 
   const croppedImage = useMemo(() => {
     if (!path) return null
@@ -485,6 +540,54 @@ export function CachedImage(props: {
     }
   }, [showBlurPreview, previewPath, centerCropSquare, centerCropAspect, blurPreviewRadius])
 
+  const underlayCroppedImage = useMemo(() => {
+    if (!underlayPath) return null
+    if (centerCropSquare) {
+      try {
+        const image = UIImage.fromFile(underlayPath)
+        if (!image || image.width <= 0 || image.height <= 0) return null
+        const side = Math.min(image.width, image.height)
+        return image.croppedTo({
+          x: (image.width - side) / 2,
+          y: (image.height - side) / 2,
+          width: side,
+          height: side,
+        })
+      } catch {
+        return null
+      }
+    }
+    if (centerCropAspect != null && centerCropAspect > 0) {
+      try {
+        const image = UIImage.fromFile(underlayPath)
+        if (!image || image.width <= 0 || image.height <= 0) return null
+        const currentAspect = image.width / image.height
+        if (Math.abs(currentAspect - centerCropAspect) > 0.01) {
+          if (currentAspect > centerCropAspect) {
+            const targetWidth = image.height * centerCropAspect
+            return image.croppedTo({
+              x: (image.width - targetWidth) / 2,
+              y: 0,
+              width: targetWidth,
+              height: image.height,
+            })
+          } else {
+            const targetHeight = image.width / centerCropAspect
+            return image.croppedTo({
+              x: 0,
+              y: (image.height - targetHeight) / 2,
+              width: image.width,
+              height: targetHeight,
+            })
+          }
+        }
+      } catch {
+        return null
+      }
+    }
+    return null
+  }, [underlayPath, centerCropSquare, centerCropAspect])
+
   // 优先使用已就绪的图片文件（高清大图优先，缩略图即时兜底）提取真实物理宽高比，
   // 确保多页作品各页在缩略图就绪的瞬间即可提前校准为真实比例，彻底消除大图下载完成时的二次外框尺寸跳变（Zero Layout Shift）：
   const activeMeasurePath = path ?? previewPath
@@ -516,8 +619,6 @@ export function CachedImage(props: {
     ? (centerCropAspect ?? 1)
     : (stableAspect ?? aspectRatioValue ?? 1)
   const containerFrame = frame ?? { maxWidth: "infinity" }
-  const fadeDuration = imageFadeDurationSec()
-  const crossFadeDuration = blurCrossFadeDurationSec()
 
   const resolvedClipShape = useMemo(() => {
     if (typeof cornerRadius === "object" && cornerRadius != null) {
@@ -532,19 +633,19 @@ export function CachedImage(props: {
     }
   }, [cornerRadius])
 
-  // 首帧已命中缓存时直接硬切呈现（0ms 动画），秒开无延时无白闪；
+  // 首帧已命中缓存或过渡已完成时直接硬切呈现（0ms 动画），秒开无延时无白闪；
   // 异步加载完成后：
-  // 1. 有本地模糊预览图垫底时，采用配置的模糊消融（0-250ms，默认 150ms），平滑过渡；
+  // 1. 有旧图垫底或本地模糊预览图垫底时，采用配置的模糊消融（0-250ms，默认 150ms），平滑过渡；
   // 2. 无本地预览图垫底时（如多页漫画后续页/冷启动），使用标准设置淡入，避免在灰色底色上误触发消融产生灰白闪屏。
-  const imageTransition = disableFadeIn || initialHitRef.current
+  const imageTransition = disableFadeIn || initialHitRef.current || transitionCompleted
     ? undefined
-    : showBlurPreview
+    : (showBlurPreview || underlayPath)
       ? (crossFadeDuration > 0 ? Transition.fade(crossFadeDuration) : undefined)
       : (fadeDuration > 0 ? Transition.fade(fadeDuration) : undefined)
 
   return (
     <ZStack
-      aspectRatio={{ value: effectiveRatio, contentMode: "fit" }}
+      aspectRatio={{ value: effectiveRatio, contentMode: contentMode }}
       clipShape={resolvedClipShape}
       clipped={true}
       frame={containerFrame}
@@ -564,24 +665,42 @@ export function CachedImage(props: {
         ) : null}
       </VStack>
 
-      {/* 2. 模糊缩略图垫底层（预模糊位图直出，彻底杜绝 Metal 滤镜 1 帧清晰跳变与交替白闪） */}
-      {showBlurPreview && previewBlurredImage ? (
+      {/* 2. 底层垫底（旧图平滑垫底直切消融，或缩略图预模糊位图垫底） */}
+      {underlayPath ? (
+        underlayCroppedImage ? (
+          <Image
+            key={`underlay-${underlayPath}`}
+            image={underlayCroppedImage}
+            resizable={true}
+            aspectRatio={{ value: effectiveRatio, contentMode: contentMode }}
+            frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          />
+        ) : (
+          <Image
+            key={`underlay-${underlayPath}`}
+            filePath={underlayPath}
+            resizable={true}
+            aspectRatio={{ value: effectiveRatio, contentMode: contentMode }}
+            frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          />
+        )
+      ) : showBlurPreview && previewBlurredImage ? (
         <Image
           image={previewBlurredImage}
           resizable={true}
-          aspectRatio={{ value: effectiveRatio, contentMode: "fill" }}
+          aspectRatio={{ value: effectiveRatio, contentMode: contentMode }}
           frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
         />
       ) : null}
 
-      {/* 3. 高清图片层：叠在模糊缩略图之上，平滑消融呈现 */}
+      {/* 3. 高清图片层：叠在垫底层之上，平滑消融呈现 */}
       {path ? (
         croppedImage ? (
           <Image
             key={path}
             image={croppedImage}
             resizable={true}
-            aspectRatio={{ value: effectiveRatio, contentMode: "fill" }}
+            aspectRatio={{ value: effectiveRatio, contentMode: contentMode }}
             frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
             transition={imageTransition}
           />
@@ -590,7 +709,7 @@ export function CachedImage(props: {
             key={path}
             filePath={path}
             resizable={true}
-            aspectRatio={{ value: effectiveRatio, contentMode: "fill" }}
+            aspectRatio={{ value: effectiveRatio, contentMode: contentMode }}
             frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
             transition={imageTransition}
           />

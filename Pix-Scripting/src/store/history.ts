@@ -28,6 +28,7 @@ interface StoredIllustData {
   image_urls?: {
     medium?: string
     square_medium?: string
+    large?: string
   }
   user: {
     id: number
@@ -120,6 +121,7 @@ function toStoredIllustData(illust: PixivIllustration): StoredIllustData {
     title: illust.title ?? "",
     type: illust.type ?? "illust",
     image_urls: {
+      large: illust.image_urls?.large,
       medium: illust.image_urls?.medium,
       square_medium: illust.image_urls?.square_medium,
     },
@@ -197,6 +199,7 @@ function inflateIllust(data: StoredIllustData): PixivIllustration {
     image_urls: {
       square_medium: data.image_urls?.square_medium,
       medium: data.image_urls?.medium,
+      large: data.image_urls?.large,
     },
     caption: "",
     user: {

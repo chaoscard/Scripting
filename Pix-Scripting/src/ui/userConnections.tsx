@@ -12,6 +12,7 @@ import {
   Spacer,
   Text,
   useEffect,
+  useMemo,
   useState,
   VStack,
   ZStack,
@@ -26,6 +27,9 @@ import {
 } from "../api/pixiv"
 import { session } from "../api/session"
 import { loadSettings, onSettingsChanged } from "../store/settings"
+import { loadBlocklist, onBlocklistChanged } from "../store/blocklist"
+import { isIllustContentVisible, isNovelContentVisible } from "../store/contentFilter"
+import { isUserFollowed } from "../store/userFollow"
 import type { PixivIllustration, PixivNovel, PixivUserPreview } from "../types"
 import {
   AvatarImage,
@@ -194,12 +198,54 @@ function normalizePage(page: {
   }
 }
 
+type PreviewWorkItem =
+  | { kind: "illust"; item: PixivIllustration }
+  | { kind: "novel"; item: PixivNovel }
+
+function getVisiblePreviewItems(
+  preview: PixivUserPreview,
+  hideNovels: boolean,
+  isFollowed: boolean
+): PreviewWorkItem[] {
+  const settings = loadSettings()
+  const blocklist = loadBlocklist()
+  const isExempt =
+    settings.exemptFilterForPersonal &&
+    (isFollowed || isUserFollowed(preview.user.id) === true || preview.user.is_followed === true)
+
+  const visibleIllusts: PreviewWorkItem[] = (preview.illusts ?? [])
+    .filter((illustration) =>
+      isIllustContentVisible(illustration, settings, blocklist, {
+        exemptRestrictions: isExempt,
+      })
+    )
+    .map((illustration) => ({
+      kind: "illust" as const,
+      item: illustration,
+    }))
+
+  const visibleNovels: PreviewWorkItem[] = hideNovels
+    ? []
+    : (preview.novels ?? [])
+        .filter((novel) =>
+          isNovelContentVisible(novel, settings, blocklist, {
+            exemptRestrictions: isExempt,
+          })
+        )
+        .map((novel) => ({
+          kind: "novel" as const,
+          item: novel,
+        }))
+
+  return [...visibleIllusts, ...visibleNovels].slice(0, 3)
+}
+
 function connectionPreviewImageURLs(preview: ConnectionPreview): (string | null)[] {
   const hideNovels = loadSettings().hideNovels
-  return [
-    ...preview.illusts.slice(0, 3).map(thumbUrlOf),
-    ...(hideNovels ? [] : (preview.novels ?? []).slice(0, 3).map(novelThumbUrlOf)),
-  ]
+  const items = getVisiblePreviewItems(preview, hideNovels, preview.user.is_followed ?? false)
+  return items.map((it) =>
+    it.kind === "illust" ? thumbUrlOf(it.item) : novelThumbUrlOf(it.item)
+  )
 }
 
 function ConnectionRow(props: {
@@ -211,10 +257,21 @@ function ConnectionRow(props: {
   const { preview, hideNovels = false } = props
   const [followed, setFollowed] = useUserFollow(preview.user.id, preview.user.is_followed ?? true)
   const [followBusy, setFollowBusy] = useState(false)
-  const previewItems = [
-    ...preview.illusts.map((illustration) => ({ kind: "illust" as const, item: illustration })),
-    ...(hideNovels ? [] : (preview.novels ?? [])).map((novel) => ({ kind: "novel" as const, item: novel })),
-  ].slice(0, 3)
+  const [filterVersion, setFilterVersion] = useState(0)
+
+  useEffect(() => {
+    const unsubSettings = onSettingsChanged(() => setFilterVersion((v) => v + 1))
+    const unsubBlocklist = onBlocklistChanged(() => setFilterVersion((v) => v + 1))
+    return () => {
+      unsubSettings()
+      unsubBlocklist()
+    }
+  }, [])
+
+  const previewItems = useMemo(() => {
+    void filterVersion
+    return getVisiblePreviewItems(preview, hideNovels, followed)
+  }, [preview, hideNovels, followed, filterVersion])
 
   async function toggleFollow() {
     if (followBusy) return
