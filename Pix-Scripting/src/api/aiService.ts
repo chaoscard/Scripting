@@ -379,13 +379,50 @@ export async function streamContinueNovel(
   return fullOutput
 }
 
+export interface OCRBubble {
+  box_2d: [number, number, number, number] // [ymin, xmin, ymax, xmax] 范围 0~1000
+  shape?: "ellipse" | "round_rect" | "rectangle" | "transparent"
+  original?: string
+  translation: string
+}
+
+export function extractOCRBubbles(text: string): OCRBubble[] {
+  if (!text) return []
+  try {
+    const match = text.match(/```(?:json)?\s*(\[\s*\{[\s\S]*?\}\s*\])\s*```/)
+    if (match && match[1]) {
+      const parsed = JSON.parse(match[1])
+      if (Array.isArray(parsed)) {
+        return parsed.filter(
+          (b) =>
+            Array.isArray(b?.box_2d) &&
+            b.box_2d.length === 4 &&
+            typeof b?.translation === "string" &&
+            b.translation.trim().length > 0
+        )
+      }
+    }
+  } catch {}
+  return []
+}
+
+export function cleanOCRDisplayMarkdown(text: string): string {
+  if (!text) return ""
+  return text.replace(/```(?:json)?\s*\[\s*\{[\s\S]*?\}\s*\]\s*```/g, "").trim()
+}
+
+export interface StreamVisionTranslateOptions extends StreamTranslateOptions {
+  onImageReady?: (filePath: string) => void
+  onBubblesParsed?: (bubbles: OCRBubble[]) => void
+}
+
 /**
  * 多模态大模型视觉深度解析与气泡翻译（替代简单本地OCR，精准识别竖排日文、对话气泡与拟声词）
  */
 export async function streamVisionTranslateImage(
   illust: PixivIllustration,
   pageIndex: number,
-  options: StreamTranslateOptions
+  options: StreamVisionTranslateOptions
 ): Promise<string> {
   const url = imageUrlOf(illust, pageIndex, "large")
   if (!url) {
@@ -395,6 +432,10 @@ export async function streamVisionTranslateImage(
   const filePath = await loadImage(url)
   if (!filePath) {
     throw new Error("图片下载失败，请检查网络后重试")
+  }
+
+  if (options.onImageReady) {
+    options.onImageReady(filePath)
   }
 
   const uiImage = UIImage.fromFile(filePath)
@@ -412,18 +453,25 @@ export async function streamVisionTranslateImage(
   }
 
   const systemPrompt =
-    "你是一位卓越的二次元漫画汉化组翻译与视觉分析专家。请仔细观察用户提供的插画/漫画页面（支持日文、英文、韩文等多种语言）：\n" +
-    "1. 定位画面中所有的对话气泡（包括竖排与横排）、背景招牌、手写旁白和拟声词。\n" +
-    "2. 按照读者阅读顺序，逐一提取【原文台词】并翻译为生动地道的【简体中文】。\n" +
-    "3. 简要标注每个气泡所在的大致位置或说话角色。\n\n" +
-    "输出格式规范：\n" +
+    "你是一位卓越的二次元漫画汉化组翻译与视觉定位专家。请仔细观察用户提供的插画/漫画页面（支持日文、英文、韩文等多种语言）：\n" +
+    "1. 识别画面中所有的对话气泡（竖排与横排）、分镜旁白框、手写小字和拟声词。\n" +
+    "2. 提取气泡紧贴原图边界的归一化 2D 矩形坐标 [ymin, xmin, ymax, xmax]（整数范围 0 到 1000，务必精确贴合原始气泡的真实边界，不要过大也不要过小）。\n" +
+    "3. 判断气泡的真实形态 shape：\n" +
+    '   - "ellipse": 常见的圆形、椭圆形或胶囊状对话气泡（绝大多数漫画人物对话气泡）\n' +
+    '   - "round_rect": 圆角矩形气泡或带弧度的说明框\n' +
+    '   - "rectangle": 矩形分镜旁白框、方形对话框\n' +
+    '   - "transparent": 无白色底框的画面悬浮字、手写小字、拟声词（需保留原图背景）\n' +
+    "4. 提取原文并翻译为自然、生动、契合角色语气的简体中文。\n\n" +
+    "请务必在回复最前面输出格式化的 JSON 坐标块：\n" +
+    "```json\n" +
+    "[\n" +
+    '  {"box_2d": [ymin, xmin, ymax, xmax], "shape": "ellipse", "original": "日文原文", "translation": "中文翻译"}\n' +
+    "]\n" +
+    "```\n\n" +
+    "在 JSON 块之后，请输出带序号的 Markdown 对照列表：\n" +
     "**[气泡 1]** (位置/说话者)\n" +
     "- **原文**：原文台词\n" +
-    "- **译文**：中文翻译\n\n" +
-    "**[拟声词/旁白]**\n" +
-    "- **原文**：原文拟声词/旁白\n" +
-    "- **译文**：中文解释/翻译\n\n" +
-    "注意：直接输出结构清晰的 Markdown 对照文本，绝对不要调用任何外部工具或函数。"
+    "- **译文**：中文翻译"
 
   let fullOutput = ""
   let reasoningOutput = ""
@@ -435,7 +483,7 @@ export async function streamVisionTranslateImage(
         content: [
           {
             type: "text",
-            content: "请识别这张漫画/插画中的所有日文气泡与文字，并给出精准的中文汉化翻译对照：",
+            content: "请识别并定位这张漫画/插画中的所有气泡与文字，返回坐标 JSON 和中文汉化翻译：",
           },
           {
             type: "image",
@@ -453,6 +501,12 @@ export async function streamVisionTranslateImage(
     if (chunk.type === "text" && chunk.content) {
       fullOutput += chunk.content
       options.onChunk(fullOutput)
+      if (options.onBubblesParsed && fullOutput.includes("```")) {
+        const bubbles = extractOCRBubbles(fullOutput)
+        if (bubbles.length > 0) {
+          options.onBubblesParsed(bubbles)
+        }
+      }
     } else if (chunk.type === "reasoning" && chunk.content) {
       reasoningOutput += chunk.content
       if (!fullOutput) {
@@ -464,6 +518,10 @@ export async function streamVisionTranslateImage(
   if (!fullOutput && reasoningOutput) {
     fullOutput = reasoningOutput
     options.onChunk(fullOutput)
+  }
+
+  if (options.onBubblesParsed) {
+    options.onBubblesParsed(extractOCRBubbles(fullOutput))
   }
 
   return fullOutput

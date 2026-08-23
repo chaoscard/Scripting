@@ -701,7 +701,7 @@ export function IllustDetailView(props: { illustID: number }) {
                 />
               )}
               <Button
-                title="翻译图片 (OCR)"
+                title="翻译图片（OCR）"
                 systemImage="text.viewfinder"
                 action={() => {
                   setAIMode("ocr")
