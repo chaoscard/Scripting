@@ -88,6 +88,7 @@ import {
 } from "./components"
 import { CommentsSheet } from "./comments"
 import { IllustAISheet, type IllustAIMode } from "./aiSheet"
+import { cleanHtmlCaption } from "../api/aiService"
 import { UgoiraPlayerView } from "./ugoiraView"
 import { buildUgoira } from "../ugoira/ugoira"
 import { renderDestination } from "./routes"
@@ -689,14 +690,16 @@ export function IllustDetailView(props: { illustID: number }) {
               action={() => setShowComments(true)}
             />
             <Menu title="助手" systemImage="sparkles">
-              <Button
-                title="翻译简介"
-                systemImage="text.quote"
-                action={() => {
-                  setAIMode("caption")
-                  setShowAISheet(true)
-                }}
-              />
+              {Boolean(current?.caption && cleanHtmlCaption(current.caption)) && (
+                <Button
+                  title="翻译简介"
+                  systemImage="text.quote"
+                  action={() => {
+                    setAIMode("caption")
+                    setShowAISheet(true)
+                  }}
+                />
+              )}
               <Button
                 title="翻译图片 (OCR)"
                 systemImage="text.viewfinder"

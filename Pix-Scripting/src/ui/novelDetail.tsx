@@ -97,6 +97,7 @@ import {
 import { NovelReaderView, NovelReaderWebView } from "./novelReader"
 import { CommentsSheet } from "./comments"
 import { NovelAISheet, type NovelAIMode } from "./aiSheet"
+import { cleanHtmlCaption } from "../api/aiService"
 import { renderDestination } from "./routes"
 import { requestPixivRoute } from "./routeNavigation"
 
@@ -869,14 +870,16 @@ export function NovelDetailView(props: { novelID: number }) {
                     action={() => setShowComments(true)}
                   />
                   <Menu title="助手" systemImage="sparkles">
-                    <Button
-                      title="翻译简介"
-                      systemImage="text.quote"
-                      action={() => {
-                        setAIMode("caption")
-                        setShowAISheet(true)
-                      }}
-                    />
+                    {Boolean(current?.caption && cleanHtmlCaption(current.caption)) && (
+                      <Button
+                        title="翻译简介"
+                        systemImage="text.quote"
+                        action={() => {
+                          setAIMode("caption")
+                          setShowAISheet(true)
+                        }}
+                      />
+                    )}
                     <Button
                       title="翻译小说"
                       systemImage="character.book.closed"
