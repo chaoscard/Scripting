@@ -96,6 +96,7 @@ import {
 } from "./components"
 import { NovelReaderView, NovelReaderWebView } from "./novelReader"
 import { CommentsSheet } from "./comments"
+import { NovelAISheet, type NovelAIMode } from "./aiSheet"
 import { renderDestination } from "./routes"
 import { requestPixivRoute } from "./routeNavigation"
 
@@ -133,6 +134,8 @@ export function NovelDetailView(props: { novelID: number }) {
   const [followed, setFollowed] = useState(false)
   const [followLoading, setFollowLoading] = useState(false)
   const [showComments, setShowComments] = useState(false)
+  const [showAISheet, setShowAISheet] = useState(false)
+  const [aiMode, setAIMode] = useState<NovelAIMode>("caption")
   const [markerPage, setMarkerPage] = useNovelMarker(novelID, null)
   const initialProgress = useMemo(() => getNovelProgress(novelID), [novelID])
   const scrollPos = useObservable<string | null>(initialProgress?.chunkId ?? null)
@@ -865,6 +868,40 @@ export function NovelDetailView(props: { novelID: number }) {
                     systemImage="bubble.left"
                     action={() => setShowComments(true)}
                   />
+                  <Menu title="助手" systemImage="sparkles">
+                    <Button
+                      title="翻译简介"
+                      systemImage="text.quote"
+                      action={() => {
+                        setAIMode("caption")
+                        setShowAISheet(true)
+                      }}
+                    />
+                    <Button
+                      title="翻译小说"
+                      systemImage="character.book.closed"
+                      action={() => {
+                        setAIMode("translate")
+                        setShowAISheet(true)
+                      }}
+                    />
+                    <Button
+                      title="总结小说"
+                      systemImage="doc.text.magnifyingglass"
+                      action={() => {
+                        setAIMode("summary")
+                        setShowAISheet(true)
+                      }}
+                    />
+                    <Button
+                      title="续写小说"
+                      systemImage="wand.and.stars"
+                      action={() => {
+                        setAIMode("continue")
+                        setShowAISheet(true)
+                      }}
+                    />
+                  </Menu>
                   <Button
                     title="书签"
                     systemImage={markerPage !== null ? "book.pages.fill" : "book.pages"}
@@ -884,7 +921,7 @@ export function NovelDetailView(props: { novelID: number }) {
               action={shareNovel}
             />
             <Button
-              title={downloadingEpub ? "正在生成 EPUB…" : "下载 EPUB 电子书"}
+              title={downloadingEpub ? "下载中…" : "下载"}
               systemImage="square.and.arrow.down"
               disabled={downloadingEpub}
               action={handleDownloadNovelEpub}
@@ -1122,6 +1159,21 @@ export function NovelDetailView(props: { novelID: number }) {
           content: <CommentsSheet novelID={current.id} />,
           isPresented: showComments,
           onChanged: setShowComments,
+        }}
+      />
+      <VStack
+        sheet={{
+          content: (
+            <NovelAISheet
+              novel={current}
+              fullText={text}
+              mode={aiMode}
+              isPresented={showAISheet}
+              onChanged={setShowAISheet}
+            />
+          ),
+          isPresented: showAISheet,
+          onChanged: setShowAISheet,
         }}
       />
       <VStack

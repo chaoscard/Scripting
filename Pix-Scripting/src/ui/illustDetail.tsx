@@ -87,6 +87,7 @@ import {
   TagChip,
 } from "./components"
 import { CommentsSheet } from "./comments"
+import { IllustAISheet, type IllustAIMode } from "./aiSheet"
 import { UgoiraPlayerView } from "./ugoiraView"
 import { buildUgoira } from "../ugoira/ugoira"
 import { renderDestination } from "./routes"
@@ -151,6 +152,8 @@ export function IllustDetailView(props: { illustID: number }) {
   const [followed, setFollowed] = useState(() => getCachedIllust(illustID)?.user?.is_followed ?? false)
   const [followLoading, setFollowLoading] = useState(false)
   const [showComments, setShowComments] = useState(false)
+  const [showAISheet, setShowAISheet] = useState(false)
+  const [aiMode, setAIMode] = useState<IllustAIMode>("caption")
   const [quality, setQuality] = useState(loadSettings().detailImageQuality)
   const [mediaReady, setMediaReady] = useState(false)
   const guard = useAsyncGuard()
@@ -685,6 +688,32 @@ export function IllustDetailView(props: { illustID: number }) {
               systemImage="bubble.left"
               action={() => setShowComments(true)}
             />
+            <Menu title="助手" systemImage="sparkles">
+              <Button
+                title="翻译简介"
+                systemImage="text.quote"
+                action={() => {
+                  setAIMode("caption")
+                  setShowAISheet(true)
+                }}
+              />
+              <Button
+                title="翻译图片 (OCR)"
+                systemImage="text.viewfinder"
+                action={() => {
+                  setAIMode("ocr")
+                  setShowAISheet(true)
+                }}
+              />
+              <Button
+                title="翻译图片（生图）"
+                systemImage="photo.badge.magnifyingglass"
+                action={() => {
+                  setAIMode("vision")
+                  setShowAISheet(true)
+                }}
+              />
+            </Menu>
             {Boolean(resolvedSeriesID) && (
               <Button
                 title="系列"
@@ -938,6 +967,20 @@ export function IllustDetailView(props: { illustID: number }) {
           content: <CommentsSheet illustID={current.id} />,
           isPresented: showComments,
           onChanged: setShowComments,
+        }}
+      />
+      <VStack
+        sheet={{
+          content: (
+            <IllustAISheet
+              illust={current}
+              mode={aiMode}
+              isPresented={showAISheet}
+              onChanged={setShowAISheet}
+            />
+          ),
+          isPresented: showAISheet,
+          onChanged: setShowAISheet,
         }}
       />
       <VStack
