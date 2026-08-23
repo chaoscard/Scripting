@@ -893,14 +893,17 @@ export function NovelDetailView(props: { novelID: number }) {
                         setShowAISheet(true)
                       }}
                     />
-                    <Button
-                      title="续写小说"
-                      systemImage="wand.and.stars"
-                      action={() => {
-                        setAIMode("continue")
-                        setShowAISheet(true)
-                      }}
-                    />
+                    {/* 多页小说仅在最后一页显示续写；单页小说始终显示续写 */}
+                    {(totalPages <= 1 || currentPage === totalPages) && (
+                      <Button
+                        title="续写小说"
+                        systemImage="wand.and.stars"
+                        action={() => {
+                          setAIMode("continue")
+                          setShowAISheet(true)
+                        }}
+                      />
+                    )}
                   </Menu>
                   <Button
                     title="书签"
@@ -1167,6 +1170,8 @@ export function NovelDetailView(props: { novelID: number }) {
             <NovelAISheet
               novel={current}
               fullText={text}
+              currentPage={currentPage}
+              totalPages={totalPages}
               mode={aiMode}
               isPresented={showAISheet}
               onChanged={setShowAISheet}

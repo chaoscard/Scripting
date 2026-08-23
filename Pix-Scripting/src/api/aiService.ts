@@ -242,17 +242,37 @@ export async function streamTranslateNovel(
 }
 
 /**
- * 结构化总结小说（大纲、角色、看点与避雷）
+ * 将 Pixiv 小说正文按 [newpage] 分割为各页文本数组
+ */
+export function splitNovelPages(rawText: string): string[] {
+  if (!rawText) return []
+  const pages = rawText.split(/\[newpage\]/i)
+  return pages.length > 0 ? pages : [rawText]
+}
+
+/**
+ * 获取 Pixiv 小说指定页码（1-based）的正文文本
+ */
+export function getNovelPageText(rawText: string, page: number): string {
+  const pages = splitNovelPages(rawText)
+  const index = Math.max(0, Math.min(page - 1, pages.length - 1))
+  return pages[index] || ""
+}
+
+/**
+ * 结构化总结小说（大纲、角色、看点与避雷，或多页小说中单页剧情提炼）
  */
 export async function streamSummarizeNovel(
   rawText: string,
-  options: StreamTranslateOptions
+  options: StreamTranslateOptions & { pageInfo?: { current: number; total: number } }
 ): Promise<string> {
   const cleaned = cleanNovelTextForAI(rawText)
   if (!cleaned) return ""
   if (!isAIAvailable()) {
     throw new Error("Scripting 助手未配置或不可用，请在设置中配置 AI 模型。")
   }
+
+  const isSinglePageOfMulti = Boolean(options.pageInfo && options.pageInfo.total > 1)
 
   // 若文本极长（超过 15,000 字），为了保证总结质量且不超上下文，进行安全采样（开头+中间段+结尾）
   let sampleText = cleaned
@@ -263,14 +283,20 @@ export async function streamSummarizeNovel(
     sampleText = `${head}\n\n[...中间情节略...]\n\n${mid}\n\n[...后文情节略...]\n\n${tail}`
   }
 
-  const systemPrompt =
-    "你是一位资深轻小说总编。请阅读提供的Pixiv小说内容，为读者生成一份清晰、专业、结构化的中文导读与速读总结。\n" +
-    "输出格式请严格遵循以下 Markdown 结构：\n\n" +
-    "### 📌 核心剧情大纲\n(用200-300字简练概括主线起因、发展与核心冲突/结局)\n\n" +
-    "### 👥 登场角色与关系\n- **角色名**：身份背景及与主角的关系\n\n" +
-    "### 🏷️ 风格标签与看点\n- (提炼出3-5个核心看点，如：纯爱发糖 / 胃痛胃药 / IF线展开 / 战斗爽快)\n\n" +
-    "### ⚠️ 阅读提示与预警\n- (如有虐心、致郁、雷点或特殊癖好请明确标注，若无则注明“全年龄温馨向/无明显雷点”)\n\n" +
-    "注意：直接输出Markdown内容，语言生动精练，不要添加额外的问候语。"
+  const systemPrompt = isSinglePageOfMulti
+    ? "你是一位资深轻小说总编。请阅读提供的Pixiv小说当前页面内容，为读者生成一份清晰、精炼、结构化的中文本页剧情提炼与重点总结。\n" +
+      "输出格式请严格遵循以下 Markdown 结构：\n\n" +
+      "### 📌 本页核心剧情脉络\n(简练概括本页发生的关键事件与冲突发展)\n\n" +
+      "### 👥 本页出场人物与互动\n- **角色名**：本页的关键行为或心理变化\n\n" +
+      "### 💡 本页看点与关键信息\n- (提炼出本页的重要看点、伏笔或亮点台词)\n\n" +
+      "注意：直接输出Markdown内容，精炼生动，不要添加额外的问候语。"
+    : "你是一位资深轻小说总编。请阅读提供的Pixiv小说内容，为读者生成一份清晰、专业、结构化的中文导读与速读总结。\n" +
+      "输出格式请严格遵循以下 Markdown 结构：\n\n" +
+      "### 📌 核心剧情大纲\n(用200-300字简练概括主线起因、发展与核心冲突/结局)\n\n" +
+      "### 👥 登场角色与关系\n- **角色名**：身份背景及与主角的关系\n\n" +
+      "### 🏷️ 风格标签与看点\n- (提炼出3-5个核心看点，如：纯爱发糖 / 胃痛胃药 / IF线展开 / 战斗爽快)\n\n" +
+      "### ⚠️ 阅读提示与预警\n- (如有虐心、致郁、雷点或特殊癖好请明确标注，若无则注明“全年龄温馨向/无明显雷点”)\n\n" +
+      "注意：直接输出Markdown内容，语言生动精练，不要添加额外的问候语。"
 
   let fullOutput = ""
   const stream = await Assistant.requestStreaming({
@@ -278,7 +304,9 @@ export async function streamSummarizeNovel(
     messages: [
       {
         role: "user",
-        content: `请为以下小说生成导读总结：\n\n${sampleText}`,
+        content: isSinglePageOfMulti
+          ? `请为以下小说第 ${options.pageInfo!.current}/${options.pageInfo!.total} 页内容生成提炼总结：\n\n${sampleText}`
+          : `请为以下小说生成导读总结：\n\n${sampleText}`,
       },
     ],
   })
