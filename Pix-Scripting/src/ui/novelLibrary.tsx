@@ -9,6 +9,7 @@ import {
   onSettingsChanged,
 } from "../store/settings"
 import { isNovelContentVisible } from "../store/contentFilter"
+import { onNovelMarkerChanged } from "../store/bookmarkSync"
 import { useLatest, usePagedList, currentBatchSize } from "./hooks"
 import { destinationElement } from "./routes"
 import type { PixivNovelMarker } from "../types"
@@ -21,8 +22,8 @@ import {
   RefreshableScrollView,
 } from "./components"
 
-// Pixiv 阅读书签（Marker）列表。它与小说收藏是不同资源：
-// 服务端仅返回已保存阅读 Marker 的小说，不支持公开/私密与标签筛选。
+// Pixiv 小说书签（Marker）列表。它与小说收藏是不同资源：
+// 服务端仅返回已保存小说 Marker 的条目，不支持公开/私密与标签筛选。
 export function NovelLibraryView() {
   const paged = usePagedList<PixivNovelMarker>({
     first: (token) => novelMarkers(token),
@@ -49,9 +50,15 @@ export function NovelLibraryView() {
     })
   }, [])
 
+  useEffect(() => {
+    return onNovelMarkerChanged(() => {
+      pagedRef.current.refresh()
+    })
+  }, [])
+
   return (
     <RefreshableScrollView
-      navigationTitle="阅读书签"
+      navigationTitle="小说书签"
       navigationBarTitleDisplayMode="inline"
       refreshable={paged.refresh}
       navigationDestination={destinationElement}
@@ -61,7 +68,7 @@ export function NovelLibraryView() {
       ) : paged.error && paged.items.length === 0 ? (
         <ErrorView message={paged.error} onRetry={paged.refresh} />
       ) : paged.items.length === 0 ? (
-        <EmptyView text="暂无阅读书签" systemImage="bookmark" />
+        <EmptyView text="暂无小说书签" systemImage="book.pages" />
       ) : (
         <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
           {paged.items.map((item, index) => (

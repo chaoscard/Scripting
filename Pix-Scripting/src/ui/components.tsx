@@ -50,6 +50,7 @@ import { loadSettings } from "../store/settings"
 import { blockTag } from "../store/blocklist"
 import { cacheIllust, cacheIllusts } from "../store/illustCache"
 import { recordWorkSeriesAssociation } from "../store/seriesCache"
+import { recordNovelMarker } from "../store/bookmarkSync"
 import { useIllustBookmark, useLatest, useNovelBookmark } from "./hooks"
 import { requestPixivRoute } from "./routeNavigation"
 import type {
@@ -884,6 +885,11 @@ export function NovelCard(props: {
     topTrailingAction,
     contextMenu,
   } = props
+
+  if (markerPage != null && markerPage > 0) {
+    recordNovelMarker(novel.id, markerPage)
+  }
+
   const [bookmarked, setBookmarked] = useNovelBookmark(novel.id, novel.is_bookmarked)
   const [bookmarkBusy, setBookmarkBusy] = useState(false)
   const [showBookmarkDetail, setShowBookmarkDetail] = useState(false)
@@ -1032,9 +1038,12 @@ export function NovelCard(props: {
                   </Text>
                 ) : null}
                 {markerPage != null ? (
-                  <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={1}>
-                    第 {markerPage} 页
-                  </Text>
+                  <HStack spacing={3}>
+                    <Image systemName="book.pages" font="caption2" foregroundStyle="#007AFF" />
+                    <Text font="caption2" foregroundStyle="#007AFF" lineLimit={1}>
+                      第 {markerPage} 页
+                    </Text>
+                  </HStack>
                 ) : null}
                 {footerText ? (
                   <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={1}>

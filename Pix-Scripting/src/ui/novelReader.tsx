@@ -583,8 +583,12 @@ function NovelPixivImageItemView(props: {
   )
 }
 
-function NovelChunkRenderer(props: { item: NovelChunkItem }) {
-  const { item } = props
+function NovelChunkRenderer(props: {
+  item: NovelChunkItem
+  markerPage?: number | null
+  onJumpToPage?: (page: number) => void
+}) {
+  const { item, markerPage, onJumpToPage } = props
 
   if (item.type === "text") {
     return <NovelChunkTextView text={item.text} />
@@ -610,6 +614,7 @@ function NovelChunkRenderer(props: { item: NovelChunkItem }) {
   }
 
   if (item.type === "newpage") {
+    const isMarked = markerPage === item.page
     return (
       <HStack
         spacing={12}
@@ -620,9 +625,18 @@ function NovelChunkRenderer(props: { item: NovelChunkItem }) {
         <VStack frame={{ maxWidth: "infinity" }}>
           <Divider />
         </VStack>
-        <Text font="footnote" fontWeight="semibold" foregroundStyle="secondaryLabel">
-          第 {item.page} 页
-        </Text>
+        <HStack spacing={4} alignment="center">
+          {isMarked ? (
+            <Image systemName="book.pages.fill" font="footnote" foregroundStyle="#007AFF" />
+          ) : null}
+          <Text
+            font="footnote"
+            fontWeight={isMarked ? "bold" : "semibold"}
+            foregroundStyle={isMarked ? "#007AFF" : "secondaryLabel"}
+          >
+            第 {item.page} 页{isMarked ? "（书签）" : ""}
+          </Text>
+        </HStack>
         <VStack frame={{ maxWidth: "infinity" }}>
           <Divider />
         </VStack>
@@ -636,15 +650,21 @@ function NovelChunkRenderer(props: { item: NovelChunkItem }) {
         padding={{ horizontal: 14, vertical: 4 }}
         frame={{ maxWidth: "infinity", alignment: "leading" }}
       >
-        <HStack
-          spacing={6}
-          padding={{ horizontal: 10, vertical: 6 }}
-          glassEffect={{ type: "rect", cornerRadius: 8 }}
+        <Button
+          action={() => onJumpToPage?.(item.page)}
+          buttonStyle="plain"
         >
-          <Text font="subheadline" foregroundStyle="#007AFF">
-            📄 跳转至第 {item.page} 页
-          </Text>
-        </HStack>
+          <HStack
+            spacing={6}
+            padding={{ horizontal: 10, vertical: 6 }}
+            glassEffect={{ type: "rect", cornerRadius: 8 }}
+          >
+            <Text font="subheadline" foregroundStyle="#007AFF">
+              📄 跳转至第 {item.page} 页
+            </Text>
+            <Image systemName="chevron.right" font="caption2" foregroundStyle="#007AFF" />
+          </HStack>
+        </Button>
       </HStack>
     )
   }
@@ -660,19 +680,52 @@ function NovelChunkRenderer(props: { item: NovelChunkItem }) {
   return null
 }
 
+export interface NovelPageBlock {
+  page: number
+  items: NovelChunkItem[]
+}
+
+export function groupChunksByPage(chunks: NovelChunkItem[]): NovelPageBlock[] {
+  if (chunks.length === 0) return []
+  const pages: NovelPageBlock[] = []
+  let currentBlock: NovelPageBlock = { page: 1, items: [] }
+  pages.push(currentBlock)
+
+  for (const chunk of chunks) {
+    if (chunk.type === "newpage") {
+      currentBlock = { page: chunk.page, items: [chunk] }
+      pages.push(currentBlock)
+    } else {
+      currentBlock.items.push(chunk)
+    }
+  }
+
+  return pages
+}
+
 /**
  * 小说正文高性能原生 SwiftUI 流式排版组件：
  * 1. 毫秒级即时分块：99.9% 的小说（< 100,000 字）在首帧同步解析完成（< 3ms），0ms 瞬间上屏；
  * 2. 巨篇（> 100,000 字）异步时间预算协程：在后台微任务中按 12ms 帧预算解析，避免阻塞主线程；
- * 3. 静态布局持久化：全部上屏后处于静态 VStack 中，一次性完成排版；用户滑动时 0 次组件创建、0 次桥接通信、0 次 CoreText 重排，实现满帧跟手与精准选词。
+ * 3. 静态布局持久化：按页封装 VStack 锚点，精准支持书签页跳转定位与滚动页码识别。
  */
 export function NovelReaderView(props: {
   text: string
   title?: string
+  markerPage?: number | null
   textEmbeddedImages?: Record<string, TextEmbeddedImage>
-  onReady?: () => void
+  onPageVisible?: (page: number) => void
+  onJumpToPage?: (page: number) => void
+  onReady?: (totalPages: number) => void
 }) {
-  const { text, textEmbeddedImages, onReady } = props
+  const {
+    text,
+    textEmbeddedImages,
+    markerPage,
+    onPageVisible,
+    onJumpToPage,
+    onReady,
+  } = props
 
   // 同步初始化：常规篇幅（< 100,000 字）直接同步解析，首帧 0ms 瞬间呈现
   const syncChunks = useMemo(() => {
@@ -685,29 +738,35 @@ export function NovelReaderView(props: {
 
   const [asyncChunks, setAsyncChunks] = useState<NovelChunkItem[] | null>(null)
 
+  const chunks = syncChunks ?? asyncChunks ?? []
+  const pageBlocks = useMemo(() => groupChunksByPage(chunks), [chunks])
+
+  const onReadyRef = useRef(onReady)
+  onReadyRef.current = onReady
+
   useEffect(() => {
     let active = true
     if (syncChunks) {
       setAsyncChunks(null)
-      onReady?.()
+      const total = Math.max(1, groupChunksByPage(syncChunks).length)
+      onReadyRef.current?.(total)
       return
     }
 
     void parseNovelToChunksAsync(text, textEmbeddedImages).then((parsed) => {
       if (active) {
         setAsyncChunks(parsed)
-        onReady?.()
+        const total = Math.max(1, groupChunksByPage(parsed).length)
+        onReadyRef.current?.(total)
       }
     })
 
     return () => {
       active = false
     }
-  }, [text, textEmbeddedImages, syncChunks, onReady])
+  }, [text, textEmbeddedImages, syncChunks])
 
-  const chunks = syncChunks ?? asyncChunks ?? []
-
-  if (chunks.length === 0) {
+  if (pageBlocks.length === 0) {
     return (
       <HStack spacing={0} frame={{ maxWidth: "infinity", height: 60 }}>
         <Spacer />
@@ -718,9 +777,51 @@ export function NovelReaderView(props: {
   }
 
   return (
-    <VStack alignment="leading" spacing={6} frame={{ maxWidth: "infinity" }}>
-      {chunks.map((item) => (
-        <NovelChunkRenderer key={item.id} item={item} />
+    <VStack alignment="leading" spacing={0} frame={{ maxWidth: "infinity" }}>
+      {pageBlocks.map((block) => (
+        <VStack
+          key={`novel-page-${block.page}`}
+          alignment="leading"
+          spacing={6}
+          frame={{ maxWidth: "infinity" }}
+          onAppear={() => {
+            onPageVisible?.(block.page)
+          }}
+        >
+          {block.page === 1 && markerPage === 1 ? (
+            <HStack
+              spacing={12}
+              padding={{ horizontal: 14, vertical: 14 }}
+              alignment="center"
+              frame={{ maxWidth: "infinity" }}
+            >
+              <VStack frame={{ maxWidth: "infinity" }}>
+                <Divider />
+              </VStack>
+              <HStack spacing={4} alignment="center">
+                <Image systemName="book.pages.fill" font="footnote" foregroundStyle="#007AFF" />
+                <Text
+                  font="footnote"
+                  fontWeight="bold"
+                  foregroundStyle="#007AFF"
+                >
+                  第 1 页（书签）
+                </Text>
+              </HStack>
+              <VStack frame={{ maxWidth: "infinity" }}>
+                <Divider />
+              </VStack>
+            </HStack>
+          ) : null}
+          {block.items.map((item) => (
+            <NovelChunkRenderer
+              key={item.id}
+              item={item}
+              markerPage={markerPage}
+              onJumpToPage={onJumpToPage}
+            />
+          ))}
+        </VStack>
       ))}
     </VStack>
   )

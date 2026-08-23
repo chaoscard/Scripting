@@ -11,6 +11,7 @@ import {
   NavigationLink,
   ProgressView,
   ScrollView,
+  ScrollViewReader,
   Spacer,
   Text,
   useCallback,
@@ -18,9 +19,12 @@ import {
   useRef,
   useState,
   VStack,
+  type ScrollViewProxy,
 } from "scripting"
 import {
   addNovelBookmark,
+  addNovelMarker,
+  deleteNovelMarker,
   followUser,
   nextNovels,
   novelBookmarkDetail,
@@ -37,6 +41,7 @@ import {
   useAsyncGuard,
   useLatest,
   useNovelBookmark,
+  useNovelMarker,
   usePagedList,
   waitForNovelLoadingFeedback,
 } from "./hooks"
@@ -102,10 +107,18 @@ export function NovelDetailView(props: { novelID: number }) {
   const [followed, setFollowed] = useState(false)
   const [followLoading, setFollowLoading] = useState(false)
   const [showComments, setShowComments] = useState(false)
+  const [markerPage, setMarkerPage] = useNovelMarker(novelID, null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [markerBusy, setMarkerBusy] = useState(false)
 
   const guard = useAsyncGuard()
   const novelRef = useLatest(novel)
   const errorRef = useLatest(error)
+  const currentPageRef = useLatest(currentPage)
+  const markerPageRef = useLatest(markerPage)
+  const proxyRef = useRef<ScrollViewProxy | null>(null)
+  const hasAutoJumpedRef = useRef(false)
   const recordedIDRef = useRef<number | null>(null)
 
   async function load() {
@@ -148,6 +161,16 @@ export function NovelDetailView(props: { novelID: number }) {
       setNovel(detail)
       setBookmarked(detail.is_bookmarked)
       setFollowed(detail.user?.is_followed ?? false)
+      const initialMarker = (detail as any)?.novel_marker?.page ?? (detail as any)?.marker?.page ?? null
+      if (initialMarker !== null) {
+        setMarkerPage(initialMarker)
+        if (!hasAutoJumpedRef.current && initialMarker > 1 && readerReady) {
+          hasAutoJumpedRef.current = true
+          setTimeout(() => {
+            jumpToPage(initialMarker)
+          }, 160)
+        }
+      }
       if (recordedIDRef.current !== detail.id) {
         recordedIDRef.current = detail.id
         recordNovelHistory(historyNovelFromDetail(detail))
@@ -308,6 +331,54 @@ export function NovelDetailView(props: { novelID: number }) {
     }
   }
 
+  const jumpToPage = useCallback((targetPage: number) => {
+    const proxy = proxyRef.current
+    if (!proxy) return
+    const targetKey = `novel-page-${targetPage}`
+    try {
+      proxy.scrollTo(targetKey, "top")
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  const handleReaderReady = useCallback(
+    (parsedTotalPages: number) => {
+      setTotalPages(parsedTotalPages)
+      setReaderReady(true)
+      if (!hasAutoJumpedRef.current) {
+        hasAutoJumpedRef.current = true
+        const targetMarker = markerPageRef.current
+        if (targetMarker != null && targetMarker > 1) {
+          setTimeout(() => {
+            jumpToPage(targetMarker)
+          }, 160)
+        }
+      }
+    },
+    [jumpToPage]
+  )
+
+  async function handleToggleMarker() {
+    if (!novel || markerBusy) return
+    void Haptics.transient()
+    setMarkerBusy(true)
+    const target = currentPageRef.current || 1
+    try {
+      if (markerPage === target) {
+        await session.call((token) => deleteNovelMarker(novel.id, token))
+        setMarkerPage(null)
+      } else {
+        await session.call((token) => addNovelMarker(novel.id, target, token))
+        setMarkerPage(target)
+      }
+    } catch {
+      // ignore
+    } finally {
+      setMarkerBusy(false)
+    }
+  }
+
   async function shareNovel() {
     if (!novel) return
     void Haptics.transient()
@@ -348,53 +419,79 @@ export function NovelDetailView(props: { novelID: number }) {
   }
 
   return (
-    <ScrollView
-      navigationTitle={current.title}
-      navigationBarTitleDisplayMode="inline"
-      toolbar={{
-        topBarTrailing: [
-          <Button
-            disabled={bookmarkLoading || bookmarkLongPressLocked}
-            action={toggleBookmark}
-            simultaneousGesture={
-              LongPressGesture({ minDuration: 500 }).onEnded(() => {
-                setBookmarkLongPressLocked(true)
-                handleBookmarkLongPress()
-                setTimeout(() => setBookmarkLongPressLocked(false), 1500)
-              })
-            }
-          >
-            <Image
-              systemName={bookmarked ? "heart.fill" : "heart"}
-              foregroundStyle={bookmarked ? "#FF375F" : undefined}
-            />
-          </Button>,
-          <Button
-            disabled={followLoading}
-            action={toggleFollow}
-            contextMenu={{
-              menuItems: (
-                <Group>
-                  <Button
-                    title={followed ? "设为私密关注" : "私密关注"}
-                    systemImage="lock"
-                    disabled={followLoading}
-                    action={() => void followWithVisibility("private")}
-                  />
-                </Group>
-              ),
+    <ScrollViewReader>
+      {(proxy) => {
+        proxyRef.current = proxy
+        return (
+          <ScrollView
+            navigationTitle={current.title}
+            navigationBarTitleDisplayMode="inline"
+            onScrollTargetVisibilityChange={{
+              idType: "string",
+              threshold: 0.1,
+              onChanged: (visibleIds) => {
+                const pageNumbers = (visibleIds as string[])
+                  .map((id) => {
+                    const m = /^novel-page-(\d+)$/.exec(id)
+                    return m ? Number(m[1]) : null
+                  })
+                  .filter((p): p is number => p !== null)
+                if (pageNumbers.length > 0) {
+                  const minPage = Math.min(...pageNumbers)
+                  setCurrentPage(minPage)
+                }
+              },
             }}
-          >
-            <Image
-              systemName={followed ? "person.fill.checkmark" : "person.badge.plus"}
-            />
-          </Button>,
-          <Menu label={<Image systemName="ellipsis.circle" />}>
-            <Button
-              title="评论"
-              systemImage="bubble.left"
-              action={() => setShowComments(true)}
-            />
+            toolbar={{
+              topBarTrailing: [
+                <Button
+                  disabled={bookmarkLoading || bookmarkLongPressLocked}
+                  action={toggleBookmark}
+                  simultaneousGesture={
+                    LongPressGesture({ minDuration: 500 }).onEnded(() => {
+                      setBookmarkLongPressLocked(true)
+                      handleBookmarkLongPress()
+                      setTimeout(() => setBookmarkLongPressLocked(false), 1500)
+                    })
+                  }
+                >
+                  <Image
+                    systemName={bookmarked ? "heart.fill" : "heart"}
+                    foregroundStyle={bookmarked ? "#FF375F" : undefined}
+                  />
+                </Button>,
+                <Button
+                  disabled={followLoading}
+                  action={toggleFollow}
+                  contextMenu={{
+                    menuItems: (
+                      <Group>
+                        <Button
+                          title={followed ? "设为私密关注" : "私密关注"}
+                          systemImage="lock"
+                          disabled={followLoading}
+                          action={() => void followWithVisibility("private")}
+                        />
+                      </Group>
+                    ),
+                  }}
+                >
+                  <Image
+                    systemName={followed ? "person.fill.checkmark" : "person.badge.plus"}
+                  />
+                </Button>,
+                <Menu label={<Image systemName="ellipsis.circle" />}>
+                  <Button
+                    title="评论"
+                    systemImage="bubble.left"
+                    action={() => setShowComments(true)}
+                  />
+                  <Button
+                    title="书签"
+                    systemImage={markerPage !== null ? "book.pages.fill" : "book.pages"}
+                    disabled={markerBusy}
+                    action={handleToggleMarker}
+                  />
             {Boolean(resolvedSeriesID) && (
               <Button
                 title="系列"
@@ -460,7 +557,12 @@ export function NovelDetailView(props: { novelID: number }) {
         ],
       }}
     >
-      <VStack alignment="leading" spacing={12} frame={{ maxWidth: "infinity" }}>
+      <VStack
+        scrollTargetLayout
+        alignment="leading"
+        spacing={12}
+        frame={{ maxWidth: "infinity" }}
+      >
         <VStack alignment="leading" spacing={8} padding={{ horizontal: 14, top: 12 }}>
           {/* 统计指标 */}
           <HStack spacing={10}>
@@ -593,8 +695,11 @@ export function NovelDetailView(props: { novelID: number }) {
             <NovelReaderView
               text={text}
               title={current.title}
+              markerPage={markerPage}
               textEmbeddedImages={textEmbeddedImages}
-              onReady={() => setReaderReady(true)}
+              onPageVisible={(page) => setCurrentPage(page)}
+              onJumpToPage={jumpToPage}
+              onReady={handleReaderReady}
             />
           ) : (
             <VStack padding={{ horizontal: 14 }}>
@@ -656,6 +761,9 @@ export function NovelDetailView(props: { novelID: number }) {
         }}
       />
     </ScrollView>
+        )
+      }}
+    </ScrollViewReader>
   )
 }
 

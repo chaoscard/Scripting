@@ -8,13 +8,24 @@ import {
   Section,
   Spacer,
   Text,
+  useEffect,
+  useState,
 } from "scripting"
 import { session } from "../api/session"
+import { loadSettings, onSettingsChanged } from "../store/settings"
 import { appToolbar, AvatarImage } from "./components"
 import { destinationElement } from "./routes"
 
 export function MoreView(props: { onClose: () => void }) {
   const user = session.user
+  const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      setHideNovels(loadSettings().hideNovels)
+    })
+  }, [])
+
   if (!user) {
     return (
       <List
@@ -57,9 +68,11 @@ export function MoreView(props: { onClose: () => void }) {
         <NavigationLink value="history">
           <MoreRow icon="clock.fill" iconColor="#FF9F0A" title="浏览记录" />
         </NavigationLink>
-        <NavigationLink value="novelBookmarks">
-          <MoreRow icon="bookmark.fill" iconColor="#0096FA" title="阅读书签" />
-        </NavigationLink>
+        {hideNovels ? null : (
+          <NavigationLink value="novelBookmarks">
+            <MoreRow icon="book.pages.fill" iconColor="#0096FA" title="小说书签" />
+          </NavigationLink>
+        )}
       </Section>
 
       <Section header={<Text>关联</Text>}>

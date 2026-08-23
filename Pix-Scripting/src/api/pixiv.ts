@@ -40,6 +40,7 @@ import { notifyUserFollowChanged } from "../store/userFollow"
 import {
   notifyIllustBookmarkChanged,
   notifyNovelBookmarkChanged,
+  notifyNovelMarkerChanged,
   notifyWatchlistChanged,
 } from "../store/bookmarkSync"
 import {
@@ -1156,6 +1157,38 @@ export async function nextNovelMarkers(
       .map((item: any) => ({ ...item, id: item.novel.id }))
     : []
   return { items, nextURL: json?.next_url ?? null }
+}
+
+export async function addNovelMarker(
+  novelID: number,
+  page: number,
+  accessToken: string
+): Promise<void> {
+  const form: Record<string, string> = {
+    novel_id: String(novelID),
+    page: String(page),
+  }
+  await apiPost("/v2/novel/marker/add", form, accessToken)
+  notifyNovelMarkerChanged(novelID, page)
+}
+
+export async function deleteNovelMarker(
+  novelID: number,
+  accessToken: string
+): Promise<void> {
+  const form: Record<string, string> = {
+    novel_id: String(novelID),
+  }
+  try {
+    await apiPost("/v2/novel/marker/delete", form, accessToken)
+  } catch (err: any) {
+    if (err?.status === 404) {
+      await apiPost("/v1/novel/marker/delete", form, accessToken)
+    } else {
+      throw err
+    }
+  }
+  notifyNovelMarkerChanged(novelID, null)
 }
 
 export async function searchNovels(

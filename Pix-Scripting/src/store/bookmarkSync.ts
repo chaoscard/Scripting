@@ -145,3 +145,44 @@ export function recordWatchlist(
     watchlistCache.set(watchlistKey(seriesID, kind), watched)
   }
 }
+
+// 小说阅读书签（Marker）同步
+export type NovelMarkerListener = (
+  novelID: number,
+  page: number | null
+) => void
+
+const novelMarkerListeners = new Set<NovelMarkerListener>()
+const novelMarkerCache = new Map<number, number | null>()
+
+export function onNovelMarkerChanged(listener: NovelMarkerListener): () => void {
+  novelMarkerListeners.add(listener)
+  return () => {
+    novelMarkerListeners.delete(listener)
+  }
+}
+
+export function notifyNovelMarkerChanged(
+  novelID: number,
+  page: number | null
+): void {
+  if (typeof novelID === "number" && novelID > 0) {
+    novelMarkerCache.set(novelID, page)
+  }
+  for (const listener of novelMarkerListeners) {
+    try {
+      listener(novelID, page)
+    } catch {}
+  }
+}
+
+export function getCachedNovelMarker(novelID: number): number | null | undefined {
+  return novelMarkerCache.get(novelID)
+}
+
+export function recordNovelMarker(novelID: number, page: number | null): void {
+  if (typeof novelID === "number" && novelID > 0) {
+    novelMarkerCache.set(novelID, page)
+  }
+}
+

@@ -332,6 +332,9 @@ export interface PixivNovel {
   visible: boolean
   series?: PixivSeries | null
   episode_number?: number
+  novel_marker?: {
+    page: number
+  } | null
   image_urls?: {
     square_medium?: string
     medium?: string
@@ -382,6 +385,9 @@ export interface PixivNovelDetail {
   textEmbeddedImages?: Record<string, TextEmbeddedImage>
   content: string
   episode_number?: number
+  novel_marker?: {
+    page: number
+  } | null
   series?: {
     id: number
     title?: string

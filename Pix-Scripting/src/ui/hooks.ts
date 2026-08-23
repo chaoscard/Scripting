@@ -9,9 +9,11 @@ import {
 import {
   getCachedIllustBookmark,
   getCachedNovelBookmark,
+  getCachedNovelMarker,
   getCachedWatchlist,
   onIllustBookmarkChanged,
   onNovelBookmarkChanged,
+  onNovelMarkerChanged,
   onWatchlistChanged,
 } from "../store/bookmarkSync"
 import { isUserFollowed, onUserFollowChanged } from "../store/userFollow"
@@ -712,5 +714,33 @@ export function useSeriesWatchlist(
   }, [seriesID, kind])
 
   return [watched, setWatched]
+}
+
+/**
+ * 响应式同步小说的阅读书签（第几页）
+ */
+export function useNovelMarker(
+  novelID: number,
+  initialPage?: number | null
+): [number | null, (page: number | null) => void] {
+  const [markerPage, setMarkerPage] = useState<number | null>(() => {
+    return getCachedNovelMarker(novelID) ?? initialPage ?? null
+  })
+
+  useEffect(() => {
+    const cached = getCachedNovelMarker(novelID)
+    if (cached !== undefined) {
+      setMarkerPage(cached)
+    } else if (initialPage !== undefined) {
+      setMarkerPage(initialPage)
+    }
+    return onNovelMarkerChanged((changedID, nextPage) => {
+      if (changedID === novelID) {
+        setMarkerPage(nextPage)
+      }
+    })
+  }, [novelID, initialPage])
+
+  return [markerPage, setMarkerPage]
 }
 
