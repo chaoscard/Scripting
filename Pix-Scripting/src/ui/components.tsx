@@ -46,6 +46,10 @@ import {
   removeNovelBookmark,
 } from "../api/pixiv"
 import { session } from "../api/session"
+import {
+  downloadEntireMangaSeries,
+  downloadEntireNovelSeries,
+} from "../downloader"
 import { loadSettings } from "../store/settings"
 import { blockTag } from "../store/blocklist"
 import { cacheIllust, cacheIllusts } from "../store/illustCache"
@@ -765,6 +769,40 @@ export function WatchlistSeriesCard(props: {
     : seriesRoute
   const formattedDate = formatWatchlistDate(item.last_published_content_datetime)
 
+  async function handleExportSeries() {
+    void Haptics.transient()
+    if (isNovel) {
+      const confirmed = await Dialog.confirm({
+        title: "下载整本小说",
+        message: `确认下载《${item.title || "系列"}》整本小说为 EPUB 电子书？\n包含全部连载章节与插图。`,
+        confirmLabel: "开始下载",
+        cancelLabel: "取消",
+      })
+      if (!confirmed) return
+      const filePath = await downloadEntireNovelSeries(item.id, item.title)
+      if (filePath) {
+        void Haptics.transient()
+        await ShareSheet.present([filePath])
+      }
+    } else {
+      const choice = await Dialog.actionSheet({
+        title: `下载整套漫画《${item.title || "系列"}》`,
+        message: "请选择下载的漫画文件格式：",
+        actions: [
+          { label: "下载为 CBZ 漫画包" },
+          { label: "下载为 EPUB 电子书" },
+        ],
+      })
+      if (choice === null) return
+      const format: "cbz" | "epub" = choice === 0 ? "cbz" : "epub"
+      const filePath = await downloadEntireMangaSeries(item.id, item.title, format)
+      if (filePath) {
+        void Haptics.transient()
+        await ShareSheet.present([filePath])
+      }
+    }
+  }
+
   if (item.mask_text) {
     return (
       <VStack
@@ -782,7 +820,31 @@ export function WatchlistSeriesCard(props: {
 
   return (
     <ZStack alignment="bottomTrailing" frame={{ maxWidth: "infinity" }}>
-      <NavigationLink value={seriesRoute}>
+      <NavigationLink
+        value={seriesRoute}
+        contextMenu={{
+          menuItems: (
+            <Group>
+              <Button
+                title={isNovel ? "下载整本小说 (EPUB)" : "下载整套漫画 (CBZ/EPUB)"}
+                systemImage="square.and.arrow.down"
+                action={() => void handleExportSeries()}
+              />
+              <Button
+                title="分享系列链接"
+                systemImage="square.and.arrow.up"
+                action={() => {
+                  void Haptics.transient()
+                  const shareUrl = isNovel
+                    ? `https://www.pixiv.net/novel/series/${item.id}`
+                    : `https://www.pixiv.net/user_series/${item.id}`
+                  void ShareSheet.present([shareUrl])
+                }}
+              />
+            </Group>
+          ),
+        }}
+      >
         <HStack
           spacing={10}
           padding={10}

@@ -4,6 +4,9 @@ import { recoverFile, writeTextSafely } from "./safeFile"
 export type FeedImageQuality = "medium" | "large"
 export type DetailImageQuality = "large" | "original"
 export type DownloadImageQuality = "large" | "original"
+export type DownloadStorageMode = "local" | "icloud"
+export type DownloadMangaFormat = "cbz" | "epub"
+export type DownloadIllustMultiAction = "album" | "zip" | "ask"
 export type CloseButtonAction = "minimize" | "exit"
 export type WatchlistSortOrder = "asc" | "desc"
 export type AmbientIntensity = "low" | "medium" | "high"
@@ -31,6 +34,12 @@ export interface AppSettings {
   feedImageQuality: FeedImageQuality
   detailImageQuality: DetailImageQuality
   downloadImageQuality: DownloadImageQuality
+  downloadStorageMode: DownloadStorageMode
+  downloadCustomDirectoryBookmark: string | null
+  downloadCustomDirectoryPath: string | null
+  downloadPhotoAlbumName: string
+  downloadMangaFormat: DownloadMangaFormat
+  downloadIllustMultiAction: DownloadIllustMultiAction
   prefetchEnabled: boolean
   cacheLimitMB: number | null
   recordHistory: boolean
@@ -61,6 +70,12 @@ const DEFAULT_SETTINGS: AppSettings = {
   feedImageQuality: "medium",
   detailImageQuality: "large",
   downloadImageQuality: "original",
+  downloadStorageMode: "local",
+  downloadCustomDirectoryBookmark: null,
+  downloadCustomDirectoryPath: null,
+  downloadPhotoAlbumName: "Pix-Scripting",
+  downloadMangaFormat: "cbz",
+  downloadIllustMultiAction: "ask",
   prefetchEnabled: true,
   cacheLimitMB: 300,
   recordHistory: true,
@@ -83,6 +98,9 @@ const WATCHLIST_SORT_VALUES: readonly WatchlistSortOrder[] = ["asc", "desc"]
 const FEED_QUALITY_VALUES: readonly FeedImageQuality[] = ["medium", "large"]
 const DETAIL_QUALITY_VALUES: readonly DetailImageQuality[] = ["large", "original"]
 const DOWNLOAD_QUALITY_VALUES: readonly DownloadImageQuality[] = ["large", "original"]
+const DOWNLOAD_STORAGE_MODE_VALUES: readonly DownloadStorageMode[] = ["local", "icloud"]
+const DOWNLOAD_MANGA_FORMAT_VALUES: readonly DownloadMangaFormat[] = ["cbz", "epub"]
+const DOWNLOAD_ILLUST_MULTI_ACTION_VALUES: readonly DownloadIllustMultiAction[] = ["album", "zip", "ask"]
 const LONG_PRESS_ACTION_VALUES: readonly AppSettings["longPressBookmarkAction"][] = ["off", "follow", "detail"]
 const CLOSE_BUTTON_ACTION_VALUES: readonly CloseButtonAction[] = ["minimize", "exit"]
 const AMBIENT_INTENSITY_VALUES: readonly AmbientIntensity[] = ["low", "medium", "high"]
@@ -226,6 +244,27 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
     downloadImageQuality: isOneOf(stored?.downloadImageQuality, DOWNLOAD_QUALITY_VALUES)
       ? stored.downloadImageQuality
       : DEFAULT_SETTINGS.downloadImageQuality,
+    downloadStorageMode: isOneOf(stored?.downloadStorageMode, DOWNLOAD_STORAGE_MODE_VALUES)
+      ? stored.downloadStorageMode
+      : DEFAULT_SETTINGS.downloadStorageMode,
+    downloadCustomDirectoryBookmark:
+      typeof stored?.downloadCustomDirectoryBookmark === "string" && stored.downloadCustomDirectoryBookmark.trim().length > 0
+        ? stored.downloadCustomDirectoryBookmark
+        : null,
+    downloadCustomDirectoryPath:
+      typeof stored?.downloadCustomDirectoryPath === "string" && stored.downloadCustomDirectoryPath.trim().length > 0
+        ? stored.downloadCustomDirectoryPath
+        : null,
+    downloadPhotoAlbumName:
+      typeof stored?.downloadPhotoAlbumName === "string" && stored.downloadPhotoAlbumName.trim().length > 0
+        ? stored.downloadPhotoAlbumName.trim()
+        : DEFAULT_SETTINGS.downloadPhotoAlbumName,
+    downloadMangaFormat: isOneOf(stored?.downloadMangaFormat, DOWNLOAD_MANGA_FORMAT_VALUES)
+      ? stored.downloadMangaFormat
+      : DEFAULT_SETTINGS.downloadMangaFormat,
+    downloadIllustMultiAction: isOneOf(stored?.downloadIllustMultiAction, DOWNLOAD_ILLUST_MULTI_ACTION_VALUES)
+      ? stored.downloadIllustMultiAction
+      : DEFAULT_SETTINGS.downloadIllustMultiAction,
     prefetchEnabled: boolOr(stored?.prefetchEnabled, DEFAULT_SETTINGS.prefetchEnabled),
     cacheLimitMB: cacheLimitOf(stored?.cacheLimitMB),
     recordHistory: boolOr(stored?.recordHistory, DEFAULT_SETTINGS.recordHistory),

@@ -249,6 +249,122 @@ export function SettingsView() {
         </Picker>
       </Section>
 
+      <Section
+        header={<Text>下载与存储</Text>}
+        footer={
+          <Text>
+            {settings.downloadStorageMode === "icloud"
+              ? "iCloud 存储模式下，保存在 /Scripting/Pix-Scripting 目录中，可在各个设备间同步，请在“文件”App 查看。"
+              : settings.downloadCustomDirectoryPath
+              ? `当前自定义存储路径：${settings.downloadCustomDirectoryPath}，请在“文件”App 查看。`
+              : "默认保存在 /Scripting/Pix-Scripting 目录中，请在“文件”App 查看。"}
+          </Text>
+        }
+      >
+        <Picker
+          title="存储模式"
+          value={settings.downloadStorageMode}
+          onChanged={(value: string) =>
+            update({ downloadStorageMode: value as "local" | "icloud" })
+          }
+        >
+          <Text tag="local">本地存储</Text>
+          <Text tag="icloud">iCloud</Text>
+        </Picker>
+
+        {settings.downloadStorageMode === "local" ? (
+          <HStack spacing={8}>
+            <VStack alignment="leading" spacing={2}>
+              <Text font="body">本地存储目录</Text>
+              <Text font="caption" foregroundStyle="secondaryLabel" lineLimit={1}>
+                {settings.downloadCustomDirectoryPath || "/Scripting/Pix-Scripting"}
+              </Text>
+            </VStack>
+            <Spacer />
+            {settings.downloadCustomDirectoryBookmark ? (
+              <Button
+                buttonStyle="plain"
+                foregroundStyle="systemRed"
+                action={() => {
+                  update({
+                    downloadCustomDirectoryBookmark: null,
+                    downloadCustomDirectoryPath: null,
+                  })
+                }}
+              >
+                <Image systemName="arrow.counterclockwise" />
+              </Button>
+            ) : null}
+            <Button
+              buttonStyle="plain"
+              foregroundStyle="systemBlue"
+              action={async () => {
+                try {
+                  const res = await DocumentPicker.pickDirectoryBookmark({
+                    preferredName: "Pixiv_Download_Dir",
+                  })
+                  if (res && res.bookmarkName) {
+                    update({
+                      downloadCustomDirectoryBookmark: res.bookmarkName,
+                      downloadCustomDirectoryPath: res.path,
+                    })
+                  }
+                } catch (err: any) {
+                  console.log("pickDirectoryBookmark error:", err?.message ?? err)
+                }
+              }}
+            >
+              <Image systemName="folder.badge.plus" />
+            </Button>
+          </HStack>
+        ) : null}
+
+        <HStack spacing={8}>
+          <Text font="body">相簿名称</Text>
+          <Spacer />
+          <Button
+            buttonStyle="plain"
+            action={async () => {
+              try {
+                const currentName = settings.downloadPhotoAlbumName || "Pix-Scripting"
+                const nextName = await Dialog.prompt({
+                  title: "修改相簿名称",
+                  message: "插画和动图保存至相册时将自动归类到此相簿",
+                  defaultValue: currentName,
+                  placeholder: "请输入相簿名称",
+                  confirmLabel: "保存",
+                  cancelLabel: "取消",
+                })
+                if (nextName !== null && nextName.trim().length > 0) {
+                  update({ downloadPhotoAlbumName: nextName.trim() })
+                }
+              } catch (e: any) {
+                console.log("prompt album name error:", e?.message ?? e)
+              }
+            }}
+          >
+            <HStack spacing={4} alignment="center">
+              <Text font="body" foregroundStyle="secondaryLabel">
+                {settings.downloadPhotoAlbumName || "Pix-Scripting"}
+              </Text>
+              <Image systemName="pencil" font="caption" foregroundStyle="tertiaryLabel" />
+            </HStack>
+          </Button>
+        </HStack>
+
+        <Picker
+          title="多图插画下载行为"
+          value={settings.downloadIllustMultiAction}
+          onChanged={(value: string) =>
+            update({ downloadIllustMultiAction: value as "album" | "zip" | "ask" })
+          }
+        >
+          <Text tag="ask">每次询问</Text>
+          <Text tag="album">存入相簿</Text>
+          <Text tag="zip">打包为 ZIP</Text>
+        </Picker>
+      </Section>
+
       <Section header={<Text>浏览记录</Text>}>
         <Toggle title="浏览记录" value={settings.recordHistory} onChanged={(value) => update({ recordHistory: value })} />
         <HStack spacing={8}>

@@ -12,6 +12,10 @@ import {
   VStack,
 } from "scripting"
 import {
+  downloadEntireMangaSeries,
+  downloadEntireNovelSeries,
+} from "../downloader"
+import {
   cachedFileExists,
   cardThumbUrlOf,
   loadImage,
@@ -411,6 +415,56 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
   const illustPagedRef = useLatest(illustPaged)
   const novelPagedRef = useLatest(novelPaged)
 
+  const [seriesDownloading, setSeriesDownloading] = useState(false)
+
+  async function handleExportSeries() {
+    if (seriesDownloading) return
+    void Haptics.transient()
+
+    if (props.kind === "novel") {
+      const confirmed = await Dialog.confirm({
+        title: "下载整本小说",
+        message: `确认将《${title}》系列合并打包下载为 EPUB 电子书？\n包含全部连载章节与内嵌插图。`,
+        confirmLabel: "开始下载",
+        cancelLabel: "取消",
+      })
+      if (!confirmed) return
+
+      setSeriesDownloading(true)
+      try {
+        const filePath = await downloadEntireNovelSeries(props.seriesID, title)
+        if (filePath) {
+          void Haptics.transient()
+          await ShareSheet.present([filePath])
+        }
+      } finally {
+        setSeriesDownloading(false)
+      }
+    } else {
+      const choice = await Dialog.actionSheet({
+        title: `下载整套漫画《${title}》`,
+        message: "请选择下载的漫画文件格式：",
+        actions: [
+          { label: "下载为 CBZ 漫画包" },
+          { label: "下载为 EPUB 电子书" },
+        ],
+      })
+      if (choice === null) return
+
+      const format: "cbz" | "epub" = choice === 0 ? "cbz" : "epub"
+      setSeriesDownloading(true)
+      try {
+        const filePath = await downloadEntireMangaSeries(props.seriesID, title, format)
+        if (filePath) {
+          void Haptics.transient()
+          await ShareSheet.present([filePath])
+        }
+      } finally {
+        setSeriesDownloading(false)
+      }
+    }
+  }
+
   async function toggleWatchlist() {
     if (watchLoading) return
     void Haptics.transient()
@@ -514,6 +568,15 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
             }}
           >
             <Image systemName="square.and.arrow.up" />
+          </Button>,
+          <Button
+            disabled={seriesDownloading}
+            action={handleExportSeries}
+          >
+            <Image
+              systemName={seriesDownloading ? "arrow.down.circle.fill" : "square.and.arrow.down"}
+              foregroundStyle={seriesDownloading ? "systemBlue" : undefined}
+            />
           </Button>,
           ...(author ? [
             <NavigationLink

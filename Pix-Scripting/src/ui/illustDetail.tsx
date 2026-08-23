@@ -33,6 +33,13 @@ import {
   unfollowUser,
 } from "../api/pixiv"
 import { session } from "../api/session"
+import {
+  exportIllustToZip,
+  exportMangaToCbz,
+  exportMangaToEpub,
+  exportUgoiraToAlbum,
+  saveImageToPixivAlbum,
+} from "../downloader"
 import { cachedFilePath, cardThumbUrlOf, imageUrlOf, loadImage, pageThumbUrlOf, prefetch } from "../image/imageLoader"
 import {
   extractIllustAmbientPalette,
@@ -457,35 +464,111 @@ export function IllustDetailView(props: { illustID: number }) {
     }
   }
 
-  async function savePages() {
+  const [downloading, setDownloading] = useState(false)
+
+  async function handleDownloadUgoira() {
+    if (downloading) return
     void Haptics.transient()
-    // 动图：保存合成后的 mp4
-    if (current.type === "ugoira") {
-      try {
-        const result = await buildUgoira(current.id)
-        await Photos.saveVideo(result.mp4Path, {
-          fileName: `pixiv_${current.id}`,
-        })
-      } catch {
-        // ignore
+    setDownloading(true)
+    try {
+      const res = await exportUgoiraToAlbum(current)
+      if (res.success) {
+        void Haptics.transient()
       }
-      return
+    } finally {
+      setDownloading(false)
     }
-    // 图片：按下载质量保存单页或全部页（单页失败不中断整批）
+  }
+
+  async function handleDownloadIllustToAlbum() {
+    if (downloading) return
+    void Haptics.transient()
+    setDownloading(true)
     const downloadQuality = loadSettings().downloadImageQuality
-    for (let i = 0; i < pageCount; i++) {
-      const url = imageUrlOf(current, i, downloadQuality) ?? pageURLs[i]
-      if (!url) continue
-      try {
-        const path = await loadImage(url)
-        if (path) {
-          await Photos.savePhoto(path, {
-            fileName: `pixiv_${current.id}_p${i + 1}`,
-          })
-        }
-      } catch {
-        // 该页失败继续下一页
+    try {
+      for (let i = 0; i < pageCount; i++) {
+        const url = imageUrlOf(current, i, downloadQuality) ?? pageURLs[i]
+        if (!url) continue
+        try {
+          const path = await loadImage(url)
+          if (path) {
+            await saveImageToPixivAlbum(path, `pixiv_${current.id}_p${i + 1}`)
+          }
+        } catch {}
       }
+      void Haptics.transient()
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  async function handleDownloadIllustToZip() {
+    if (downloading) return
+    void Haptics.transient()
+    setDownloading(true)
+    const downloadQuality = loadSettings().downloadImageQuality
+    try {
+      const urls: string[] = []
+      for (let i = 0; i < pageCount; i++) {
+        const url = imageUrlOf(current, i, downloadQuality) ?? pageURLs[i]
+        if (url) urls.push(url)
+      }
+      const zipPath = await exportIllustToZip({
+        illust: current,
+        imageUrls: urls,
+      })
+      if (zipPath) {
+        void Haptics.transient()
+        await ShareSheet.present([zipPath])
+      }
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  async function handleDownloadManga(format: "cbz" | "epub") {
+    if (downloading) return
+    void Haptics.transient()
+    setDownloading(true)
+    const downloadQuality = loadSettings().downloadImageQuality
+    try {
+      const pages: { pageIndex: number; url: string }[] = []
+      for (let i = 0; i < pageCount; i++) {
+        const url = imageUrlOf(current, i, downloadQuality) ?? pageURLs[i]
+        if (url) pages.push({ pageIndex: i + 1, url })
+      }
+
+      let filePath: string | null = null
+      if (format === "cbz") {
+        filePath = await exportMangaToCbz({
+          id: current.id,
+          title: current.title,
+          author: current.user?.name || "Unknown",
+          authorId: current.user?.id,
+          seriesTitle: resolvedSeriesTitle ?? undefined,
+          description: current.caption,
+          tags: current.tags?.map((t) => t.name),
+          pages,
+        })
+      } else {
+        filePath = await exportMangaToEpub({
+          id: current.id,
+          title: current.title,
+          author: current.user?.name || "Unknown",
+          authorId: current.user?.id,
+          seriesTitle: resolvedSeriesTitle ?? undefined,
+          description: current.caption,
+          tags: current.tags?.map((t) => t.name),
+          pages,
+        })
+      }
+
+      if (filePath) {
+        void Haptics.transient()
+        await ShareSheet.present([filePath])
+      }
+    } finally {
+      setDownloading(false)
     }
   }
 
@@ -616,15 +699,55 @@ export function IllustDetailView(props: { illustID: number }) {
               />
             )}
             <Button
-              title="下载"
-              systemImage="square.and.arrow.down"
-              action={savePages}
-            />
-            <Button
               title="分享"
               systemImage="square.and.arrow.up"
               action={shareIllust}
             />
+            {current.type === "ugoira" ? (
+              <Button
+                title={downloading ? "保存中…" : "保存至相簿"}
+                systemImage="square.and.arrow.down"
+                disabled={downloading}
+                action={handleDownloadUgoira}
+              />
+            ) : current.type === "manga" ? (
+              <Menu title="下载漫画" systemImage="square.and.arrow.down">
+                <Button
+                  title="下载为 CBZ 漫画包"
+                  systemImage="doc.zipper"
+                  disabled={downloading}
+                  action={() => void handleDownloadManga("cbz")}
+                />
+                <Button
+                  title="下载为 EPUB 电子书"
+                  systemImage="book"
+                  disabled={downloading}
+                  action={() => void handleDownloadManga("epub")}
+                />
+              </Menu>
+            ) : pageCount > 1 ? (
+              <Menu title="下载插画" systemImage="square.and.arrow.down">
+                <Button
+                  title="保存全部至相簿"
+                  systemImage="photo.on.rectangle.angled"
+                  disabled={downloading}
+                  action={handleDownloadIllustToAlbum}
+                />
+                <Button
+                  title="打包为 ZIP 归档"
+                  systemImage="doc.zipper"
+                  disabled={downloading}
+                  action={handleDownloadIllustToZip}
+                />
+              </Menu>
+            ) : (
+              <Button
+                title={downloading ? "保存中…" : "保存至相簿"}
+                systemImage="square.and.arrow.down"
+                disabled={downloading}
+                action={handleDownloadIllustToAlbum}
+              />
+            )}
             <Divider />
             <Menu title="信息" systemImage="info.circle">
               <Button

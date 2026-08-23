@@ -41,6 +41,7 @@ import {
   unfollowUser,
 } from "../api/pixiv"
 import { session } from "../api/session"
+import { exportNovelToEpub } from "../downloader"
 import {
   currentBatchSize,
   useAsyncGuard,
@@ -518,6 +519,73 @@ export function NovelDetailView(props: { novelID: number }) {
     await handleToggleSpecificPageMarker(target)
   }
 
+  const [downloadingEpub, setDownloadingEpub] = useState(false)
+
+  async function handleDownloadNovelEpub() {
+    if (downloadingEpub) return
+    void Haptics.transient()
+    setDownloadingEpub(true)
+    try {
+      let fullText = text
+      const imagesMap: Record<string, string> = {}
+      if (textEmbeddedImages) {
+        Object.entries(textEmbeddedImages).forEach(([key, imgObj]) => {
+          const url = imgObj?.urls?.original || imgObj?.urls?.["1200x1200"] || imgObj?.urls?.["480mw"]
+          if (url) imagesMap[key] = url
+        })
+      }
+
+      let cover = current.image_urls?.large || current.image_urls?.medium
+
+      if (!fullText) {
+        const viewer = await session.call((token) => novelViewerData(current.id, token))
+        if (viewer && viewer.text) {
+          fullText = viewer.text
+          if (viewer.coverUrl) cover = viewer.coverUrl
+          if (viewer.textEmbeddedImages) {
+            Object.entries(viewer.textEmbeddedImages).forEach(([key, imgObj]) => {
+              const url = imgObj?.urls?.original || imgObj?.urls?.["1200x1200"] || imgObj?.urls?.["480mw"]
+              if (url) imagesMap[key] = url
+            })
+          }
+        }
+      }
+
+      if (!fullText) {
+        return
+      }
+
+      const filePath = await exportNovelToEpub({
+        id: current.id,
+        title: current.title,
+        author: current.user?.name || "Unknown",
+        authorId: current.user?.id,
+        seriesTitle: resolvedSeriesTitle ?? undefined,
+        description: current.caption,
+        tags: current.tags?.map((t) => t.name),
+        coverUrl: cover,
+        chapters: [
+          {
+            id: current.id,
+            title: current.title,
+            text: fullText,
+            images: imagesMap,
+            caption: current.caption,
+          },
+        ],
+      })
+
+      if (filePath) {
+        void Haptics.transient()
+        await ShareSheet.present([filePath])
+      }
+    } catch (e: any) {
+      console.log("handleDownloadNovelEpub error:", e?.message ?? e)
+    } finally {
+      setDownloadingEpub(false)
+    }
+  }
+
   async function shareNovel() {
     if (!novel) return
     void Haptics.transient()
@@ -814,6 +882,12 @@ export function NovelDetailView(props: { novelID: number }) {
               title="分享"
               systemImage="square.and.arrow.up"
               action={shareNovel}
+            />
+            <Button
+              title={downloadingEpub ? "正在生成 EPUB…" : "下载 EPUB 电子书"}
+              systemImage="square.and.arrow.down"
+              disabled={downloadingEpub}
+              action={handleDownloadNovelEpub}
             />
             <Divider />
             <Menu title="信息" systemImage="info.circle">
