@@ -11,6 +11,8 @@ export interface MangaCbzOptions {
   description?: string
   tags?: string[]
   pages: { pageIndex: number; url: string }[]
+  targetDir?: string
+  customFileName?: string
   onProgress?: (msg: string, current: number, total: number) => void
 }
 
@@ -37,12 +39,19 @@ export async function exportMangaToCbz(options: MangaCbzOptions): Promise<string
     description,
     tags = [],
     pages,
+    targetDir: customTargetDir,
+    customFileName,
     onProgress,
   } = options
 
-  const safeTitle = sanitizeFileName(seriesTitle ? `${seriesTitle} - ${title}` : `${title}_${author}`)
+  const safeTitle = customFileName
+    ? sanitizeFileName(customFileName)
+    : sanitizeFileName(seriesTitle ? `${seriesTitle} - ${title}` : `${title}_${author}`)
   const outputFileName = `${safeTitle}.cbz`
-  const targetDir = getCategoryDirectory("manga")
+  const targetDir = customTargetDir || getCategoryDirectory("manga")
+  if (!FileManager.existsSync(targetDir)) {
+    try { FileManager.createDirectorySync(targetDir, true) } catch {}
+  }
   const targetFilePath = `${targetDir}/${outputFileName}`
 
   const tempDir = `${getCategoryDirectory("temp")}/cbz_${id}_${Date.now()}`

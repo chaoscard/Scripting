@@ -19,6 +19,8 @@ export interface NovelEpubOptions {
   tags?: string[]
   coverUrl?: string
   chapters: NovelChapter[]
+  targetDir?: string
+  customFileName?: string
   onProgress?: (msg: string, current: number, total: number) => void
 }
 
@@ -36,6 +38,8 @@ export interface MangaEpubOptions {
   description?: string
   tags?: string[]
   pages: MangaPageItem[]
+  targetDir?: string
+  customFileName?: string
   onProgress?: (msg: string, current: number, total: number) => void
 }
 
@@ -246,12 +250,19 @@ export async function exportNovelToEpub(options: NovelEpubOptions): Promise<stri
     tags = [],
     coverUrl,
     chapters,
+    targetDir: customTargetDir,
+    customFileName,
     onProgress,
   } = options
 
-  const safeTitle = sanitizeFileName(seriesTitle ? `${seriesTitle} - ${title}` : `${title}_${author}`)
+  const safeTitle = customFileName
+    ? sanitizeFileName(customFileName)
+    : sanitizeFileName(seriesTitle ? `${seriesTitle} - ${title}` : `${title}_${author}`)
   const outputFileName = `${safeTitle}.epub`
-  const targetDir = getCategoryDirectory("novels")
+  const targetDir = customTargetDir || getCategoryDirectory("novels")
+  if (!FileManager.existsSync(targetDir)) {
+    try { FileManager.createDirectorySync(targetDir, true) } catch {}
+  }
   const targetFilePath = `${targetDir}/${outputFileName}`
 
   const tempDir = `${getCategoryDirectory("temp")}/epub_novel_${id}_${Date.now()}`
@@ -465,11 +476,26 @@ export async function exportNovelToEpub(options: NovelEpubOptions): Promise<stri
  * 导出漫画为固定版面 EPUB 文件
  */
 export async function exportMangaToEpub(options: MangaEpubOptions): Promise<string | null> {
-  const { id, title, author, seriesTitle, description, pages, onProgress } = options
+  const {
+    id,
+    title,
+    author,
+    seriesTitle,
+    description,
+    pages,
+    targetDir: customTargetDir,
+    customFileName,
+    onProgress,
+  } = options
 
-  const safeTitle = sanitizeFileName(seriesTitle ? `${seriesTitle} - ${title}` : `${title}_${author}`)
+  const safeTitle = customFileName
+    ? sanitizeFileName(customFileName)
+    : sanitizeFileName(seriesTitle ? `${seriesTitle} - ${title}` : `${title}_${author}`)
   const outputFileName = `${safeTitle}.epub`
-  const targetDir = getCategoryDirectory("manga")
+  const targetDir = customTargetDir || getCategoryDirectory("manga")
+  if (!FileManager.existsSync(targetDir)) {
+    try { FileManager.createDirectorySync(targetDir, true) } catch {}
+  }
   const targetFilePath = `${targetDir}/${outputFileName}`
 
   const tempDir = `${getCategoryDirectory("temp")}/epub_manga_${id}_${Date.now()}`

@@ -21,6 +21,14 @@ import {
 } from "scripting"
 import type { UserAmbientPalette } from "../image/colorExtractor"
 import {
+  downloadAuthorIllustrationsToAlbum,
+  exportAuthorIllustrationsToZip,
+  exportAuthorManga,
+  exportAuthorNovels,
+  fetchAllUserIllustrations,
+  fetchAllUserNovels,
+} from "../downloader"
+import {
   fetchWebUserDetail,
   followDetail,
   followUser,
@@ -253,6 +261,198 @@ export function UserDetailView(props: { userID: number }) {
     }
   }
 
+  const [downloading, setDownloading] = useState(false)
+  const [downloadStatusText, setDownloadStatusText] = useState("")
+
+  const handleDownloadClick = async () => {
+    if (!detail) return
+    if (downloading) {
+      void Dialog.alert({
+        title: "下载正在进行中",
+        message: "当前已有批量下载任务正在执行，请稍候完成。",
+      })
+      return
+    }
+
+    const totalIllusts = detail.profile.total_illusts ?? 0
+    const totalManga = detail.profile.total_manga ?? 0
+    const totalNovels = hideNovels ? 0 : (detail.profile.total_novels ?? 0)
+
+    if (totalIllusts === 0 && totalManga === 0 && totalNovels === 0) {
+      void Dialog.alert({
+        title: "提示",
+        message: "该创作者暂无作品投稿。",
+      })
+      return
+    }
+
+    // 构造可选作品类别列表
+    const categories: { key: "illust" | "manga" | "novel"; label: string }[] = []
+    if (totalIllusts > 0) {
+      categories.push({ key: "illust", label: `下载全部插画 (${totalIllusts} 部)` })
+    }
+    if (totalManga > 0) {
+      categories.push({ key: "manga", label: `下载全部漫画 (${totalManga} 部)` })
+    }
+    if (totalNovels > 0) {
+      categories.push({ key: "novel", label: `下载全部小说 (${totalNovels} 部)` })
+    }
+
+    let selectedCatKey: "illust" | "manga" | "novel" = categories[0].key
+
+    if (categories.length > 1) {
+      const choice = await Dialog.actionSheet({
+        title: "下载创作者作品",
+        message: `画师：${detail.user.name}`,
+        actions: categories.map((c) => ({ label: c.label })),
+      })
+      if (choice == null || choice < 0 || choice >= categories.length) {
+        return
+      }
+      selectedCatKey = categories[choice].key
+    }
+
+    // 分类下载处理
+    if (selectedCatKey === "illust") {
+      const choice = await Dialog.actionSheet({
+        title: "插画下载方式",
+        message: `共 ${totalIllusts} 部插画作品`,
+        actions: [
+          { label: "下载至相簿" },
+          { label: "打包为 ZIP 归档" },
+        ],
+      })
+      if (choice !== 0 && choice !== 1) return
+
+      if (choice === 0) {
+        const albumName = loadSettings().downloadPhotoAlbumName || "Pix-Scripting"
+        const confirmed = await Dialog.confirm({
+          title: "确认下载全部插画？",
+          message: `将拉取画师「${detail.user.name}」全部插画并保存至专属相簿「${albumName}」。`,
+          confirmLabel: "开始下载",
+          cancelLabel: "取消",
+        })
+        if (!confirmed) return
+
+        setDownloading(true)
+        try {
+          const list = await fetchAllUserIllustrations(userID, "illust", (msg) => setDownloadStatusText(msg))
+          if (list.length === 0) {
+            void Dialog.alert({ title: "提示", message: "未获取到插画作品" })
+            return
+          }
+          const result = await downloadAuthorIllustrationsToAlbum(detail.user.name, list, (msg) => setDownloadStatusText(msg))
+          void Dialog.alert({
+            title: "下载完成",
+            message: `已成功将 ${result.successCount} 部插画保存至相簿「${albumName}」。`,
+          })
+        } catch (e: any) {
+          void Dialog.alert({ title: "下载失败", message: e?.message ?? "下载插画时发生错误" })
+        } finally {
+          setDownloading(false)
+          setDownloadStatusText("")
+        }
+      } else {
+        const confirmed = await Dialog.confirm({
+          title: "确认打包全部插画？",
+          message: `将拉取画师「${detail.user.name}」全部插画原图并打包为 ZIP 归档，多页插画将归入独立子文件夹，请在“文件”App 查看。`,
+          confirmLabel: "开始下载",
+          cancelLabel: "取消",
+        })
+        if (!confirmed) return
+
+        setDownloading(true)
+        try {
+          const list = await fetchAllUserIllustrations(userID, "illust", (msg) => setDownloadStatusText(msg))
+          if (list.length === 0) {
+            void Dialog.alert({ title: "提示", message: "未获取到插画作品" })
+            return
+          }
+          const zipPath = await exportAuthorIllustrationsToZip(detail.user.name, userID, list, (msg) => setDownloadStatusText(msg))
+          if (zipPath) {
+            void Dialog.alert({
+              title: "打包完成",
+              message: "插画全集 ZIP 归档已保存，请在“文件”App 查看。",
+            })
+          } else {
+            void Dialog.alert({ title: "打包失败", message: "生成插画 ZIP 归档包失败" })
+          }
+        } catch (e: any) {
+          void Dialog.alert({ title: "打包失败", message: e?.message ?? "打包插画时发生错误" })
+        } finally {
+          setDownloading(false)
+          setDownloadStatusText("")
+        }
+      }
+    } else if (selectedCatKey === "manga") {
+      const choice = await Dialog.actionSheet({
+        title: "漫画下载格式",
+        message: `共 ${totalManga} 部漫画作品`,
+        actions: [
+          { label: "打包为 CBZ 漫画包" },
+          { label: "打包为 EPUB 电子书" },
+        ],
+      })
+      if (choice !== 0 && choice !== 1) return
+      const format: "cbz" | "epub" = choice === 0 ? "cbz" : "epub"
+      const formatLabel = format === "cbz" ? "CBZ 漫画包" : "EPUB 电子书"
+
+      const confirmed = await Dialog.confirm({
+        title: "确认下载全部漫画？",
+        message: `将拉取画师「${detail.user.name}」全部漫画（共 ${totalManga} 部），连载系列将自动合并为全集卷，短篇将独立导出为单本，格式为 ${formatLabel}，请在“文件”App 查看。`,
+        confirmLabel: "开始下载",
+        cancelLabel: "取消",
+      })
+      if (!confirmed) return
+
+      setDownloading(true)
+      try {
+        const mangaList = await fetchAllUserIllustrations(userID, "manga", (msg) => setDownloadStatusText(msg))
+        if (mangaList.length === 0) {
+          void Dialog.alert({ title: "提示", message: "未获取到漫画作品" })
+          return
+        }
+        const res = await exportAuthorManga(detail.user.name, userID, mangaList, format, (msg) => setDownloadStatusText(msg))
+        void Dialog.alert({
+          title: "导出完成",
+          message: `已成功导出 ${res.totalExported} 本漫画文件，请在“文件”App 查看。`,
+        })
+      } catch (e: any) {
+        void Dialog.alert({ title: "导出失败", message: e?.message ?? "导出漫画时发生错误" })
+      } finally {
+        setDownloading(false)
+        setDownloadStatusText("")
+      }
+    } else if (selectedCatKey === "novel") {
+      const confirmed = await Dialog.confirm({
+        title: "确认下载全部小说？",
+        message: `将拉取作者「${detail.user.name}」全部小说（共 ${totalNovels} 部），连载系列将自动合并为多章节整本电子书，短篇将独立导出为单本，请在“文件”App 查看。`,
+        confirmLabel: "开始下载",
+        cancelLabel: "取消",
+      })
+      if (!confirmed) return
+
+      setDownloading(true)
+      try {
+        const novelList = await fetchAllUserNovels(userID, (msg) => setDownloadStatusText(msg))
+        if (novelList.length === 0) {
+          void Dialog.alert({ title: "提示", message: "未获取到小说作品" })
+          return
+        }
+        const res = await exportAuthorNovels(detail.user.name, userID, novelList, (msg) => setDownloadStatusText(msg))
+        void Dialog.alert({
+          title: "导出完成",
+          message: `已成功导出 ${res.totalExported} 本 EPUB 电子书，请在“文件”App 查看。`,
+        })
+      } catch (e: any) {
+        void Dialog.alert({ title: "导出失败", message: e?.message ?? "导出小说时发生错误" })
+      } finally {
+        setDownloading(false)
+        setDownloadStatusText("")
+      }
+    }
+  }
+
   async function handleRefresh() {
     await Promise.all([loadDetail(), worksRefreshRef.current()])
   }
@@ -311,6 +511,15 @@ export function UserDetailView(props: { userID: number }) {
             }}
           >
             <Image systemName="square.and.arrow.up" />
+          </Button>,
+          <Button
+            disabled={downloading}
+            action={() => {
+              void Haptics.transient()
+              void handleDownloadClick()
+            }}
+          >
+            <Image systemName={downloading ? "arrow.down.circle.fill" : "square.and.arrow.down"} />
           </Button>,
           <Menu label={<Image systemName="ellipsis.circle" />}>
             <NavigationLink value={`userConnections:following:${userID}`}>
@@ -377,8 +586,28 @@ export function UserDetailView(props: { userID: number }) {
         <UserProfileHeader
           detail={detail}
           webDetail={webDetail}
-          
         />
+
+        {/* 批量下载进度提示栏 */}
+        {downloading ? (
+          <HStack
+            spacing={8}
+            padding={{ horizontal: 16, vertical: 10 }}
+            background="systemGray6"
+            clipShape={{ type: "rect", cornerRadius: 10 }}
+            frame={{ maxWidth: "infinity" }}
+            alignment="center"
+          >
+            <Image systemName="arrow.down.circle.fill" foregroundStyle="tintColor" />
+            <Text
+              font="footnote"
+              foregroundStyle="secondaryLabel"
+              lineLimit={1}
+            >
+              {downloadStatusText || "正在下载作品…"}
+            </Text>
+          </HStack>
+        ) : null}
 
         {/* 位于个人资料和作品列表之间的分段选择器（仅显示有投稿项，<=1 项时自动隐藏） */}
         <UserWorkPicker

@@ -5,6 +5,8 @@ import type { PixivIllustration } from "../types"
 export interface IllustZipOptions {
   illust: PixivIllustration
   imageUrls: string[]
+  targetDir?: string
+  customFileName?: string
   onProgress?: (msg: string, current: number, total: number) => void
 }
 
@@ -12,13 +14,18 @@ export interface IllustZipOptions {
  * 将插画/组图导出为包含元数据的 ZIP 归档包
  */
 export async function exportIllustToZip(options: IllustZipOptions): Promise<string | null> {
-  const { illust, imageUrls, onProgress } = options
+  const { illust, imageUrls, targetDir: customTargetDir, customFileName, onProgress } = options
   const authorName = illust.user?.name || "Unknown"
   const title = illust.title || "Illust"
 
-  const safeFolderName = sanitizeFileName(`${authorName} - ${title} (${illust.id})`)
+  const safeFolderName = customFileName
+    ? sanitizeFileName(customFileName)
+    : sanitizeFileName(`${authorName} - ${title} (${illust.id})`)
   const outputFileName = `${safeFolderName}.zip`
-  const targetDir = getCategoryDirectory("illustrations")
+  const targetDir = customTargetDir || getCategoryDirectory("illustrations")
+  if (!FileManager.existsSync(targetDir)) {
+    try { FileManager.createDirectorySync(targetDir, true) } catch {}
+  }
   const targetFilePath = `${targetDir}/${outputFileName}`
 
   const tempDir = `${getCategoryDirectory("temp")}/zip_illust_${illust.id}_${Date.now()}`

@@ -84,6 +84,33 @@ export function getCategoryDirectory(category: DownloadCategory): string {
 }
 
 /**
+ * 获取并确保特定创作者的存储子目录（例如：/Pix-Scripting/画师名 (UID)/插画）
+ */
+export function getAuthorDownloadDirectory(
+  authorName: string,
+  authorId: number,
+  subCategory?: "illustrations" | "manga" | "novels"
+): string {
+  const root = getDownloadRootDirectory()
+  const authorFolder = sanitizeFileName(`${authorName || "Artist"} (${authorId})`)
+  let dirPath = `${root}/${authorFolder}`
+
+  if (subCategory) {
+    let subName = "插画"
+    if (subCategory === "manga") subName = "漫画"
+    else if (subCategory === "novels") subName = "小说"
+    dirPath = `${dirPath}/${subName}`
+  }
+
+  if (!FileManager.existsSync(dirPath)) {
+    try {
+      FileManager.createDirectorySync(dirPath, true)
+    } catch {}
+  }
+  return dirPath
+}
+
+/**
  * 清理指定临时目录或文件
  */
 export function cleanTemporaryPath(path: string): void {

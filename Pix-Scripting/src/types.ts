@@ -317,6 +317,7 @@ export interface PixivNovelSeriesResponse {
 export interface PixivNovel {
   id: number
   title: string
+  caption?: string
   user: PixivUser
   tags: PixivTag[]
   create_date: string
