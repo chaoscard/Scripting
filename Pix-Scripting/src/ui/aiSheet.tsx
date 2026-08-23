@@ -428,36 +428,31 @@ export function IllustAISheet(props: {
     >
       {/* 简介模式：支持折叠查看原文 */}
       {mode === "caption" && Boolean(rawCaption) && (
-        <Group>
-          <VStack
-            spacing={8}
-            padding={12}
-            background={{ light: "#F2F2F7", dark: "#1C1C1E" }}
-          >
-            <HStack alignment="center">
-              <Text
-                font="subheadline"
-                fontWeight="semibold"
-                foregroundStyle="secondaryLabel"
-              >
-                原文
-              </Text>
-              <Spacer />
-              <Button
-                title={showOriginalCaption ? "收起" : "展开"}
-                action={() => setShowOriginalCaption(!showOriginalCaption)}
-              />
-            </HStack>
-            {showOriginalCaption && (
-              <Text
-                font="footnote"
-                lineSpacing={3}
-              >
-                {rawCaption}
-              </Text>
-            )}
-          </VStack>
-        </Group>
+        <VStack spacing={6}>
+          <HStack alignment="center">
+            <Text
+              font="subheadline"
+              fontWeight="semibold"
+              foregroundStyle="secondaryLabel"
+            >
+              原文
+            </Text>
+            <Spacer />
+            <Button
+              title={showOriginalCaption ? "收起" : "展开"}
+              action={() => setShowOriginalCaption(!showOriginalCaption)}
+            />
+          </HStack>
+          {showOriginalCaption && (
+            <Text
+              font="footnote"
+              foregroundStyle="secondaryLabel"
+              lineSpacing={3}
+            >
+              {rawCaption}
+            </Text>
+          )}
+        </VStack>
       )}
 
       {/* 多图模式：支持快速切换选中的页码 */}
@@ -768,36 +763,31 @@ export function NovelAISheet(props: {
     >
       {/* 简介模式：支持折叠查看日文原文 */}
       {mode === "caption" && Boolean(rawCaption) && (
-        <Group>
-          <VStack
-            spacing={8}
-            padding={12}
-            background={{ light: "#F2F2F7", dark: "#1C1C1E" }}
-          >
-            <HStack alignment="center">
-              <Text
-                font="subheadline"
-                fontWeight="semibold"
-                foregroundStyle="secondaryLabel"
-              >
-                原文简介
-              </Text>
-              <Spacer />
-              <Button
-                title={showOriginalCaption ? "收起" : "展开"}
-                action={() => setShowOriginalCaption(!showOriginalCaption)}
-              />
-            </HStack>
-            {showOriginalCaption && (
-              <Text
-                font="footnote"
-                lineSpacing={3}
-              >
-                {rawCaption}
-              </Text>
-            )}
-          </VStack>
-        </Group>
+        <VStack spacing={6}>
+          <HStack alignment="center">
+            <Text
+              font="subheadline"
+              fontWeight="semibold"
+              foregroundStyle="secondaryLabel"
+            >
+              原文简介
+            </Text>
+            <Spacer />
+            <Button
+              title={showOriginalCaption ? "收起" : "展开"}
+              action={() => setShowOriginalCaption(!showOriginalCaption)}
+            />
+          </HStack>
+          {showOriginalCaption && (
+            <Text
+              font="footnote"
+              foregroundStyle="secondaryLabel"
+              lineSpacing={3}
+            >
+              {rawCaption}
+            </Text>
+          )}
+        </VStack>
       )}
 
       {/* 续写模式：支持输入自定义提示词和预设选项 */}
