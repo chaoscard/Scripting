@@ -1168,7 +1168,35 @@ export async function addNovelMarker(
     novel_id: String(novelID),
     page: String(page),
   }
-  await apiPost("/v2/novel/marker/add", form, accessToken)
+  try {
+    await apiPost("/v2/novel/marker/add", form, accessToken)
+    notifyNovelMarkerChanged(novelID, page)
+    return
+  } catch (err: any) {
+    if (err?.status === 404) {
+      try {
+        await apiPost("/v1/novel/marker/add", form, accessToken)
+        notifyNovelMarkerChanged(novelID, page)
+        return
+      } catch {}
+    }
+  }
+
+  // Pixiv 官方每本小说仅允许保留一个书签，若已存在其他页书签则可能拒绝直接添加；
+  // 先尝试删除旧书签，再重新添加新页码书签
+  try {
+    await deleteNovelMarker(novelID, accessToken)
+  } catch {}
+
+  try {
+    await apiPost("/v2/novel/marker/add", form, accessToken)
+  } catch (err2: any) {
+    if (err2?.status === 404) {
+      await apiPost("/v1/novel/marker/add", form, accessToken)
+    } else {
+      throw err2
+    }
+  }
   notifyNovelMarkerChanged(novelID, page)
 }
 

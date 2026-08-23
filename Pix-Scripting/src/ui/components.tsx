@@ -51,7 +51,7 @@ import { blockTag } from "../store/blocklist"
 import { cacheIllust, cacheIllusts } from "../store/illustCache"
 import { recordWorkSeriesAssociation } from "../store/seriesCache"
 import { recordNovelMarker } from "../store/bookmarkSync"
-import { useIllustBookmark, useLatest, useNovelBookmark } from "./hooks"
+import { useIllustBookmark, useLatest, useNovelBookmark, useNovelMarker } from "./hooks"
 import { requestPixivRoute } from "./routeNavigation"
 import type {
   PixivIllustration,
@@ -891,6 +891,7 @@ export function NovelCard(props: {
   }
 
   const [bookmarked, setBookmarked] = useNovelBookmark(novel.id, novel.is_bookmarked)
+  const [activeMarker] = useNovelMarker(novel.id, markerPage ?? null)
   const [bookmarkBusy, setBookmarkBusy] = useState(false)
   const [showBookmarkDetail, setShowBookmarkDetail] = useState(false)
 
@@ -1037,11 +1038,11 @@ export function NovelCard(props: {
                     {`第 ${novel.episode_number} 话`}
                   </Text>
                 ) : null}
-                {markerPage != null ? (
+                {activeMarker != null ? (
                   <HStack spacing={3}>
                     <Image systemName="book.pages" font="caption2" foregroundStyle="#007AFF" />
                     <Text font="caption2" foregroundStyle="#007AFF" lineLimit={1}>
-                      第 {markerPage} 页
+                      第 {activeMarker} 页
                     </Text>
                   </HStack>
                 ) : null}

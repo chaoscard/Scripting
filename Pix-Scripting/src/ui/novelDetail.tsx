@@ -1,7 +1,9 @@
 import {
   Button,
   Divider,
+  DragGesture,
   FlowLayout,
+  GlassEffectContainer,
   Group,
   HStack,
   Image,
@@ -19,6 +21,7 @@ import {
   useRef,
   useState,
   VStack,
+  ZStack,
   type ScrollViewProxy,
 } from "scripting"
 import {
@@ -56,7 +59,11 @@ import {
   onUserFollowChanged,
   recordUserFollowed,
 } from "../store/userFollow"
-import { getCachedNovelBookmark } from "../store/bookmarkSync"
+import {
+  getCachedNovelBookmark,
+  getCachedNovelMarker,
+  recordNovelMarker,
+} from "../store/bookmarkSync"
 import type { PixivNovel, PixivNovelDetail, TextEmbeddedImage } from "../types"
 import {
   loadSettings,
@@ -108,17 +115,15 @@ export function NovelDetailView(props: { novelID: number }) {
   const [followLoading, setFollowLoading] = useState(false)
   const [showComments, setShowComments] = useState(false)
   const [markerPage, setMarkerPage] = useNovelMarker(novelID, null)
-  const [currentPage, setCurrentPage] = useState(1)
+  const [currentPage, setCurrentPage] = useState<number>(() => getCachedNovelMarker(novelID) ?? 1)
   const [totalPages, setTotalPages] = useState(1)
+  const [pagerVisible, setPagerVisible] = useState(true)
   const [markerBusy, setMarkerBusy] = useState(false)
 
   const guard = useAsyncGuard()
   const novelRef = useLatest(novel)
   const errorRef = useLatest(error)
-  const currentPageRef = useLatest(currentPage)
-  const markerPageRef = useLatest(markerPage)
   const proxyRef = useRef<ScrollViewProxy | null>(null)
-  const hasAutoJumpedRef = useRef(false)
   const recordedIDRef = useRef<number | null>(null)
 
   async function load() {
@@ -161,15 +166,18 @@ export function NovelDetailView(props: { novelID: number }) {
       setNovel(detail)
       setBookmarked(detail.is_bookmarked)
       setFollowed(detail.user?.is_followed ?? false)
-      const initialMarker = (detail as any)?.novel_marker?.page ?? (detail as any)?.marker?.page ?? null
-      if (initialMarker !== null) {
-        setMarkerPage(initialMarker)
-        if (!hasAutoJumpedRef.current && initialMarker > 1 && readerReady) {
-          hasAutoJumpedRef.current = true
-          setTimeout(() => {
-            jumpToPage(initialMarker)
-          }, 160)
+      const detailMarker = (detail as any)?.novel_marker?.page ?? (detail as any)?.marker?.page ?? null
+      const existingCached = getCachedNovelMarker(detail.id)
+      let targetMarker = existingCached
+      if (detailMarker !== null && detailMarker > 0) {
+        if (existingCached == null || existingCached <= 1 || detailMarker > 1) {
+          targetMarker = detailMarker
+          setMarkerPage(detailMarker)
+          recordNovelMarker(detail.id, detailMarker)
         }
+      }
+      if (targetMarker && targetMarker > 1) {
+        setCurrentPage(targetMarker)
       }
       if (recordedIDRef.current !== detail.id) {
         recordedIDRef.current = detail.id
@@ -197,6 +205,9 @@ export function NovelDetailView(props: { novelID: number }) {
   }
 
   useEffect(() => {
+    const cachedMarker = getCachedNovelMarker(novelID)
+    setCurrentPage(cachedMarker ?? 1)
+    setPagerVisible(true)
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [novelID])
@@ -331,52 +342,48 @@ export function NovelDetailView(props: { novelID: number }) {
     }
   }
 
-  const jumpToPage = useCallback((targetPage: number) => {
-    const proxy = proxyRef.current
-    if (!proxy) return
-    const targetKey = `novel-page-${targetPage}`
+  const handlePageChange = useCallback((newPage: number) => {
+    if (newPage < 1) return
+    setCurrentPage(newPage)
+    setPagerVisible(true)
     try {
-      proxy.scrollTo(targetKey, "top")
+      proxyRef.current?.scrollTo("novel-top-anchor", "top")
     } catch {
       // ignore
     }
   }, [])
 
-  const handleReaderReady = useCallback(
-    (parsedTotalPages: number) => {
-      setTotalPages(parsedTotalPages)
-      setReaderReady(true)
-      if (!hasAutoJumpedRef.current) {
-        hasAutoJumpedRef.current = true
-        const targetMarker = markerPageRef.current
-        if (targetMarker != null && targetMarker > 1) {
-          setTimeout(() => {
-            jumpToPage(targetMarker)
-          }, 160)
-        }
-      }
-    },
-    [jumpToPage]
-  )
+  const handleReaderReady = useCallback((parsedTotalPages: number) => {
+    setTotalPages(parsedTotalPages)
+    setReaderReady(true)
+    setCurrentPage((prev) => {
+      if (prev > parsedTotalPages) return parsedTotalPages
+      return prev
+    })
+  }, [])
 
-  async function handleToggleMarker() {
+  async function handleToggleSpecificPageMarker(targetPage: number) {
     if (!novel || markerBusy) return
     void Haptics.transient()
     setMarkerBusy(true)
-    const target = currentPageRef.current || 1
     try {
-      if (markerPage === target) {
+      if (markerPage === targetPage) {
         await session.call((token) => deleteNovelMarker(novel.id, token))
         setMarkerPage(null)
       } else {
-        await session.call((token) => addNovelMarker(novel.id, target, token))
-        setMarkerPage(target)
+        await session.call((token) => addNovelMarker(novel.id, targetPage, token))
+        setMarkerPage(targetPage)
       }
-    } catch {
-      // ignore
+    } catch (e: any) {
+      console.warn("Toggle novel marker failed:", e)
     } finally {
       setMarkerBusy(false)
     }
+  }
+
+  async function handleToggleMarker() {
+    const target = currentPage || markerPage || 1
+    await handleToggleSpecificPageMarker(target)
   }
 
   async function shareNovel() {
@@ -385,63 +392,174 @@ export function NovelDetailView(props: { novelID: number }) {
     await ShareSheet.present([`https://www.pixiv.net/novel/show.php?id=${novel.id}`])
   }
 
-  if (loading) {
-    return (
-      <ScrollView
-        navigationTitle="小说"
-        navigationBarTitleDisplayMode="inline"
-      >
-        <LoadingView />
-      </ScrollView>
-    )
-  }
-  if (error || !novel) {
-    return (
-      <ScrollView
-        navigationTitle="小说"
-        navigationBarTitleDisplayMode="inline"
-      >
-        <ErrorView message={error ?? "小说不存在"} onRetry={load} />
-      </ScrollView>
-    )
-  }
-
-  const current = novel
-  const rawSeries = current.series ?? (current as any).novel_series
-  const rawSeriesObj = Array.isArray(rawSeries) ? rawSeries[0] : rawSeries
-  const associatedRef = getSeriesByWorkID(current.id, "novel")
-  const resolvedSeriesID = rawSeriesObj?.id ?? associatedRef?.seriesID ?? null
-  const resolvedSeriesTitle = rawSeriesObj?.title ?? associatedRef?.seriesTitle ?? null
-  const resolvedEpisodeNumber = current.episode_number ?? associatedRef?.episodeNumber ?? null
-
-  if (resolvedSeriesID) {
-    recordWorkSeriesAssociation(current.id, "novel", resolvedSeriesID, resolvedSeriesTitle, resolvedEpisodeNumber)
-  }
-
   return (
     <ScrollViewReader>
       {(proxy) => {
         proxyRef.current = proxy
+
+        if (loading) {
+          return (
+            <ScrollView
+              navigationTitle="小说"
+              navigationBarTitleDisplayMode="inline"
+            >
+              <LoadingView />
+            </ScrollView>
+          )
+        }
+        if (error || !novel) {
+          return (
+            <ScrollView
+              navigationTitle="小说"
+              navigationBarTitleDisplayMode="inline"
+            >
+              <ErrorView message={error ?? "小说不存在"} onRetry={load} />
+            </ScrollView>
+          )
+        }
+
+        const current = novel
+        const rawSeries = current.series ?? (current as any).novel_series
+        const rawSeriesObj = Array.isArray(rawSeries) ? rawSeries[0] : rawSeries
+        const associatedRef = getSeriesByWorkID(current.id, "novel")
+        const resolvedSeriesID = rawSeriesObj?.id ?? associatedRef?.seriesID ?? null
+        const resolvedSeriesTitle = rawSeriesObj?.title ?? associatedRef?.seriesTitle ?? null
+        const resolvedEpisodeNumber = current.episode_number ?? associatedRef?.episodeNumber ?? null
+
+        if (resolvedSeriesID) {
+          recordWorkSeriesAssociation(current.id, "novel", resolvedSeriesID, resolvedSeriesTitle, resolvedEpisodeNumber)
+        }
+
         return (
           <ScrollView
             navigationTitle={current.title}
             navigationBarTitleDisplayMode="inline"
-            onScrollTargetVisibilityChange={{
-              idType: "string",
-              threshold: 0.1,
-              onChanged: (visibleIds) => {
-                const pageNumbers = (visibleIds as string[])
-                  .map((id) => {
-                    const m = /^novel-page-(\d+)$/.exec(id)
-                    return m ? Number(m[1]) : null
-                  })
-                  .filter((p): p is number => p !== null)
-                if (pageNumbers.length > 0) {
-                  const minPage = Math.min(...pageNumbers)
-                  setCurrentPage(minPage)
-                }
-              },
-            }}
+            simultaneousGesture={
+              DragGesture({ minDistance: 20, coordinateSpace: "global" })
+                .onChanged((e) => {
+                  if (e.translation.height < -15) {
+                    if (pagerVisible) setPagerVisible(false)
+                  } else if (e.translation.height > 15) {
+                    if (!pagerVisible) setPagerVisible(true)
+                  }
+                })
+            }
+            overlay={
+              totalPages > 1 && pagerVisible
+                ? {
+                    alignment: "bottom",
+                    content: (
+                      <VStack padding={{ horizontal: 20, bottom: 12 }} frame={{ maxWidth: "infinity" }}>
+                        <GlassEffectContainer>
+                          <HStack alignment="center" frame={{ maxWidth: "infinity" }}>
+                            {/* 左侧区域（固定宽 80，上一页按钮靠左，第一页时隐藏） */}
+                            <HStack alignment="center" frame={{ width: 80, alignment: "leading" }}>
+                              {currentPage > 1 ? (
+                                <ZStack
+                                  alignment="center"
+                                  frame={{ width: 36, height: 36 }}
+                                  glassEffect="circle"
+                                  contentShape="circle"
+                                  onTapGesture={() => handlePageChange(currentPage - 1)}
+                                >
+                                  <Image
+                                    systemName="chevron.left"
+                                    font="subheadline"
+                                    fontWeight="semibold"
+                                    foregroundStyle="#007AFF"
+                                  />
+                                </ZStack>
+                              ) : null}
+                            </HStack>
+
+                            <Spacer />
+
+                            {/* 中间区域（独立页码胶囊选择器，始终严格居中） */}
+                            <Menu
+                              label={
+                                <HStack
+                                  spacing={6}
+                                  alignment="center"
+                                  padding={{ horizontal: 14, vertical: 8 }}
+                                  glassEffect="capsule"
+                                  contentShape="capsule"
+                                >
+                                  <Text font="body" fontWeight="bold">
+                                    {currentPage} / {totalPages}
+                                  </Text>
+                                  <Image
+                                    systemName="chevron.up.chevron.down"
+                                    font="caption"
+                                    foregroundStyle="secondaryLabel"
+                                  />
+                                </HStack>
+                              }
+                            >
+                              {Array.from({ length: totalPages }, (_, i) => totalPages - i).map((p) => (
+                                <Button
+                                  key={p}
+                                  title={`第 ${p} 页${p === markerPage ? "（书签）" : ""}`}
+                                  systemImage={
+                                    p === currentPage
+                                      ? "checkmark"
+                                      : p === markerPage
+                                      ? "book.pages.fill"
+                                      : undefined
+                                  }
+                                  action={() => handlePageChange(p)}
+                                />
+                              ))}
+                            </Menu>
+
+                            <Spacer />
+
+                            {/* 右侧区域（固定宽 80，书签和下一页按钮靠右，最后一页隐藏下一页按钮） */}
+                            <HStack spacing={8} alignment="center" frame={{ width: 80, alignment: "trailing" }}>
+                              <ZStack
+                                alignment="center"
+                                frame={{ width: 36, height: 36 }}
+                                glassEffect="circle"
+                                contentShape="circle"
+                                onTapGesture={
+                                  !markerBusy
+                                    ? () => {
+                                        void handleToggleMarker()
+                                      }
+                                    : undefined
+                                }
+                              >
+                                <Image
+                                  systemName={markerPage === currentPage ? "book.pages.fill" : "book.pages"}
+                                  font="subheadline"
+                                  fontWeight="semibold"
+                                  foregroundStyle={markerPage === currentPage ? "#007AFF" : "secondaryLabel"}
+                                />
+                              </ZStack>
+
+                              {currentPage < totalPages ? (
+                                <ZStack
+                                  alignment="center"
+                                  frame={{ width: 36, height: 36 }}
+                                  glassEffect="circle"
+                                  contentShape="circle"
+                                  onTapGesture={() => handlePageChange(currentPage + 1)}
+                                >
+                                  <Image
+                                    systemName="chevron.right"
+                                    font="subheadline"
+                                    fontWeight="semibold"
+                                    foregroundStyle="#007AFF"
+                                  />
+                                </ZStack>
+                              ) : null}
+                            </HStack>
+                          </HStack>
+                        </GlassEffectContainer>
+                      </VStack>
+                    ),
+                  }
+                : undefined
+            }
             toolbar={{
               topBarTrailing: [
                 <Button
@@ -558,7 +676,6 @@ export function NovelDetailView(props: { novelID: number }) {
       }}
     >
       <VStack
-        scrollTargetLayout
         alignment="leading"
         spacing={12}
         frame={{ maxWidth: "infinity" }}
@@ -690,15 +807,20 @@ export function NovelDetailView(props: { novelID: number }) {
         </VStack>
 
         {/* 正文 */}
-        <VStack alignment="leading" spacing={0} padding={{ top: 4, bottom: 0 }} frame={{ maxWidth: "infinity" }}>
+        <VStack
+          alignment="leading"
+          spacing={0}
+          padding={{ top: 4, bottom: 0 }}
+          frame={{ maxWidth: "infinity" }}
+        >
           {text ? (
             <NovelReaderView
               text={text}
               title={current.title}
               markerPage={markerPage}
+              currentPage={currentPage}
               textEmbeddedImages={textEmbeddedImages}
-              onPageVisible={(page) => setCurrentPage(page)}
-              onJumpToPage={jumpToPage}
+              onJumpToPage={handlePageChange}
               onReady={handleReaderReady}
             />
           ) : (
@@ -723,7 +845,7 @@ export function NovelDetailView(props: { novelID: number }) {
 
         {/* 相关作品 */}
         <RelatedNovelsSection
-          key={current.id}
+          key={`related-novels-${current.id}`}
           novelID={current.id}
           ready={!loading && readerReady}
         />

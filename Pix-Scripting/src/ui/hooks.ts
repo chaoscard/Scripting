@@ -15,6 +15,7 @@ import {
   onNovelBookmarkChanged,
   onNovelMarkerChanged,
   onWatchlistChanged,
+  recordNovelMarker,
 } from "../store/bookmarkSync"
 import { isUserFollowed, onUserFollowChanged } from "../store/userFollow"
 import {
@@ -723,20 +724,28 @@ export function useNovelMarker(
   novelID: number,
   initialPage?: number | null
 ): [number | null, (page: number | null) => void] {
-  const [markerPage, setMarkerPage] = useState<number | null>(() => {
+  const [markerPage, setMarkerPageState] = useState<number | null>(() => {
     return getCachedNovelMarker(novelID) ?? initialPage ?? null
   })
+
+  const setMarkerPage = useCallback(
+    (page: number | null) => {
+      recordNovelMarker(novelID, page)
+      setMarkerPageState(page)
+    },
+    [novelID]
+  )
 
   useEffect(() => {
     const cached = getCachedNovelMarker(novelID)
     if (cached !== undefined) {
-      setMarkerPage(cached)
+      setMarkerPageState(cached)
     } else if (initialPage !== undefined) {
-      setMarkerPage(initialPage)
+      setMarkerPageState(initialPage)
     }
     return onNovelMarkerChanged((changedID, nextPage) => {
       if (changedID === novelID) {
-        setMarkerPage(nextPage)
+        setMarkerPageState(nextPage)
       }
     })
   }, [novelID, initialPage])
