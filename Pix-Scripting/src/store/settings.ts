@@ -50,6 +50,8 @@ export interface AppSettings {
   loadingAnimationDuration: LoadingAnimationDuration
   novelLoadingDuration: NovelLoadingDuration
   launchAnimationDuration: LaunchAnimationDuration
+  enableLiveActivity: boolean
+  enableTaskNotification: boolean
   advancedSettingsUnlocked: boolean
 }
 
@@ -85,6 +87,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   loadingAnimationDuration: 400,
   novelLoadingDuration: 1000,
   launchAnimationDuration: 1500,
+  enableLiveActivity: true,
+  enableTaskNotification: true,
   advancedSettingsUnlocked: false,
 }
 
@@ -276,6 +280,11 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
     loadingAnimationDuration: parseLoadingDuration(stored?.loadingAnimationDuration),
     novelLoadingDuration: parseNovelLoadingDuration(stored?.novelLoadingDuration),
     launchAnimationDuration: parseLaunchDuration(stored?.launchAnimationDuration),
+    enableLiveActivity: boolOr(stored?.enableLiveActivity, DEFAULT_SETTINGS.enableLiveActivity),
+    enableTaskNotification: boolOr(
+      stored?.enableTaskNotification,
+      DEFAULT_SETTINGS.enableTaskNotification
+    ),
     advancedSettingsUnlocked: boolOr(stored?.advancedSettingsUnlocked, DEFAULT_SETTINGS.advancedSettingsUnlocked),
   }
 }

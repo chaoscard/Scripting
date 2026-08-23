@@ -232,6 +232,16 @@ export function SettingsView() {
           <Text tag="minimize">后台运行</Text>
           <Text tag="exit">完全关闭</Text>
         </Picker>
+        <Toggle
+          title="灵动岛实时进度"
+          value={settings.enableLiveActivity}
+          onChanged={(value) => update({ enableLiveActivity: value })}
+        />
+        <Toggle
+          title="任务完成后通知"
+          value={settings.enableTaskNotification}
+          onChanged={(value) => update({ enableTaskNotification: value })}
+        />
       </Section>
 
       <Section header={<Text>图片质量</Text>}>

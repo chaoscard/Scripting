@@ -169,7 +169,7 @@ export function UserWorksView(props: { userID?: number; title?: string }) {
     if (categories.length > 1) {
       const choice = await Dialog.actionSheet({
         title: "下载创作者作品",
-        message: `画师：${detail.user.name}`,
+        message: `用户：${detail.user.name}`,
         actions: categories.map((c) => ({ label: c.label })),
       })
       if (choice == null || choice < 0 || choice >= categories.length) {
@@ -193,7 +193,7 @@ export function UserWorksView(props: { userID?: number; title?: string }) {
         const albumName = loadSettings().downloadPhotoAlbumName || "Pix-Scripting"
         const confirmed = await Dialog.confirm({
           title: "确认下载全部插画？",
-          message: `将拉取画师「${detail.user.name}」全部插画并保存至专属相簿「${albumName}」。`,
+          message: `将拉取用户「${detail.user.name}」全部插画并保存至专属相簿「${albumName}」。`,
           confirmLabel: "开始下载",
           cancelLabel: "取消",
         })
@@ -220,7 +220,7 @@ export function UserWorksView(props: { userID?: number; title?: string }) {
       } else {
         const confirmed = await Dialog.confirm({
           title: "确认打包全部插画？",
-          message: `将拉取画师「${detail.user.name}」全部插画原图并打包为 ZIP 归档，多页插画将归入独立子文件夹，请在“文件”App 查看。`,
+          message: `将拉取用户「${detail.user.name}」全部插画原图并打包为 ZIP 归档，多页插画将归入独立子文件夹，请在“文件”App 查看。`,
           confirmLabel: "开始下载",
           cancelLabel: "取消",
         })
@@ -264,7 +264,7 @@ export function UserWorksView(props: { userID?: number; title?: string }) {
 
       const confirmed = await Dialog.confirm({
         title: "确认下载全部漫画？",
-        message: `将拉取画师「${detail.user.name}」全部漫画（共 ${totalManga} 部），连载系列将自动合并为全集卷，短篇将独立导出为单本，格式为 ${formatLabel}，请在“文件”App 查看。`,
+        message: `将拉取用户「${detail.user.name}」全部漫画（共 ${totalManga} 部），连载系列将自动合并为全集卷，短篇将独立导出为单本，格式为 ${formatLabel}，请在“文件”App 查看。`,
         confirmLabel: "开始下载",
         cancelLabel: "取消",
       })
@@ -291,7 +291,7 @@ export function UserWorksView(props: { userID?: number; title?: string }) {
     } else if (selectedCatKey === "novel") {
       const confirmed = await Dialog.confirm({
         title: "确认下载全部小说？",
-        message: `将拉取作者「${detail.user.name}」全部小说（共 ${totalNovels} 部），连载系列将自动合并为多章节整本电子书，短篇将独立导出为单本，请在“文件”App 查看。`,
+        message: `将拉取用户「${detail.user.name}」全部小说（共 ${totalNovels} 部），连载系列将自动合并为多章节整本电子书，短篇将独立导出为单本，请在“文件”App 查看。`,
         confirmLabel: "开始下载",
         cancelLabel: "取消",
       })

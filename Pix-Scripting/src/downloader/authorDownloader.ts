@@ -19,6 +19,7 @@ import {
 import { fetchImageBinaryWithRetry, runConcurrentTasks } from "./downloadHelper"
 import { exportMangaToEpub, exportNovelToEpub, type NovelChapter } from "./epubExporter"
 import { downloadIllustToAlbum, saveVideoToPixivAlbum } from "./photoAlbum"
+import { runWithBackgroundTask } from "./backgroundTaskManager"
 import type { PixivIllustration, PixivNovel } from "../types"
 
 export interface SeriesCluster<T> {
@@ -43,7 +44,7 @@ export async function fetchAllUserIllustrations(
 ): Promise<PixivIllustration[]> {
   const allWorks: PixivIllustration[] = []
   const label = type === "illust" ? "插画" : "漫画"
-  onProgress?.(`正在获取画师${label}列表…`, 0)
+  onProgress?.(`正在获取用户${label}列表…`, 0)
 
   let page = await session.call((token) => userWorks(userID, type, token))
   if (Array.isArray(page?.items)) {
@@ -205,31 +206,50 @@ export async function downloadAuthorIllustrationsToAlbum(
   illusts: PixivIllustration[],
   onProgress?: (msg: string, current: number, total: number) => void
 ): Promise<{ successCount: number; totalCount: number }> {
-  let successCount = 0
-  const totalCount = illusts.length
+  return runWithBackgroundTask(
+    {
+      title: "下载用户插画",
+      subtitle: `用户: ${authorName}`,
+      total: illusts.length,
+      categoryIcon: "photo.stack.fill",
+      initialStatus: `准备下载 ${illusts.length} 项作品至相簿…`,
+    },
+    async (task) => {
+      let successCount = 0
+      const totalCount = illusts.length
 
-  for (let i = 0; i < illusts.length; i++) {
-    const item = illusts[i]
-    onProgress?.(`正在保存插画 (${i + 1}/${totalCount}): ${item.title}`, i + 1, totalCount)
+      for (let i = 0; i < illusts.length; i++) {
+        const item = illusts[i]
+        const statusMsg = `正在保存插画 (${i + 1}/${totalCount}): ${item.title}`
+        onProgress?.(statusMsg, i + 1, totalCount)
+        task.updateProgress({ current: i + 1, total: totalCount, statusText: statusMsg })
 
-    try {
-      if (item.type === "ugoira") {
-        const ugoiraRes = await buildUgoira(item.id)
-        if (ugoiraRes?.mp4Path) {
-          const safeTitle = sanitizeFileName(`${item.title}_${authorName}_${item.id}`)
-          const ok = await saveVideoToPixivAlbum(ugoiraRes.mp4Path, `${safeTitle}.mp4`)
-          if (ok) successCount++
+        try {
+          if (item.type === "ugoira") {
+            const ugoiraRes = await buildUgoira(item.id)
+            if (ugoiraRes?.mp4Path) {
+              const safeTitle = sanitizeFileName(`${item.title}_${authorName}_${item.id}`)
+              const ok = await saveVideoToPixivAlbum(ugoiraRes.mp4Path, `${safeTitle}.mp4`)
+              if (ok) successCount++
+            }
+          } else {
+            const ok = await downloadIllustToAlbum(item)
+            if (ok) successCount++
+          }
+        } catch (e: any) {
+          console.log(`downloadAuthorIllustrationsToAlbum failed for ${item.id}:`, e?.message ?? e)
         }
-      } else {
-        const ok = await downloadIllustToAlbum(item)
-        if (ok) successCount++
       }
-    } catch (e: any) {
-      console.log(`downloadAuthorIllustrationsToAlbum failed for ${item.id}:`, e?.message ?? e)
-    }
-  }
 
-  return { successCount, totalCount }
+      const albumName = loadSettings().downloadPhotoAlbumName || "Pix-Scripting"
+      await task.finish({
+        success: true,
+        summary: `已成功将 ${successCount}/${totalCount} 部插画保存至相簿「${albumName}」。`,
+      })
+
+      return { successCount, totalCount }
+    }
+  )
 }
 
 /**
@@ -253,125 +273,159 @@ export async function exportAuthorIllustrationsToZip(
 
   const zipFileName = sanitizeFileName(`[${safeAuthorName}] 插画全集 (共${illusts.length}部_${totalPages}P)`) + ".zip"
   const targetFilePath = `${targetDir}/${zipFileName}`
-
   const tempDir = `${getCategoryDirectory("temp")}/zip_author_${authorId}_${Date.now()}`
 
-  try {
-    FileManager.createDirectorySync(tempDir, true)
+  return runWithBackgroundTask(
+    {
+      title: "打包用户插画全集",
+      subtitle: `用户: ${safeAuthorName}`,
+      total: totalPages,
+      categoryIcon: "doc.zipper",
+      initialStatus: `准备打包 ${illusts.length} 部插画 (${totalPages} 张)…`,
+    },
+    async (task) => {
+      try {
+        FileManager.createDirectorySync(tempDir, true)
 
-    let processedPages = 0
-    onProgress?.(`准备下载画师「${safeAuthorName}」插画全集 (共 ${illusts.length} 部, ${totalPages} 张)…`, 0, totalPages)
+        let processedPages = 0
+        const initialMsg = `准备下载用户「${safeAuthorName}」插画全集 (共 ${illusts.length} 部, ${totalPages} 张)…`
+        onProgress?.(initialMsg, 0, totalPages)
+        task.updateProgress({ current: 0, total: totalPages, statusText: initialMsg })
 
-    for (let i = 0; i < illusts.length; i++) {
-      const item = illusts[i]
-      const safeTitle = sanitizeFileName(item.title || "Untitled")
-      const pageCount = Math.max(1, item.page_count || item.meta_pages?.length || 1)
+        for (let i = 0; i < illusts.length; i++) {
+          const item = illusts[i]
+          const safeTitle = sanitizeFileName(item.title || "Untitled")
+          const pageCount = Math.max(1, item.page_count || item.meta_pages?.length || 1)
 
-      if (item.type === "ugoira") {
-        // 动图导出为 mp4 放入根目录
-        onProgress?.(`正在合成动图 (${i + 1}/${illusts.length}): ${item.title}`, processedPages, totalPages)
-        try {
-          const ugoiraRes = await buildUgoira(item.id)
-          if (ugoiraRes?.mp4Path && FileManager.existsSync(ugoiraRes.mp4Path)) {
-            const destMp4 = `${tempDir}/${item.id}_${safeTitle}.mp4`
-            await FileManager.copyFile(ugoiraRes.mp4Path, destMp4)
+          if (item.type === "ugoira") {
+            // 动图导出为 mp4 放入根目录
+            const statusMsg = `正在合成动图 (${i + 1}/${illusts.length}): ${item.title}`
+            onProgress?.(statusMsg, processedPages, totalPages)
+            task.updateProgress({ current: processedPages, total: totalPages, statusText: statusMsg })
+            try {
+              const ugoiraRes = await buildUgoira(item.id)
+              if (ugoiraRes?.mp4Path && FileManager.existsSync(ugoiraRes.mp4Path)) {
+                const destMp4 = `${tempDir}/${item.id}_${safeTitle}.mp4`
+                await FileManager.copyFile(ugoiraRes.mp4Path, destMp4)
+              }
+            } catch (ugErr: any) {
+              console.log(`Ugoira export error in batch ${item.id}:`, ugErr?.message ?? ugErr)
+            }
+            processedPages++
+          } else if (pageCount === 1) {
+            // 单页插画：直接放入根目录
+            const url = imageUrlOf(item, 0, quality)
+            if (url) {
+              const data = await fetchImageBinaryWithRetry(url)
+              if (data) {
+                const ext = url.includes(".png") ? "png" : "jpg"
+                const fileName = `${item.id}_${safeTitle}.${ext}`
+                FileManager.writeAsDataSync(`${tempDir}/${fileName}`, data)
+              }
+            }
+            processedPages++
+            const statusMsg = `下载插画 (${processedPages}/${totalPages}): ${item.title}`
+            onProgress?.(statusMsg, processedPages, totalPages)
+            task.updateProgress({ current: processedPages, total: totalPages, statusText: statusMsg })
+          } else {
+            // 多页插画：创建子目录
+            const subFolder = `${tempDir}/${item.id}_${safeTitle} (${pageCount}P)`
+            FileManager.createDirectorySync(subFolder, true)
+
+            const pageUrls: string[] = []
+            for (let p = 0; p < pageCount; p++) {
+              const url = imageUrlOf(item, p, quality)
+              if (url) pageUrls.push(url)
+            }
+
+            await runConcurrentTasks(pageUrls, 4, async (url, idx) => {
+              const data = await fetchImageBinaryWithRetry(url)
+              if (data) {
+                const paddedNum = String(idx + 1).padStart(pageUrls.length >= 100 ? 3 : 2, "0")
+                const ext = url.includes(".png") ? "png" : "jpg"
+                const fileName = `${paddedNum}.${ext}`
+                FileManager.writeAsDataSync(`${subFolder}/${fileName}`, data)
+              }
+              processedPages++
+              const statusMsg = `下载插画 (${processedPages}/${totalPages}): ${item.title} (P${idx + 1})`
+              onProgress?.(statusMsg, processedPages, totalPages)
+              task.updateProgress({ current: processedPages, total: totalPages, statusText: statusMsg })
+            })
           }
-        } catch (ugErr: any) {
-          console.log(`Ugoira export error in batch ${item.id}:`, ugErr?.message ?? ugErr)
-        }
-        processedPages++
-      } else if (pageCount === 1) {
-        // 单页插画：直接放入根目录
-        const url = imageUrlOf(item, 0, quality)
-        if (url) {
-          const data = await fetchImageBinaryWithRetry(url)
-          if (data) {
-            const ext = url.includes(".png") ? "png" : "jpg"
-            const fileName = `${item.id}_${safeTitle}.${ext}`
-            FileManager.writeAsDataSync(`${tempDir}/${fileName}`, data)
-          }
-        }
-        processedPages++
-        onProgress?.(`下载插画 (${processedPages}/${totalPages}): ${item.title}`, processedPages, totalPages)
-      } else {
-        // 多页插画：创建子目录
-        const subFolder = `${tempDir}/${item.id}_${safeTitle} (${pageCount}P)`
-        FileManager.createDirectorySync(subFolder, true)
-
-        const pageUrls: string[] = []
-        for (let p = 0; p < pageCount; p++) {
-          const url = imageUrlOf(item, p, quality)
-          if (url) pageUrls.push(url)
         }
 
-        await runConcurrentTasks(pageUrls, 4, async (url, idx) => {
-          const data = await fetchImageBinaryWithRetry(url)
-          if (data) {
-            const paddedNum = String(idx + 1).padStart(pageUrls.length >= 100 ? 3 : 2, "0")
-            const ext = url.includes(".png") ? "png" : "jpg"
-            const fileName = `${paddedNum}.${ext}`
-            FileManager.writeAsDataSync(`${subFolder}/${fileName}`, data)
-          }
-          processedPages++
-          onProgress?.(`下载插画 (${processedPages}/${totalPages}): ${item.title} (P${idx + 1})`, processedPages, totalPages)
+        // 写入画师与作品元数据
+        const metaJson = {
+          author: {
+            id: authorId,
+            name: authorName,
+          },
+          exported_at: new Date().toISOString(),
+          total_works: illusts.length,
+          total_pages: totalPages,
+          works: illusts.map((it) => ({
+            id: it.id,
+            title: it.title,
+            type: it.type,
+            page_count: it.page_count,
+            create_date: it.create_date,
+            tags: it.tags?.map((t: any) => t.name) ?? [],
+            total_bookmarks: it.total_bookmarks,
+            total_view: it.total_view,
+          })),
+        }
+
+        FileManager.writeAsStringSync(
+          `${tempDir}/info.json`,
+          JSON.stringify(metaJson, null, 2),
+          "utf-8"
+        )
+
+        const packMsg = "正在打包插画全集 ZIP 压缩包…"
+        onProgress?.(packMsg, totalPages, totalPages)
+        task.updateProgress({ current: totalPages, total: totalPages, statusText: packMsg })
+
+        if (FileManager.existsSync(targetFilePath)) {
+          try { FileManager.removeSync(targetFilePath) } catch {}
+        }
+
+        const tempZipPath = `${tempDir}.zip`
+        if (FileManager.existsSync(tempZipPath)) {
+          try { FileManager.removeSync(tempZipPath) } catch {}
+        }
+
+        await FileManager.zip(tempDir, tempZipPath)
+        if (!FileManager.existsSync(tempZipPath)) {
+          await task.finish({
+            success: false,
+            summary: "ZIP 压缩包打包失败",
+          })
+          return null
+        }
+
+        await FileManager.copyFile(tempZipPath, targetFilePath)
+
+        cleanTemporaryPath(tempZipPath)
+        cleanTemporaryPath(tempDir)
+
+        await task.finish({
+          success: true,
+          summary: `已成功将 ${illusts.length} 部作品 (${totalPages}P) 打包归档至文件。`,
         })
+
+        return targetFilePath
+      } catch (err: any) {
+        console.log("exportAuthorIllustrationsToZip error:", err?.message ?? err)
+        cleanTemporaryPath(tempDir)
+        await task.finish({
+          success: false,
+          summary: "打包插画归档时发生异常",
+          errorMessage: err?.message ?? String(err),
+        })
+        return null
       }
     }
-
-    // 写入画师与作品元数据
-    const metaJson = {
-      author: {
-        id: authorId,
-        name: authorName,
-      },
-      exported_at: new Date().toISOString(),
-      total_works: illusts.length,
-      total_pages: totalPages,
-      works: illusts.map((it) => ({
-        id: it.id,
-        title: it.title,
-        type: it.type,
-        page_count: it.page_count,
-        create_date: it.create_date,
-        tags: it.tags?.map((t: any) => t.name) ?? [],
-        total_bookmarks: it.total_bookmarks,
-        total_view: it.total_view,
-      })),
-    }
-
-    FileManager.writeAsStringSync(
-      `${tempDir}/info.json`,
-      JSON.stringify(metaJson, null, 2),
-      "utf-8"
-    )
-
-    onProgress?.("正在打包插画全集 ZIP 压缩包…", totalPages, totalPages)
-
-    if (FileManager.existsSync(targetFilePath)) {
-      try { FileManager.removeSync(targetFilePath) } catch {}
-    }
-
-    const tempZipPath = `${tempDir}.zip`
-    if (FileManager.existsSync(tempZipPath)) {
-      try { FileManager.removeSync(tempZipPath) } catch {}
-    }
-
-    await FileManager.zip(tempDir, tempZipPath)
-    if (!FileManager.existsSync(tempZipPath)) {
-      return null
-    }
-
-    await FileManager.copyFile(tempZipPath, targetFilePath)
-
-    cleanTemporaryPath(tempZipPath)
-    cleanTemporaryPath(tempDir)
-
-    return targetFilePath
-  } catch (err: any) {
-    console.log("exportAuthorIllustrationsToZip error:", err?.message ?? err)
-    cleanTemporaryPath(tempDir)
-    return null
-  }
+  )
 }
 
 /**
@@ -390,103 +444,124 @@ export async function exportAuthorManga(
 
   const clustered = clusterIllustrationsBySeries(mangaWorks)
   const totalTasks = clustered.seriesList.length + clustered.standaloneWorks.length
-  let completedTasks = 0
 
-  // 1. 导出各个系列
-  for (const series of clustered.seriesList) {
-    const seriesTitle = series.seriesTitle || `系列_${series.seriesId}`
-    const episodeCount = series.works.length
-    onProgress?.(`正在导出漫画系列「${seriesTitle}」(${completedTasks + 1}/${totalTasks})…`, completedTasks, totalTasks)
+  return runWithBackgroundTask(
+    {
+      title: "导出用户漫画全集",
+      subtitle: `用户: ${safeAuthorName}`,
+      total: totalTasks,
+      categoryIcon: "books.vertical.fill",
+      initialStatus: `准备导出 ${totalTasks} 个漫画系列与短篇…`,
+    },
+    async (task) => {
+      let completedTasks = 0
 
-    // 收集该系列所有话的所有漫画页面
-    const allPages: { pageIndex: number; url: string }[] = []
-    let pageCounter = 1
+      // 1. 导出各个系列
+      for (const series of clustered.seriesList) {
+        const seriesTitle = series.seriesTitle || `系列_${series.seriesId}`
+        const episodeCount = series.works.length
+        const statusMsg = `正在导出漫画系列「${seriesTitle}」(${completedTasks + 1}/${totalTasks})…`
+        onProgress?.(statusMsg, completedTasks, totalTasks)
+        task.updateProgress({ current: completedTasks, total: totalTasks, statusText: statusMsg })
 
-    for (const ep of series.works) {
-      const pageCount = Math.max(1, ep.page_count || ep.meta_pages?.length || 1)
-      for (let p = 0; p < pageCount; p++) {
-        const url = imageUrlOf(ep, p, quality)
-        if (url) {
-          allPages.push({ pageIndex: pageCounter++, url })
+        // 收集该系列所有话的所有漫画页面
+        const allPages: { pageIndex: number; url: string }[] = []
+        let pageCounter = 1
+
+        for (const ep of series.works) {
+          const pageCount = Math.max(1, ep.page_count || ep.meta_pages?.length || 1)
+          for (let p = 0; p < pageCount; p++) {
+            const url = imageUrlOf(ep, p, quality)
+            if (url) {
+              allPages.push({ pageIndex: pageCounter++, url })
+            }
+          }
         }
+
+        const customFileName = `[${safeAuthorName}] - [系列] ${seriesTitle} (全${episodeCount}话)`
+
+        if (format === "cbz") {
+          await exportMangaToCbz({
+            id: series.seriesId,
+            title: seriesTitle,
+            author: authorName,
+            authorId,
+            seriesTitle,
+            description: `包含全部 ${episodeCount} 话连载。`,
+            pages: allPages,
+            targetDir,
+            customFileName,
+          })
+        } else {
+          await exportMangaToEpub({
+            id: series.seriesId,
+            title: seriesTitle,
+            author: authorName,
+            authorId,
+            seriesTitle,
+            description: `包含全部 ${episodeCount} 话连载。`,
+            pages: allPages,
+            targetDir,
+            customFileName,
+          })
+        }
+
+        completedTasks++
       }
-    }
 
-    const customFileName = `[${safeAuthorName}] - [系列] ${seriesTitle} (全${episodeCount}话)`
+      // 2. 导出不成系列的单篇漫画
+      for (const single of clustered.standaloneWorks) {
+        const title = single.title || `漫画_${single.id}`
+        const statusMsg = `正在导出短篇漫画「${title}」(${completedTasks + 1}/${totalTasks})…`
+        onProgress?.(statusMsg, completedTasks, totalTasks)
+        task.updateProgress({ current: completedTasks, total: totalTasks, statusText: statusMsg })
 
-    if (format === "cbz") {
-      await exportMangaToCbz({
-        id: series.seriesId,
-        title: seriesTitle,
-        author: authorName,
-        authorId,
-        seriesTitle,
-        description: `包含全部 ${episodeCount} 话连载。`,
-        pages: allPages,
-        targetDir,
-        customFileName,
-      })
-    } else {
-      await exportMangaToEpub({
-        id: series.seriesId,
-        title: seriesTitle,
-        author: authorName,
-        authorId,
-        seriesTitle,
-        description: `包含全部 ${episodeCount} 话连载。`,
-        pages: allPages,
-        targetDir,
-        customFileName,
-      })
-    }
+        const pageCount = Math.max(1, single.page_count || single.meta_pages?.length || 1)
+        const pages: { pageIndex: number; url: string }[] = []
+        for (let p = 0; p < pageCount; p++) {
+          const url = imageUrlOf(single, p, quality)
+          if (url) {
+            pages.push({ pageIndex: p + 1, url })
+          }
+        }
 
-    completedTasks++
-  }
+        const customFileName = `[${safeAuthorName}] - [短篇] ${title}`
 
-  // 2. 导出不成系列的单篇漫画
-  for (const single of clustered.standaloneWorks) {
-    const title = single.title || `漫画_${single.id}`
-    onProgress?.(`正在导出短篇漫画「${title}」(${completedTasks + 1}/${totalTasks})…`, completedTasks, totalTasks)
+        if (format === "cbz") {
+          await exportMangaToCbz({
+            id: single.id,
+            title,
+            author: authorName,
+            authorId,
+            description: single.caption,
+            pages,
+            targetDir,
+            customFileName,
+          })
+        } else {
+          await exportMangaToEpub({
+            id: single.id,
+            title,
+            author: authorName,
+            authorId,
+            description: single.caption,
+            pages,
+            targetDir,
+            customFileName,
+          })
+        }
 
-    const pageCount = Math.max(1, single.page_count || single.meta_pages?.length || 1)
-    const pages: { pageIndex: number; url: string }[] = []
-    for (let p = 0; p < pageCount; p++) {
-      const url = imageUrlOf(single, p, quality)
-      if (url) {
-        pages.push({ pageIndex: p + 1, url })
+        completedTasks++
       }
-    }
 
-    const customFileName = `[${safeAuthorName}] - [短篇] ${title}`
-
-    if (format === "cbz") {
-      await exportMangaToCbz({
-        id: single.id,
-        title,
-        author: authorName,
-        authorId,
-        description: single.caption,
-        pages,
-        targetDir,
-        customFileName,
+      await task.finish({
+        success: true,
+        summary: `已成功将「${safeAuthorName}」的 ${completedTasks} 部漫画导出至文件。`,
       })
-    } else {
-      await exportMangaToEpub({
-        id: single.id,
-        title,
-        author: authorName,
-        authorId,
-        description: single.caption,
-        pages,
-        targetDir,
-        customFileName,
-      })
+
+      return { totalExported: completedTasks, targetDir }
     }
-
-    completedTasks++
-  }
-
-  return { totalExported: completedTasks, targetDir }
+  )
 }
 
 /**
@@ -503,13 +578,25 @@ export async function exportAuthorNovels(
 
   const clustered = clusterNovelsBySeries(novels)
   const totalTasks = clustered.seriesList.length + clustered.standaloneWorks.length
-  let completedTasks = 0
 
-  // 1. 导出各个小说系列
-  for (const series of clustered.seriesList) {
-    const seriesTitle = series.seriesTitle || `系列_${series.seriesId}`
-    const chapterCount = series.works.length
-    onProgress?.(`正在拉取小说系列「${seriesTitle}」(${completedTasks + 1}/${totalTasks})…`, completedTasks, totalTasks)
+  return runWithBackgroundTask(
+    {
+      title: "导出用户小说全集",
+      subtitle: `用户: ${safeAuthorName}`,
+      total: totalTasks,
+      categoryIcon: "book.fill",
+      initialStatus: `准备导出 ${totalTasks} 个小说系列与短篇…`,
+    },
+    async (task) => {
+      let completedTasks = 0
+
+      // 1. 导出各个小说系列
+      for (const series of clustered.seriesList) {
+        const seriesTitle = series.seriesTitle || `系列_${series.seriesId}`
+        const chapterCount = series.works.length
+        const statusMsg = `正在拉取小说系列「${seriesTitle}」(${completedTasks + 1}/${totalTasks})…`
+        onProgress?.(statusMsg, completedTasks, totalTasks)
+        task.updateProgress({ current: completedTasks, total: totalTasks, statusText: statusMsg })
 
     const chapters: NovelChapter[] = []
     let seriesCoverUrl: string | undefined
@@ -605,5 +692,12 @@ export async function exportAuthorNovels(
     completedTasks++
   }
 
+  await task.finish({
+    success: true,
+    summary: `已成功将「${safeAuthorName}」的 ${completedTasks} 部小说导出至文件。`,
+  })
+
   return { totalExported: completedTasks, targetDir }
+}
+)
 }
