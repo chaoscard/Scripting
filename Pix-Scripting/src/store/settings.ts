@@ -6,7 +6,6 @@ export type DetailImageQuality = "large" | "original"
 export type DownloadImageQuality = "large" | "original"
 export type DownloadStorageMode = "local" | "icloud"
 export type DownloadMangaFormat = "cbz" | "epub"
-export type DownloadIllustMultiAction = "album" | "zip" | "ask"
 export type CloseButtonAction = "minimize" | "exit"
 export type WatchlistSortOrder = "asc" | "desc"
 export type AmbientIntensity = "low" | "medium" | "high"
@@ -39,7 +38,6 @@ export interface AppSettings {
   downloadCustomDirectoryPath: string | null
   downloadPhotoAlbumName: string
   downloadMangaFormat: DownloadMangaFormat
-  downloadIllustMultiAction: DownloadIllustMultiAction
   prefetchEnabled: boolean
   cacheLimitMB: number | null
   recordHistory: boolean
@@ -75,7 +73,6 @@ const DEFAULT_SETTINGS: AppSettings = {
   downloadCustomDirectoryPath: null,
   downloadPhotoAlbumName: "Pix-Scripting",
   downloadMangaFormat: "cbz",
-  downloadIllustMultiAction: "ask",
   prefetchEnabled: true,
   cacheLimitMB: 300,
   recordHistory: true,
@@ -100,7 +97,6 @@ const DETAIL_QUALITY_VALUES: readonly DetailImageQuality[] = ["large", "original
 const DOWNLOAD_QUALITY_VALUES: readonly DownloadImageQuality[] = ["large", "original"]
 const DOWNLOAD_STORAGE_MODE_VALUES: readonly DownloadStorageMode[] = ["local", "icloud"]
 const DOWNLOAD_MANGA_FORMAT_VALUES: readonly DownloadMangaFormat[] = ["cbz", "epub"]
-const DOWNLOAD_ILLUST_MULTI_ACTION_VALUES: readonly DownloadIllustMultiAction[] = ["album", "zip", "ask"]
 const LONG_PRESS_ACTION_VALUES: readonly AppSettings["longPressBookmarkAction"][] = ["off", "follow", "detail"]
 const CLOSE_BUTTON_ACTION_VALUES: readonly CloseButtonAction[] = ["minimize", "exit"]
 const AMBIENT_INTENSITY_VALUES: readonly AmbientIntensity[] = ["low", "medium", "high"]
@@ -262,9 +258,6 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
     downloadMangaFormat: isOneOf(stored?.downloadMangaFormat, DOWNLOAD_MANGA_FORMAT_VALUES)
       ? stored.downloadMangaFormat
       : DEFAULT_SETTINGS.downloadMangaFormat,
-    downloadIllustMultiAction: isOneOf(stored?.downloadIllustMultiAction, DOWNLOAD_ILLUST_MULTI_ACTION_VALUES)
-      ? stored.downloadIllustMultiAction
-      : DEFAULT_SETTINGS.downloadIllustMultiAction,
     prefetchEnabled: boolOr(stored?.prefetchEnabled, DEFAULT_SETTINGS.prefetchEnabled),
     cacheLimitMB: cacheLimitOf(stored?.cacheLimitMB),
     recordHistory: boolOr(stored?.recordHistory, DEFAULT_SETTINGS.recordHistory),

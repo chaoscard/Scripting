@@ -774,7 +774,7 @@ export function WatchlistSeriesCard(props: {
     if (isNovel) {
       const confirmed = await Dialog.confirm({
         title: "下载整本小说",
-        message: `确认下载《${item.title || "系列"}》整本小说为 EPUB 电子书？\n包含全部连载章节与插图。`,
+        message: `确认下载《${item.title || "系列"}》整本 EPUB 小说？`,
         confirmLabel: "开始下载",
         cancelLabel: "取消",
       })
@@ -787,13 +787,12 @@ export function WatchlistSeriesCard(props: {
     } else {
       const choice = await Dialog.actionSheet({
         title: `下载整套漫画《${item.title || "系列"}》`,
-        message: "请选择下载的漫画文件格式：",
         actions: [
-          { label: "下载为 CBZ 漫画包" },
-          { label: "下载为 EPUB 电子书" },
+          { label: "CBZ 漫画包" },
+          { label: "EPUB 电子书" },
         ],
       })
-      if (choice === null) return
+      if (choice !== 0 && choice !== 1) return
       const format: "cbz" | "epub" = choice === 0 ? "cbz" : "epub"
       const filePath = await downloadEntireMangaSeries(item.id, item.title, format)
       if (filePath) {

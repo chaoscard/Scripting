@@ -31,7 +31,7 @@ import {
 import { loadBlocklist, onBlocklistChanged } from "../store/blocklist"
 import { editAIShowSettings } from "../api/pixiv"
 import { session } from "../api/session"
-import { clearUgoiraCache, ugoiraCacheUsageBytes } from "../ugoira/ugoira"
+import { clearUgoiraCache, enforceUgoiraCacheLimit, ugoiraCacheUsageBytes } from "../ugoira/ugoira"
 import { useTimedFlag } from "./hooks"
 
 const CACHE_LIMIT_OPTIONS = [300, 500, 1000, 2000] as const
@@ -351,18 +351,6 @@ export function SettingsView() {
             </HStack>
           </Button>
         </HStack>
-
-        <Picker
-          title="多图插画下载行为"
-          value={settings.downloadIllustMultiAction}
-          onChanged={(value: string) =>
-            update({ downloadIllustMultiAction: value as "album" | "zip" | "ask" })
-          }
-        >
-          <Text tag="ask">每次询问</Text>
-          <Text tag="album">存入相簿</Text>
-          <Text tag="zip">打包为 ZIP</Text>
-        </Picker>
       </Section>
 
       <Section header={<Text>浏览记录</Text>}>
@@ -400,6 +388,7 @@ export function SettingsView() {
           const cacheLimitMB = value === "unlimited" ? null : Number(value)
           update({ cacheLimitMB })
           enforceCacheLimit()
+          enforceUgoiraCacheLimit()
           refreshCacheSize()
         }}>
           {CACHE_LIMIT_OPTIONS.map((limit) => <Text key={limit} tag={String(limit)}>{limit}M</Text>)}

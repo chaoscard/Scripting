@@ -2,6 +2,7 @@ import { downloadBinary } from "../api/client"
 import { loadSettings } from "../store/settings"
 import { pixivDataPath } from "../store/dataDirectory"
 import { recoverFile, writeDataSafely, writeTextSafely } from "../store/safeFile"
+import { enforceUgoiraCacheLimit } from "../ugoira/ugoira"
 import type { PixivImageUrls } from "../types"
 
 // 图片磁盘缓存：Referer 下载 + LRU 淘汰
@@ -153,6 +154,9 @@ function touch(meta: CacheMeta, key: string, url: string, size: number): void {
 
 // 按 LRU 清理超出上限的缓存
 export function enforceCacheLimit(): void {
+  try {
+    enforceUgoiraCacheLimit()
+  } catch {}
   const settings = loadSettings()
   if (settings.cacheLimitMB == null) return
   const limitBytes = settings.cacheLimitMB * 1024 * 1024

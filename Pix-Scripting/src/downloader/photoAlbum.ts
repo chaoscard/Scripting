@@ -1,4 +1,7 @@
-import { loadSettings } from "../store/settings"
+import { loadSettings, type DownloadImageQuality } from "../store/settings"
+import { cachedFilePath, imageUrlOf } from "../image/imageLoader"
+import { fetchImageBinaryWithRetry, runConcurrentTasks } from "./downloadHelper"
+import type { PixivIllustration } from "../types"
 
 /**
  * 获取或自动创建专属相簿（默认 "Pix-Scripting"）
@@ -86,4 +89,50 @@ export async function saveVideoToPixivAlbum(
     console.log("saveVideoToPixivAlbum error:", err?.message ?? err)
     return false
   }
+}
+
+/**
+ * 专用于将插画（单页/多页）下载并存入系统相册的独立通道
+ * 优先复用前台已命中的磁盘缓存；若未缓存则直接流式下载二进制 Data 入相册，不污染浏览图片缓存 ImageCache
+ */
+export async function downloadIllustToAlbum(
+  illust: PixivIllustration,
+  downloadQuality?: DownloadImageQuality,
+  onProgress?: (current: number, total: number) => void
+): Promise<boolean> {
+  const quality = downloadQuality ?? loadSettings().downloadImageQuality
+  const pageCount = Math.max(1, illust.page_count || illust.meta_pages?.length || 1)
+  const tasks: { pageIndex: number; url: string }[] = []
+
+  for (let i = 0; i < pageCount; i++) {
+    const url = imageUrlOf(illust, i, quality)
+    if (url) {
+      tasks.push({ pageIndex: i + 1, url })
+    }
+  }
+
+  if (tasks.length === 0) return false
+
+  let successCount = 0
+  await runConcurrentTasks(tasks, 3, async (task) => {
+    const fileName = `pixiv_${illust.id}_p${task.pageIndex}`
+    try {
+      const cached = cachedFilePath(task.url)
+      if (cached) {
+        const ok = await saveImageToPixivAlbum(cached, fileName)
+        if (ok) successCount++
+      } else {
+        const data = await fetchImageBinaryWithRetry(task.url)
+        if (data) {
+          const ok = await saveImageToPixivAlbum(data, fileName)
+          if (ok) successCount++
+        }
+      }
+    } catch (err: any) {
+      console.log(`downloadIllustToAlbum error for page ${task.pageIndex}:`, err?.message ?? err)
+    }
+    onProgress?.(task.pageIndex, tasks.length)
+  })
+
+  return successCount > 0
 }

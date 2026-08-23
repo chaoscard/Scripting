@@ -424,7 +424,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
     if (props.kind === "novel") {
       const confirmed = await Dialog.confirm({
         title: "下载整本小说",
-        message: `确认将《${title}》系列合并打包下载为 EPUB 电子书？\n包含全部连载章节与内嵌插图。`,
+        message: `确认下载《${title}》整本 EPUB 小说？`,
         confirmLabel: "开始下载",
         cancelLabel: "取消",
       })
@@ -443,13 +443,12 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
     } else {
       const choice = await Dialog.actionSheet({
         title: `下载整套漫画《${title}》`,
-        message: "请选择下载的漫画文件格式：",
         actions: [
-          { label: "下载为 CBZ 漫画包" },
-          { label: "下载为 EPUB 电子书" },
+          { label: "CBZ 漫画包" },
+          { label: "EPUB 电子书" },
         ],
       })
-      if (choice === null) return
+      if (choice !== 0 && choice !== 1) return
 
       const format: "cbz" | "epub" = choice === 0 ? "cbz" : "epub"
       setSeriesDownloading(true)

@@ -1,6 +1,7 @@
 import { downloadBinary } from "../api/client"
 import { ugoiraMetadata } from "../api/pixiv"
 import { session } from "../api/session"
+import { loadSettings } from "../store/settings"
 import { pixivDataPath } from "../store/dataDirectory"
 import { publishPreparedFile, recoverFile, writeTextSafely } from "../store/safeFile"
 import type { UgoiraFrame } from "../types"
@@ -10,13 +11,21 @@ import type { UgoiraFrame } from "../types"
 const UGOIRA_DIR_NAME = "UgoiraCache"
 const CACHE_META_KEY = "pixiv_ugoira_cache_v1"
 
+export interface UgoiraCacheMetaEntry {
+  mp4Path: string
+  duration: number
+  size?: number
+  lastAccess?: number
+}
+
 interface UgoiraCacheMeta {
-  [illustID: string]: { mp4Path: string; duration: number }
+  [illustID: string]: UgoiraCacheMetaEntry
 }
 
 let baseDir: string | null = null
 let cacheGeneration = 0
 let taskSequence = 0
+let ugoiraMetaSaveTimer: number | null = null
 const inflightBuilds = new Map<number, Promise<UgoiraResult>>()
 
 function joinPath(...parts: string[]): string {
@@ -69,6 +78,25 @@ function isUsableFile(path: string): boolean {
   }
 }
 
+function touchUgoira(meta: UgoiraCacheMeta, id: string): void {
+  const entry = meta[id]
+  if (entry) {
+    entry.lastAccess = Date.now()
+    if (entry.size == null && isUsableFile(entry.mp4Path)) {
+      try {
+        entry.size = FileManager.statSync(entry.mp4Path).size
+      } catch {}
+    }
+    if (ugoiraMetaSaveTimer != null) clearTimeout(ugoiraMetaSaveTimer)
+    ugoiraMetaSaveTimer = setTimeout(() => {
+      ugoiraMetaSaveTimer = null
+      try {
+        saveMeta(meta)
+      } catch {}
+    }, 3000)
+  }
+}
+
 export interface UgoiraResult {
   mp4Path: string
   duration: number
@@ -79,7 +107,8 @@ export function cachedUgoira(illustID: number): UgoiraResult | null {
   const meta = loadMeta()
   const entry = meta[String(illustID)]
   if (entry && Number.isFinite(entry.duration) && entry.duration > 0 && isUsableFile(entry.mp4Path)) {
-    return entry
+    touchUgoira(meta, String(illustID))
+    return { mp4Path: entry.mp4Path, duration: entry.duration }
   }
   if (entry) {
     delete meta[String(illustID)]
@@ -173,9 +202,19 @@ async function performBuild(illustID: number): Promise<UgoiraResult> {
     const dir = ensureDir()
     const mp4Path = joinPath(dir, `ugoira_${illustID}.mp4`)
     publishPreparedFile(taskOutput, mp4Path)
+    let fileSize = 0
+    try {
+      fileSize = FileManager.statSync(mp4Path).size
+    } catch {}
     const meta = loadMeta()
-    meta[String(illustID)] = { mp4Path, duration }
+    meta[String(illustID)] = {
+      mp4Path,
+      duration,
+      size: fileSize,
+      lastAccess: Date.now(),
+    }
     saveMeta(meta)
+    enforceUgoiraCacheLimit()
     return { mp4Path, duration }
   } finally {
     try {
@@ -208,6 +247,44 @@ async function extractZipEntries(zipPath: string, destDir: string): Promise<void
   }
 }
 
+// 按 LRU 清理超出上限的动图缓存
+export function enforceUgoiraCacheLimit(): void {
+  const settings = loadSettings()
+  if (settings.cacheLimitMB == null) return
+  const limitBytes = Math.round(settings.cacheLimitMB * 1024 * 1024 * 0.4)
+  const meta = loadMeta()
+  const entries = Object.entries(meta)
+
+  for (const [, v] of entries) {
+    if (v.size == null && isUsableFile(v.mp4Path)) {
+      try {
+        v.size = FileManager.statSync(v.mp4Path).size
+      } catch {}
+    }
+    if (v.lastAccess == null) {
+      v.lastAccess = Date.now()
+    }
+  }
+
+  let total = entries.reduce((sum, [, v]) => sum + (v.size || 0), 0)
+  if (total <= limitBytes) return
+
+  const sorted = entries.sort((a, b) => (a[1].lastAccess || 0) - (b[1].lastAccess || 0))
+  for (const [id, v] of sorted) {
+    if (total <= limitBytes) break
+    try {
+      if (FileManager.existsSync(v.mp4Path)) {
+        FileManager.removeSync(v.mp4Path)
+      }
+    } catch {}
+    delete meta[id]
+    total -= v.size || 0
+  }
+  try {
+    saveMeta(meta)
+  } catch {}
+}
+
 // 动图缓存占用（字节），用于与图片缓存统一展示。
 export function ugoiraCacheUsageBytes(): number {
   const dir = ensureDir()
@@ -230,6 +307,10 @@ export function ugoiraCacheUsageBytes(): number {
 // 清空动图缓存。构建任务在独立临时目录继续收尾，但旧代次不得发布。
 export function clearUgoiraCache(): void {
   cacheGeneration += 1
+  if (ugoiraMetaSaveTimer != null) {
+    clearTimeout(ugoiraMetaSaveTimer)
+    ugoiraMetaSaveTimer = null
+  }
   const dir = ensureDir()
   try {
     if (FileManager.existsSync(dir)) FileManager.removeSync(dir)

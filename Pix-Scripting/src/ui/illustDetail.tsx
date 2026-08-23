@@ -34,6 +34,7 @@ import {
 } from "../api/pixiv"
 import { session } from "../api/session"
 import {
+  downloadIllustToAlbum,
   exportIllustToZip,
   exportMangaToCbz,
   exportMangaToEpub,
@@ -486,17 +487,10 @@ export function IllustDetailView(props: { illustID: number }) {
     setDownloading(true)
     const downloadQuality = loadSettings().downloadImageQuality
     try {
-      for (let i = 0; i < pageCount; i++) {
-        const url = imageUrlOf(current, i, downloadQuality) ?? pageURLs[i]
-        if (!url) continue
-        try {
-          const path = await loadImage(url)
-          if (path) {
-            await saveImageToPixivAlbum(path, `pixiv_${current.id}_p${i + 1}`)
-          }
-        } catch {}
+      const ok = await downloadIllustToAlbum(current, downloadQuality)
+      if (ok) {
+        void Haptics.transient()
       }
-      void Haptics.transient()
     } finally {
       setDownloading(false)
     }
@@ -705,13 +699,13 @@ export function IllustDetailView(props: { illustID: number }) {
             />
             {current.type === "ugoira" ? (
               <Button
-                title={downloading ? "保存中…" : "保存至相簿"}
+                title={downloading ? "下载中…" : "下载"}
                 systemImage="square.and.arrow.down"
                 disabled={downloading}
                 action={handleDownloadUgoira}
               />
             ) : current.type === "manga" ? (
-              <Menu title="下载漫画" systemImage="square.and.arrow.down">
+              <Menu title="下载" systemImage="square.and.arrow.down">
                 <Button
                   title="下载为 CBZ 漫画包"
                   systemImage="doc.zipper"
@@ -726,9 +720,9 @@ export function IllustDetailView(props: { illustID: number }) {
                 />
               </Menu>
             ) : pageCount > 1 ? (
-              <Menu title="下载插画" systemImage="square.and.arrow.down">
+              <Menu title="下载" systemImage="square.and.arrow.down">
                 <Button
-                  title="保存全部至相簿"
+                  title="下载全部至相簿"
                   systemImage="photo.on.rectangle.angled"
                   disabled={downloading}
                   action={handleDownloadIllustToAlbum}
@@ -742,7 +736,7 @@ export function IllustDetailView(props: { illustID: number }) {
               </Menu>
             ) : (
               <Button
-                title={downloading ? "保存中…" : "保存至相簿"}
+                title={downloading ? "下载中…" : "下载"}
                 systemImage="square.and.arrow.down"
                 disabled={downloading}
                 action={handleDownloadIllustToAlbum}
