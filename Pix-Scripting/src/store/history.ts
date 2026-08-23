@@ -1,10 +1,13 @@
 // 本地浏览记录：Pixiv 的历史接口需要会员，改为本地记录。
-// 插画、漫画和小说共用一个 iCloud 同步文件，按类型分别展示。
-// 架构：轻量精简存储字段 + 内存实时响应 + 1.5s 防抖批量落盘。
+// 插画、漫画和小说分别使用独立的 iCloud 同步 JSON 文件（history_illust.json, history_manga.json, history_novel.json）。
+// 架构：轻量精简存储字段 + 内存分类型独立缓存 + 1.5s 防抖批量落盘。
 import { loadSettings } from "./settings"
 import { pixivHistoryDirectory } from "./dataDirectory"
 import { recoverFile, writeTextSafely } from "./safeFile"
+import { clearNovelProgress } from "./novelProgress"
 import type { PixivIllustration, PixivNovel } from "../types"
+
+export type HistoryContentKind = "illustration" | "manga" | "novel"
 
 export interface IllustrationHistoryEntry {
   kind: "illust"
@@ -86,21 +89,51 @@ interface StoredHistoryEntry {
   novel?: StoredNovelData
 }
 
-const HISTORY_FILE_NAME = "history.json"
+const HISTORY_ILLUST_FILE = "history_illust.json"
+const HISTORY_MANGA_FILE = "history_manga.json"
+const HISTORY_NOVEL_FILE = "history_novel.json"
 const DEBOUNCE_DELAY_MS = 1500
 
-let entries: HistoryEntry[] | null = null
-let isDirty = false
-let saveTimer: ReturnType<typeof setTimeout> | null = null
-const listeners = new Set<() => void>()
-
-function historyFilePath(): string {
-  return `${pixivHistoryDirectory()}/${HISTORY_FILE_NAME}`
+const caches: {
+  illustration: IllustrationHistoryEntry[] | null
+  manga: IllustrationHistoryEntry[] | null
+  novel: NovelHistoryEntry[] | null
+} = {
+  illustration: null,
+  manga: null,
+  novel: null,
 }
 
-export async function prepareHistoryStorage(): Promise<void> {
-  if (!FileManager.isiCloudEnabled) return
-  const path = historyFilePath()
+const dirtyFlags: { [key in HistoryContentKind]: boolean } = {
+  illustration: false,
+  manga: false,
+  novel: false,
+}
+
+const saveTimers: { [key in HistoryContentKind]?: ReturnType<typeof setTimeout> | null } = {
+  illustration: null,
+  manga: null,
+  novel: null,
+}
+
+const listeners = new Set<() => void>()
+
+function fileNameForKind(kind: HistoryContentKind): string {
+  switch (kind) {
+    case "illustration":
+      return HISTORY_ILLUST_FILE
+    case "manga":
+      return HISTORY_MANGA_FILE
+    case "novel":
+      return HISTORY_NOVEL_FILE
+  }
+}
+
+export function historyFilePath(kind: HistoryContentKind): string {
+  return `${pixivHistoryDirectory()}/${fileNameForKind(kind)}`
+}
+
+async function prepareSingleFile(path: string): Promise<void> {
   if (
     !FileManager.existsSync(path) ||
     !FileManager.isFileStoredIniCloud(path) ||
@@ -111,8 +144,17 @@ export async function prepareHistoryStorage(): Promise<void> {
   try {
     await FileManager.downloadFileFromiCloud(path)
   } catch {
-    // 云端文件暂不可下载时在下次启动或刷新时再重试。
+    // 忽略下载异常
   }
+}
+
+export async function prepareHistoryStorage(): Promise<void> {
+  if (!FileManager.isiCloudEnabled) return
+  await Promise.all([
+    prepareSingleFile(historyFilePath("illustration")),
+    prepareSingleFile(historyFilePath("manga")),
+    prepareSingleFile(historyFilePath("novel")),
+  ]).catch(() => {})
 }
 
 function toStoredIllustData(illust: PixivIllustration): StoredIllustData {
@@ -260,46 +302,60 @@ function inflateNovel(data: StoredNovelData): PixivNovel {
   }
 }
 
-function persistSync(targetEntries: HistoryEntry[]): boolean {
+function persistKindSync(kind: HistoryContentKind): boolean {
   try {
-    const compactEntries = targetEntries.map(toStoredEntry)
-    writeTextSafely(historyFilePath(), JSON.stringify(compactEntries), (raw) => {
+    const list = caches[kind] ?? []
+    const compactEntries = list.map(toStoredEntry)
+    const filePath = historyFilePath(kind)
+    writeTextSafely(filePath, JSON.stringify(compactEntries), (raw) => {
       const parsed = JSON.parse(raw)
-      if (!Array.isArray(parsed)) throw new Error("历史记录格式错误")
+      if (!Array.isArray(parsed)) throw new Error(`${kind} 历史记录格式错误`)
     })
-    isDirty = false
+    dirtyFlags[kind] = false
     return true
   } catch (error: any) {
-    console.log("history persist error:", error?.message ?? error)
+    console.warn(`${kind} history persist error:`, error?.message ?? error)
     return false
   }
 }
 
 export function flushHistory(): boolean {
-  if (saveTimer) {
-    clearTimeout(saveTimer)
-    saveTimer = null
+  let ok = true
+  const kinds: HistoryContentKind[] = ["illustration", "manga", "novel"]
+  for (const k of kinds) {
+    if (saveTimers[k]) {
+      clearTimeout(saveTimers[k]!)
+      saveTimers[k] = null
+    }
+    if (dirtyFlags[k] && caches[k]) {
+      if (!persistKindSync(k)) {
+        ok = false
+      }
+    }
   }
-  if (!isDirty || !entries) return true
-  return persistSync(entries)
+  return ok
 }
 
-function commit(next: HistoryEntry[], immediate = false): boolean {
-  entries = next
-  isDirty = true
+function commitKind(kind: HistoryContentKind, next: any[], immediate = false): boolean {
+  caches[kind] = next as any
+  dirtyFlags[kind] = true
   emitChanged()
 
   if (immediate) {
-    return flushHistory()
+    if (saveTimers[kind]) {
+      clearTimeout(saveTimers[kind]!)
+      saveTimers[kind] = null
+    }
+    return persistKindSync(kind)
   }
 
-  if (saveTimer) {
-    clearTimeout(saveTimer)
+  if (saveTimers[kind]) {
+    clearTimeout(saveTimers[kind]!)
   }
-  saveTimer = setTimeout(() => {
-    saveTimer = null
-    if (isDirty && entries) {
-      persistSync(entries)
+  saveTimers[kind] = setTimeout(() => {
+    saveTimers[kind] = null
+    if (dirtyFlags[kind] && caches[kind]) {
+      persistKindSync(kind)
     }
   }, DEBOUNCE_DELAY_MS)
   return true
@@ -309,9 +365,7 @@ function emitChanged(): void {
   for (const fn of listeners) {
     try {
       fn()
-    } catch {
-      // 单个监听器异常不影响其他
-    }
+    } catch {}
   }
 }
 
@@ -325,155 +379,177 @@ export function onHistoryChanged(fn: () => void): () => void {
 export async function refreshHistoryFromCloud(): Promise<void> {
   flushHistory()
   await prepareHistoryStorage()
-  entries = null
+  caches.illustration = null
+  caches.manga = null
+  caches.novel = null
   emitChanged()
 }
 
-function entryKey(entry: HistoryEntry): string {
-  return entry.kind === "illust"
-    ? `illust:${entry.illustration.id}`
-    : `novel:${entry.novel.id}`
-}
+function parseRawEntriesForKind(
+  kind: HistoryContentKind,
+  rawEntries: any[]
+): (IllustrationHistoryEntry | NovelHistoryEntry)[] {
+  const seen = new Set<number>()
+  const valid: (IllustrationHistoryEntry | NovelHistoryEntry)[] = []
 
-function parseEntries(rawEntries: any[]): HistoryEntry[] {
-  const seen = new Set<string>()
-  const valid: HistoryEntry[] = []
   for (const raw of rawEntries) {
     const viewedAt = typeof raw?.viewedAt === "number" ? raw.viewedAt : 0
-    let entry: HistoryEntry | null = null
 
-    if (raw?.kind === "novel" && raw.novel) {
-      entry = { kind: "novel", novel: inflateNovel(raw.novel), viewedAt }
-    } else if (raw?.kind === "illust" && raw.illustration) {
-      entry = { kind: "illust", illustration: inflateIllust(raw.illustration), viewedAt }
-    } else if (raw?.novel) {
-      // 兼容旧格式未标记 kind 的条目
-      entry = { kind: "novel", novel: inflateNovel(raw.novel), viewedAt }
-    } else if (raw?.illustration) {
-      entry = { kind: "illust", illustration: inflateIllust(raw.illustration), viewedAt }
+    if (kind === "novel") {
+      const novelData = raw?.novel
+      if (novelData && typeof novelData.id === "number" && !seen.has(novelData.id)) {
+        seen.add(novelData.id)
+        valid.push({ kind: "novel", novel: inflateNovel(novelData), viewedAt })
+      }
+    } else {
+      const illustData = raw?.illustration
+      if (illustData && typeof illustData.id === "number" && !seen.has(illustData.id)) {
+        seen.add(illustData.id)
+        valid.push({
+          kind: "illust",
+          illustration: inflateIllust(illustData),
+          viewedAt,
+        })
+      }
     }
-
-    if (!entry) continue
-    const key = entryKey(entry)
-    if (seen.has(key)) continue
-    seen.add(key)
-    valid.push(entry)
   }
+
   return valid.sort((a, b) => b.viewedAt - a.viewedAt)
 }
 
-function loadEntries(): HistoryEntry[] {
-  if (entries) return entries
-  const path = historyFilePath()
-  try {
-    recoverFile(path)
-    if (!FileManager.existsSync(path)) {
-      entries = []
-      return entries
-    }
-    const raw = FileManager.readAsStringSync(path, "utf-8")
-    const decoded = JSON.parse(raw)
-    entries = Array.isArray(decoded) ? parseEntries(decoded) : []
-  } catch {
-    entries = []
+function loadKindEntries(kind: HistoryContentKind): (IllustrationHistoryEntry | NovelHistoryEntry)[] {
+  if (caches[kind] !== null) {
+    return caches[kind]!
   }
-  return entries
+
+  const filePath = historyFilePath(kind)
+  try {
+    recoverFile(filePath)
+    if (!FileManager.existsSync(filePath)) {
+      caches[kind] = []
+      return caches[kind]!
+    }
+    const raw = FileManager.readAsStringSync(filePath, "utf-8")
+    const decoded = JSON.parse(raw)
+    if (Array.isArray(decoded)) {
+      caches[kind] = parseRawEntriesForKind(kind, decoded) as any
+    } else {
+      caches[kind] = []
+    }
+  } catch {
+    caches[kind] = []
+  }
+
+  return caches[kind]!
 }
 
-export function getHistory(): HistoryEntry[] {
-  return loadEntries()
+export function getHistory(kind?: HistoryContentKind): HistoryEntry[] {
+  if (kind) {
+    return loadKindEntries(kind) as HistoryEntry[]
+  }
+  const all: HistoryEntry[] = [
+    ...(loadKindEntries("illustration") as HistoryEntry[]),
+    ...(loadKindEntries("manga") as HistoryEntry[]),
+    ...(loadKindEntries("novel") as HistoryEntry[]),
+  ]
+  return all.sort((a, b) => b.viewedAt - a.viewedAt)
 }
 
-export function historyCount(): number {
-  return loadEntries().length
+export function historyCount(kind?: HistoryContentKind): number {
+  if (kind) {
+    return loadKindEntries(kind).length
+  }
+  return (
+    loadKindEntries("illustration").length +
+    loadKindEntries("manga").length +
+    loadKindEntries("novel").length
+  )
 }
 
 export function historyKindCount(kind: HistoryContentKind): number {
-  const list = loadEntries()
-  let count = 0
-  for (const entry of list) {
-    if (kind === "novel") {
-      if (entry.kind === "novel") count++
-    } else if (entry.kind === "illust") {
-      const isManga = entry.illustration?.type === "manga"
-      if (kind === "manga" ? isManga : !isManga) count++
-    }
-  }
-  return count
-}
-
-function recordEntry(entry: HistoryEntry): void {
-  if (!loadSettings().recordHistory) return
-  const list = [...loadEntries()]
-  const key = entryKey(entry)
-  const index = list.findIndex((item) => entryKey(item) === key)
-  if (index >= 0) list.splice(index, 1)
-  list.unshift(entry)
-  commit(list, false)
+  return loadKindEntries(kind).length
 }
 
 export function recordHistory(illustration: PixivIllustration): void {
-  recordEntry({ kind: "illust", illustration, viewedAt: Date.now() })
+  if (!loadSettings().recordHistory) return
+  const isManga = illustration.type === "manga"
+  const kind: HistoryContentKind = isManga ? "manga" : "illustration"
+  const list = [...(loadKindEntries(kind) as IllustrationHistoryEntry[])]
+  const index = list.findIndex((item) => item.illustration.id === illustration.id)
+  if (index >= 0) list.splice(index, 1)
+  list.unshift({ kind: "illust", illustration, viewedAt: Date.now() })
+  commitKind(kind, list, false)
 }
 
 export function recordNovelHistory(novel: PixivNovel): void {
-  recordEntry({ kind: "novel", novel, viewedAt: Date.now() })
+  if (!loadSettings().recordHistory) return
+  const kind: HistoryContentKind = "novel"
+  const list = [...(loadKindEntries(kind) as NovelHistoryEntry[])]
+  const index = list.findIndex((item) => item.novel.id === novel.id)
+  if (index >= 0) list.splice(index, 1)
+  list.unshift({ kind: "novel", novel, viewedAt: Date.now() })
+  commitKind(kind, list, false)
 }
 
 export function updateHistoryBookmark(id: number, isBookmarked: boolean): void {
-  const list = loadEntries()
-  const index = list.findIndex(
-    (entry) => entry.kind === "illust" && entry.illustration.id === id
-  )
-  if (index < 0) return
-  const next = [...list]
-  const entry = next[index] as IllustrationHistoryEntry
-  next[index] = {
-    ...entry,
-    illustration: { ...entry.illustration, is_bookmarked: isBookmarked },
+  const kinds: HistoryContentKind[] = ["illustration", "manga"]
+  for (const kind of kinds) {
+    const list = loadKindEntries(kind) as IllustrationHistoryEntry[]
+    const index = list.findIndex((item) => item.illustration.id === id)
+    if (index >= 0) {
+      const next = [...list]
+      next[index] = {
+        ...next[index],
+        illustration: { ...next[index].illustration, is_bookmarked: isBookmarked },
+      }
+      commitKind(kind, next, false)
+    }
   }
-  commit(next, false)
 }
 
 export function updateNovelHistoryBookmark(id: number, isBookmarked: boolean): void {
-  const list = loadEntries()
-  const index = list.findIndex(
-    (entry) => entry.kind === "novel" && entry.novel.id === id
-  )
-  if (index < 0) return
-  const next = [...list]
-  const entry = next[index] as NovelHistoryEntry
-  next[index] = {
-    ...entry,
-    novel: { ...entry.novel, is_bookmarked: isBookmarked },
+  const kind: HistoryContentKind = "novel"
+  const list = loadKindEntries(kind) as NovelHistoryEntry[]
+  const index = list.findIndex((item) => item.novel.id === id)
+  if (index >= 0) {
+    const next = [...list]
+    next[index] = {
+      ...next[index],
+      novel: { ...next[index].novel, is_bookmarked: isBookmarked },
+    }
+    commitKind(kind, next, false)
   }
-  commit(next, false)
 }
 
 export function removeHistoryEntry(kind: HistoryEntry["kind"], id: number): void {
-  const list = loadEntries()
-  const next = list.filter((entry) => {
-    if (entry.kind !== kind) return true
-    if (entry.kind === "illust") return entry.illustration.id !== id
-    return entry.novel.id !== id
-  })
-  if (next.length !== list.length) commit(next, true)
+  if (kind === "novel") {
+    const list = loadKindEntries("novel") as NovelHistoryEntry[]
+    const next = list.filter((e) => e.novel.id !== id)
+    if (next.length !== list.length) {
+      commitKind("novel", next, true)
+    }
+    clearNovelProgress(id)
+  } else {
+    for (const k of ["illustration", "manga"] as const) {
+      const list = loadKindEntries(k) as IllustrationHistoryEntry[]
+      const next = list.filter((e) => e.illustration.id !== id)
+      if (next.length !== list.length) {
+        commitKind(k, next, true)
+      }
+    }
+  }
 }
 
-export type HistoryContentKind = "illustration" | "manga" | "novel"
-
 export function clearHistoryKind(kind: HistoryContentKind): void {
-  const list = loadEntries()
-  const next = list.filter((entry) => {
-    if (kind === "novel") return entry.kind !== "novel"
-    if (entry.kind !== "illust") return true
-    return kind === "manga"
-      ? entry.illustration.type !== "manga"
-      : entry.illustration.type === "manga"
-  })
-  if (next.length !== list.length) commit(next, true)
+  commitKind(kind, [], true)
+  if (kind === "novel") {
+    clearNovelProgress()
+  }
 }
 
 export function clearHistory(): void {
-  commit([], true)
+  commitKind("illustration", [], true)
+  commitKind("manga", [], true)
+  commitKind("novel", [], true)
+  clearNovelProgress()
 }

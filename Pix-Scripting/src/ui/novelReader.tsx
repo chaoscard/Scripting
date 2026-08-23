@@ -1,6 +1,7 @@
 import {
   Button,
   Divider,
+  Group,
   HStack,
   Image,
   LazyVStack,
@@ -211,6 +212,9 @@ function processLineIntoNovelItems(
     if (state.currentBuffer.length > 0) {
       state.currentBuffer.push("")
       state.currentBufferChars += 1
+      if (state.currentBufferChars >= 200) {
+        flushBuffer()
+      }
     }
     return
   }
@@ -219,7 +223,7 @@ function processLineIntoNovelItems(
   if (!trimmed.includes("[")) {
     state.currentBuffer.push(rawLine)
     state.currentBufferChars += rawLine.length + 1
-    if (state.currentBufferChars >= 1200) {
+    if (state.currentBufferChars >= 350) {
       flushBuffer()
     }
     return
@@ -301,7 +305,7 @@ function processLineIntoNovelItems(
     }
   }
 
-  if (state.currentBufferChars >= 1200 && (!trimmed || state.currentBufferChars >= 2000)) {
+  if (state.currentBufferChars >= 350 && (!trimmed || state.currentBufferChars >= 600)) {
     flushBuffer()
   }
 }
@@ -730,6 +734,7 @@ export function groupChunksByPage(chunks: NovelChunkItem[]): NovelPageBlock[] {
  * 3. 极简页码控制：翻页直接通过状态切换单页数据块，彻底移除长列表滚动位置同步复杂逻辑。
  */
 export function NovelReaderView(props: {
+  novelId?: number
   text: string
   title?: string
   markerPage?: number | null
@@ -737,6 +742,7 @@ export function NovelReaderView(props: {
   textEmbeddedImages?: Record<string, TextEmbeddedImage>
   onJumpToPage?: (page: number) => void
   onReady?: (totalPages: number) => void
+  onChunkVisible?: (chunkId: string) => void
 }) {
   const {
     text,
@@ -745,6 +751,7 @@ export function NovelReaderView(props: {
     currentPage = 1,
     onJumpToPage,
     onReady,
+    onChunkVisible,
   } = props
 
   // 同步初始化：常规篇幅（< 100,000 字）直接同步解析，首帧 0ms 瞬间呈现
@@ -800,17 +807,14 @@ export function NovelReaderView(props: {
   const currentBlock = pageBlocks.find((b) => b.page === currentPage) ?? pageBlocks[0]
 
   return (
-    <VStack
-      alignment="leading"
-      spacing={0}
-      frame={{ maxWidth: "infinity" }}
-    >
+    <Group>
       {/* 顶部锚点 */}
       <VStack key="novel-top-anchor" frame={{ height: 0 }} />
 
       {/* 第一页且第一页是书签时显示书签提示 */}
       {currentBlock.page === 1 && markerPage === 1 ? (
         <HStack
+          key="novel-marker-top-hint"
           spacing={12}
           padding={{ horizontal: 14, vertical: 14 }}
           alignment="center"
@@ -837,14 +841,20 @@ export function NovelReaderView(props: {
 
       {/* 渲染当前页的内容 */}
       {currentBlock.items.map((item) => (
-        <NovelChunkRenderer
+        <VStack
           key={item.id}
-          item={item}
-          markerPage={markerPage}
-          onJumpToPage={onJumpToPage}
-        />
+          alignment="leading"
+          spacing={0}
+          frame={{ maxWidth: "infinity" }}
+        >
+          <NovelChunkRenderer
+            item={item}
+            markerPage={markerPage}
+            onJumpToPage={onJumpToPage}
+          />
+        </VStack>
       ))}
-    </VStack>
+    </Group>
   )
 }
 

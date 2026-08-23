@@ -56,13 +56,8 @@ interface HistoryNovelItem extends PixivNovel {
 }
 
 function loadHistoryIllusts(kind: "illustration" | "manga"): HistoryIllustItem[] {
-  return getHistory()
-    .filter((entry): entry is Extract<HistoryEntry, { kind: "illust" }> => {
-      if (entry.kind !== "illust") return false
-      return kind === "illustration"
-        ? entry.illustration.type !== "manga"
-        : entry.illustration.type === "manga"
-    })
+  return getHistory(kind)
+    .filter((entry): entry is Extract<HistoryEntry, { kind: "illust" }> => entry.kind === "illust")
     .map((entry) => ({
       ...entry.illustration,
       viewedAt: entry.viewedAt,
@@ -70,7 +65,7 @@ function loadHistoryIllusts(kind: "illustration" | "manga"): HistoryIllustItem[]
 }
 
 function loadHistoryNovels(): HistoryNovelItem[] {
-  return getHistory()
+  return getHistory("novel")
     .filter((entry): entry is Extract<HistoryEntry, { kind: "novel" }> => entry.kind === "novel")
     .map((entry) => ({
       ...entry.novel,

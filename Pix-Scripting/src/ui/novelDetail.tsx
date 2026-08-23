@@ -18,6 +18,8 @@ import {
   Text,
   useCallback,
   useEffect,
+  useMemo,
+  useObservable,
   useRef,
   useState,
   VStack,
@@ -53,6 +55,11 @@ import {
   recordNovelHistory,
   updateNovelHistoryBookmark,
 } from "../store/history"
+import {
+  flushNovelProgress,
+  getNovelProgress,
+  recordNovelProgress,
+} from "../store/novelProgress"
 import { getSeriesByWorkID, recordWorkSeriesAssociation } from "../store/seriesCache"
 import {
   isUserFollowed,
@@ -94,6 +101,17 @@ import { requestPixivRoute } from "./routeNavigation"
 const BLOCKED_BY_BLOCKLIST_MESSAGE = "该小说已被屏蔽（标签或作者在黑名单中）"
 const BLOCKED_BY_RESTRICTION_MESSAGE = "该小说被内容显示设置过滤，暂时无法显示"
 
+function isNovelChunkId(id: string): boolean {
+  return (
+    id.startsWith("chunk-") ||
+    id.startsWith("ch-") ||
+    id.startsWith("page-") ||
+    id.startsWith("jump-") ||
+    id.startsWith("up-") ||
+    id.startsWith("px-")
+  )
+}
+
 function historyNovelFromDetail(detail: PixivNovelDetail): PixivNovel {
   return { ...detail, is_muted: false, visible: true }
 }
@@ -115,7 +133,11 @@ export function NovelDetailView(props: { novelID: number }) {
   const [followLoading, setFollowLoading] = useState(false)
   const [showComments, setShowComments] = useState(false)
   const [markerPage, setMarkerPage] = useNovelMarker(novelID, null)
-  const [currentPage, setCurrentPage] = useState<number>(() => getCachedNovelMarker(novelID) ?? 1)
+  const initialProgress = useMemo(() => getNovelProgress(novelID), [novelID])
+  const scrollPos = useObservable<string | null>(initialProgress?.chunkId ?? null)
+  const [currentPage, setCurrentPage] = useState<number>(
+    () => initialProgress?.page ?? getCachedNovelMarker(novelID) ?? 1
+  )
   const [totalPages, setTotalPages] = useState(1)
   const [pagerVisible, setPagerVisible] = useState(true)
   const [markerBusy, setMarkerBusy] = useState(false)
@@ -123,8 +145,54 @@ export function NovelDetailView(props: { novelID: number }) {
   const guard = useAsyncGuard()
   const novelRef = useLatest(novel)
   const errorRef = useLatest(error)
-  const proxyRef = useRef<ScrollViewProxy | null>(null)
+  const currentPageRef = useLatest(currentPage)
   const recordedIDRef = useRef<number | null>(null)
+  const proxyRef = useRef<ScrollViewProxy | null>(null)
+  const initialScrollChunkIdRef = useRef<string | null>(initialProgress?.chunkId ?? null)
+  const lastRecordedChunkRef = useRef<string | null>(initialProgress?.chunkId ?? null)
+  const isRestoringScrollRef = useRef<boolean>(
+    Boolean(
+      initialProgress?.chunkId &&
+        initialProgress.chunkId !== "novel-top-anchor" &&
+        initialProgress.chunkId !== "chunk-0"
+    )
+  )
+  const hasRestoredScrollRef = useRef(false)
+  const isUnmountingRef = useRef(false)
+  const isDisappearedRef = useRef(false)
+
+  const performScrollRestoration = useCallback((targetChunk?: string) => {
+    const target = targetChunk ?? getNovelProgress(novelID)?.chunkId
+    if (
+      !target ||
+      target === "novel-top-anchor" ||
+      target === "novel-header-content" ||
+      target === "chunk-0"
+    ) {
+      isRestoringScrollRef.current = false
+      return
+    }
+
+    initialScrollChunkIdRef.current = target
+    lastRecordedChunkRef.current = target
+    isRestoringScrollRef.current = true
+    scrollPos.setValue(target)
+
+    const attempts = [30, 80, 180, 350, 600, 1000]
+    attempts.forEach((delay) => {
+      setTimeout(() => {
+        if (isDisappearedRef.current || isUnmountingRef.current) return
+        try {
+          scrollPos.setValue(target)
+          proxyRef.current?.scrollTo(target, "top")
+        } catch {}
+      }, delay)
+    })
+
+    setTimeout(() => {
+      isRestoringScrollRef.current = false
+    }, 1800)
+  }, [novelID, scrollPos])
 
   async function load() {
     const g = guard()
@@ -168,6 +236,7 @@ export function NovelDetailView(props: { novelID: number }) {
       setFollowed(detail.user?.is_followed ?? false)
       const detailMarker = (detail as any)?.novel_marker?.page ?? (detail as any)?.marker?.page ?? null
       const existingCached = getCachedNovelMarker(detail.id)
+      const savedProgress = getNovelProgress(detail.id)
       let targetMarker = existingCached
       if (detailMarker !== null && detailMarker > 0) {
         if (existingCached == null || existingCached <= 1 || detailMarker > 1) {
@@ -176,7 +245,19 @@ export function NovelDetailView(props: { novelID: number }) {
           recordNovelMarker(detail.id, detailMarker)
         }
       }
-      if (targetMarker && targetMarker > 1) {
+      if (savedProgress?.page && savedProgress.page > 0) {
+        setCurrentPage(savedProgress.page)
+        if (
+          savedProgress.chunkId &&
+          savedProgress.chunkId !== "novel-top-anchor" &&
+          savedProgress.chunkId !== "chunk-0"
+        ) {
+          initialScrollChunkIdRef.current = savedProgress.chunkId
+          lastRecordedChunkRef.current = savedProgress.chunkId
+          isRestoringScrollRef.current = true
+          scrollPos.setValue(savedProgress.chunkId)
+        }
+      } else if (targetMarker && targetMarker > 1) {
         setCurrentPage(targetMarker)
       }
       if (recordedIDRef.current !== detail.id) {
@@ -205,12 +286,33 @@ export function NovelDetailView(props: { novelID: number }) {
   }
 
   useEffect(() => {
+    const saved = getNovelProgress(novelID)
     const cachedMarker = getCachedNovelMarker(novelID)
-    setCurrentPage(cachedMarker ?? 1)
+    const targetPage = saved?.page ?? cachedMarker ?? 1
+    setCurrentPage(targetPage)
+    initialScrollChunkIdRef.current = saved?.chunkId ?? null
+    lastRecordedChunkRef.current = saved?.chunkId ?? null
+    isRestoringScrollRef.current = Boolean(
+      saved?.chunkId &&
+        saved.chunkId !== "novel-top-anchor" &&
+        saved.chunkId !== "chunk-0"
+    )
+    hasRestoredScrollRef.current = false
+    if (saved?.chunkId && saved.chunkId !== "chunk-0") {
+      scrollPos.setValue(saved.chunkId)
+    }
     setPagerVisible(true)
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [novelID])
+
+  useEffect(() => {
+    isUnmountingRef.current = false
+    return () => {
+      isUnmountingRef.current = true
+      flushNovelProgress()
+    }
+  }, [])
 
   useEffect(() => {
     return onUserFollowChanged((changedUserID, nextFollowed) => {
@@ -346,12 +448,17 @@ export function NovelDetailView(props: { novelID: number }) {
     if (newPage < 1) return
     setCurrentPage(newPage)
     setPagerVisible(true)
+    initialScrollChunkIdRef.current = null
+    lastRecordedChunkRef.current = null
+    isRestoringScrollRef.current = false
+    scrollPos.setValue("novel-top-anchor")
+    recordNovelProgress(novelID, newPage, undefined, true)
     try {
       proxyRef.current?.scrollTo("novel-top-anchor", "top")
     } catch {
       // ignore
     }
-  }, [])
+  }, [novelID, scrollPos])
 
   const handleReaderReady = useCallback((parsedTotalPages: number) => {
     setTotalPages(parsedTotalPages)
@@ -360,7 +467,32 @@ export function NovelDetailView(props: { novelID: number }) {
       if (prev > parsedTotalPages) return parsedTotalPages
       return prev
     })
-  }, [])
+    const saved = getNovelProgress(novelID)
+    const target = saved?.chunkId
+    if (target && target !== "novel-top-anchor" && target !== "chunk-0") {
+      performScrollRestoration(target)
+    }
+  }, [novelID, performScrollRestoration])
+
+  useEffect(() => {
+    if (readerReady && !loading) {
+      const target = initialScrollChunkIdRef.current
+      if (
+        target &&
+        target !== "novel-top-anchor" &&
+        target !== "chunk-0" &&
+        !hasRestoredScrollRef.current
+      ) {
+        hasRestoredScrollRef.current = true
+        performScrollRestoration(target)
+      } else {
+        const t = setTimeout(() => {
+          isRestoringScrollRef.current = false
+        }, 200)
+        return () => clearTimeout(t)
+      }
+    }
+  }, [readerReady, loading, performScrollRestoration])
 
   async function handleToggleSpecificPageMarker(targetPage: number) {
     if (!novel || markerBusy) return
@@ -392,48 +524,109 @@ export function NovelDetailView(props: { novelID: number }) {
     await ShareSheet.present([`https://www.pixiv.net/novel/show.php?id=${novel.id}`])
   }
 
+  if (loading) {
+    return (
+      <ScrollView
+        navigationTitle="小说"
+        navigationBarTitleDisplayMode="inline"
+      >
+        <LoadingView />
+      </ScrollView>
+    )
+  }
+  if (error || !novel) {
+    return (
+      <ScrollView
+        navigationTitle="小说"
+        navigationBarTitleDisplayMode="inline"
+      >
+        <ErrorView message={error ?? "小说不存在"} onRetry={load} />
+      </ScrollView>
+    )
+  }
+
+  const current = novel
+  const rawSeries = current.series ?? (current as any).novel_series
+  const rawSeriesObj = Array.isArray(rawSeries) ? rawSeries[0] : rawSeries
+  const associatedRef = getSeriesByWorkID(current.id, "novel")
+  const resolvedSeriesID = rawSeriesObj?.id ?? associatedRef?.seriesID ?? null
+  const resolvedSeriesTitle = rawSeriesObj?.title ?? associatedRef?.seriesTitle ?? null
+  const resolvedEpisodeNumber = current.episode_number ?? associatedRef?.episodeNumber ?? null
+
+  if (resolvedSeriesID) {
+    recordWorkSeriesAssociation(current.id, "novel", resolvedSeriesID, resolvedSeriesTitle, resolvedEpisodeNumber)
+  }
+
   return (
     <ScrollViewReader>
       {(proxy) => {
         proxyRef.current = proxy
-
-        if (loading) {
-          return (
-            <ScrollView
-              navigationTitle="小说"
-              navigationBarTitleDisplayMode="inline"
-            >
-              <LoadingView />
-            </ScrollView>
-          )
-        }
-        if (error || !novel) {
-          return (
-            <ScrollView
-              navigationTitle="小说"
-              navigationBarTitleDisplayMode="inline"
-            >
-              <ErrorView message={error ?? "小说不存在"} onRetry={load} />
-            </ScrollView>
-          )
-        }
-
-        const current = novel
-        const rawSeries = current.series ?? (current as any).novel_series
-        const rawSeriesObj = Array.isArray(rawSeries) ? rawSeries[0] : rawSeries
-        const associatedRef = getSeriesByWorkID(current.id, "novel")
-        const resolvedSeriesID = rawSeriesObj?.id ?? associatedRef?.seriesID ?? null
-        const resolvedSeriesTitle = rawSeriesObj?.title ?? associatedRef?.seriesTitle ?? null
-        const resolvedEpisodeNumber = current.episode_number ?? associatedRef?.episodeNumber ?? null
-
-        if (resolvedSeriesID) {
-          recordWorkSeriesAssociation(current.id, "novel", resolvedSeriesID, resolvedSeriesTitle, resolvedEpisodeNumber)
-        }
-
         return (
           <ScrollView
+            scrollPosition={{
+              value: scrollPos,
+              anchor: "top",
+            }}
             navigationTitle={current.title}
             navigationBarTitleDisplayMode="inline"
+            onAppear={() => {
+              isDisappearedRef.current = false
+              const saved = getNovelProgress(novelID)
+              if (saved?.page && saved.page !== currentPageRef.current) {
+                setCurrentPage(saved.page)
+              }
+              const target = saved?.chunkId
+              if (target && target !== "novel-top-anchor" && target !== "chunk-0") {
+                performScrollRestoration(target)
+              }
+            }}
+            onDisappear={() => {
+              isDisappearedRef.current = true
+              flushNovelProgress()
+            }}
+            onScrollTargetVisibilityChange={{
+              idType: "string",
+              threshold: 0.15,
+              onChanged: (rawIds) => {
+                if (isUnmountingRef.current || isDisappearedRef.current) return
+                const ids = (rawIds as string[]).filter(Boolean)
+                if (!ids || ids.length === 0) return
+
+                // 正在恢复滚动位置阶段：若目标 chunk 已经可见，说明跳转成功，解除锁定
+                if (isRestoringScrollRef.current) {
+                  const target = initialScrollChunkIdRef.current
+                  if (target && ids.includes(target)) {
+                    isRestoringScrollRef.current = false
+                    lastRecordedChunkRef.current = target
+                  }
+                  return
+                }
+
+                // 1. 如果顶部头部内容在视野中，说明用户处于小说开头/简介/标签区
+                const isHeaderVisible =
+                  ids.includes("novel-header-content") || ids.includes("novel-top-anchor")
+                if (isHeaderVisible) {
+                  const lastChunk = lastRecordedChunkRef.current
+                  const isNearTop =
+                    !lastChunk ||
+                    lastChunk === "chunk-0" ||
+                    lastChunk === "chunk-1" ||
+                    lastChunk === "chunk-2"
+                  if (isNearTop) {
+                    lastRecordedChunkRef.current = null
+                    recordNovelProgress(novelID, currentPageRef.current, undefined)
+                  }
+                  return
+                }
+
+                // 2. 头部已完全滚出视野，用户已进入正文段落阅读：记录当前视野最上方的正文块
+                const visibleChunkId = ids.find((id) => isNovelChunkId(id))
+                if (visibleChunkId) {
+                  lastRecordedChunkRef.current = visibleChunkId
+                  recordNovelProgress(novelID, currentPageRef.current, visibleChunkId)
+                }
+              },
+            }}
             simultaneousGesture={
               DragGesture({ minDistance: 20, coordinateSpace: "global" })
                 .onChanged((e) => {
@@ -679,8 +872,9 @@ export function NovelDetailView(props: { novelID: number }) {
         alignment="leading"
         spacing={12}
         frame={{ maxWidth: "infinity" }}
+        scrollTargetLayout={true}
       >
-        <VStack alignment="leading" spacing={8} padding={{ horizontal: 14, top: 12 }}>
+        <VStack key="novel-header-content" alignment="leading" spacing={8} padding={{ horizontal: 14, top: 12 }}>
           {/* 统计指标 */}
           <HStack spacing={10}>
             <HStack spacing={3}>
@@ -807,48 +1001,46 @@ export function NovelDetailView(props: { novelID: number }) {
         </VStack>
 
         {/* 正文 */}
-        <VStack
-          alignment="leading"
-          spacing={0}
-          padding={{ top: 4, bottom: 0 }}
-          frame={{ maxWidth: "infinity" }}
-        >
-          {text ? (
-            <NovelReaderView
-              text={text}
-              title={current.title}
-              markerPage={markerPage}
-              currentPage={currentPage}
-              textEmbeddedImages={textEmbeddedImages}
-              onJumpToPage={handlePageChange}
-              onReady={handleReaderReady}
-            />
-          ) : (
-            <VStack padding={{ horizontal: 14 }}>
-              <Text font="footnote" foregroundStyle="secondaryLabel">
-                {textError ?? "（正文为空）"}
-              </Text>
-            </VStack>
-          )}
-        </VStack>
+        {text ? (
+          <NovelReaderView
+            novelId={current.id}
+            text={text}
+            title={current.title}
+            markerPage={markerPage}
+            currentPage={currentPage}
+            textEmbeddedImages={textEmbeddedImages}
+            onJumpToPage={handlePageChange}
+            onReady={handleReaderReady}
+          />
+        ) : (
+          <VStack key="novel-text-empty" padding={{ horizontal: 14 }}>
+            <Text font="footnote" foregroundStyle="secondaryLabel">
+              {textError ?? "（正文为空）"}
+            </Text>
+          </VStack>
+        )}
 
         {/* 话数翻页器 */}
-        <SeriesEpisodePager
-          workID={current.id}
-          seriesID={resolvedSeriesID}
-          seriesTitle={resolvedSeriesTitle}
-          kind="novel"
-          seriesPrev={current.series_prev}
-          seriesNext={current.series_next}
-          episodeNumber={resolvedEpisodeNumber}
-        />
+        <VStack key="novel-series-pager">
+          <SeriesEpisodePager
+            workID={current.id}
+            seriesID={resolvedSeriesID}
+            seriesTitle={resolvedSeriesTitle}
+            kind="novel"
+            seriesPrev={current.series_prev}
+            seriesNext={current.series_next}
+            episodeNumber={resolvedEpisodeNumber}
+          />
+        </VStack>
 
         {/* 相关作品 */}
-        <RelatedNovelsSection
-          key={`related-novels-${current.id}`}
-          novelID={current.id}
-          ready={!loading && readerReady}
-        />
+        <VStack key={`novel-related-${current.id}`}>
+          <RelatedNovelsSection
+            key={`related-novels-${current.id}`}
+            novelID={current.id}
+            ready={!loading && readerReady}
+          />
+        </VStack>
       </VStack>
 
       <VStack

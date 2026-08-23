@@ -3,6 +3,7 @@ import { RootView } from "./src/ui/root"
 import { flushHistory, prepareHistoryStorage } from "./src/store/history"
 import { prepareSettingsStorage } from "./src/store/settings"
 import { prepareBlocklistStorage } from "./src/store/blocklist"
+import { flushNovelProgress, prepareNovelProgressStorage } from "./src/store/novelProgress"
 
 async function main() {
   try {
@@ -11,6 +12,7 @@ async function main() {
     })
     Script.onMinimize(() => {
       flushHistory()
+      flushNovelProgress()
     })
     Script.enableMinimize()
 
@@ -18,6 +20,7 @@ async function main() {
       prepareHistoryStorage(),
       prepareSettingsStorage(),
       prepareBlocklistStorage(),
+      prepareNovelProgressStorage(),
     ]).catch(() => {})
 
     await Navigation.present({
@@ -25,9 +28,11 @@ async function main() {
       modalPresentationStyle: "overFullScreen",
     })
     flushHistory()
+    flushNovelProgress()
     Script.exit()
   } catch (e) {
     flushHistory()
+    flushNovelProgress()
     console.present().then(Script.exit)
     console.error(e)
   }

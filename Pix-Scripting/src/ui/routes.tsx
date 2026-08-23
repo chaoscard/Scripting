@@ -49,7 +49,7 @@ export function renderDestination(page: string) {
   }
   if (page.startsWith("novel:")) {
     const id = parseID(page, "novel:")
-    if (id != null) return <NovelDetailView novelID={id} />
+    if (id != null) return <NovelDetailView key={`novel-${id}`} novelID={id} />
   }
   if (page.startsWith("mangaSeries:")) {
     const id = parseID(page, "mangaSeries:")
