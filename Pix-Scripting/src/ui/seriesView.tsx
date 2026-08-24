@@ -71,6 +71,7 @@ import {
 } from "./hooks"
 
 type SeriesKind = "manga" | "novel"
+type SeriesWorkItem = PixivIllustration | PixivNovel
 
 function seriesIllust(
   item: PixivIllustrationSeriesItem,
@@ -142,7 +143,6 @@ function candidateUrlOf(item: any): string | null {
   if (typeof item === "string") return item
   if (typeof item !== "object") return null
 
-  // 1. cover?.urls: 优先最高画质 original -> 1200x1200 -> 480mw -> large -> 240mw -> medium -> square_medium -> 128x128
   const coverUrls = item.cover?.urls ?? item.cover_image_urls ?? item.cover
   if (coverUrls && typeof coverUrls === "object") {
     const url =
@@ -157,12 +157,10 @@ function candidateUrlOf(item: any): string | null {
     if (url && typeof url === "string") return url
   }
 
-  // 2. meta_single_page.original_image_url
   if (item.meta_single_page?.original_image_url) {
     return item.meta_single_page.original_image_url
   }
 
-  // 3. meta_pages[0].image_urls
   if (Array.isArray(item.meta_pages) && item.meta_pages.length > 0) {
     const firstPage = item.meta_pages[0]?.image_urls
     if (firstPage) {
@@ -175,7 +173,6 @@ function candidateUrlOf(item: any): string | null {
     }
   }
 
-  // 4. image_urls: original -> large -> medium -> square_medium
   if (item.image_urls && typeof item.image_urls === "object") {
     const url =
       item.image_urls.original ??
@@ -185,7 +182,6 @@ function candidateUrlOf(item: any): string | null {
     if (url && typeof url === "string") return url
   }
 
-  // 5. item.url
   if (typeof item.url === "string" && item.url) {
     return item.url
   }
@@ -206,7 +202,10 @@ function extractRawCoverCandidate(
 }
 
 export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
-  const [title, setTitle] = useState("系列")
+  const { kind, seriesID } = props
+  const defaultTitle = kind === "manga" ? "漫画系列" : "小说系列"
+
+  const [title, setTitle] = useState(defaultTitle)
   const [caption, setCaption] = useState("")
   const [coverUrl, setCoverUrl] = useState<string | null>(null)
   const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null)
@@ -214,9 +213,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
   const authorRef = useRef<PixivUser | null>(null)
   authorRef.current = author
   const [workCount, setWorkCount] = useState<number | null>(null)
-  const [isWatched, setIsWatched] = useSeriesWatchlist(props.seriesID, props.kind, false)
-  const isWatchedRef = useRef(isWatched)
-  isWatchedRef.current = isWatched
+  const [isWatched, setIsWatched] = useSeriesWatchlist(seriesID, kind, false)
   const [watchLoading, setWatchLoading] = useState(false)
   const [isAscending, setIsAscending] = useState(
     () => loadSettings().watchlistSortOrder === "asc"
@@ -227,40 +224,137 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
   const { ambientBackground } = useUserAmbientPalette(coverPreviewUrl || coverUrl)
 
   // 全量已获取未过滤的原始数据映射池（按自然正序 1..N 存储）
-  const rawMappedIllustsRef = useRef<PixivIllustration[]>([])
-  const rawMappedNovelsRef = useRef<PixivNovel[]>([])
+  const rawMappedItemsRef = useRef<SeriesWorkItem[]>([])
 
-  // 1. 漫画系列分页流
-  const illustPaged = usePagedList<PixivIllustration>({
+  // 统一的系列分页流状态机
+  const paged = usePagedList<SeriesWorkItem>({
     first: async (token) => {
       // 若已有缓存原始数据且只是切换了排序，直接快速复用
-      if (rawMappedIllustsRef.current.length > 0) {
+      if (rawMappedItemsRef.current.length > 0) {
         const sorted = isAscendingRef.current
-          ? rawMappedIllustsRef.current
-          : [...rawMappedIllustsRef.current].reverse()
+          ? rawMappedItemsRef.current
+          : [...rawMappedItemsRef.current].reverse()
         return { items: sorted, nextURL: null }
       }
 
-      const result = await illustrationSeries(props.seriesID, token)
-      const detail = result.illust_series_detail
-      setTitle(detail.title || "漫画系列")
+      let detail: any
+      let seriesAuthor: PixivUser | null = null
+      let rawCover: string | null = null
+      let mappedItems: SeriesWorkItem[] = []
+      let totalCount = 0
+
+      if (kind === "manga") {
+        const result = await illustrationSeries(seriesID, token)
+        detail = result.illust_series_detail
+        seriesAuthor =
+          detail.user ??
+          result.illust_series_first_illust?.user ??
+          result.illusts?.[0]?.user ??
+          null
+
+        rawCover = extractRawCoverCandidate(
+          detail,
+          result.illust_series_first_illust,
+          result.illusts?.[0]
+        )
+
+        const allRawIllusts: PixivIllustrationSeriesItem[] = Array.isArray(result.illusts) ? [...result.illusts] : []
+        let currentNextURL = result.next_url ?? null
+
+        while (currentNextURL && allRawIllusts.length < 500) {
+          try {
+            const nextResult = await nextIllustrationSeries(currentNextURL, token)
+            if (Array.isArray(nextResult.illusts) && nextResult.illusts.length > 0) {
+              allRawIllusts.push(...nextResult.illusts)
+              currentNextURL = nextResult.next_url ?? null
+            } else {
+              break
+            }
+          } catch {
+            break
+          }
+        }
+
+        const rawAscending = [...allRawIllusts].reverse()
+        const sTitle = detail.title || defaultTitle
+        const illusts = rawAscending.map((it, idx) =>
+          seriesIllust(it, seriesID, sTitle, seriesAuthor, idx + 1)
+        )
+        cacheIllusts(illusts)
+        cacheSeriesNav(
+          seriesID,
+          "manga",
+          sTitle,
+          illusts.map((it) => ({
+            id: it.id,
+            title: it.title,
+            episodeNumber: it.episode_number,
+          }))
+        )
+        mappedItems = illusts
+        totalCount = detail.series_work_count ?? allRawIllusts.length
+      } else {
+        const result = await novelSeries(seriesID, token)
+        detail = result.novel_series_detail
+        seriesAuthor =
+          detail.user ??
+          result.novel_series_first_novel?.user ??
+          result.novels?.[0]?.user ??
+          null
+
+        rawCover = extractRawCoverCandidate(
+          detail,
+          result.novel_series_first_novel,
+          result.novels?.[0]
+        )
+
+        const allRawNovels: PixivNovel[] = Array.isArray(result.novels) ? [...result.novels] : []
+        let currentNextURL = result.next_url ?? null
+
+        while (currentNextURL && allRawNovels.length < 500) {
+          try {
+            const nextResult = await nextNovelSeries(currentNextURL, token)
+            if (Array.isArray(nextResult.novels) && nextResult.novels.length > 0) {
+              allRawNovels.push(...nextResult.novels)
+              currentNextURL = nextResult.next_url ?? null
+            } else {
+              break
+            }
+          } catch {
+            break
+          }
+        }
+
+        const sTitle = detail.title || defaultTitle
+        const novels: PixivNovel[] = allRawNovels.map((novel, idx) => ({
+          ...novel,
+          series: { id: seriesID, title: sTitle },
+          episode_number: idx + 1,
+        }))
+        cacheSeriesNav(
+          seriesID,
+          "novel",
+          sTitle,
+          novels.map((it) => ({
+            id: it.id,
+            title: it.title,
+            episodeNumber: it.episode_number,
+          }))
+        )
+        mappedItems = novels
+        totalCount = detail.content_count ?? allRawNovels.length
+      }
+
+      // 提取通用系列元信息
+      const resolvedTitle = detail.title || defaultTitle
+      setTitle(resolvedTitle)
       setCaption(detail.caption || "")
       const watched = Boolean(detail.watchlist_added ?? (detail as any).is_watched)
       setIsWatched(watched)
 
-      const seriesAuthor =
-        detail.user ??
-        result.illust_series_first_illust?.user ??
-        result.illusts?.[0]?.user ??
-        null
       setAuthor(seriesAuthor)
       authorRef.current = seriesAuthor
 
-      const rawCover = extractRawCoverCandidate(
-        detail,
-        result.illust_series_first_illust,
-        result.illusts?.[0]
-      )
       const cover = upgradeHighQualityCoverUrl(rawCover)
       setCoverPreviewUrl(rawCover)
       setCoverUrl(cover)
@@ -275,153 +369,34 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
         ])
       }
 
-      const allRawIllusts: PixivIllustrationSeriesItem[] = Array.isArray(result.illusts) ? [...result.illusts] : []
-      let currentNextURL = result.next_url ?? null
+      rawMappedItemsRef.current = mappedItems
+      setWorkCount(totalCount)
 
-      while (currentNextURL && allRawIllusts.length < 500) {
-        try {
-          const nextResult = await nextIllustrationSeries(currentNextURL!, token)
-          if (Array.isArray(nextResult.illusts) && nextResult.illusts.length > 0) {
-            allRawIllusts.push(...nextResult.illusts)
-            currentNextURL = nextResult.next_url ?? null
-          } else {
-            break
-          }
-        } catch {
-          break
-        }
-      }
-
-      const rawAscending = [...allRawIllusts].reverse()
-      const seriesTitle = detail.title || "漫画系列"
-      const mappedIllusts = rawAscending.map((it, idx) =>
-        seriesIllust(it, props.seriesID, seriesTitle, seriesAuthor, idx + 1)
-      )
-      cacheIllusts(mappedIllusts)
-      cacheSeriesNav(
-        props.seriesID,
-        "manga",
-        detail.title || "漫画系列",
-        mappedIllusts.map((it) => ({
-          id: it.id,
-          title: it.title,
-          episodeNumber: it.episode_number,
-        }))
-      )
-      rawMappedIllustsRef.current = mappedIllusts
-      setWorkCount(detail.series_work_count ?? allRawIllusts.length)
-
-      const sorted = isAscendingRef.current ? mappedIllusts : [...mappedIllusts].reverse()
+      const sorted = isAscendingRef.current ? mappedItems : [...mappedItems].reverse()
       return { items: sorted, nextURL: null }
     },
-    filter: (items) => filterSeriesIllusts(items),
-    deps: [props.seriesID, isAscending],
-    enabled: props.kind === "manga",
-    onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
-  })
-
-  // 2. 小说系列分页流
-  const novelPaged = usePagedList<PixivNovel>({
-    first: async (token) => {
-      // 若已有缓存原始数据且只是切换了排序，直接快速复用
-      if (rawMappedNovelsRef.current.length > 0) {
-        const sorted = isAscendingRef.current
-          ? rawMappedNovelsRef.current
-          : [...rawMappedNovelsRef.current].reverse()
-        return { items: sorted, nextURL: null }
-      }
-
-      const result = await novelSeries(props.seriesID, token)
-      const detail = result.novel_series_detail
-      setTitle(detail.title || "小说系列")
-      setCaption(detail.caption || "")
-      const watched = Boolean(detail.watchlist_added ?? (detail as any).is_watched)
-      setIsWatched(watched)
-
-      const seriesAuthor =
-        detail.user ??
-        result.novel_series_first_novel?.user ??
-        result.novels?.[0]?.user ??
-        null
-      setAuthor(seriesAuthor)
-      authorRef.current = seriesAuthor
-
-      const rawCover = extractRawCoverCandidate(
-        detail,
-        result.novel_series_first_novel,
-        result.novels?.[0]
-      )
-      const cover = upgradeHighQualityCoverUrl(rawCover)
-      setCoverPreviewUrl(rawCover)
-      setCoverUrl(cover)
-
-      // 预热封面背景图，防止首次渲染时高度跳动
-      const targetPreheatUrl = rawCover || cover
-      const preheatDuration = loadSettings().backgroundPreheatDuration ?? 1000
-      if (targetPreheatUrl && !cachedFileExists(targetPreheatUrl) && preheatDuration > 0) {
-        await Promise.race([
-          loadImage(targetPreheatUrl, 0),
-          new Promise((resolve) => setTimeout(() => resolve(null), preheatDuration)),
-        ])
-      }
-
-      const allRawNovels: PixivNovel[] = Array.isArray(result.novels) ? [...result.novels] : []
-      let currentNextURL = result.next_url ?? null
-
-      while (currentNextURL && allRawNovels.length < 500) {
-        try {
-          const nextResult = await nextNovelSeries(currentNextURL!, token)
-          if (Array.isArray(nextResult.novels) && nextResult.novels.length > 0) {
-            allRawNovels.push(...nextResult.novels)
-            currentNextURL = nextResult.next_url ?? null
-          } else {
-            break
-          }
-        } catch {
-          break
-        }
-      }
-
-      const novelSeriesTitle = detail.title || "小说系列"
-      const mappedNovels = allRawNovels.map((novel, idx) => ({
-        ...novel,
-        series: { id: props.seriesID, title: novelSeriesTitle },
-        episode_number: idx + 1,
-      }))
-      cacheSeriesNav(
-        props.seriesID,
-        "novel",
-        detail.title || "小说系列",
-        mappedNovels.map((it) => ({
-          id: it.id,
-          title: it.title,
-          episodeNumber: it.episode_number,
-        }))
-      )
-      rawMappedNovelsRef.current = mappedNovels
-      setWorkCount(detail.content_count ?? allRawNovels.length)
-
-      const sorted = isAscendingRef.current ? mappedNovels : [...mappedNovels].reverse()
-      return { items: sorted, nextURL: null }
+    filter: (items) =>
+      kind === "manga"
+        ? filterSeriesIllusts(items as PixivIllustration[])
+        : filterSeriesNovels(items as PixivNovel[]),
+    deps: [seriesID, isAscending, kind],
+    onBatchPublished: (_, pendingItems) => {
+      const batch = pendingItems.slice(0, currentBatchSize())
+      const urls = kind === "manga"
+        ? batch.map((it) => cardThumbUrlOf(it as PixivIllustration))
+        : batch.map((it) => novelThumbUrlOf(it as PixivNovel))
+      return prefetch(urls).cancel
     },
-    filter: (items) => filterSeriesNovels(items),
-    deps: [props.seriesID, isAscending],
-    enabled: props.kind === "novel",
-    onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
   })
 
-  const illustPagedRef = useLatest(illustPaged)
-  const novelPagedRef = useLatest(novelPaged)
-
+  const pagedRef = useLatest(paged)
   const [seriesDownloading, setSeriesDownloading] = useState(false)
 
   async function handleExportSeries() {
     if (seriesDownloading) return
     void Haptics.transient()
 
-    if (props.kind === "novel") {
+    if (kind === "novel") {
       const confirmed = await Dialog.confirm({
         title: "下载整本小说",
         message: `确认下载《${title}》整本 EPUB 小说？`,
@@ -432,7 +407,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
 
       setSeriesDownloading(true)
       try {
-        const filePath = await downloadEntireNovelSeries(props.seriesID, title)
+        const filePath = await downloadEntireNovelSeries(seriesID, title)
         if (filePath) {
           void Haptics.transient()
           await ShareSheet.present([filePath])
@@ -453,7 +428,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
       const format: "cbz" | "epub" = choice === 0 ? "cbz" : "epub"
       setSeriesDownloading(true)
       try {
-        const filePath = await downloadEntireMangaSeries(props.seriesID, title, format)
+        const filePath = await downloadEntireMangaSeries(seriesID, title, format)
         if (filePath) {
           void Haptics.transient()
           await ShareSheet.present([filePath])
@@ -471,10 +446,10 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
     const nextState = !isWatched
     try {
       if (nextState) {
-        await session.call((token) => addWatchlistSeries(props.seriesID, props.kind, token))
+        await session.call((token) => addWatchlistSeries(seriesID, kind, token))
         setIsWatched(true)
       } else {
-        await session.call((token) => deleteWatchlistSeries(props.seriesID, props.kind, token))
+        await session.call((token) => deleteWatchlistSeries(seriesID, kind, token))
         setIsWatched(false)
       }
     } catch {
@@ -489,16 +464,12 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
       const nextSettings = loadSettings()
       const targetAsc = nextSettings.watchlistSortOrder === "asc"
       setIsAscending(targetAsc)
-      if (props.kind === "manga") illustPagedRef.current.reapplyFilter()
-      else novelPagedRef.current.reapplyFilter()
+      pagedRef.current.reapplyFilter()
     })
-  }, [props.kind])
-
-  const paged = props.kind === "manga" ? illustPaged : novelPaged
+  }, [kind])
 
   const handleRefresh = async () => {
-    rawMappedIllustsRef.current = []
-    rawMappedNovelsRef.current = []
+    rawMappedItemsRef.current = []
     await paged.refresh()
   }
 
@@ -558,11 +529,11 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
           <Button
             action={() => {
               void Haptics.transient()
-              const shareUrl = props.kind === "novel"
-                ? `https://www.pixiv.net/novel/series/${props.seriesID}`
+              const shareUrl = kind === "novel"
+                ? `https://www.pixiv.net/novel/series/${seriesID}`
                 : (author?.id
-                    ? `https://www.pixiv.net/user/${author.id}/series/${props.seriesID}`
-                    : `https://www.pixiv.net/series/${props.seriesID}`)
+                    ? `https://www.pixiv.net/user/${author.id}/series/${seriesID}`
+                    : `https://www.pixiv.net/series/${seriesID}`)
               void ShareSheet.present([shareUrl])
             }}
           >
@@ -594,7 +565,6 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
       <VStack alignment="leading" spacing={0} frame={{ maxWidth: "infinity" }}>
         {/* 沉浸式顶部背景图与居中悬浮胶囊标题 */}
         <ImmersiveHeaderBanner url={coverUrl} previewUrl={coverPreviewUrl}>
-          {/* 胶囊状液态玻璃标题：垂直中心线对齐封面底边（参考用户主页头像位置） */}
           <HStack
             alignment="center"
             padding={{ horizontal: 20, vertical: 9 }}
@@ -621,7 +591,6 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
           padding={{ top: 28, horizontal: 16, bottom: 8 }}
           frame={{ maxWidth: "infinity" }}
         >
-          {/* 共多少话居中显示，放在标题下方，字体加大一号 (caption) */}
           {workCount != null ? (
             <Text
               font="caption"
@@ -633,7 +602,6 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
             </Text>
           ) : null}
 
-          {/* 如果有简介，用玻璃卡片包裹起来，要求和用户主页简介样式一致，没有不显示 */}
           {caption.trim() ? (
             <VStack
               alignment="leading"
@@ -648,29 +616,29 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
           ) : null}
         </VStack>
 
-        {/* 章节列表 */}
-        {props.kind === "novel" ? (
+        {/* 章节列表分流 */}
+        {kind === "novel" ? (
           <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10, top: 4 }}>
-            {novelPaged.items.length === 0 && !novelPaged.initialLoading ? (
+            {paged.items.length === 0 && !paged.initialLoading ? (
               <EmptyView
                 text={
-                  novelPaged.hasFilteredContent
+                  paged.hasFilteredContent
                     ? "当前页面部分小说被内容显示设置过滤，暂时无法显示"
                     : "暂无可显示的小说章节"
                 }
-                systemImage={novelPaged.hasFilteredContent ? "eye.slash" : "book"}
+                systemImage={paged.hasFilteredContent ? "eye.slash" : "book"}
               />
             ) : (
               <>
-                {novelPaged.items.map((novel, index) => (
+                {(paged.items as PixivNovel[]).map((novel, index) => (
                   <NovelCard key={novel.id} novel={novel} priority={index} />
                 ))}
-                {novelPaged.items.length > 0 ? (
+                {paged.items.length > 0 ? (
                   <LoadMoreTrigger
-                    anchor={novelPaged.items[novelPaged.items.length - 1].id}
-                    onLoadMore={novelPaged.loadMore}
-                    hasMore={novelPaged.hasMore}
-                    isLoading={novelPaged.loadingMore}
+                    anchor={paged.items[paged.items.length - 1].id}
+                    onLoadMore={paged.loadMore}
+                    hasMore={paged.hasMore}
+                    isLoading={paged.loadingMore}
                   />
                 ) : null}
               </>
@@ -678,28 +646,28 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
           </LazyVStack>
         ) : (
           <VStack alignment="leading" spacing={8} padding={{ top: 4 }} frame={{ maxWidth: "infinity" }}>
-            {illustPaged.items.length === 0 && !illustPaged.initialLoading ? (
+            {paged.items.length === 0 && !paged.initialLoading ? (
               <EmptyView
                 text={
-                  illustPaged.hasFilteredContent
+                  paged.hasFilteredContent
                     ? "当前页面部分作品被内容显示设置过滤，暂时无法显示"
                     : "暂无可显示的漫画章节"
                 }
-                systemImage={illustPaged.hasFilteredContent ? "eye.slash" : "photo.on.rectangle"}
+                systemImage={paged.hasFilteredContent ? "eye.slash" : "photo.on.rectangle"}
               />
             ) : (
               <IllustFlowFeed
-                items={illustPaged.items}
-                onLoadMore={illustPaged.loadMore}
-                hasMore={illustPaged.hasMore}
-                isLoading={illustPaged.loadingMore}
+                items={paged.items as PixivIllustration[]}
+                onLoadMore={paged.loadMore}
+                hasMore={paged.hasMore}
+                isLoading={paged.loadingMore}
                 cornerBadgeOf={(illust, index) => (
                   <ImageNumberBadge
                     number={
                       illust.episode_number ??
                       (isAscending
                         ? index + 1
-                        : (workCount ?? rawMappedIllustsRef.current.length) - index)
+                        : (workCount ?? rawMappedItemsRef.current.length) - index)
                     }
                   />
                 )}

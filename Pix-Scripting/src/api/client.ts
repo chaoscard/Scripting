@@ -168,19 +168,20 @@ export interface RequestOptions {
   body?: string
   timeout?: number
   skipPace?: boolean
-  allowedOrigin?: string
+  allowedOrigin?: string | string[]
 }
 
-function assertAllowedURL(url: string, allowedOrigin: string): void {
+function assertAllowedURL(url: string, allowedOrigin: string | string[]): void {
   let parsed: URL
   try {
     parsed = new URL(url)
   } catch {
     throw new PixivError(0, "无效的请求地址")
   }
+  const allowed = Array.isArray(allowedOrigin) ? allowedOrigin : [allowedOrigin]
   if (
     parsed.protocol !== "https:" ||
-    parsed.origin !== allowedOrigin ||
+    !allowed.includes(parsed.origin) ||
     parsed.username !== "" ||
     parsed.password !== ""
   ) {
@@ -361,7 +362,7 @@ export async function apiGetText(
 // 请求公开网页文本，不携带 Pixiv Authorization，并限制首跳及重定向 Origin。
 export async function apiGetPublicText(
   url: string,
-  allowedOrigin: string,
+  allowedOrigin: string | string[],
   accept = "text/html",
   extraHeaders?: Record<string, string>
 ): Promise<string> {
@@ -384,7 +385,7 @@ export async function apiGetPublicText(
 // 请求公开网页 JSON，不携带 Pixiv Authorization，并限制首跳及重定向 Origin。
 export async function apiGetPublicJson<T = any>(
   url: string,
-  allowedOrigin: string,
+  allowedOrigin: string | string[],
   extraHeaders?: Record<string, string>
 ): Promise<T> {
   return withTransientRetry(async () => {

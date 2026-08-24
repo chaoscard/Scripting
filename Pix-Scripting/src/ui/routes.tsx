@@ -3,7 +3,7 @@
 import { NavigationDestination, VStack } from "scripting"
 import { session } from "../api/session"
 import { IllustDetailView } from "./illustDetail"
-import { VisionDetailView } from "./visionDetail"
+import { PixivisionDetailView } from "./pixivisionDetail"
 import { UserDetailView } from "./userDetail"
 import { NovelDetailView } from "./novelDetail"
 import { TagFeedView } from "./tagFeed"
@@ -39,9 +39,9 @@ export function renderDestination(page: string) {
     const id = parseID(page, "illust:")
     if (id != null) return <IllustDetailView illustID={id} />
   }
-  if (page.startsWith("vision:")) {
-    const id = parseID(page, "vision:")
-    if (id != null) return <VisionDetailView articleID={id} />
+  if (page.startsWith("pixivision:")) {
+    const id = parseID(page, "pixivision:")
+    if (id != null) return <PixivisionDetailView articleID={id} />
   }
   if (page.startsWith("user:")) {
     const id = parseID(page, "user:")

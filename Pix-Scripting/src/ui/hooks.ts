@@ -230,6 +230,8 @@ export interface UsePagedListOptions<T> {
   enabled?: boolean
   // 黑名单或内容设置变更时自动重过滤当前列表（默认 true）
   autoReapplyOnFilterChange?: boolean
+  // 是否需要 OAuth 登录态；公开接口（如 Pixivision）设为 false，未登录或刷新时不阻塞（默认 true）
+  requiresAuth?: boolean
   // 每次发布 UI 批次后通知调用方；pendingItems 是紧随本批的待展示项目，
   // 用于只预取下一批缩略图。返回的 cleanup 会在下一批、刷新或失活时调用。
   onBatchPublished?: (items: T[], pendingItems: T[]) => void | (() => void)
@@ -247,6 +249,7 @@ export function usePagedList<T extends { id: number | string }>(
     deps,
     enabled = true,
     autoReapplyOnFilterChange = true,
+    requiresAuth = true,
     onBatchPublished,
   } = opts
   const [items, setItems] = useState<T[]>([])
@@ -350,8 +353,13 @@ export function usePagedList<T extends { id: number | string }>(
       setNextURL(null)
       consumedTailRef.current = null
     }
+    const fetchFirst = (fn: (token: string) => Promise<PageResult<T>>) =>
+      requiresAuth ? session.call(fn) : fn("")
+    const fetchMore = (fn: (url: string, token: string) => Promise<PageResult<T>>, url: string) =>
+      requiresAuth ? session.call((token) => fn(url, token)) : fn(url, "")
+
     try {
-      let page = await session.call((token) => firstRef.current(token))
+      let page = await fetchFirst(firstRef.current)
       if (
         seq !== seqRef.current ||
         activation !== activationRef.current ||
@@ -383,7 +391,7 @@ export function usePagedList<T extends { id: number | string }>(
       ) {
         const url = nextPageURL
         visitedURLs.add(url)
-        page = await session.call((token) => moreRef.current!(url, token))
+        page = await fetchMore(moreRef.current!, url)
         if (
           seq !== seqRef.current ||
           activation !== activationRef.current ||
@@ -503,7 +511,9 @@ export function usePagedList<T extends { id: number | string }>(
         const fetchUrl: string = nextPageURL
         visitedURLs.add(fetchUrl)
         const [page]: [PageResult<T>, unknown] = await Promise.all([
-          session.call((token) => moreFn(fetchUrl, token)),
+          requiresAuth
+            ? session.call((token) => moreFn(fetchUrl, token))
+            : moreFn(fetchUrl, ""),
           attempts === 1
             ? waitForPaginationFeedback()
             : Promise.resolve(),

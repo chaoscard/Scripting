@@ -15,10 +15,10 @@ import {
   newNovels,
   nextIllustrations,
   nextNovels,
-  nextVision,
+  nextPixivision,
+  pixivisionHome,
   recommendedNovels,
   recommendations,
-  visionHome,
 } from "../api/pixiv"
 import { cardThumbUrlOf, novelThumbUrlOf, prefetch } from "../image/imageLoader"
 import {
@@ -34,7 +34,7 @@ import { useLatest, usePagedList, currentBatchSize } from "./hooks"
 import type {
   PixivIllustration,
   PixivNovel,
-  PixivVisionArticle,
+  PixivisionArticle,
 } from "../types"
 import {
   appToolbar,
@@ -45,11 +45,11 @@ import {
   IllustFlowFeed,
   NovelCard,
   RefreshableScrollView,
-  VisionCard,
+  PixivisionCard,
 } from "./components"
 
-type ExploreMode = "recommended" | "latest" | "vision"
-type FeedMode = Exclude<ExploreMode, "vision">
+type ExploreMode = "recommended" | "latest" | "pixivision"
+type FeedMode = Exclude<ExploreMode, "pixivision">
 type FeedKind = "illustration" | "manga" | "novel"
 
 export function DiscoveryView(props: { onClose: () => void }) {
@@ -84,12 +84,12 @@ export function DiscoveryView(props: { onClose: () => void }) {
           if (!activated) setActivated(true)
         }}
       >
-        {mode === "vision" ? null : (
+        {mode === "pixivision" ? null : (
           <FeedKindPicker kind={kind} hideNovels={hideNovels} onKindChange={setKind} />
         )}
-        {mode === "vision" ? (
-          <VisionExploreFeed
-            key="vision"
+        {mode === "pixivision" ? (
+          <PixivisionExploreFeed
+            key="pixivision"
             enabled={activated}
             onRegisterRefresh={(fn) => {
               refreshHandlerRef.current = fn
@@ -263,26 +263,27 @@ function LatestExploreFeed(props: {
   return <NovelFeedContent paged={novelPaged} label="最新作品" />
 }
 
-function VisionExploreFeed(props: {
+function PixivisionExploreFeed(props: {
   enabled?: boolean
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
   const { enabled = true, onRegisterRefresh } = props
 
-  const visionPaged = usePagedList<PixivVisionArticle>({
-    first: (token) => visionHome(token),
-    more: (nextURL, token) => nextVision(nextURL, token),
+  const paged = usePagedList<PixivisionArticle>({
+    first: () => pixivisionHome(),
+    more: (nextURL) => nextPixivision(nextURL),
     deps: [],
     enabled,
+    requiresAuth: false,
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map((item) => item.imageURL)).cancel,
   })
 
   useEffect(() => {
-    onRegisterRefresh?.(visionPaged.refresh)
-  }, [visionPaged.refresh, onRegisterRefresh])
+    onRegisterRefresh?.(paged.refresh)
+  }, [paged.refresh, onRegisterRefresh])
 
-  return <VisionFeedContent paged={visionPaged} />
+  return <PixivisionFeedContent paged={paged} />
 }
 
 function exploreToolbar(props: {
@@ -307,7 +308,7 @@ function exploreToolbar(props: {
       >
         <Label tag="recommended" title="推荐" systemImage="sparkles" />
         <Label tag="latest" title="最新" systemImage="clock" />
-        <Label tag="vision" title="专辑" systemImage="rectangle.stack" />
+        <Label tag="pixivision" title="专辑" systemImage="rectangle.stack" />
       </Picker>
     </Menu>
   )
@@ -413,8 +414,8 @@ function NovelFeedContent(props: {
   )
 }
 
-function VisionFeedContent(props: {
-  paged: ReturnType<typeof usePagedList<PixivVisionArticle>>
+function PixivisionFeedContent(props: {
+  paged: ReturnType<typeof usePagedList<PixivisionArticle>>
 }) {
   const { paged } = props
   return (
@@ -428,7 +429,7 @@ function VisionFeedContent(props: {
       ) : (
         <LazyVStack alignment="leading" spacing={12}>
           {paged.items.map((article, index) => (
-            <VisionCard key={article.id} article={article} priority={index} />
+            <PixivisionCard key={article.id} article={article} priority={index} />
           ))}
           <LoadMoreTrigger
             anchor={paged.items[paged.items.length - 1].id}

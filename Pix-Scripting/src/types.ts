@@ -72,7 +72,7 @@ export interface PixivIllustration {
   comment_access_control: number
 }
 
-export interface PixivVisionArticle {
+export interface PixivisionArticle {
   id: number
   title: string
   imageURL: string
@@ -80,20 +80,20 @@ export interface PixivVisionArticle {
   category: string
 }
 
-export interface PixivVisionArtwork {
+export interface PixivisionArtwork {
   id: number
   title: string
   imageURL: string
 }
 
-export interface PixivVisionDetail {
+export interface PixivisionDetail {
   id: number
   title: string
   date: string
   category: string
   description: string
-  artworks: PixivVisionArtwork[]
-  embeddedArticles: PixivVisionArticle[]
+  artworks: PixivisionArtwork[]
+  embeddedArticles: PixivisionArticle[]
 }
 
 export interface PixivPage<T> {
