@@ -1,5 +1,6 @@
 import type {
   PixivAutocompleteResponse,
+  PixivAutocompleteTag,
   PixivBookmarkDetail,
   PixivBookmarkDetailResponse,
   PixivBookmarkTag,
@@ -32,6 +33,7 @@ import type {
   PixivUserPreview,
   PixivUserPreviewListResponse,
   PixivWebUserDetail,
+  SearchOptions,
   TextEmbeddedImage,
   UgoiraMetadataResponse,
 } from "../types"
@@ -58,16 +60,6 @@ export type NewWorkKind = "illustration" | "manga"
 export type Visibility = "public" | "private"
 export type FollowRestriction = "all" | Visibility
 export type UserConnectionKind = "following" | "follower"
-
-export interface SearchOptions {
-  target: string
-  sort: string
-  aiFilter?: number
-  word: string
-  startDate?: string
-  endDate?: string
-  bookmarkThreshold?: number
-}
 
 // ---------- 推荐 ----------
 
@@ -682,12 +674,18 @@ export async function searchIllustrations(
 export async function searchAutocomplete(
   word: string,
   accessToken: string
-): Promise<{ name: string; translated_name?: string | null }[]> {
+): Promise<PixivAutocompleteTag[]> {
   const json = await apiGet<PixivAutocompleteResponse>(
     "/v2/search/autocomplete",
     { merge_plain_keyword_results: "true", word },
     accessToken
   )
+  if (Array.isArray(json?.tags) && json.tags.length > 0) {
+    return json.tags
+  }
+  if (Array.isArray(json?.search_auto_complete_keywords)) {
+    return json.search_auto_complete_keywords.map((name) => ({ name }))
+  }
   return json?.tags ?? []
 }
 
@@ -712,6 +710,28 @@ export async function trendingTags(
     accessToken
   )
   return json?.trend_tags ?? []
+}
+
+export async function trendingNovelTags(
+  accessToken: string
+): Promise<PixivTrendingTag[]> {
+  const json = await apiGet<PixivTrendingTagsResponse>(
+    "/v1/trending-tags/novel",
+    { filter: "for_ios" },
+    accessToken
+  )
+  return json?.trend_tags ?? []
+}
+
+export async function recommendedUsers(
+  accessToken: string
+): Promise<PixivPage<PixivUserPreview>> {
+  const json = await apiGet<PixivUserPreviewListResponse>(
+    "/v1/user/recommended",
+    { filter: "for_ios" },
+    accessToken
+  )
+  return { items: json?.user_previews ?? [], nextURL: json?.next_url ?? null }
 }
 
 // ---------- 作品详情 ----------
@@ -1279,13 +1299,27 @@ export async function deleteNovelMarker(
 }
 
 export async function searchNovels(
-  word: string,
-  sort: "date_desc" | "popular_desc" | "date_asc",
+  options: SearchOptions,
   accessToken: string
 ): Promise<PixivPage<PixivNovel>> {
+  const query: Record<string, string> = {
+    filter: "for_ios",
+    merge_plain_keyword_results: "true",
+    search_target: options.target || "partial_match_for_tags",
+    sort: options.sort || "date_desc",
+    word: options.word,
+  }
+  if (options.aiFilter != null) {
+    query["search_ai_type"] = String(options.aiFilter)
+  }
+  if (options.startDate) query["start_date"] = options.startDate
+  if (options.endDate) query["end_date"] = options.endDate
+  if (options.bookmarkThreshold && options.bookmarkThreshold > 0) {
+    query["word"] = `${options.word} ${options.bookmarkThreshold}users入り`
+  }
   const json = await apiGet<PixivNovelListResponse>(
     "/v1/search/novel",
-    { search_target: "partial_match_for_tags", sort, word },
+    query,
     accessToken
   )
   return { items: json?.novels ?? [], nextURL: json?.next_url ?? null }

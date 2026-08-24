@@ -187,7 +187,8 @@ export interface PixivUserPreview {
 export interface PixivTrendingTag {
   tag: string
   translated_name?: string | null
-  illust: { id: number; image_urls: PixivImageUrls }
+  illust?: { id: number; title?: string; image_urls: PixivImageUrls } | PixivIllustration
+  novel?: { id: number; title?: string; image_urls: PixivImageUrls } | PixivNovel
 }
 
 export interface PixivStamp {
@@ -498,11 +499,14 @@ export interface PixivNovelMarkersResponse {
   next_url?: string | null
 }
 
+export interface PixivAutocompleteTag {
+  name: string
+  translated_name?: string | null
+}
+
 export interface PixivAutocompleteResponse {
-  tags: Array<{
-    name: string
-    translated_name?: string | null
-  }>
+  tags?: PixivAutocompleteTag[]
+  search_auto_complete_keywords?: string[]
 }
 
 export interface PixivNotificationContent {
@@ -532,3 +536,71 @@ export interface PixivNotificationListResponse {
   notifications: PixivNotification[]
   next_url?: string | null
 }
+
+// ---------- 高级搜索相关类型 ----------
+
+export type SearchScope = "illust" | "novel" | "user"
+
+export type SearchCategory =
+  | "all_illust"
+  | "illust"
+  | "manga"
+  | "ugoira"
+  | "novel"
+
+export type SearchTargetIllust =
+  | "partial_match_for_tags"
+  | "exact_match_for_tags"
+  | "title_and_caption"
+
+export type SearchTargetNovel =
+  | "partial_match_for_tags"
+  | "exact_match_for_tags"
+  | "text"
+  | "keyword"
+
+export type SearchSort =
+  | "date_desc"
+  | "popular_desc"
+  | "date_asc"
+  | "popular_male_desc"
+  | "popular_female_desc"
+
+export type SearchMediaFilter = "all" | "illust" | "manga" | "ugoira"
+
+export type BookmarkThreshold =
+  | 0
+  | 300
+  | 500
+  | 1000
+  | 5000
+  | 10000
+  | 20000
+  | 30000
+  | 50000
+
+export interface SearchOptions {
+  target: string
+  sort: string
+  aiFilter?: number
+  word: string
+  startDate?: string
+  endDate?: string
+  bookmarkThreshold?: number
+}
+
+export interface AdvancedSearchParams {
+  word: string
+  category: SearchCategory
+  scope: SearchScope
+  target: string
+  sort: SearchSort
+  mediaFilter: SearchMediaFilter
+  bookmarkThreshold: BookmarkThreshold
+  useDateRange: boolean
+  startDate: string // "YYYY-MM-DD"
+  endDate: string // "YYYY-MM-DD"
+  startTimestamp: number
+  endTimestamp: number
+}
+

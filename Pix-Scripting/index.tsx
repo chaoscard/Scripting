@@ -4,6 +4,7 @@ import { flushHistory, prepareHistoryStorage } from "./src/store/history"
 import { prepareSettingsStorage } from "./src/store/settings"
 import { prepareBlocklistStorage } from "./src/store/blocklist"
 import { flushNovelProgress, prepareNovelProgressStorage } from "./src/store/novelProgress"
+import { prepareSearchHistoryStorage } from "./src/store/searchHistory"
 
 async function main() {
   try {
@@ -21,6 +22,7 @@ async function main() {
       prepareSettingsStorage(),
       prepareBlocklistStorage(),
       prepareNovelProgressStorage(),
+      prepareSearchHistoryStorage(),
     ]).catch(() => {})
 
     await Navigation.present({
