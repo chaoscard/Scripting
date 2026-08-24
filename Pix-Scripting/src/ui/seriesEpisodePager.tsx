@@ -60,7 +60,7 @@ export function useSeriesEpisodeNav(options: UseSeriesEpisodeNavOptions): Series
       return {
         seriesID: null,
         seriesTitle: defaultTitle,
-        episodeNumber: null,
+        episodeNumber: episodeNumberFallback,
         hasPrev: false,
         prevID: null,
         hasNext: false,
@@ -106,7 +106,7 @@ export function useSeriesEpisodeNav(options: UseSeriesEpisodeNavOptions): Series
       setState({
         seriesID: null,
         seriesTitle: defaultTitle,
-        episodeNumber: null,
+        episodeNumber: episodeNumberFallback,
         hasPrev: false,
         prevID: null,
         hasNext: false,

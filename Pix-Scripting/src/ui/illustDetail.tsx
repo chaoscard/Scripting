@@ -84,6 +84,7 @@ import {
   formatNumber,
   LoadingView,
   SeriesEpisodePager,
+  useSeriesEpisodeNav,
   TagChip,
 } from "./components"
 import { CommentsSheet } from "./comments"
@@ -162,6 +163,25 @@ export function IllustDetailView(props: { illustID: number }) {
   const errorRef = useLatest(error)
   // 同一实例只记录一次浏览（下拉刷新/重试不重复刷新 viewedAt）；换作品时重置
   const recordedIDRef = useRef<number | null>(null)
+
+  const cachedIllust = getCachedIllust(illustID)
+  const currentIllust = illust ?? cachedIllust
+  const rawSeries = currentIllust?.series ?? (currentIllust as any)?.illust_series
+  const rawSeriesObj = Array.isArray(rawSeries) ? rawSeries[0] : rawSeries
+  const associatedRef = getSeriesByWorkID(illustID, "manga")
+  const resolvedSeriesID = rawSeriesObj?.id ?? associatedRef?.seriesID ?? null
+  const resolvedSeriesTitle = rawSeriesObj?.title ?? associatedRef?.seriesTitle ?? null
+  const resolvedEpisodeNumber = currentIllust?.episode_number ?? associatedRef?.episodeNumber ?? null
+
+  const seriesNav = useSeriesEpisodeNav({
+    workID: illustID,
+    seriesID: resolvedSeriesID,
+    seriesTitleFallback: resolvedSeriesTitle,
+    kind: "manga",
+    initialEpisodeNumber: resolvedEpisodeNumber,
+  })
+
+  const episodeNumber = seriesNav.episodeNumber ?? resolvedEpisodeNumber
 
   async function load(clear = !illustRef.current) {
     const g = guard()
@@ -368,15 +388,9 @@ export function IllustDetailView(props: { illustID: number }) {
   }
 
   const current = illust
-  const rawSeries = current.series ?? (current as any).illust_series
-  const rawSeriesObj = Array.isArray(rawSeries) ? rawSeries[0] : rawSeries
-  const associatedRef = getSeriesByWorkID(current.id, "manga")
-  const resolvedSeriesID = rawSeriesObj?.id ?? associatedRef?.seriesID ?? null
-  const resolvedSeriesTitle = rawSeriesObj?.title ?? associatedRef?.seriesTitle ?? null
-  const resolvedEpisodeNumber = current.episode_number ?? associatedRef?.episodeNumber ?? null
 
   if (resolvedSeriesID) {
-    recordWorkSeriesAssociation(current.id, "manga", resolvedSeriesID, resolvedSeriesTitle, resolvedEpisodeNumber)
+    recordWorkSeriesAssociation(current.id, "manga", resolvedSeriesID, resolvedSeriesTitle, episodeNumber)
   }
 
   const pageCount = Math.max(1, current.page_count || current.meta_pages.length || 1)
@@ -810,6 +824,12 @@ export function IllustDetailView(props: { illustID: number }) {
                   action={() => Pasteboard.setString(`页数：${pageCount}页`)}
                 />
               )}
+              {episodeNumber != null && (
+                <Button
+                  title={`话数：第${episodeNumber}话`}
+                  action={() => Pasteboard.setString(`第${episodeNumber}话`)}
+                />
+              )}
               {Boolean(current.width && current.height) && (
                 <Button
                   title={`分辨率：${current.width}×${current.height}`}
@@ -916,6 +936,11 @@ export function IllustDetailView(props: { illustID: number }) {
                 </Text>
               </HStack>
             )}
+            {episodeNumber != null && (
+              <Text font="footnote">
+                {`第${episodeNumber}话`}
+              </Text>
+            )}
             <Text font="footnote">
               {formatDate(current.create_date)}
             </Text>
@@ -956,7 +981,7 @@ export function IllustDetailView(props: { illustID: number }) {
           seriesID={resolvedSeriesID}
           seriesTitle={resolvedSeriesTitle}
           kind="manga"
-          episodeNumber={resolvedEpisodeNumber}
+          episodeNumber={episodeNumber}
         />
 
         <RelatedIllustrationsSection

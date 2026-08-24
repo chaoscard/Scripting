@@ -224,10 +224,11 @@ export function RankingView(props: { onClose: () => void }) {
           />
         ) : null}
 
+        {/* 右上角菜单切换分类时销毁非激活分类内存；分类内部横向Picker切换时保持已访问模式挂载，0 重载 0 转圈 */}
         {kind === "illustration" ? (
-          <IllustRankingFeed
-            key={`illust-${illustrationMode}`}
-            mode={illustrationMode}
+          <IllustRankingSection
+            key="ranking-illust"
+            selectedMode={illustrationMode}
             label="插画"
             enabled={activated}
             onRegisterRefresh={(fn) => {
@@ -235,9 +236,9 @@ export function RankingView(props: { onClose: () => void }) {
             }}
           />
         ) : kind === "manga" ? (
-          <IllustRankingFeed
-            key={`manga-${mangaMode}`}
-            mode={mangaMode}
+          <IllustRankingSection
+            key="ranking-manga"
+            selectedMode={mangaMode}
             label="漫画"
             enabled={activated}
             onRegisterRefresh={(fn) => {
@@ -245,30 +246,19 @@ export function RankingView(props: { onClose: () => void }) {
             }}
           />
         ) : kind === "novel" ? (
-          <NovelRankingFeed
-            key={`novel-${novelMode}`}
-            mode={novelMode}
-            enabled={activated}
-            onRegisterRefresh={(fn) => {
-              refreshHandlerRef.current = fn
-            }}
-          />
-        ) : advancedParams.category === "novel" ? (
-          <NovelRankingFeed
-            key={`adv-novel-${advancedParams.mode}-${advancedParams.date}`}
-            mode={advancedParams.mode}
-            date={advancedParams.date}
+          <NovelRankingSection
+            key="ranking-novel"
+            selectedMode={novelMode}
             enabled={activated}
             onRegisterRefresh={(fn) => {
               refreshHandlerRef.current = fn
             }}
           />
         ) : (
-          <IllustRankingFeed
-            key={`adv-${advancedParams.category}-${advancedParams.mode}-${advancedParams.date}`}
-            mode={advancedParams.mode}
-            date={advancedParams.date}
-            label={advancedParams.category === "manga" ? "漫画" : "插画"}
+          <AdvancedRankingFeedItem
+            key={`ranking-advanced-${advancedParams.category}-${advancedParams.mode}-${advancedParams.date}`}
+            params={advancedParams}
+            active={true}
             enabled={activated}
             onRegisterRefresh={(fn) => {
               refreshHandlerRef.current = fn
@@ -407,14 +397,85 @@ function RankingModePicker(props: {
   )
 }
 
-function IllustRankingFeed(props: {
-  mode: string
+function IllustRankingSection(props: {
+  selectedMode: string
   label: "插画" | "漫画"
-  date?: string | null
   enabled?: boolean
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { mode, label, date = null, enabled = true, onRegisterRefresh } = props
+  const { selectedMode, label, enabled = true, onRegisterRefresh } = props
+  const [visitedModes, setVisitedModes] = useState<string[]>(() => [selectedMode])
+
+  useEffect(() => {
+    if (selectedMode) {
+      setVisitedModes((prev) =>
+        prev.includes(selectedMode) ? prev : [...prev, selectedMode]
+      )
+    }
+  }, [selectedMode])
+
+  return (
+    <>
+      {visitedModes.map((m) => {
+        const isCurrent = selectedMode === m
+        return (
+          <IllustRankingFeedItem
+            key={m}
+            mode={m}
+            label={label}
+            active={isCurrent}
+            enabled={enabled && isCurrent}
+            onRegisterRefresh={onRegisterRefresh}
+          />
+        )
+      })}
+    </>
+  )
+}
+
+function NovelRankingSection(props: {
+  selectedMode: string
+  enabled?: boolean
+  onRegisterRefresh?: (fn: () => Promise<void>) => void
+}) {
+  const { selectedMode, enabled = true, onRegisterRefresh } = props
+  const [visitedModes, setVisitedModes] = useState<string[]>(() => [selectedMode])
+
+  useEffect(() => {
+    if (selectedMode) {
+      setVisitedModes((prev) =>
+        prev.includes(selectedMode) ? prev : [...prev, selectedMode]
+      )
+    }
+  }, [selectedMode])
+
+  return (
+    <>
+      {visitedModes.map((m) => {
+        const isCurrent = selectedMode === m
+        return (
+          <NovelRankingFeedItem
+            key={m}
+            mode={m}
+            active={isCurrent}
+            enabled={enabled && isCurrent}
+            onRegisterRefresh={onRegisterRefresh}
+          />
+        )
+      })}
+    </>
+  )
+}
+
+function IllustRankingFeedItem(props: {
+  mode: string
+  label: "插画" | "漫画"
+  date?: string | null
+  active: boolean
+  enabled?: boolean
+  onRegisterRefresh?: (fn: () => Promise<void>) => void
+}) {
+  const { mode, label, date = null, active, enabled = true, onRegisterRefresh } = props
 
   const paged = usePagedList<PixivIllustration>({
     first: (token) => ranking(mode, date, token),
@@ -435,21 +496,24 @@ function IllustRankingFeed(props: {
   }, [])
 
   useEffect(() => {
-    if (enabled) {
+    if (active && enabled) {
       onRegisterRefresh?.(paged.refresh)
     }
-  }, [enabled, paged.refresh, onRegisterRefresh])
+  }, [active, enabled, paged.refresh, onRegisterRefresh])
+
+  if (!active) return null
 
   return <IllustRankingFeedContent paged={paged} label={label} />
 }
 
-function NovelRankingFeed(props: {
+function NovelRankingFeedItem(props: {
   mode: string
   date?: string | null
+  active: boolean
   enabled?: boolean
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { mode, date = null, enabled = true, onRegisterRefresh } = props
+  const { mode, date = null, active, enabled = true, onRegisterRefresh } = props
 
   const paged = usePagedList<PixivNovel>({
     first: (token) => novelRanking(mode, date, token),
@@ -470,12 +534,74 @@ function NovelRankingFeed(props: {
   }, [])
 
   useEffect(() => {
-    if (enabled) {
+    if (active && enabled) {
       onRegisterRefresh?.(paged.refresh)
     }
-  }, [enabled, paged.refresh, onRegisterRefresh])
+  }, [active, enabled, paged.refresh, onRegisterRefresh])
+
+  if (!active) return null
 
   return <NovelRankingFeedContent paged={paged} />
+}
+
+function AdvancedRankingFeedItem(props: {
+  params: AdvancedRankingParams
+  active: boolean
+  enabled?: boolean
+  onRegisterRefresh?: (fn: () => Promise<void>) => void
+}) {
+  const { params, active, enabled = true, onRegisterRefresh } = props
+  const isNovel = params.category === "novel"
+
+  const illustPaged = usePagedList<PixivIllustration>({
+    first: (token) => ranking(params.mode, params.date, token),
+    more: (nextURL, token) => nextIllustrations(nextURL, token),
+    filter: filterRankingItems,
+    deps: [params.category, params.mode, params.date],
+    enabled: enabled && !isNovel,
+    onBatchPublished: (_, pendingItems) =>
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
+  })
+
+  const novelPaged = usePagedList<PixivNovel>({
+    first: (token) => novelRanking(params.mode, params.date, token),
+    more: (nextURL, token) => nextNovels(nextURL, token),
+    filter: filterNovelRankingItems,
+    deps: ["novel", params.mode, params.date],
+    enabled: enabled && isNovel,
+    onBatchPublished: (_, pendingItems) =>
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
+  })
+
+  const illustPagedRef = useLatest(illustPaged)
+  const novelPagedRef = useLatest(novelPaged)
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      illustPagedRef.current.reapplyFilter()
+      novelPagedRef.current.reapplyFilter()
+    })
+  }, [])
+
+  const activeRefresh = isNovel ? novelPaged.refresh : illustPaged.refresh
+
+  useEffect(() => {
+    if (active && enabled) {
+      onRegisterRefresh?.(activeRefresh)
+    }
+  }, [active, enabled, activeRefresh, onRegisterRefresh])
+
+  if (!active) return null
+
+  if (isNovel) {
+    return <NovelRankingFeedContent paged={novelPaged} />
+  }
+  return (
+    <IllustRankingFeedContent
+      paged={illustPaged}
+      label={params.category === "manga" ? "漫画" : "插画"}
+    />
+  )
 }
 
 function NovelRankingFeedContent(props: {
