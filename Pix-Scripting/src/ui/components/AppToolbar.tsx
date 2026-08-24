@@ -16,7 +16,11 @@ export function appToolbar(dismiss: () => void, title?: string, trailing?: any) 
         }}
       />,
     ],
-    topBarTrailing: trailing ? [trailing] : undefined,
+    topBarTrailing: trailing
+      ? Array.isArray(trailing)
+        ? trailing
+        : [trailing]
+      : undefined,
     principal: title
       ? [
           <Text font="title2" fontWeight="bold">

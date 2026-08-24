@@ -18,6 +18,7 @@ import { UserBookmarksView } from "./userBookmarks"
 import { UserConnectionsView, type ConnectionRouteKind } from "./userConnections"
 import { UserWorksView } from "./userWorks"
 import { AboutView } from "./about"
+import { RankingCustomPickerView, type CustomRankingPickerKind } from "./rankingCustomPicker"
 
 // 解析 "xxx:123" 形式的数值 id；非法输入返回 null（避免 NaN 传给详情页）
 function parseID(value: string, prefix: string): number | null {
@@ -109,6 +110,12 @@ export function renderDestination(page: string) {
   if (page.startsWith("userWorks:")) {
     const id = parseID(page, "userWorks:")
     if (id != null) return <UserWorksView userID={id} title="作品" />
+  }
+  if (page.startsWith("rankingCustomPicker:")) {
+    const kind = page.slice("rankingCustomPicker:".length) as CustomRankingPickerKind
+    if (kind === "illust" || kind === "manga" || kind === "novel") {
+      return <RankingCustomPickerView kind={kind} />
+    }
   }
   if (page === "blockedSettings") return <BlockedSettingsView />
   if (page === "settings") return <SettingsView />

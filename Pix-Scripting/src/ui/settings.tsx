@@ -22,6 +22,7 @@ import {
 } from "../image/imageLoader"
 import { clearHistory, historyCount, onHistoryChanged } from "../store/history"
 import {
+  formatCustomRankingSummary,
   loadSettings,
   onSettingsChanged,
   resetSettings,
@@ -186,6 +187,47 @@ export function SettingsView() {
             </Text>
           </HStack>
         </NavigationLink>
+      </Section>
+
+      <Section header={<Text>排行</Text>}>
+        <Toggle
+          title="自定义榜单"
+          value={settings.customRankingEnabled}
+          onChanged={(value) => update({ customRankingEnabled: value })}
+        />
+        {settings.customRankingEnabled ? (
+          <>
+            <NavigationLink value="rankingCustomPicker:illust">
+              <HStack spacing={8}>
+                <Text font="body">插画</Text>
+                <Spacer />
+                <Text font="caption" foregroundStyle="secondaryLabel">
+                  {formatCustomRankingSummary("illust", settings)}
+                </Text>
+              </HStack>
+            </NavigationLink>
+            <NavigationLink value="rankingCustomPicker:manga">
+              <HStack spacing={8}>
+                <Text font="body">漫画</Text>
+                <Spacer />
+                <Text font="caption" foregroundStyle="secondaryLabel">
+                  {formatCustomRankingSummary("manga", settings)}
+                </Text>
+              </HStack>
+            </NavigationLink>
+            {!settings.hideNovels ? (
+              <NavigationLink value="rankingCustomPicker:novel">
+                <HStack spacing={8}>
+                  <Text font="body">小说</Text>
+                  <Spacer />
+                  <Text font="caption" foregroundStyle="secondaryLabel">
+                    {formatCustomRankingSummary("novel", settings)}
+                  </Text>
+                </HStack>
+              </NavigationLink>
+            ) : null}
+          </>
+        ) : null}
       </Section>
 
       <Section header={<Text>功能</Text>}>

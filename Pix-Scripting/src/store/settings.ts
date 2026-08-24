@@ -18,6 +18,65 @@ export type LoadingAnimationDuration = number
 export type NovelLoadingDuration = number
 export type LaunchAnimationDuration = number
 
+export interface RankingOptionDef {
+  key: string
+  title: string
+  type: "illust" | "manga" | "novel"
+  requiresR18?: boolean
+  requiresR18G?: boolean
+  requiresAI?: boolean
+}
+
+export const ALL_ILLUST_RANKING_OPTIONS: ReadonlyArray<RankingOptionDef> = [
+  { key: "day", title: "每日", type: "illust" },
+  { key: "day_male", title: "男性向", type: "illust" },
+  { key: "day_female", title: "女性向", type: "illust" },
+  { key: "week_original", title: "原创", type: "illust" },
+  { key: "week_rookie", title: "新人", type: "illust" },
+  { key: "week", title: "每周", type: "illust" },
+  { key: "month", title: "每月", type: "illust" },
+  { key: "day_ai", title: "AI生成", type: "illust", requiresAI: true },
+  { key: "day_r18", title: "R-18每日", type: "illust", requiresR18: true },
+  { key: "week_r18", title: "R18每周", type: "illust", requiresR18: true },
+  { key: "day_male_r18", title: "R18男性向", type: "illust", requiresR18: true },
+  { key: "day_female_r18", title: "R18女性向", type: "illust", requiresR18: true },
+  { key: "day_r18_ai", title: "R-18 AI生成", type: "illust", requiresR18: true, requiresAI: true },
+  { key: "week_r18g", title: "R18G每周", type: "illust", requiresR18: true, requiresR18G: true },
+]
+
+export const ALL_MANGA_RANKING_OPTIONS: ReadonlyArray<RankingOptionDef> = [
+  { key: "day_manga", title: "每日", type: "manga" },
+  { key: "week_manga", title: "每周", type: "manga" },
+  { key: "month_manga", title: "每月", type: "manga" },
+  { key: "week_rookie_manga", title: "新人", type: "manga" },
+  { key: "day_r18_manga", title: "R-18每日", type: "manga", requiresR18: true },
+  { key: "week_r18_manga", title: "R18每周", type: "manga", requiresR18: true },
+  { key: "week_r18g_manga", title: "R18G每周", type: "manga", requiresR18: true, requiresR18G: true },
+]
+
+export const ALL_NOVEL_RANKING_OPTIONS: ReadonlyArray<RankingOptionDef> = [
+  { key: "day", title: "每日", type: "novel" },
+  { key: "day_male", title: "男性向", type: "novel" },
+  { key: "day_female", title: "女性向", type: "novel" },
+  { key: "week_rookie", title: "新人", type: "novel" },
+  { key: "week", title: "每周", type: "novel" },
+  { key: "day_ai", title: "AI生成", type: "novel", requiresAI: true },
+  { key: "day_r18", title: "R-18每日", type: "novel", requiresR18: true },
+  { key: "day_male_r18", title: "R18男性向", type: "novel", requiresR18: true },
+  { key: "day_female_r18", title: "R18女性向", type: "novel", requiresR18: true },
+  { key: "week_r18", title: "R18每周", type: "novel", requiresR18: true },
+  { key: "day_r18_ai", title: "R-18 AI生成", type: "novel", requiresR18: true, requiresAI: true },
+  { key: "week_r18g", title: "R18G每周", type: "novel", requiresR18: true, requiresR18G: true },
+]
+
+export interface ActiveCustomRankingTab {
+  id: string
+  type: "illust" | "manga" | "novel"
+  mode: string
+  title: string
+  fullTitle: string
+}
+
 export interface AppSettings {
   launchPage: LaunchPage
   showR18: boolean
@@ -53,6 +112,10 @@ export interface AppSettings {
   enableLiveActivity: boolean
   enableTaskNotification: boolean
   advancedSettingsUnlocked: boolean
+  customRankingEnabled: boolean
+  customRankingIllustModes: string[]
+  customRankingMangaModes: string[]
+  customRankingNovelModes: string[]
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -90,6 +153,10 @@ const DEFAULT_SETTINGS: AppSettings = {
   enableLiveActivity: true,
   enableTaskNotification: true,
   advancedSettingsUnlocked: false,
+  customRankingEnabled: false,
+  customRankingIllustModes: ["day", "week", "month", "week_original", "week_rookie"],
+  customRankingMangaModes: ["day_manga", "week_manga", "month_manga", "week_rookie_manga"],
+  customRankingNovelModes: ["day", "week", "week_rookie"],
 }
 
 const KEY = "pixiv_settings_v1"
@@ -208,6 +275,13 @@ function parseLaunchDuration(value: unknown): number {
   return DEFAULT_SETTINGS.launchAnimationDuration
 }
 
+function parseStringArray(value: unknown, fallback: string[]): string[] {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+  }
+  return fallback
+}
+
 function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): AppSettings {
   return {
     ...DEFAULT_SETTINGS,
@@ -286,6 +360,10 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
       DEFAULT_SETTINGS.enableTaskNotification
     ),
     advancedSettingsUnlocked: boolOr(stored?.advancedSettingsUnlocked, DEFAULT_SETTINGS.advancedSettingsUnlocked),
+    customRankingEnabled: boolOr(stored?.customRankingEnabled, DEFAULT_SETTINGS.customRankingEnabled),
+    customRankingIllustModes: parseStringArray(stored?.customRankingIllustModes, DEFAULT_SETTINGS.customRankingIllustModes),
+    customRankingMangaModes: parseStringArray(stored?.customRankingMangaModes, DEFAULT_SETTINGS.customRankingMangaModes),
+    customRankingNovelModes: parseStringArray(stored?.customRankingNovelModes, DEFAULT_SETTINGS.customRankingNovelModes),
   }
 }
 
@@ -361,4 +439,145 @@ export function updateSettings(patch: Partial<AppSettings>): AppSettings {
   emitChanged()
   return next
 }
+
+export function isRankingOptionVisible(option: RankingOptionDef, settings: AppSettings): boolean {
+  if (option.requiresR18 && !settings.showR18) return false
+  if (option.requiresR18G && (!settings.showR18 || !settings.showR18G)) return false
+  if (option.requiresAI && !settings.showAI) return false
+  if (option.type === "novel" && settings.hideNovels) return false
+  return true
+}
+
+export function getVisibleRankingOptions(
+  options: ReadonlyArray<RankingOptionDef>,
+  settings: AppSettings
+): RankingOptionDef[] {
+  return options.filter((opt) => isRankingOptionVisible(opt, settings))
+}
+
+export const DEFAULT_ILLUST_RANKING_MODES = [
+  "day",
+  "week",
+  "month",
+  "week_original",
+  "week_rookie",
+]
+
+export const DEFAULT_MANGA_RANKING_MODES = [
+  "day_manga",
+  "week_manga",
+  "month_manga",
+  "week_rookie_manga",
+]
+
+export const DEFAULT_NOVEL_RANKING_MODES = [
+  "day",
+  "week",
+  "week_rookie",
+]
+
+export interface CustomRankingTabItem {
+  value: string
+  title: string
+}
+
+export function resetCustomRankingKind(
+  kind: "illust" | "manga" | "novel"
+): AppSettings {
+  if (kind === "illust") {
+    return updateSettings({
+      customRankingIllustModes: [...DEFAULT_ILLUST_RANKING_MODES],
+    })
+  } else if (kind === "manga") {
+    return updateSettings({
+      customRankingMangaModes: [...DEFAULT_MANGA_RANKING_MODES],
+    })
+  } else {
+    return updateSettings({
+      customRankingNovelModes: [...DEFAULT_NOVEL_RANKING_MODES],
+    })
+  }
+}
+
+export function getCustomRankingModesForKind(
+  kind: "illustration" | "manga" | "novel",
+  settings: AppSettings
+): CustomRankingTabItem[] {
+  const options =
+    kind === "illustration"
+      ? ALL_ILLUST_RANKING_OPTIONS
+      : kind === "manga"
+        ? ALL_MANGA_RANKING_OPTIONS
+        : ALL_NOVEL_RANKING_OPTIONS
+  const selectedModes =
+    kind === "illustration"
+      ? settings.customRankingIllustModes
+      : kind === "manga"
+        ? settings.customRankingMangaModes
+        : settings.customRankingNovelModes
+
+  const visible = getVisibleRankingOptions(options, settings)
+  const active: CustomRankingTabItem[] = []
+
+  for (const mode of selectedModes) {
+    const found = visible.find((o) => o.key === mode)
+    if (found) {
+      active.push({ value: found.key, title: found.title })
+    }
+  }
+
+  // 每个类别最多截取 5 项
+  const limited = active.slice(0, 5)
+  if (limited.length > 0) return limited
+
+  // 如果用户未选任何有效项（如全部取消），回退到该类别的默认初始有效榜单列表
+  const defaultModes =
+    kind === "illustration"
+      ? DEFAULT_ILLUST_RANKING_MODES
+      : kind === "manga"
+        ? DEFAULT_MANGA_RANKING_MODES
+        : DEFAULT_NOVEL_RANKING_MODES
+
+  const fallbackList: CustomRankingTabItem[] = []
+  for (const mode of defaultModes) {
+    const found = visible.find((o) => o.key === mode)
+    if (found) {
+      fallbackList.push({ value: found.key, title: found.title })
+    }
+  }
+
+  if (fallbackList.length > 0) return fallbackList
+
+  if (visible.length > 0) {
+    return [{ value: visible[0].key, title: visible[0].title }]
+  }
+  return []
+}
+
+export function formatCustomRankingSummary(
+  kind: "illust" | "manga" | "novel",
+  settings: AppSettings
+): string {
+  const options =
+    kind === "illust"
+      ? ALL_ILLUST_RANKING_OPTIONS
+      : kind === "manga"
+        ? ALL_MANGA_RANKING_OPTIONS
+        : ALL_NOVEL_RANKING_OPTIONS
+  const selectedModes =
+    kind === "illust"
+      ? settings.customRankingIllustModes
+      : kind === "manga"
+        ? settings.customRankingMangaModes
+        : settings.customRankingNovelModes
+  const visible = getVisibleRankingOptions(options, settings)
+  const activeTitles = selectedModes
+    .map((m) => visible.find((o) => o.key === m)?.title)
+    .filter(Boolean) as string[]
+
+  if (activeTitles.length === 0) return "未选择"
+  if (activeTitles.length <= 2) return activeTitles.join("、")
+  return `已选 ${activeTitles.length} 项`
+}
+
 

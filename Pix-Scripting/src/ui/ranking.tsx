@@ -1,9 +1,12 @@
 import {
+  Button,
+  HStack,
   Image,
   Label,
   LazyVStack,
   Menu,
   Picker,
+  Spacer,
   Text,
   useCallback,
   useEffect,
@@ -14,8 +17,13 @@ import {
 import { nextIllustrations, nextNovels, novelRanking, ranking } from "../api/pixiv"
 import { cardThumbUrlOf, novelThumbUrlOf, prefetch } from "../image/imageLoader"
 import {
+  ALL_ILLUST_RANKING_OPTIONS,
+  ALL_MANGA_RANKING_OPTIONS,
+  ALL_NOVEL_RANKING_OPTIONS,
+  getCustomRankingModesForKind,
   loadSettings,
   onSettingsChanged,
+  type AppSettings,
 } from "../store/settings"
 import {
   isIllustContentVisible,
@@ -35,28 +43,15 @@ import {
   NovelCard,
   RefreshableScrollView,
 } from "./components"
+import {
+  getInitialAdvancedParams,
+  RankingAdvancedSheet,
+  type AdvancedRankingParams,
+} from "./rankingAdvancedSheet"
 
 type RankingKind = "illustration" | "manga" | "novel" | "advanced"
 
-type IllustrationRankingMode =
-  | "day"
-  | "week"
-  | "month"
-  | "week_original"
-  | "week_rookie"
-
-type MangaRankingMode =
-  | "day_manga"
-  | "week_manga"
-  | "month_manga"
-  | "week_rookie_manga"
-
-type NovelRankingMode = "day" | "week" | "week_rookie"
-
-const ILLUSTRATION_MODES: ReadonlyArray<{
-  value: IllustrationRankingMode
-  title: string
-}> = [
+const DEFAULT_ILLUSTRATION_MODES: ReadonlyArray<{ value: string; title: string }> = [
   { value: "day", title: "每日" },
   { value: "week", title: "每周" },
   { value: "month", title: "每月" },
@@ -64,49 +59,87 @@ const ILLUSTRATION_MODES: ReadonlyArray<{
   { value: "week_rookie", title: "新人" },
 ]
 
-const MANGA_MODES: ReadonlyArray<{ value: MangaRankingMode; title: string }> = [
+const DEFAULT_MANGA_MODES: ReadonlyArray<{ value: string; title: string }> = [
   { value: "day_manga", title: "每日" },
   { value: "week_manga", title: "每周" },
   { value: "month_manga", title: "每月" },
   { value: "week_rookie_manga", title: "新人" },
 ]
 
-const NOVEL_MODES: ReadonlyArray<{ value: NovelRankingMode; title: string }> = [
+const DEFAULT_NOVEL_MODES: ReadonlyArray<{ value: string; title: string }> = [
   { value: "day", title: "每日" },
   { value: "week", title: "每周" },
   { value: "week_rookie", title: "新人" },
 ]
 
+function getRankingModeTitle(
+  category: "illustration" | "manga" | "novel",
+  mode: string
+): string {
+  const list =
+    category === "illustration"
+      ? ALL_ILLUST_RANKING_OPTIONS
+      : category === "manga"
+        ? ALL_MANGA_RANKING_OPTIONS
+        : ALL_NOVEL_RANKING_OPTIONS
+  const match = list.find((item) => item.key === mode)
+  return match?.title ?? mode
+}
+
 export function RankingView(props: { onClose: () => void }) {
   const isLaunchTab = useRef(loadSettings().launchPage === "ranking").current
   const [activated, setActivated] = useState(isLaunchTab)
+  const [settings, setSettings] = useState<AppSettings>(() => loadSettings())
   const [kind, setKind] = useState<RankingKind>("illustration")
-  const [illustrationMode, setIllustrationMode] =
-    useState<IllustrationRankingMode>("day")
-  const [mangaMode, setMangaMode] = useState<MangaRankingMode>("day_manga")
-  const [novelMode, setNovelMode] = useState<NovelRankingMode>("day")
-  const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
+  const [illustrationMode, setIllustrationMode] = useState<string>("day")
+  const [mangaMode, setMangaMode] = useState<string>("day_manga")
+  const [novelMode, setNovelMode] = useState<string>("day")
+
+  // 高级模式状态
+  const [advancedParams, setAdvancedParams] = useState<AdvancedRankingParams>(
+    () => getInitialAdvancedParams()
+  )
+  const [isAdvancedSheetOpen, setIsAdvancedSheetOpen] = useState(false)
+  const hasQueriedAdvancedRef = useRef(false)
+
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
   useEffect(() => {
     return onSettingsChanged(() => {
-      const next = loadSettings().hideNovels
-      setHideNovels(next)
-      if (next && kind === "novel") {
-        setKind("illustration")
+      const next = loadSettings()
+      setSettings(next)
+      if (next.hideNovels) {
+        if (kind === "novel") {
+          setKind("illustration")
+        }
+        if (advancedParams.category === "novel") {
+          setAdvancedParams((prev) => ({
+            ...prev,
+            category: "illustration",
+            mode: "day",
+          }))
+        }
       }
     })
-  }, [kind])
+  }, [kind, advancedParams.category])
 
-  const rootModes =
+  // 获取当前分类下可用的模式列表（受自定义设置与内容显示设置联动）
+  const activeModes =
     kind === "illustration"
-      ? ILLUSTRATION_MODES
+      ? settings.customRankingEnabled
+        ? getCustomRankingModesForKind("illustration", settings)
+        : DEFAULT_ILLUSTRATION_MODES
       : kind === "manga"
-        ? MANGA_MODES
+        ? settings.customRankingEnabled
+          ? getCustomRankingModesForKind("manga", settings)
+          : DEFAULT_MANGA_MODES
         : kind === "novel"
-          ? NOVEL_MODES
+          ? settings.customRankingEnabled
+            ? getCustomRankingModesForKind("novel", settings)
+            : DEFAULT_NOVEL_MODES
           : null
-  const rootSelectedMode =
+
+  const selectedMode =
     kind === "illustration"
       ? illustrationMode
       : kind === "manga"
@@ -115,20 +148,57 @@ export function RankingView(props: { onClose: () => void }) {
           ? novelMode
           : null
 
-  function selectRootMode(value: string) {
-    if (kind === "illustration") setIllustrationMode(value as IllustrationRankingMode)
-    else if (kind === "manga") setMangaMode(value as MangaRankingMode)
-    else if (kind === "novel") setNovelMode(value as NovelRankingMode)
+  // 保证当前选中的模式在当前可用模式列表中有效
+  useEffect(() => {
+    if (activeModes && activeModes.length > 0 && selectedMode) {
+      const exists = activeModes.some((m) => m.value === selectedMode)
+      if (!exists) {
+        const fallback = activeModes[0].value
+        if (kind === "illustration") setIllustrationMode(fallback)
+        else if (kind === "manga") setMangaMode(fallback)
+        else if (kind === "novel") setNovelMode(fallback)
+      }
+    }
+  }, [activeModes, selectedMode, kind])
+
+  function handleSelectMode(value: string) {
+    if (kind === "illustration") setIllustrationMode(value)
+    else if (kind === "manga") setMangaMode(value)
+    else if (kind === "novel") setNovelMode(value)
+  }
+
+  function handleKindChange(nextKind: RankingKind) {
+    setKind(nextKind)
+    if (nextKind === "advanced" && !hasQueriedAdvancedRef.current) {
+      setIsAdvancedSheetOpen(true)
+    }
   }
 
   return (
     <RefreshableScrollView
       navigationBarTitleDisplayMode="inline"
       navigationDestination={destinationElement}
+      sheet={{
+        isPresented: isAdvancedSheetOpen,
+        onChanged: (presented: boolean) => setIsAdvancedSheetOpen(presented),
+        content: (
+          <RankingAdvancedSheet
+            currentParams={advancedParams}
+            settings={settings}
+            onApply={(params) => {
+              hasQueriedAdvancedRef.current = true
+              setAdvancedParams(params)
+              setIsAdvancedSheetOpen(false)
+            }}
+            onCancel={() => setIsAdvancedSheetOpen(false)}
+          />
+        ),
+      }}
       toolbar={rankingToolbar({
         kind,
-        hideNovels,
-        onKindChange: setKind,
+        hideNovels: settings.hideNovels,
+        onKindChange: handleKindChange,
+        onOpenAdvancedSheet: () => setIsAdvancedSheetOpen(true),
         onClose: props.onClose,
       })}
       refreshable={() => refreshHandlerRef.current()}
@@ -141,26 +211,34 @@ export function RankingView(props: { onClose: () => void }) {
           if (!activated) setActivated(true)
         }}
       >
-        {rootModes && rootSelectedMode ? (
+        {kind === "advanced" ? (
+          <AdvancedRankingBar
+            params={advancedParams}
+            onPress={() => setIsAdvancedSheetOpen(true)}
+          />
+        ) : activeModes && activeModes.length > 0 && selectedMode ? (
           <RankingModePicker
-            modes={rootModes}
-            selected={rootSelectedMode}
-            onSelect={selectRootMode}
+            modes={activeModes}
+            selected={selectedMode}
+            onSelect={handleSelectMode}
           />
         ) : null}
+
         {kind === "illustration" ? (
-          <IllustrationRankingFeed
-            key="illustration"
+          <IllustRankingFeed
+            key={`illust-${illustrationMode}`}
             mode={illustrationMode}
+            label="插画"
             enabled={activated}
             onRegisterRefresh={(fn) => {
               refreshHandlerRef.current = fn
             }}
           />
         ) : kind === "manga" ? (
-          <MangaRankingFeed
-            key="manga"
+          <IllustRankingFeed
+            key={`manga-${mangaMode}`}
             mode={mangaMode}
+            label="漫画"
             enabled={activated}
             onRegisterRefresh={(fn) => {
               refreshHandlerRef.current = fn
@@ -168,18 +246,95 @@ export function RankingView(props: { onClose: () => void }) {
           />
         ) : kind === "novel" ? (
           <NovelRankingFeed
-            key="novel"
+            key={`novel-${novelMode}`}
             mode={novelMode}
             enabled={activated}
             onRegisterRefresh={(fn) => {
               refreshHandlerRef.current = fn
             }}
           />
+        ) : advancedParams.category === "novel" ? (
+          <NovelRankingFeed
+            key={`adv-novel-${advancedParams.mode}-${advancedParams.date}`}
+            mode={advancedParams.mode}
+            date={advancedParams.date}
+            enabled={activated}
+            onRegisterRefresh={(fn) => {
+              refreshHandlerRef.current = fn
+            }}
+          />
         ) : (
-          <AdvancedSearchPlaceholder />
+          <IllustRankingFeed
+            key={`adv-${advancedParams.category}-${advancedParams.mode}-${advancedParams.date}`}
+            mode={advancedParams.mode}
+            date={advancedParams.date}
+            label={advancedParams.category === "manga" ? "漫画" : "插画"}
+            enabled={activated}
+            onRegisterRefresh={(fn) => {
+              refreshHandlerRef.current = fn
+            }}
+          />
         )}
       </VStack>
     </RefreshableScrollView>
+  )
+}
+
+function AdvancedRankingBar(props: {
+  params: AdvancedRankingParams
+  onPress: () => void
+}) {
+  const { params, onPress } = props
+  const categoryLabel =
+    params.category === "illustration"
+      ? "插画"
+      : params.category === "manga"
+        ? "漫画"
+        : "小说"
+  const modeTitle = getRankingModeTitle(params.category, params.mode)
+
+  return (
+    <Button
+      buttonStyle="plain"
+      action={onPress}
+      padding={{ horizontal: 14, vertical: 4 }}
+    >
+      <HStack
+        alignment="center"
+        spacing={8}
+        padding={{ horizontal: 12, vertical: 8 }}
+        background="#8E8E9318"
+        clipShape={{ type: "rect", cornerRadius: 10 }}
+        frame={{ maxWidth: "infinity" }}
+      >
+        <Image
+          systemName="calendar"
+          foregroundStyle="accentColor"
+          font="subheadline"
+        />
+        <Text font="subheadline" fontWeight="medium" foregroundStyle="label">
+          {params.date}
+        </Text>
+        <Text font="caption" foregroundStyle="secondaryLabel">
+          •
+        </Text>
+        <Text font="subheadline" foregroundStyle="secondaryLabel">
+          {categoryLabel}
+        </Text>
+        <Text font="caption" foregroundStyle="secondaryLabel">
+          •
+        </Text>
+        <Text font="subheadline" foregroundStyle="secondaryLabel">
+          {modeTitle}
+        </Text>
+        <Spacer />
+        <Image
+          systemName="chevron.right"
+          font="caption"
+          foregroundStyle="tertiaryLabel"
+        />
+      </HStack>
+    </Button>
   )
 }
 
@@ -187,6 +342,7 @@ function rankingToolbar(props: {
   kind: RankingKind
   hideNovels: boolean
   onKindChange: (kind: RankingKind) => void
+  onOpenAdvancedSheet: () => void
   onClose: () => void
 }) {
   const title =
@@ -196,10 +352,14 @@ function rankingToolbar(props: {
         ? "漫画"
         : props.kind === "novel"
           ? "小说"
-          : "高级"
-  return appToolbar(
-    props.onClose,
-    title,
+          : "历史"
+
+  const trailingItems = [
+    props.kind === "advanced" ? (
+      <Button action={props.onOpenAdvancedSheet}>
+        <Image systemName="slider.horizontal.3" />
+      </Button>
+    ) : null,
     <Menu label={<Image systemName="ellipsis.circle" />}>
       <Picker
         title="排行榜类型"
@@ -213,12 +373,14 @@ function rankingToolbar(props: {
         )}
         <Label
           tag="advanced"
-          title="高级"
-          systemImage="slider.horizontal.3"
+          title="历史"
+          systemImage="clock.arrow.circlepath"
         />
       </Picker>
-    </Menu>
-  )
+    </Menu>,
+  ].filter(Boolean)
+
+  return appToolbar(props.onClose, title, trailingItems)
 }
 
 function RankingModePicker(props: {
@@ -243,247 +405,75 @@ function RankingModePicker(props: {
   )
 }
 
-function IllustrationRankingFeed(props: {
-  mode: IllustrationRankingMode
+function IllustRankingFeed(props: {
+  mode: string
+  label: "插画" | "漫画"
+  date?: string | null
   enabled?: boolean
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { mode, enabled = true, onRegisterRefresh } = props
+  const { mode, label, date = null, enabled = true, onRegisterRefresh } = props
 
-  // 1. 每日
-  const dayPaged = usePagedList<PixivIllustration>({
-    first: (token) => ranking("day", null, token),
+  const paged = usePagedList<PixivIllustration>({
+    first: (token) => ranking(mode, date, token),
     more: (nextURL, token) => nextIllustrations(nextURL, token),
     filter: filterRankingItems,
-    deps: ["illustration", "day"],
-    enabled: enabled && mode === "day",
+    deps: [label, mode, date ?? ""],
+    enabled,
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
 
-  // 2. 每周
-  const weekPaged = usePagedList<PixivIllustration>({
-    first: (token) => ranking("week", null, token),
-    more: (nextURL, token) => nextIllustrations(nextURL, token),
-    filter: filterRankingItems,
-    deps: ["illustration", "week"],
-    enabled: enabled && mode === "week",
-    onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
-  })
-
-  // 3. 每月
-  const monthPaged = usePagedList<PixivIllustration>({
-    first: (token) => ranking("month", null, token),
-    more: (nextURL, token) => nextIllustrations(nextURL, token),
-    filter: filterRankingItems,
-    deps: ["illustration", "month"],
-    enabled: enabled && mode === "month",
-    onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
-  })
-
-  // 4. 原创
-  const originalPaged = usePagedList<PixivIllustration>({
-    first: (token) => ranking("week_original", null, token),
-    more: (nextURL, token) => nextIllustrations(nextURL, token),
-    filter: filterRankingItems,
-    deps: ["illustration", "week_original"],
-    enabled: enabled && mode === "week_original",
-    onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
-  })
-
-  // 5. 新人
-  const rookiePaged = usePagedList<PixivIllustration>({
-    first: (token) => ranking("week_rookie", null, token),
-    more: (nextURL, token) => nextIllustrations(nextURL, token),
-    filter: filterRankingItems,
-    deps: ["illustration", "week_rookie"],
-    enabled: enabled && mode === "week_rookie",
-    onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
-  })
-
-  const dayPagedRef = useLatest(dayPaged)
-  const weekPagedRef = useLatest(weekPaged)
-  const monthPagedRef = useLatest(monthPaged)
-  const originalPagedRef = useLatest(originalPaged)
-  const rookiePagedRef = useLatest(rookiePaged)
+  const pagedRef = useLatest(paged)
 
   useEffect(() => {
     return onSettingsChanged(() => {
-      dayPagedRef.current.reapplyFilter()
-      weekPagedRef.current.reapplyFilter()
-      monthPagedRef.current.reapplyFilter()
-      originalPagedRef.current.reapplyFilter()
-      rookiePagedRef.current.reapplyFilter()
+      pagedRef.current.reapplyFilter()
     })
   }, [])
 
-  const currentPaged =
-    mode === "day"
-      ? dayPaged
-      : mode === "week"
-        ? weekPaged
-        : mode === "month"
-          ? monthPaged
-          : mode === "week_original"
-            ? originalPaged
-            : rookiePaged
-
   useEffect(() => {
-    onRegisterRefresh?.(currentPaged.refresh)
-  }, [currentPaged.refresh, onRegisterRefresh])
+    if (enabled) {
+      onRegisterRefresh?.(paged.refresh)
+    }
+  }, [enabled, paged.refresh, onRegisterRefresh])
 
-  return <IllustRankingFeedContent paged={currentPaged} label="插画" />
-}
-
-function MangaRankingFeed(props: {
-  mode: MangaRankingMode
-  enabled?: boolean
-  onRegisterRefresh?: (fn: () => Promise<void>) => void
-}) {
-  const { mode, enabled = true, onRegisterRefresh } = props
-
-  // 1. 每日
-  const dayPaged = usePagedList<PixivIllustration>({
-    first: (token) => ranking("day_manga", null, token),
-    more: (nextURL, token) => nextIllustrations(nextURL, token),
-    filter: filterRankingItems,
-    deps: ["manga", "day_manga"],
-    enabled: enabled && mode === "day_manga",
-    onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
-  })
-
-  // 2. 每周
-  const weekPaged = usePagedList<PixivIllustration>({
-    first: (token) => ranking("week_manga", null, token),
-    more: (nextURL, token) => nextIllustrations(nextURL, token),
-    filter: filterRankingItems,
-    deps: ["manga", "week_manga"],
-    enabled: enabled && mode === "week_manga",
-    onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
-  })
-
-  // 3. 每月
-  const monthPaged = usePagedList<PixivIllustration>({
-    first: (token) => ranking("month_manga", null, token),
-    more: (nextURL, token) => nextIllustrations(nextURL, token),
-    filter: filterRankingItems,
-    deps: ["manga", "month_manga"],
-    enabled: enabled && mode === "month_manga",
-    onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
-  })
-
-  // 4. 新人
-  const rookiePaged = usePagedList<PixivIllustration>({
-    first: (token) => ranking("week_rookie_manga", null, token),
-    more: (nextURL, token) => nextIllustrations(nextURL, token),
-    filter: filterRankingItems,
-    deps: ["manga", "week_rookie_manga"],
-    enabled: enabled && mode === "week_rookie_manga",
-    onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
-  })
-
-  const dayPagedRef = useLatest(dayPaged)
-  const weekPagedRef = useLatest(weekPaged)
-  const monthPagedRef = useLatest(monthPaged)
-  const rookiePagedRef = useLatest(rookiePaged)
-
-  useEffect(() => {
-    return onSettingsChanged(() => {
-      dayPagedRef.current.reapplyFilter()
-      weekPagedRef.current.reapplyFilter()
-      monthPagedRef.current.reapplyFilter()
-      rookiePagedRef.current.reapplyFilter()
-    })
-  }, [])
-
-  const currentPaged =
-    mode === "day_manga"
-      ? dayPaged
-      : mode === "week_manga"
-        ? weekPaged
-        : mode === "month_manga"
-          ? monthPaged
-          : rookiePaged
-
-  useEffect(() => {
-    onRegisterRefresh?.(currentPaged.refresh)
-  }, [currentPaged.refresh, onRegisterRefresh])
-
-  return <IllustRankingFeedContent paged={currentPaged} label="漫画" />
+  return <IllustRankingFeedContent paged={paged} label={label} />
 }
 
 function NovelRankingFeed(props: {
-  mode: NovelRankingMode
+  mode: string
+  date?: string | null
   enabled?: boolean
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { mode, enabled = true, onRegisterRefresh } = props
+  const { mode, date = null, enabled = true, onRegisterRefresh } = props
 
-  // 1. 每日
-  const dayPaged = usePagedList<PixivNovel>({
-    first: (token) => novelRanking("day", null, token),
+  const paged = usePagedList<PixivNovel>({
+    first: (token) => novelRanking(mode, date, token),
     more: (nextURL, token) => nextNovels(nextURL, token),
     filter: filterNovelRankingItems,
-    deps: ["novel", "day"],
-    enabled: enabled && mode === "day",
+    deps: ["novel", mode, date ?? ""],
+    enabled,
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
   })
 
-  // 2. 每周
-  const weekPaged = usePagedList<PixivNovel>({
-    first: (token) => novelRanking("week", null, token),
-    more: (nextURL, token) => nextNovels(nextURL, token),
-    filter: filterNovelRankingItems,
-    deps: ["novel", "week"],
-    enabled: enabled && mode === "week",
-    onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
-  })
-
-  // 3. 新人
-  const rookiePaged = usePagedList<PixivNovel>({
-    first: (token) => novelRanking("week_rookie", null, token),
-    more: (nextURL, token) => nextNovels(nextURL, token),
-    filter: filterNovelRankingItems,
-    deps: ["novel", "week_rookie"],
-    enabled: enabled && mode === "week_rookie",
-    onBatchPublished: (_, pendingItems) =>
-      prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
-  })
-
-  const dayPagedRef = useLatest(dayPaged)
-  const weekPagedRef = useLatest(weekPaged)
-  const rookiePagedRef = useLatest(rookiePaged)
+  const pagedRef = useLatest(paged)
 
   useEffect(() => {
     return onSettingsChanged(() => {
-      dayPagedRef.current.reapplyFilter()
-      weekPagedRef.current.reapplyFilter()
-      rookiePagedRef.current.reapplyFilter()
+      pagedRef.current.reapplyFilter()
     })
   }, [])
 
-  const currentPaged =
-    mode === "day"
-      ? dayPaged
-      : mode === "week"
-        ? weekPaged
-        : rookiePaged
-
   useEffect(() => {
-    onRegisterRefresh?.(currentPaged.refresh)
-  }, [currentPaged.refresh, onRegisterRefresh])
+    if (enabled) {
+      onRegisterRefresh?.(paged.refresh)
+    }
+  }, [enabled, paged.refresh, onRegisterRefresh])
 
-  return <NovelRankingFeedContent paged={currentPaged} />
+  return <NovelRankingFeedContent paged={paged} />
 }
 
 function NovelRankingFeedContent(props: {
@@ -567,20 +557,6 @@ function IllustRankingFeedContent(props: {
           cornerBadgeOf={badgeOf}
         />
       )}
-    </VStack>
-  )
-}
-
-function AdvancedSearchPlaceholder() {
-  return (
-    <VStack alignment="center" spacing={12} padding={{ top: 80, horizontal: 20 }}>
-      <Image systemName="slider.horizontal.3" font="largeTitle" foregroundStyle="secondaryLabel" />
-      <Text font="headline" fontWeight="bold">
-        高级搜索
-      </Text>
-      <Text font="subheadline" foregroundStyle="secondaryLabel">
-        根据收藏数、日期区间与排序方式精确筛选
-      </Text>
     </VStack>
   )
 }
