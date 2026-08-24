@@ -356,9 +356,11 @@ function rankingToolbar(props: {
 
   const trailingItems = [
     props.kind === "advanced" ? (
-      <Button action={props.onOpenAdvancedSheet}>
-        <Image systemName="slider.horizontal.3" />
-      </Button>
+      <Button
+        title="高级筛选"
+        systemImage="slider.horizontal.3"
+        action={props.onOpenAdvancedSheet}
+      />
     ) : null,
     <Menu label={<Image systemName="ellipsis.circle" />}>
       <Picker
