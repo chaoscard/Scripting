@@ -3,6 +3,7 @@ import {
   HStack,
   Image,
   LazyVGrid,
+  LazyVStack,
   Menu,
   NavigationLink,
   NavigationStack,
@@ -11,6 +12,7 @@ import {
   Spacer,
   Text,
   TextField,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -55,7 +57,7 @@ interface ReplyState {
   expanded: boolean
 }
 
-export function CommentsSheet(props: { illustID?: number; novelID?: number }) {
+export function CommentsSheet(props: { illustID?: number; novelID?: number; onClose?: () => void }) {
   const { illustID, novelID } = props
   const [items, setItems] = useState<PixivComment[]>([])
   const [nextURL, setNextURL] = useState<string | null>(null)
@@ -63,7 +65,6 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number }) {
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [postError, setPostError] = useState<string | null>(null)
-  const [text, setText] = useState("")
   const [posting, setPosting] = useState(false)
 
   // 回复目标（记录实际被回复的 ID 与所属顶层根评论 rootID）
@@ -74,11 +75,6 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number }) {
     rootID: number
   } | null>(null)
 
-  // 表情/贴图面板状态
-  const [showEmotePanel, setShowEmotePanel] = useState(false)
-  const [emoteTab, setEmoteTab] = useState<string>("emoji")
-  const [stampCategoryKey, setStampCategoryKey] = useState<string>("all")
-
   // 子回复状态管理 (commentID -> ReplyState)
   const [replyStates, setReplyStates] = useState<Record<number, ReplyState>>({})
 
@@ -86,7 +82,7 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number }) {
   const seqRef = useRef(0)
   const loadingMoreRef = useRef(false)
 
-  async function load() {
+  const load = useCallback(async () => {
     const seq = ++seqRef.current
     setLoading(true)
     setError(null)
@@ -102,16 +98,37 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number }) {
     } finally {
       if (seq === seqRef.current) setLoading(false)
     }
-  }
+  }, [illustID, novelID])
 
   useEffect(() => {
     load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [illustID, novelID])
+  }, [load])
 
-  async function sendText() {
-    const content = text.trim()
-    if (!content || posting) return
+  const refreshRepliesFor = useCallback(async (commentID: number) => {
+    try {
+      const page = await session.call((token) =>
+        novelID != null
+          ? novelCommentReplies(commentID, token)
+          : commentReplies(commentID, token)
+      )
+      setReplyStates((prev) => ({
+        ...prev,
+        [commentID]: {
+          items: dedupeByID(page.items),
+          nextURL: page.nextURL,
+          loading: false,
+          loadingMore: false,
+          error: null,
+          expanded: true,
+        },
+      }))
+    } catch {
+      // 静默
+    }
+  }, [novelID])
+
+  const sendText = useCallback(async (content: string): Promise<boolean> => {
+    if (!content.trim() || posting) return false
     setPosting(true)
     setPostError(null)
     const parentID = replyTarget?.id ?? null
@@ -122,24 +139,22 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number }) {
       } else {
         await session.call((token) => postComment(illustID ?? 0, content, parentID, token))
       }
-      setText("")
-      withAnimation(() => {
-        setReplyTarget(null)
-        setShowEmotePanel(false)
-      })
+      setReplyTarget(null)
       if (targetRootID != null) {
         await refreshRepliesFor(targetRootID)
       }
       await load()
+      return true
     } catch (err: any) {
       setPostError(err?.message ?? "发表失败，请稍后重试")
+      return false
     } finally {
       setPosting(false)
     }
-  }
+  }, [illustID, novelID, posting, refreshRepliesFor, replyTarget, load])
 
-  async function sendStamp(stampID: number) {
-    if (posting) return
+  const sendStamp = useCallback(async (stampID: number): Promise<boolean> => {
+    if (posting) return false
     setPosting(true)
     setPostError(null)
     const parentID = replyTarget?.id ?? null
@@ -150,22 +165,21 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number }) {
       } else {
         await session.call((token) => postComment(illustID ?? 0, "", parentID, token, stampID))
       }
-      withAnimation(() => {
-        setReplyTarget(null)
-        setShowEmotePanel(false)
-      })
+      setReplyTarget(null)
       if (targetRootID != null) {
         await refreshRepliesFor(targetRootID)
       }
       await load()
+      return true
     } catch (err: any) {
       setPostError(err?.message ?? "发送贴图失败，请稍后重试")
+      return false
     } finally {
       setPosting(false)
     }
-  }
+  }, [illustID, novelID, posting, refreshRepliesFor, replyTarget, load])
 
-  async function loadMore() {
+  const loadMore = useCallback(async () => {
     const url = nextURL
     if (!url || loadingMoreRef.current) return
     loadingMoreRef.current = true
@@ -182,9 +196,9 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number }) {
       loadingMoreRef.current = false
       setLoadingMore(false)
     }
-  }
+  }, [nextURL])
 
-  async function toggleReplies(commentID: number) {
+  const toggleReplies = useCallback(async (commentID: number) => {
     const current = replyStates[commentID]
     if (current?.expanded) {
       setReplyStates((prev) => ({
@@ -245,60 +259,9 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number }) {
         },
       }))
     }
-  }
+  }, [novelID, replyStates])
 
-  async function refreshRepliesFor(commentID: number) {
-    try {
-      const page = await session.call((token) =>
-        novelID != null
-          ? novelCommentReplies(commentID, token)
-          : commentReplies(commentID, token)
-      )
-      setReplyStates((prev) => ({
-        ...prev,
-        [commentID]: {
-          items: dedupeByID(page.items),
-          nextURL: page.nextURL,
-          loading: false,
-          loadingMore: false,
-          error: null,
-          expanded: true,
-        },
-      }))
-    } catch {
-      // 静默
-    }
-  }
-
-  async function loadMoreReplies(commentID: number) {
-    const state = replyStates[commentID]
-    if (!state || !state.nextURL || state.loadingMore) return
-
-    setReplyStates((prev) => ({
-      ...prev,
-      [commentID]: { ...prev[commentID], loadingMore: true },
-    }))
-
-    try {
-      const page = await session.call((token) => nextComments(state.nextURL!, token))
-      setReplyStates((prev) => ({
-        ...prev,
-        [commentID]: {
-          ...prev[commentID],
-          items: mergeUniqueByID(prev[commentID].items, page.items),
-          nextURL: page.nextURL,
-          loadingMore: false,
-        },
-      }))
-    } catch {
-      setReplyStates((prev) => ({
-        ...prev,
-        [commentID]: { ...prev[commentID], loadingMore: false },
-      }))
-    }
-  }
-
-  async function retryReplies(commentID: number) {
+  const retryReplies = useCallback(async (commentID: number) => {
     setReplyStates((prev) => ({
       ...prev,
       [commentID]: {
@@ -310,6 +273,7 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number }) {
         expanded: true,
       },
     }))
+
     try {
       const page = await session.call((token) =>
         novelID != null
@@ -340,47 +304,70 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number }) {
         },
       }))
     }
-  }
+  }, [novelID])
 
-  function handleReply(comment: PixivComment, rootID?: number) {
-    withAnimation(() => {
-      setShowEmotePanel(false)
-    })
+  const loadMoreReplies = useCallback(async (commentID: number) => {
+    const state = replyStates[commentID]
+    if (!state || !state.nextURL || state.loadingMore) return
+
+    setReplyStates((prev) => ({
+      ...prev,
+      [commentID]: { ...prev[commentID], loadingMore: true },
+    }))
+
+    try {
+      const page = await session.call((token) => nextComments(state.nextURL!, token))
+      setReplyStates((prev) => ({
+        ...prev,
+        [commentID]: {
+          ...prev[commentID],
+          items: mergeUniqueByID(prev[commentID].items, page.items),
+          nextURL: page.nextURL,
+          loadingMore: false,
+        },
+      }))
+    } catch {
+      setReplyStates((prev) => ({
+        ...prev,
+        [commentID]: { ...prev[commentID], loadingMore: false },
+      }))
+    }
+  }, [replyStates])
+
+  const handleReply = useCallback((comment: PixivComment, rootID?: number) => {
     setReplyTarget({
       id: comment.id,
       name: comment.user.name,
       seq: Date.now(),
       rootID: rootID ?? comment.id,
     })
-  }
-
-  function handleSelectEmoji(emojiCode: string) {
-    setText((prev) => prev + emojiCode)
-  }
+  }, [])
 
   return (
     <NavigationStack
-      presentationDetents={[0.65, "large"]}
+      presentationDetents={["medium", "large"]}
       presentationDragIndicator="visible"
     >
       <VStack
         alignment="leading"
         spacing={0}
         frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+        navigationTitle={`评论${items.length > 0 ? ` (${items.length})` : ""}`}
+        navigationBarTitleDisplayMode="inline"
+        toolbar={{
+          topBarLeading: props.onClose ? (
+            <Button action={props.onClose}>
+              <Image systemName="xmark" />
+            </Button>
+          ) : undefined,
+          principal: (
+            <Text font="headline" fontWeight="bold">
+              评论 {items.length > 0 ? `(${items.length})` : ""}
+            </Text>
+          ),
+        }}
         navigationDestination={destinationElement}
       >
-        {/* 顶部标题区 */}
-        <HStack
-          spacing={8}
-          alignment="center"
-          padding={{ horizontal: 16, top: 16, bottom: 10 }}
-          frame={{ maxWidth: "infinity" }}
-        >
-          <Text font="headline" fontWeight="bold">
-            评论 {items.length > 0 ? `(${items.length})` : ""}
-          </Text>
-          <Spacer />
-        </HStack>
 
         {postError ? (
           <Text
@@ -392,8 +379,25 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number }) {
           </Text>
         ) : null}
 
-        {/* 评论列表 */}
-        <VStack frame={{ maxWidth: "infinity" }}>
+        {/* 评论列表区：通过 safeAreaInset 将输入底栏精准吸底并贴合键盘 */}
+        <ScrollView
+          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          refreshable={load}
+          presentationContentInteraction="scrolls"
+          safeAreaInset={{
+            bottom: {
+              content: (
+                <CommentInputBar
+                  replyTarget={replyTarget}
+                  onCancelReply={() => setReplyTarget(null)}
+                  onSendText={sendText}
+                  onSendStamp={sendStamp}
+                  posting={posting}
+                />
+              ),
+            },
+          }}
+        >
           {loading ? (
             <LoadingView />
           ) : error && items.length === 0 ? (
@@ -401,129 +405,174 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number }) {
           ) : items.length === 0 ? (
             <EmptyView text="还没有评论，快来抢沙发吧" systemImage="bubble.left" />
           ) : (
-            <ScrollView
+            <LazyVStack
+              alignment="leading"
+              spacing={10}
+              padding={{ horizontal: 14, vertical: 8 }}
               frame={{ maxWidth: "infinity" }}
-              refreshable={load}
-              presentationContentInteraction="scrolls"
             >
-              <VStack
-                alignment="leading"
-                spacing={10}
-                padding={{ horizontal: 14, vertical: 8 }}
-                frame={{ maxWidth: "infinity" }}
-              >
-                {items.map((comment) => (
-                  <CommentCard
-                    key={comment.id}
-                    comment={comment}
-                    onReply={handleReply}
-                    replyState={replyStates[comment.id]}
-                    onToggleReplies={() => toggleReplies(comment.id)}
-                    onRetryReplies={() => retryReplies(comment.id)}
-                    onLoadMoreReplies={() => loadMoreReplies(comment.id)}
-                  />
-                ))}
-                <LoadMoreTrigger
-                  anchor={items[items.length - 1].id}
-                  onLoadMore={loadMore}
-                  hasMore={nextURL != null}
-                  isLoading={loadingMore}
+              {items.map((comment) => (
+                <CommentCard
+                  key={comment.id}
+                  comment={comment}
+                  onReply={handleReply}
+                  replyState={replyStates[comment.id]}
+                  onToggleReplies={() => toggleReplies(comment.id)}
+                  onRetryReplies={() => retryReplies(comment.id)}
+                  onLoadMoreReplies={() => loadMoreReplies(comment.id)}
                 />
-              </VStack>
-            </ScrollView>
+              ))}
+              <LoadMoreTrigger
+                anchor={items[items.length - 1].id}
+                onLoadMore={loadMore}
+                hasMore={nextURL != null}
+                isLoading={loadingMore}
+              />
+            </LazyVStack>
           )}
-        </VStack>
-
-        {/* 底部输入区及表情面板 */}
-        <VStack
-          spacing={6}
-          padding={{ horizontal: 12, top: 8, bottom: 16 }}
-          frame={{ maxWidth: "infinity" }}
-        >
-          {/* 回复对象指示条 */}
-          {replyTarget ? (
-            <HStack
-              spacing={6}
-              alignment="center"
-              padding={{ horizontal: 12, vertical: 6 }}
-              glassEffect={{ type: "rect", cornerRadius: 16 }}
-              frame={{ maxWidth: "infinity", alignment: "leading" }}
-            >
-              <Image
-                systemName="arrowshape.turn.up.left.fill"
-                font="caption"
-                foregroundStyle="#0096FA"
-              />
-              <Text
-                font="caption"
-                foregroundStyle="secondaryLabel"
-                frame={{ alignment: "leading" }}
-              >
-                回复 @{replyTarget.name}
-              </Text>
-              <Spacer />
-              <Button
-                title="取消回复"
-                systemImage="xmark.circle.fill"
-                tint="secondaryLabel"
-                action={() => setReplyTarget(null)}
-              />
-            </HStack>
-          ) : null}
-
-          {/* 文本输入与表情切换底栏 */}
-          <HStack
-            spacing={8}
-            alignment="center"
-            frame={{ maxWidth: "infinity" }}
-          >
-            <Button
-              title={showEmotePanel ? "键盘" : "表情"}
-              systemImage={showEmotePanel ? "keyboard" : "face.smiling"}
-              tint="#0096FA"
-              buttonStyle="glass"
-              action={() => {
-                withAnimation(() => {
-                  setShowEmotePanel((prev) => !prev)
-                })
-              }}
-            />
-            <TextField
-              key={replyTarget ? `reply-${replyTarget.seq}` : "comment-default"}
-              title="评论"
-              value={text}
-              onChanged={setText}
-              onSubmit={sendText}
-              prompt={replyTarget ? `回复 @${replyTarget.name}…` : "写下你的评论…"}
-              submitLabel="send"
-              autofocus={replyTarget != null}
-              frame={{ maxWidth: "infinity" }}
-            />
-            <Button
-              title="发送"
-              buttonStyle="glassProminent"
-              tint="#0096FA"
-              controlSize="small"
-              disabled={posting || !text.trim()}
-              action={sendText}
-            />
-          </HStack>
-
-          {/* 官方 Emoji 和 Stamp 面板（支持菜单切换） */}
-          {showEmotePanel ? (
-            <EmotePickerPanel
-              tab={emoteTab}
-              onTabChanged={setEmoteTab}
-              categoryKey={stampCategoryKey}
-              onCategoryChanged={setStampCategoryKey}
-              onSelectEmoji={handleSelectEmoji}
-              onSelectStamp={sendStamp}
-              disabled={posting}
-            />
-          ) : null}
-        </VStack>
+        </ScrollView>
       </VStack>
     </NavigationStack>
+  )
+}
+
+function CommentInputBar(props: {
+  replyTarget: { id: number; name: string; seq: number; rootID: number } | null
+  onCancelReply: () => void
+  onSendText: (content: string) => Promise<boolean>
+  onSendStamp: (stampID: number) => Promise<boolean>
+  posting: boolean
+}) {
+  const { replyTarget, onCancelReply, onSendText, onSendStamp, posting } = props
+  const [text, setText] = useState("")
+  const [showEmotePanel, setShowEmotePanel] = useState(false)
+  const [emoteTab, setEmoteTab] = useState<string>("emoji")
+  const [stampCategoryKey, setStampCategoryKey] = useState<string>("all")
+
+  // 当外部回复目标切换时，收起表情面板
+  useEffect(() => {
+    if (replyTarget) {
+      setShowEmotePanel(false)
+    }
+  }, [replyTarget])
+
+  const handleSendText = async () => {
+    const content = text.trim()
+    if (!content || posting) return
+    const success = await onSendText(content)
+    if (success) {
+      setText("")
+      withAnimation(() => {
+        setShowEmotePanel(false)
+      })
+    }
+  }
+
+  const handleSendStamp = async (stampID: number) => {
+    if (posting) return
+    const success = await onSendStamp(stampID)
+    if (success) {
+      withAnimation(() => {
+        setShowEmotePanel(false)
+      })
+    }
+  }
+
+  return (
+    <VStack
+      spacing={6}
+      padding={{ horizontal: 12, top: 6, bottom: 8 }}
+      frame={{ maxWidth: "infinity" }}
+    >
+      {/* 回复对象指示条 */}
+      {replyTarget ? (
+        <HStack
+          spacing={6}
+          alignment="center"
+          padding={{ horizontal: 12, vertical: 6 }}
+          glassEffect="capsule"
+          frame={{ maxWidth: "infinity", alignment: "leading" }}
+        >
+          <Image
+            systemName="arrowshape.turn.up.left.fill"
+            font="caption"
+            foregroundStyle="#0096FA"
+          />
+          <Text
+            font="caption"
+            foregroundStyle="secondaryLabel"
+            frame={{ alignment: "leading" }}
+          >
+            回复 @{replyTarget.name}
+          </Text>
+          <Spacer />
+          <Button
+            title="取消回复"
+            systemImage="xmark.circle.fill"
+            tint="secondaryLabel"
+            action={onCancelReply}
+          />
+        </HStack>
+      ) : null}
+
+      {/* 文本输入与表情切换底栏 */}
+      <HStack
+        spacing={8}
+        alignment="center"
+        frame={{ maxWidth: "infinity" }}
+      >
+        <Button
+          title={showEmotePanel ? "键盘" : "表情"}
+          systemImage={showEmotePanel ? "keyboard" : "face.smiling"}
+          tint="#0096FA"
+          buttonStyle="glass"
+          action={() => {
+            withAnimation(() => {
+              setShowEmotePanel((prev) => !prev)
+            })
+          }}
+        />
+        <HStack
+          alignment="center"
+          padding={{ horizontal: 12, vertical: 6 }}
+          glassEffect="capsule"
+          frame={{ maxWidth: "infinity" }}
+        >
+          <TextField
+            key={replyTarget ? `reply-${replyTarget.seq}` : "comment-default"}
+            title="评论"
+            value={text}
+            onChanged={setText}
+            onSubmit={handleSendText}
+            prompt={replyTarget ? `回复 @${replyTarget.name}…` : "写下你的评论…"}
+            submitLabel="send"
+            textFieldStyle="plain"
+            autofocus={replyTarget != null}
+            frame={{ maxWidth: "infinity" }}
+          />
+        </HStack>
+        <Button
+          title="发送"
+          buttonStyle="glassProminent"
+          tint="#0096FA"
+          disabled={posting || !text.trim()}
+          action={handleSendText}
+        />
+      </HStack>
+
+      {/* 官方 Emoji 和 Stamp 面板（支持菜单切换） */}
+      {showEmotePanel ? (
+        <EmotePickerPanel
+          tab={emoteTab}
+          onTabChanged={setEmoteTab}
+          categoryKey={stampCategoryKey}
+          onCategoryChanged={setStampCategoryKey}
+          onSelectEmoji={(emojiCode) => setText((prev) => prev + emojiCode)}
+          onSelectStamp={handleSendStamp}
+          disabled={posting}
+        />
+      ) : null}
+    </VStack>
   )
 }
 

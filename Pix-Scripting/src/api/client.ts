@@ -71,12 +71,38 @@ export function standardHeaders(
   return headers
 }
 
-export function imageHeaders(): Record<string, string> {
-  return {
-    Referer: IMAGE_REFERER,
+export function isPixivMediaDomain(hostname: string): boolean {
+  const host = hostname.toLowerCase()
+  return (
+    host === "pximg.net" ||
+    host.endsWith(".pximg.net") ||
+    host === "pixiv.net" ||
+    host.endsWith(".pixiv.net") ||
+    host === "pixivision.net" ||
+    host.endsWith(".pixivision.net") ||
+    host === "pixiv.org" ||
+    host.endsWith(".pixiv.org")
+  )
+}
+
+export function imageHeaders(url?: string): Record<string, string> {
+  const headers: Record<string, string> = {
     "User-Agent": IMAGE_USER_AGENT,
     Accept: "image/avif,image/webp,image/jpeg,image/png,*/*",
   }
+  if (!url) {
+    headers.Referer = IMAGE_REFERER
+    return headers
+  }
+  try {
+    const host = new URL(url).hostname
+    if (isPixivMediaDomain(host)) {
+      headers.Referer = IMAGE_REFERER
+    }
+  } catch {
+    headers.Referer = IMAGE_REFERER
+  }
+  return headers
 }
 
 function formBody(values: Record<string, string>): string {
@@ -413,45 +439,40 @@ export function isAllowedImageDownloadURL(url: string): boolean {
     if (parsed.username !== "" || parsed.password !== "") return false
     const host = parsed.hostname.toLowerCase()
 
-    // 拦截内网或私有 IP
+    // 拦截内网或私有/本地保留 IP
     if (
       host === "localhost" ||
       host === "127.0.0.1" ||
+      host === "0.0.0.0" ||
       host === "::1" ||
       host.startsWith("192.168.") ||
       host.startsWith("10.") ||
-      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host)
+      host.startsWith("169.254.") ||
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host) ||
+      host.startsWith("fc") ||
+      host.startsWith("fd") ||
+      host.startsWith("fe80")
     ) {
       return false
     }
 
-    // 允许 Pixiv / Pximg / Pixivision 官方图片与静态资源域名
-    return (
-      host === "pximg.net" ||
-      host.endsWith(".pximg.net") ||
-      host === "pixiv.net" ||
-      host.endsWith(".pixiv.net") ||
-      host === "pixivision.net" ||
-      host.endsWith(".pixivision.net") ||
-      host === "pixiv.org" ||
-      host.endsWith(".pixiv.org")
-    )
+    return true
   } catch {
     return false
   }
 }
 
-// 下载二进制（图片等），带 Referer 与 CDN 安全白名单；跳过 API 限速（图片 CDN 并发下载）
+// 下载二进制（图片等），带 Referer 与 HTTPS 安全过滤；跳过 API 限速（图片 CDN 并发下载）
 export async function downloadBinary(
   url: string,
   extraHeaders?: Record<string, string>
 ): Promise<Data | null> {
   if (!isAllowedImageDownloadURL(url)) {
-    console.log("downloadBinary rejected non-whitelisted URL:", url.slice(0, 90))
+    console.log("downloadBinary rejected insecure or non-HTTPS URL:", url.slice(0, 90))
     return null
   }
   const { status, data } = await rawRequest(url, "GET", {
-    headers: { ...imageHeaders(), ...(extraHeaders ?? {}) },
+    headers: { ...imageHeaders(url), ...(extraHeaders ?? {}) },
     timeout: 60,
     skipPace: true,
   })

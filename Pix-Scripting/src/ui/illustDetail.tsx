@@ -973,7 +973,12 @@ export function IllustDetailView(props: { illustID: number }) {
 
       <VStack
         sheet={{
-          content: <CommentsSheet illustID={current.id} />,
+          content: (
+            <CommentsSheet
+              illustID={current.id}
+              onClose={() => setShowComments(false)}
+            />
+          ),
           isPresented: showComments,
           onChanged: setShowComments,
         }}

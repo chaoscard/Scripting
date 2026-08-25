@@ -45,6 +45,8 @@ export function SettingsView() {
   const [cacheCleared, setCacheCleared] = useTimedFlag()
   const [historyTotal, setHistoryTotal] = useState<number>(() => historyCount())
   const [historyCleared, setHistoryCleared] = useTimedFlag()
+  const [syncingWebCookie, setSyncingWebCookie] = useState(false)
+  const [, setWebCookieVersion] = useState(0)
 
   function refreshCacheSize() {
     setCacheSize(cacheUsageBytes() + ugoiraCacheUsageBytes())
@@ -288,25 +290,47 @@ export function SettingsView() {
           <VStack alignment="leading" spacing={2}>
             <Text font="body">Web 登录态</Text>
             <Text font="caption" foregroundStyle="secondaryLabel">
-              {session.webCookie ? "已同步网页端登录态（支持 R-18 标签与筛选）" : "未同步，点击立即同步"}
+              部分功能需要Web接口
             </Text>
           </VStack>
           <Spacer />
           <Button
             buttonStyle="glass"
             controlSize="small"
+            disabled={syncingWebCookie}
             action={async () => {
+              setSyncingWebCookie(true)
+              void Haptics.transient()
               try {
-                await syncWebCookies()
-                update({})
+                const ok = await syncWebCookies()
+                if (ok) {
+                  void Haptics.transient()
+                }
+                setWebCookieVersion((v) => v + 1)
               } catch (e: any) {
                 console.log("syncWebCookies error:", e?.message ?? e)
+              } finally {
+                setSyncingWebCookie(false)
               }
             }}
           >
-            <Text font="subheadline">
-              {session.webCookie ? "重新同步" : "立即同步"}
-            </Text>
+            {session.webCookie ? (
+              <HStack spacing={4} alignment="center">
+                <Text font="body">{syncingWebCookie ? "同步中…" : "已同步"}</Text>
+                {!syncingWebCookie ? (
+                  <Image
+                    systemName="checkmark"
+                    font="subheadline"
+                    fontWeight="bold"
+                    foregroundStyle="systemGreen"
+                  />
+                ) : null}
+              </HStack>
+            ) : (
+              <Text font="body">
+                {syncingWebCookie ? "同步中…" : "立即同步"}
+              </Text>
+            )}
           </Button>
         </HStack>
       </Section>
@@ -331,10 +355,10 @@ export function SettingsView() {
         footer={
           <Text>
             {settings.downloadStorageMode === "icloud"
-              ? "iCloud 存储模式下，保存在 /Scripting/Pix-Scripting 目录中，可在各个设备间同步，请在“文件”App 查看。"
+              ? `iCloud 存储模式下，图片默认保存在${settings.downloadPhotoAlbumName || "Pix-Scripting"}相簿中，请在“照片”App查看；文件默认保存在 /Scripting/Pix-Scripting 目录中，可在各设备间同步，请在“文件”App 查看。`
               : settings.downloadCustomDirectoryPath
-              ? `当前自定义存储路径：${settings.downloadCustomDirectoryPath}，请在“文件”App 查看。`
-              : "默认保存在 /Scripting/Pix-Scripting 目录中，请在“文件”App 查看。"}
+              ? `图片默认保存在${settings.downloadPhotoAlbumName || "Pix-Scripting"}相簿中，请在“照片”App查看；文件保存在 ${settings.downloadCustomDirectoryPath} 目录中，请在“文件”App 查看。`
+              : `图片默认保存在${settings.downloadPhotoAlbumName || "Pix-Scripting"}相簿中，请在“照片”App查看；文件默认保存在 /Scripting/Pix-Scripting 目录中，请在“文件”App 查看。`}
           </Text>
         }
       >
@@ -460,11 +484,8 @@ export function SettingsView() {
         </HStack>
       </Section>
 
-      <Section
-        header={<Text>缓存管理</Text>}
-        footer={<Text>多媒体缓存总预算按 9:1 分配给静态图片(90%)与动图转换(10%)。</Text>}
-      >
-        <Picker title="多媒体缓存上限" value={settings.cacheLimitMB == null ? "unlimited" : String(settings.cacheLimitMB)} onChanged={(value: string) => {
+      <Section header={<Text>缓存管理</Text>}>
+        <Picker title="图片缓存上限" value={settings.cacheLimitMB == null ? "unlimited" : String(settings.cacheLimitMB)} onChanged={(value: string) => {
           const cacheLimitMB = value === "unlimited" ? null : Number(value)
           update({ cacheLimitMB })
           enforceCacheLimit()

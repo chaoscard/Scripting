@@ -1172,7 +1172,12 @@ export function NovelDetailView(props: { novelID: number }) {
 
       <VStack
         sheet={{
-          content: <CommentsSheet novelID={current.id} />,
+          content: (
+            <CommentsSheet
+              novelID={current.id}
+              onClose={() => setShowComments(false)}
+            />
+          ),
           isPresented: showComments,
           onChanged: setShowComments,
         }}

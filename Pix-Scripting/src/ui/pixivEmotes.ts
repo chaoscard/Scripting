@@ -91,9 +91,14 @@ export type CommentToken =
   | { type: "emoji"; code: string; url: string }
 
 const EMOJI_REGEX = /(\([a-zA-Z0-9_]+\))/g
+const tokenCache = new Map<string, CommentToken[]>()
+const MAX_TOKEN_CACHE_SIZE = 500
 
 export function tokenizeCommentText(text: string): CommentToken[] {
   if (!text) return []
+  const cached = tokenCache.get(text)
+  if (cached) return cached
+
   const parts = text.split(EMOJI_REGEX)
   const tokens: CommentToken[] = []
   for (const part of parts) {
@@ -105,5 +110,9 @@ export function tokenizeCommentText(text: string): CommentToken[] {
       tokens.push({ type: "text", text: part })
     }
   }
+  if (tokenCache.size >= MAX_TOKEN_CACHE_SIZE) {
+    tokenCache.clear()
+  }
+  tokenCache.set(text, tokens)
   return tokens
 }

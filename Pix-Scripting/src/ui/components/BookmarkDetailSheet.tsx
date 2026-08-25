@@ -178,13 +178,15 @@ export function BookmarkDetailSheet(props: {
 
   return (
     <NavigationStack
-      presentationDetents={[0.65, "large"]}
+      presentationDetents={["medium", "large"]}
       presentationDragIndicator="visible"
     >
       <VStack
         alignment="leading"
         spacing={0}
         frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+        navigationTitle="收藏"
+        navigationBarTitleDisplayMode="inline"
         toolbar={{
           topBarLeading: (
             <Button
@@ -192,6 +194,11 @@ export function BookmarkDetailSheet(props: {
             >
               <Image systemName="xmark" />
             </Button>
+          ),
+          principal: (
+            <Text font="headline" fontWeight="semibold">
+              收藏
+            </Text>
           ),
           topBarTrailing: (
             <Button
@@ -221,14 +228,70 @@ export function BookmarkDetailSheet(props: {
           <LoadingView />
         ) : (
           <ScrollView
-            frame={{ maxWidth: "infinity" }}
+            frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
             presentationContentInteraction="scrolls"
+            safeAreaInset={
+              showCustomTagInput
+                ? {
+                    bottom: {
+                      content: (
+                        <VStack
+                          padding={{ horizontal: 16, top: 6, bottom: 8 }}
+                          frame={{ maxWidth: "infinity" }}
+                        >
+                          <HStack
+                            spacing={8}
+                            alignment="center"
+                            padding={{ horizontal: 14, vertical: 6 }}
+                            glassEffect="capsule"
+                            glassEffectTransition="materialize"
+                            frame={{ maxWidth: "infinity" }}
+                          >
+                            <Image
+                              systemName="tag.fill"
+                              font="footnote"
+                              foregroundStyle="#0096FA"
+                            />
+                            <TextField
+                              key={`custom-tag-${inputSeq}`}
+                              title="自定义标签"
+                              prompt="输入自定义标签名称…"
+                              value={customTag}
+                              onChanged={setCustomTag}
+                              onSubmit={addCustomTag}
+                              submitLabel="done"
+                              textFieldStyle="plain"
+                              autofocus={true}
+                              frame={{ maxWidth: "infinity" }}
+                            />
+                            <Button
+                              buttonStyle="glassProminent"
+                              tint="#0096FA"
+                              controlSize="small"
+                              disabled={!customTag.trim() || selectedTags.length >= 10}
+                              action={addCustomTag}
+                            >
+                              <Image systemName="plus" font="body" />
+                            </Button>
+                          </HStack>
+                        </VStack>
+                      ),
+                    },
+                  }
+                : undefined
+            }
           >
             <VStack
               alignment="leading"
               spacing={14}
-              padding={{ horizontal: 16, vertical: 8 }}
+              padding={{ horizontal: 16, top: 8, bottom: showCustomTagInput ? 12 : 24 }}
               frame={{ maxWidth: "infinity" }}
+              onTapGesture={() => {
+                if (showCustomTagInput) {
+                  setShowCustomTagInput(false)
+                  setCustomTag("")
+                }
+              }}
             >
               {/* 私密收藏设置卡片 */}
               <HStack
@@ -299,38 +362,6 @@ export function BookmarkDetailSheet(props: {
             </VStack>
           </ScrollView>
         )}
-
-        {/* 底部自定义标签输入条（点击自定义标签后弹出） */}
-        {showCustomTagInput ? (
-          <HStack
-            spacing={8}
-            alignment="center"
-            padding={{ horizontal: 16, top: 8, bottom: 20 }}
-            glassEffectTransition="materialize"
-            transition={Transition.move("bottom").combined(Transition.opacity())}
-            frame={{ maxWidth: "infinity" }}
-          >
-            <TextField
-              key={`custom-tag-${inputSeq}`}
-              title="自定义标签"
-              prompt="输入自定义标签名称…"
-              value={customTag}
-              onChanged={setCustomTag}
-              onSubmit={addCustomTag}
-              submitLabel="done"
-              autofocus={true}
-              frame={{ maxWidth: "infinity" }}
-            />
-            <Button
-              buttonStyle="glassProminent"
-              tint="#0096FA"
-              disabled={!customTag.trim() || selectedTags.length >= 10}
-              action={addCustomTag}
-            >
-              <Image systemName="plus" font="body" />
-            </Button>
-          </HStack>
-        ) : null}
       </VStack>
     </NavigationStack>
   )
