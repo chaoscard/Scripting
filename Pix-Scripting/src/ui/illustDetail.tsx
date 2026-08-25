@@ -383,7 +383,7 @@ export function IllustDetailView(props: { illustID: number }) {
     recordWorkSeriesAssociation(current.id, "manga", resolvedSeriesID, resolvedSeriesTitle, resolvedEpisodeNumber)
   }
 
-  const pageCount = Math.max(1, current.page_count || current.meta_pages.length || 1)
+  const pageCount = Math.max(1, current.page_count || current.meta_pages?.length || 1)
   // 无限滚动：一次性生成所有页的图片 URL（meta_pages 缺失时由 imageUrlOf 推导）
   const pageURLs: (string | null)[] = []
   for (let k = 0; k < pageCount; k++) {
@@ -783,16 +783,16 @@ export function IllustDetailView(props: { illustID: number }) {
             <Divider />
             <Menu title="信息" systemImage="info.circle">
               <Button
-                title={`作者：${current.user.name}`}
-                action={() => Pasteboard.setString(current.user.name)}
+                title={`作者：${current.user?.name ?? "未知"}`}
+                action={() => Pasteboard.setString(current.user?.name ?? "")}
               />
               <Button
-                title={`UID：${current.user.id}`}
-                action={() => Pasteboard.setString(String(current.user.id))}
+                title={`UID：${current.user?.id ?? 0}`}
+                action={() => Pasteboard.setString(String(current.user?.id ?? ""))}
               />
               <Button
-                title={`标题：${current.title}`}
-                action={() => Pasteboard.setString(current.title)}
+                title={`标题：${current.title ?? "未命名"}`}
+                action={() => Pasteboard.setString(current.title ?? "")}
               />
               <Button
                 title={`PID：${current.id}`}
@@ -824,9 +824,9 @@ export function IllustDetailView(props: { illustID: number }) {
               )}
             </Menu>
           </Menu>,
-          <NavigationLink value={`user:${current.user.id}`}>
+          <NavigationLink value={`user:${current.user?.id ?? 0}`}>
             <AvatarImage
-              url={current.user.profile_image_urls?.medium ?? null}
+              url={current.user?.profile_image_urls?.medium ?? null}
               size={28}
             />
           </NavigationLink>,
@@ -935,7 +935,7 @@ export function IllustDetailView(props: { illustID: number }) {
           />
 
           {/* 标签：原生流式换行展示所有标签 */}
-          {current.tags.length > 0 ? (
+          {Array.isArray(current.tags) && current.tags.length > 0 ? (
             <VStack alignment="leading" spacing={6}>
               <Text font="subheadline" fontWeight="semibold" foregroundStyle="secondaryLabel">
                 标签
@@ -1039,76 +1039,28 @@ function RelatedIllustrationsSection(props: {
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
-  const pagedRef = useLatest(paged)
-
-  useEffect(() => {
-    return onSettingsChanged(() => {
-      pagedRef.current.reapplyFilter()
-    })
-  }, [])
-
-  if (paged.initialLoading && !enabled) {
-    return null
-  }
 
   return (
-    <VStack
-      alignment="leading"
-      spacing={8}
-      padding={{ top: 4 }}
-      frame={{ maxWidth: "infinity", alignment: "leading" }}
-    >
-      <Text
-        font="subheadline"
-        fontWeight="semibold"
-        foregroundStyle="secondaryLabel"
-        padding={{ horizontal: 14 }}
-      >
+    <VStack alignment="leading" spacing={8} padding={{ top: 8, bottom: 20 }}>
+      <Text font="headline" fontWeight="bold" padding={{ horizontal: 14 }}>
         相关作品
       </Text>
-      {paged.initialLoading ? (
-        <HStack spacing={0} frame={{ maxWidth: "infinity", height: 80 }}>
-          <Spacer />
-          <ProgressView progressViewStyle="circular" />
-          <Spacer />
-        </HStack>
-      ) : paged.error && paged.items.length === 0 ? (
-        <VStack alignment="center" spacing={8} padding={16} frame={{ maxWidth: "infinity" }}>
-          <Text font="footnote" foregroundStyle="secondaryLabel">
-            相关作品加载失败
-          </Text>
-          <Button
-            title="重试"
-            buttonStyle="glass"
-            action={() => paged.refresh()}
-          />
-        </VStack>
-      ) : paged.items.length > 0 ? (
-        <IllustFlowFeed
-          items={paged.items}
-          onLoadMore={paged.loadMore}
-          hasMore={paged.hasMore}
-          isLoading={paged.loadingMore}
-        />
-      ) : (
-        <HStack spacing={0} padding={{ horizontal: 14, vertical: 8 }} frame={{ maxWidth: "infinity", alignment: "leading" }}>
-          <Text font="footnote" foregroundStyle="secondaryLabel">
-            暂无相关作品
-          </Text>
-        </HStack>
-      )}
+      <IllustFlowFeed
+        paged={paged}
+        emptyMessage="暂无相关作品"
+        columns={3}
+      />
     </VStack>
   )
 }
 
 function filterRelatedIllustrations(
   items: PixivIllustration[],
-  currentIllustID?: number
+  currentID: number
 ): PixivIllustration[] {
   const settings = loadSettings()
-  return items.filter(
-    (item) =>
-      item.id !== currentIllustID &&
-      isIllustContentVisible(item, settings)
-  )
+  return items.filter((item) => {
+    if (item.id === currentID) return false
+    return isIllustContentVisible(item, settings)
+  })
 }
