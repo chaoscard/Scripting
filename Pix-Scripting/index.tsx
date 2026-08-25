@@ -6,11 +6,39 @@ import { prepareBlocklistStorage } from "./src/store/blocklist"
 import { flushNovelProgress, prepareNovelProgressStorage } from "./src/store/novelProgress"
 import { prepareSearchHistoryStorage } from "./src/store/searchHistory"
 import { flushSeriesCache, prepareSeriesCacheStorage } from "./src/store/seriesCache"
+import { requestPixivRoute } from "./src/ui/routeNavigation"
+import { populateWidgetPool, seedIllustFromWidgetPool } from "./src/store/widgetStore"
+import { normalizeRoute } from "./src/ui/routes"
+
+function seedIfIllustRoute(route?: string | null) {
+  if (!route) return
+  const norm = normalizeRoute(route)
+  if (norm.startsWith("illust:")) {
+    const id = Number(norm.slice("illust:".length))
+    if (Number.isFinite(id) && id > 0) {
+      seedIllustFromWidgetPool(id)
+    }
+  }
+}
 
 async function main() {
   try {
-    Script.onResume(() => {
-      // 保持长驻实例监听
+    const startupRoute =
+      (Script.queryParameters?.route as string | undefined) ||
+      (Script.widgetParameter ? `illust:${Script.widgetParameter}` : null)
+    if (startupRoute && typeof startupRoute === "string") {
+      seedIfIllustRoute(startupRoute)
+      requestPixivRoute(startupRoute)
+    }
+
+    Script.onResume((details) => {
+      const resumeRoute =
+        (details.queryParameters?.route as string | undefined) ||
+        (details.widgetParameter ? `illust:${details.widgetParameter}` : null)
+      if (resumeRoute && typeof resumeRoute === "string") {
+        seedIfIllustRoute(resumeRoute)
+        requestPixivRoute(resumeRoute)
+      }
     })
     Script.onMinimize(() => {
       flushHistory()
@@ -27,6 +55,9 @@ async function main() {
       prepareSearchHistoryStorage(),
       prepareSeriesCacheStorage(),
     ]).catch(() => {})
+
+    // 后台静默预热小组件数据池
+    populateWidgetPool().catch(() => {})
 
     await Navigation.present({
       element: <RootView />,
