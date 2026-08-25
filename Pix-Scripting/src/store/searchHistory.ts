@@ -3,7 +3,6 @@ import { recoverFile, writeTextSafely } from "./safeFile"
 import { session } from "../api/session"
 
 const SEARCH_HISTORY_FILE_NAME = "search_history.json"
-const MAX_SEARCH_HISTORY_ITEMS = 30
 
 let cachedSearchHistory: string[] | null = null
 const listeners = new Set<() => void>()
@@ -80,7 +79,7 @@ export function addSearchHistory(query: string): string[] {
   if (!trimmed) return getSearchHistory()
   const current = getSearchHistory()
   const filtered = current.filter((item) => item !== trimmed)
-  const next = [trimmed, ...filtered].slice(0, MAX_SEARCH_HISTORY_ITEMS)
+  const next = [trimmed, ...filtered]
   cachedSearchHistory = next
   persistSearchHistory(next)
   emitChanged()

@@ -1,6 +1,7 @@
 import type { PixivUser } from "../types"
 import { pixivBlocklistDirectory } from "./dataDirectory"
 import { recoverFile, writeTextSafely } from "./safeFile"
+import { session } from "../api/session"
 
 export interface BlockedUser {
   id: number
@@ -19,19 +20,23 @@ const DEFAULT_BLOCKLIST: BlocklistData = {
   blockedUsers: [],
 }
 
-const KEY = "pixiv_blocklist_v1"
 const BLOCKLIST_FILE_NAME = "blocklist.json"
 
 let cachedBlocklist: BlocklistData | null = null
 const listeners = new Set<() => void>()
 
-function blocklistFilePath(): string {
-  return `${pixivBlocklistDirectory()}/${BLOCKLIST_FILE_NAME}`
+export function clearBlocklistMemoryCache(): void {
+  cachedBlocklist = null
+  emitChanged()
 }
 
-export async function prepareBlocklistStorage(): Promise<void> {
+function blocklistFilePath(userId?: string | number | null): string {
+  return `${pixivBlocklistDirectory(userId ?? session.userID)}/${BLOCKLIST_FILE_NAME}`
+}
+
+export async function prepareBlocklistStorage(userId?: string | number | null): Promise<void> {
   if (!FileManager.isiCloudEnabled) return
-  const path = blocklistFilePath()
+  const path = blocklistFilePath(userId)
   if (
     !FileManager.existsSync(path) ||
     !FileManager.isFileStoredIniCloud(path) ||
@@ -74,7 +79,6 @@ function persistBlocklist(blocklist: BlocklistData): boolean {
   } catch (error: any) {
     console.log("blocklist persist error:", error?.message ?? error)
   }
-  Storage.set(KEY, blocklist)
   return true
 }
 
@@ -87,18 +91,10 @@ export function loadBlocklist(): BlocklistData {
       const raw = FileManager.readAsStringSync(path, "utf-8")
       const parsed = JSON.parse(raw)
       cachedBlocklist = parseBlocklist(parsed)
-      Storage.set(KEY, cachedBlocklist)
       return cachedBlocklist
     }
   } catch {
-    // 文件解析异常时尝试读取缓存
-  }
-
-  const stored = Storage.get(KEY)
-  if (stored && typeof stored === "object") {
-    cachedBlocklist = parseBlocklist(stored as Partial<BlocklistData>)
-    persistBlocklist(cachedBlocklist)
-    return cachedBlocklist
+    // 文件解析异常时使用默认值
   }
 
   cachedBlocklist = { ...DEFAULT_BLOCKLIST }

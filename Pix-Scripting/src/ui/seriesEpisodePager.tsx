@@ -119,7 +119,13 @@ export function useSeriesEpisodeNav(options: UseSeriesEpisodeNavOptions): Series
 
     let active = true
 
-    // 先检查同步缓存
+    // 如果有前后话元数据，顺便预热关联
+    if (initialPrev?.id) {
+      recordWorkSeriesAssociation(initialPrev.id, kind, seriesID, defaultTitle)
+    }
+    if (initialNext?.id) {
+      recordWorkSeriesAssociation(initialNext.id, kind, seriesID, defaultTitle)
+    }
     const cached = getCachedSeriesNav(seriesID, kind)
     if (cached) {
       const idx = cached.items.findIndex((it) => it.id === workID)
@@ -139,8 +145,8 @@ export function useSeriesEpisodeNav(options: UseSeriesEpisodeNavOptions): Series
       }
     }
 
-    // 异步拉取
-    fetchSeriesNav(seriesID, kind).then((navData) => {
+    // 异步拉取（带 targetWorkID 快速按需命中）
+    fetchSeriesNav(seriesID, kind, workID).then((navData) => {
       if (!active || !navData) return
       const idx = navData.items.findIndex((it) => it.id === workID)
       if (idx >= 0) {

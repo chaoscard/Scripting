@@ -95,10 +95,6 @@ export function saveCredentials(creds: StoredCredentials): void {
   } catch (e: any) {
     console.log("Keychain save error:", e?.message ?? e)
   }
-  // 清理历史遗留的 Storage 明文副本
-  try {
-    Storage.remove(CREDENTIALS_KEY)
-  } catch {}
 }
 
 function isStoredCredentials(value: unknown): value is StoredCredentials {
@@ -182,9 +178,6 @@ export async function clearPixivWebCookies(): Promise<void> {
 export function clearCredentials(): void {
   try {
     Keychain.remove(CREDENTIALS_KEY)
-  } catch {}
-  try {
-    Storage.remove(CREDENTIALS_KEY)
   } catch {}
   // 异步清理 WebView 容器内的 Pixiv Web 会话与 Cookie，防止切号复用
   clearPixivWebCookies().catch(() => {})

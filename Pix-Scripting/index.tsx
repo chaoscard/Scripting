@@ -5,6 +5,7 @@ import { prepareSettingsStorage } from "./src/store/settings"
 import { prepareBlocklistStorage } from "./src/store/blocklist"
 import { flushNovelProgress, prepareNovelProgressStorage } from "./src/store/novelProgress"
 import { prepareSearchHistoryStorage } from "./src/store/searchHistory"
+import { flushSeriesCache, prepareSeriesCacheStorage } from "./src/store/seriesCache"
 
 async function main() {
   try {
@@ -14,6 +15,7 @@ async function main() {
     Script.onMinimize(() => {
       flushHistory()
       flushNovelProgress()
+      flushSeriesCache()
     })
     Script.enableMinimize()
 
@@ -23,6 +25,7 @@ async function main() {
       prepareBlocklistStorage(),
       prepareNovelProgressStorage(),
       prepareSearchHistoryStorage(),
+      prepareSeriesCacheStorage(),
     ]).catch(() => {})
 
     await Navigation.present({
@@ -31,10 +34,12 @@ async function main() {
     })
     flushHistory()
     flushNovelProgress()
+    flushSeriesCache()
     Script.exit()
   } catch (e) {
     flushHistory()
     flushNovelProgress()
+    flushSeriesCache()
     console.present().then(Script.exit)
     console.error(e)
   }

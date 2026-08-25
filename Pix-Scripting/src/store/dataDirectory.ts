@@ -36,12 +36,19 @@ export function pixivHistoryDirectory(userId?: string | number | null): string {
   return pixivCloudDirectory(`History/users/${uid}`)
 }
 
+// 系列目录与话数映射保存在 iCloud Documents，按账号隔离支持跨设备同步。
+export function pixivSeriesCacheDirectory(userId?: string | number | null): string {
+  const uid = userId != null && String(userId).trim().length > 0 ? String(userId).trim() : "anonymous"
+  return pixivCloudDirectory(`Series/users/${uid}`)
+}
+
 // 应用设置保存在 iCloud Documents，以便多设备间同步配置。
 export function pixivSettingsDirectory(): string {
   return pixivCloudDirectory("Settings")
 }
 
-// 黑名单独立保存在 iCloud Documents，支持跨设备同步。
-export function pixivBlocklistDirectory(): string {
-  return pixivCloudDirectory("Blocklist")
+// 黑名单保存在 iCloud Documents，按账号隔离支持跨设备同步。
+export function pixivBlocklistDirectory(userId?: string | number | null): string {
+  const uid = userId != null && String(userId).trim().length > 0 ? String(userId).trim() : "anonymous"
+  return pixivCloudDirectory(`Blocklist/users/${uid}`)
 }

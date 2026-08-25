@@ -2,6 +2,7 @@ import {
   Button,
   Device,
   Divider,
+  Group,
   HStack,
   Image,
   Label,
@@ -480,7 +481,7 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
     debouncedUserAutocomplete.cancel()
     addSearchHistory(trimmed)
     setSubmitted(trimmed)
-    setQuery(trimmed)
+    setQuery("")
     setAdvancedParams((prev) => ({ ...prev, word: trimmed, scope }))
     setTagSuggestions([])
     setUserSuggestions([])
@@ -560,19 +561,11 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
         value: query,
         onChanged: onQueryChanged,
         placement: "toolbar",
-        prompt:
-          scope === "user"
-            ? "搜索用户…"
-            : scope === "novel"
-              ? "搜索小说、标签、作者…"
-              : "输入关键字",
+        prompt: "输入关键词",
         presented: {
           value: searchPresented,
           onChanged: (val: boolean) => {
             setSearchPresented(val)
-            if (!val && !query.trim()) {
-              setSubmitted("")
-            }
           },
         },
       }}
@@ -604,7 +597,7 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
           ) : null}
 
           {/* 2. 键盘抬起/搜索框激活且无输入内容：隐藏热门标签与推荐用户，展示用户搜索历史 */}
-          {!isSuggestingActive && !submitted && searchPresented ? (
+          {!isSuggestingActive && searchPresented ? (
             <SearchHistorySection
               history={historyItems}
               onSelect={submitSearch}
@@ -639,48 +632,99 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
             )
           ) : null}
 
-          {/* 4. 已提交搜索且不在提示词态：展示完整搜索结果列表 */}
+          {/* 4. 已提交搜索且不在提示词态：展示当前搜索状态条与完整搜索结果列表 */}
           {submitted && !searchPresented ? (
-            activePaged.initialLoading ? (
-              <LoadingView />
-            ) : activePaged.error ? (
-              <ErrorView
-                message={activePaged.error}
-                onRetry={activePaged.refresh}
-              />
-            ) : activePaged.items.length === 0 ? (
-              <EmptyView
-                text={
-                  activePaged.hasFilteredContent
-                    ? scope === "novel"
-                      ? "当前页面部分小说被内容显示设置过滤，暂时无法显示"
-                      : scope === "user"
-                        ? "当前页面部分用户内容被内容显示设置过滤，暂时无法显示"
-                        : "当前页面部分作品被内容显示设置过滤，暂时无法显示"
-                    : "没有找到相关内容"
-                }
-                systemImage={activePaged.hasFilteredContent ? "eye.slash" : "magnifyingglass"}
-              />
-            ) : scope === "illust" ? (
-              <IllustFlowFeed
-                items={illustPaged.items}
-                onLoadMore={illustPaged.loadMore}
-                hasMore={illustPaged.hasMore}
-                isLoading={illustPaged.loadingMore}
-              />
-            ) : scope === "novel" ? (
-              <NovelResults
-                items={novelPaged.items}
-                loadingMore={novelPaged.loadingMore}
-                hasMore={novelPaged.hasMore}
-                onLoadMore={novelPaged.loadMore}
-              />
-            ) : (
-              <UserResults
-                paged={userSearchPaged}
-                hideNovels={hideNovels}
-              />
-            )
+            <VStack spacing={10} frame={{ maxWidth: "infinity" }}>
+              {/* 当前搜索状态条：支持一键清除回到初始推荐状态 */}
+              <HStack
+                alignment="center"
+                spacing={8}
+                padding={{ horizontal: 16, top: 2, bottom: 2 }}
+                frame={{ maxWidth: "infinity" }}
+              >
+                <HStack
+                  alignment="center"
+                  spacing={6}
+                  padding={{ horizontal: 12, vertical: 6 }}
+                  glassEffect="capsule"
+                  contentShape="capsule"
+                >
+                  <Image systemName="magnifyingglass" font="caption" foregroundStyle="secondaryLabel" />
+                  <Text font="subheadline" fontWeight="medium" foregroundStyle="label" lineLimit={1}>
+                    {submitted}
+                  </Text>
+                  <Button
+                    buttonStyle="plain"
+                    action={() => {
+                      setSubmitted("")
+                      setQuery("")
+                    }}
+                  >
+                    <Image
+                      systemName="xmark.circle.fill"
+                      font="subheadline"
+                      foregroundStyle="secondaryLabel"
+                    />
+                  </Button>
+                </HStack>
+                <Spacer />
+                <Button
+                  buttonStyle="plain"
+                  action={() => {
+                    setSubmitted("")
+                    setQuery("")
+                  }}
+                >
+                  <HStack alignment="center" spacing={4}>
+                    <Image systemName="arrow.uturn.backward" font="caption" foregroundStyle="#007AFF" />
+                    <Text font="subheadline" foregroundStyle="#007AFF">
+                      返回推荐
+                    </Text>
+                  </HStack>
+                </Button>
+              </HStack>
+
+              {activePaged.initialLoading ? (
+                <LoadingView />
+              ) : activePaged.error ? (
+                <ErrorView
+                  message={activePaged.error}
+                  onRetry={activePaged.refresh}
+                />
+              ) : activePaged.items.length === 0 ? (
+                <EmptyView
+                  text={
+                    activePaged.hasFilteredContent
+                      ? scope === "novel"
+                        ? "当前页面部分小说被内容显示设置过滤，暂时无法显示"
+                        : scope === "user"
+                          ? "当前页面部分用户内容被内容显示设置过滤，暂时无法显示"
+                          : "当前页面部分作品被内容显示设置过滤，暂时无法显示"
+                      : "没有找到相关内容"
+                  }
+                  systemImage={activePaged.hasFilteredContent ? "eye.slash" : "magnifyingglass"}
+                />
+              ) : scope === "illust" ? (
+                <IllustFlowFeed
+                  items={illustPaged.items}
+                  onLoadMore={illustPaged.loadMore}
+                  hasMore={illustPaged.hasMore}
+                  isLoading={illustPaged.loadingMore}
+                />
+              ) : scope === "novel" ? (
+                <NovelResults
+                  items={novelPaged.items}
+                  loadingMore={novelPaged.loadingMore}
+                  hasMore={novelPaged.hasMore}
+                  onLoadMore={novelPaged.loadMore}
+                />
+              ) : (
+                <UserResults
+                  paged={userSearchPaged}
+                  hideNovels={hideNovels}
+                />
+              )}
+            </VStack>
           ) : null}
         </VStack>
     </RefreshableScrollView>
@@ -761,15 +805,6 @@ function TagSuggestionsSection(props: {
 
   return (
     <VStack alignment="leading" spacing={8} padding={{ horizontal: 16, top: 4, bottom: 20 }}>
-      <Text
-        font="subheadline"
-        fontWeight="semibold"
-        foregroundStyle="secondaryLabel"
-        padding={{ vertical: 4 }}
-      >
-        你是不是要找这个？
-      </Text>
-
       {loading && suggestions.length === 0 ? (
         <LoadingView />
       ) : suggestions.length === 0 ? (
@@ -784,21 +819,34 @@ function TagSuggestionsSection(props: {
           </Text>
         </VStack>
       ) : (
-        <VStack spacing={0} frame={{ maxWidth: "infinity" }}>
+        <VStack
+          spacing={0}
+          glassEffect={{ type: "rect", cornerRadius: 12 }}
+          clipShape={{ type: "rect", cornerRadius: 12 }}
+          frame={{ maxWidth: "infinity" }}
+        >
           {suggestions.map((item, index) => (
             <VStack key={`${item.name}-${index}`} spacing={0} frame={{ maxWidth: "infinity" }}>
-              {index > 0 ? <Divider padding={{ leading: 0 }} /> : null}
+              {index > 0 ? <Divider /> : null}
               <Button
                 buttonStyle="plain"
                 action={() => onSelect(item.name)}
+                contentShape="rect"
                 frame={{ maxWidth: "infinity", alignment: "leading" }}
               >
                 <HStack
-                  spacing={8}
-                  padding={{ vertical: 13 }}
+                  alignment="center"
+                  spacing={10}
+                  padding={{ horizontal: 14, vertical: 12 }}
                   frame={{ maxWidth: "infinity", alignment: "leading" }}
+                  contentShape="rect"
                 >
-                  <Text font="body" foregroundStyle="label">
+                  <Image
+                    systemName="magnifyingglass"
+                    font="subheadline"
+                    foregroundStyle="secondaryLabel"
+                  />
+                  <Text font="body" foregroundStyle="label" lineLimit={1}>
                     {item.name}
                   </Text>
                   {item.translated_name ? (
@@ -876,7 +924,7 @@ function SearchHistorySection(props: {
 
   return (
     <VStack alignment="leading" spacing={10} padding={{ horizontal: 16, top: 4, bottom: 20 }}>
-      <HStack spacing={6} frame={{ maxWidth: "infinity" }}>
+      <HStack alignment="center" spacing={6} frame={{ maxWidth: "infinity" }}>
         <Image
           systemName="clock.arrow.circlepath"
           font="subheadline"
@@ -887,14 +935,32 @@ function SearchHistorySection(props: {
         </Text>
         <Spacer />
         {history.length > 0 ? (
-          <Button buttonStyle="plain" action={onClear}>
-            <HStack spacing={4}>
-              <Image systemName="trash" font="caption" foregroundStyle="secondaryLabel" />
-              <Text font="caption" foregroundStyle="secondaryLabel">
-                清空
-              </Text>
-            </HStack>
-          </Button>
+          <ZStack
+            alignment="center"
+            frame={{ width: 32, height: 32 }}
+            glassEffect="circle"
+            contentShape="circle"
+            shadow={{ color: "#0000000D", radius: 4, y: 1 }}
+            contextMenu={{
+              menuItems: (
+                <Group>
+                  <Button
+                    title="清空全部搜索记录"
+                    systemImage="trash"
+                    role="destructive"
+                    action={onClear}
+                  />
+                </Group>
+              ),
+            }}
+          >
+            <Image
+              systemName="trash"
+              font="footnote"
+              fontWeight="semibold"
+              foregroundStyle="#FF3B30"
+            />
+          </ZStack>
         ) : null}
       </HStack>
 
