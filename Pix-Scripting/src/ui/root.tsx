@@ -3,6 +3,7 @@ import {
   Navigation,
   NavigationStack,
   ProgressView,
+  Script,
   Spacer,
   Tab,
   TabView,
@@ -66,9 +67,12 @@ export function RootView() {
 
   useEffect(() => {
     let cancelled = false
-    const duration = loadSettings().launchAnimationDuration ?? 1500
-    // 冷启动过渡体验：启动就绪缓冲，给首屏网络请求与首批图片解码留出充分时间，
-    // 确保过渡后首屏卡片与图片完全就绪、无空白闪烁。
+    const hasStartupRoute = Boolean(
+      Script.queryParameters?.route || Script.widgetParameter
+    )
+    const defaultDuration = loadSettings().launchAnimationDuration ?? 1500
+    // 冷启动过渡体验：从小组件/外部直达特定作品时缩短至 100ms，直接展现内容；常规启动保留完整就绪缓冲
+    const duration = hasStartupRoute ? 100 : defaultDuration
     const timer = setTimeout(() => {
       if (!cancelled) {
         setIsReady(true)
@@ -131,7 +135,7 @@ function MainTabView(props: {
 
   useEffect(() => {
     return setPixivRouteNavigator((route: string) => {
-      const activeTab = selection.value
+      const activeTab = selection.value || initialTab || "discovery"
       if (activeTab === "ranking") {
         rankingPath.setValue([...rankingPath.value, route])
       } else if (activeTab === "following") {
@@ -144,7 +148,7 @@ function MainTabView(props: {
         discoveryPath.setValue([...discoveryPath.value, route])
       }
     })
-  }, [selection, discoveryPath, rankingPath, followingPath, searchPath, morePath])
+  }, [selection, discoveryPath, rankingPath, followingPath, searchPath, morePath, initialTab])
 
   return (
     <TabView

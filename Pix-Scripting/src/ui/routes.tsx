@@ -20,10 +20,58 @@ import { UserWorksView } from "./userWorks"
 import { AboutView } from "./about"
 import { RankingCustomPickerView, type CustomRankingPickerKind } from "./rankingCustomPicker"
 
+// 解析与规范化各类路由格式（支持 URL 编码如 %3A、纯数字 ID、Pixiv 网页链接等）
+export function normalizeRoute(rawRoute: string): string {
+  if (!rawRoute || typeof rawRoute !== "string") return ""
+  let decoded = rawRoute.trim()
+  try {
+    decoded = decodeURIComponent(decoded)
+  } catch {}
+  if (
+    decoded.includes("%3A") ||
+    decoded.includes("%3a") ||
+    decoded.includes("%2F") ||
+    decoded.includes("%2f")
+  ) {
+    try {
+      decoded = decodeURIComponent(decoded)
+    } catch {}
+  }
+  decoded = decoded.replace(/^["']|["']$/g, "").trim()
+  if (!decoded) return ""
+
+  // 纯数字当作插画/漫画 ID
+  if (/^\d+$/.test(decoded)) {
+    return `illust:${decoded}`
+  }
+  // 网页链接匹配 https://www.pixiv.net/artworks/123456
+  const artworkMatch = decoded.match(/artworks\/(\d+)/)
+  if (artworkMatch) {
+    return `illust:${artworkMatch[1]}`
+  }
+  const novelMatch = decoded.match(/novel\/(?:show|series)\.php\?id=(\d+)/)
+  if (novelMatch) {
+    return `novel:${novelMatch[1]}`
+  }
+  const userMatch = decoded.match(/users\/(\d+)/)
+  if (userMatch) {
+    return `user:${userMatch[1]}`
+  }
+  return decoded
+}
+
 // 解析 "xxx:123" 形式的数值 id；非法输入返回 null（避免 NaN 传给详情页）
 function parseID(value: string, prefix: string): number | null {
-  const id = Number(value.slice(prefix.length))
-  return Number.isFinite(id) && id > 0 ? id : null
+  const normalized = normalizeRoute(value)
+  if (normalized.startsWith(prefix)) {
+    const id = Number(normalized.slice(prefix.length))
+    return Number.isFinite(id) && id > 0 ? id : null
+  }
+  if (prefix === "illust:" && /^\d+$/.test(normalized)) {
+    const id = Number(normalized)
+    return Number.isFinite(id) && id > 0 ? id : null
+  }
+  return null
 }
 
 // 解析 URL 编码的标签名；畸形百分号编码抛异常时回退原始文本
@@ -35,7 +83,8 @@ function decodeTag(value: string): string {
   }
 }
 
-export function renderDestination(page: string) {
+export function renderDestination(rawPage: string) {
+  const page = normalizeRoute(rawPage)
   if (page.startsWith("illust:")) {
     const id = parseID(page, "illust:")
     if (id != null) return <IllustDetailView illustID={id} />
