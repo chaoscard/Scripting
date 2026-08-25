@@ -19,6 +19,7 @@ import { UserConnectionsView, type ConnectionRouteKind } from "./userConnections
 import { UserWorksView } from "./userWorks"
 import { AboutView } from "./about"
 import { RankingCustomPickerView, type CustomRankingPickerKind } from "./rankingCustomPicker"
+import { seedIllustFromWidgetPool } from "../store/widgetStore"
 
 // 解析与规范化各类路由格式（支持 URL 编码如 %3A、纯数字 ID、Pixiv 网页链接等）
 export function normalizeRoute(rawRoute: string): string {
@@ -87,7 +88,10 @@ export function renderDestination(rawPage: string) {
   const page = normalizeRoute(rawPage)
   if (page.startsWith("illust:")) {
     const id = parseID(page, "illust:")
-    if (id != null) return <IllustDetailView illustID={id} />
+    if (id != null) {
+      seedIllustFromWidgetPool(id)
+      return <IllustDetailView illustID={id} />
+    }
   }
   if (page.startsWith("pixivision:")) {
     const id = parseID(page, "pixivision:")
@@ -110,7 +114,10 @@ export function renderDestination(rawPage: string) {
     if (id != null) return <SeriesView kind="novel" seriesID={id} />
   }
   if (page.startsWith("tag:")) {
-    return <TagFeedView tag={decodeTag(page.slice("tag:".length))} />
+    return <TagFeedView tag={decodeTag(page.slice("tag:".length))} kind="illust" />
+  }
+  if (page.startsWith("novelTag:")) {
+    return <TagFeedView tag={decodeTag(page.slice("novelTag:".length))} kind="novel" />
   }
   if (page === "novelBookmarks") return <NovelLibraryView />
   if (page === "library") return <LibraryView />

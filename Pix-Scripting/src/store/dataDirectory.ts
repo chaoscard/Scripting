@@ -62,3 +62,4 @@ export function pixivWidgetDirectory(): string {
 export function pixivWidgetPath(...parts: string[]): string {
   return [pixivWidgetDirectory(), ...parts].join("/")
 }
+

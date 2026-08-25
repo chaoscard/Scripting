@@ -611,3 +611,32 @@ export interface AdvancedSearchParams {
   endTimestamp: number
 }
 
+export interface PixivTagInfoResponse {
+  error: boolean
+  message: string
+  body: {
+    tag?: string
+    abstract?: string
+    thumbnail?: string | null
+    ja?: {
+      tag?: string
+      abstract?: string
+      url?: string
+    } | null
+    en?: {
+      tag?: string
+      abstract?: string
+      url?: string
+    } | null
+    is_view_lead_wire?: boolean
+  }
+}
+
+export interface PixivTagDetail {
+  tag: string
+  abstract?: string
+  thumbnailUrl?: string | null
+  dicUrl?: string | null
+  hasEncyclopedia: boolean
+}
+

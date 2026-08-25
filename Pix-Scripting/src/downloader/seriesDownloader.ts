@@ -8,7 +8,7 @@ import {
 } from "../api/pixiv"
 import { session } from "../api/session"
 import { imageUrlOf } from "../image/imageLoader"
-import { loadSettings } from "../store/settings"
+import { getDownloadImageQuality, loadSettings } from "../store/settings"
 import { exportNovelToEpub, type NovelChapter } from "./epubExporter"
 import { exportMangaToCbz } from "./cbzExporter"
 import { exportMangaToEpub } from "./epubExporter"
@@ -214,7 +214,7 @@ export async function downloadEntireMangaSeries(
         // 按正序排列
         allIllusts.sort((a, b) => (a.series_order ?? a.id) - (b.series_order ?? b.id))
 
-        const quality = loadSettings().downloadImageQuality
+        const quality = getDownloadImageQuality()
         const allPages: { pageIndex: number; url: string }[] = []
         let globalPageCounter = 0
         const totalIllusts = allIllusts.length

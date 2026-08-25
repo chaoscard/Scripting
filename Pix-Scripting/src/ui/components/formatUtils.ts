@@ -117,14 +117,17 @@ export function formatTextWithBreakOpportunities(text: string, isUrl = false): s
   const noBreakAfter = new Set([
     "“", "‘", "（", "《", "【", "(", "[", "{", "<"
   ])
+
+  // 按完整的 Unicode Code Point 切分字符（避免拆散 Emoji 等 4 字节代理对）
+  const chars = Array.from(text)
   const result: string[] = []
 
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i]
+  for (let i = 0; i < chars.length; i++) {
+    const ch = chars[i]
     result.push(ch)
 
-    if (i < text.length - 1) {
-      const nextCh = text[i + 1]
+    if (i < chars.length - 1) {
+      const nextCh = chars[i + 1]
       if (
         ch === "\n" || nextCh === "\n" ||
         ch === "\r" || nextCh === "\r" ||
@@ -134,11 +137,18 @@ export function formatTextWithBreakOpportunities(text: string, isUrl = false): s
         continue
       }
 
+      // 如果当前字符或下一个字符是 Emoji 组合控制符（如变体选择器 VS16 \uFE0F、零宽连字 \u200D 等），不拆分
+      if (ch === "\uFE0F" || nextCh === "\uFE0F" || ch === "\u200D" || nextCh === "\u200D") {
+        continue
+      }
+
       if (isUrl) {
         // 对于 URL 链接：在所有字符（含字母数字及 / ? & = - _ . : 等符号）间注入断行契机，防止 CoreText 将超长 URL 路径整块推至下一行
         result.push("\u200B")
       } else {
-        const isCjk = text.charCodeAt(i) > 255 || text.charCodeAt(i + 1) > 255
+        const code = ch.codePointAt(0) ?? 0
+        const nextCode = nextCh.codePointAt(0) ?? 0
+        const isCjk = code > 255 || nextCode > 255
         if (!noBreakBefore.has(nextCh) && !noBreakAfter.has(ch)) {
           if (isCjk) {
             // 中日韩文字与任意相邻字符之间注入零宽空格，避免 CoreText 词组级过度避让导致提前换行
@@ -222,12 +232,15 @@ export function routeForDescriptionLink(value: string): string | null {
 
   // 4. tags: pixiv.net/tags/TAG or pixiv.net/tags/TAG/novels or pixiv.net/tags/TAG/artworks
   const tagMatch = decoded.match(
-    new RegExp(`^(?:https?:\\/\\/(?:www\\.)?pixiv\\.net)?\\/?${LANG_PREFIX}tags\\/([^/?#]+)(?:[/?#].*)?$`, "i")
+    new RegExp(`^(?:https?:\\/\\/(?:www\\.)?pixiv\\.net)?\\/?${LANG_PREFIX}tags\\/([^/?#]+)(?:\\/(novels?|artworks?|illustrations?))?(?:[/?#].*)?$`, "i")
   )
   if (tagMatch && (!hasURLScheme || isPixivURL)) {
     try {
       const tag = decodeURIComponent(tagMatch[1])
-      if (tag.trim()) return `tag:${encodeURIComponent(tag.trim())}`
+      const isNovel = Boolean(tagMatch[2] && /^novels?$/i.test(tagMatch[2]))
+      const prefix = isNovel ? "novelTag:" : "tag:"
+      if (tag.trim()) return `${prefix}${encodeURIComponent(tag.trim())}`
+      return `${prefix}${tagMatch[1]}`
     } catch {
       return `tag:${tagMatch[1]}`
     }

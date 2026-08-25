@@ -1,5 +1,5 @@
 import { downloadBinary } from "../api/client"
-import { loadSettings } from "../store/settings"
+import { getFeedImageQuality, loadSettings } from "../store/settings"
 import { pixivDataPath } from "../store/dataDirectory"
 import { recoverFile, writeDataSafely, writeTextSafely } from "../store/safeFile"
 import { enforceUgoiraCacheLimit } from "../ugoira/ugoira"
@@ -599,7 +599,7 @@ export function cardThumbUrlOf(
   const selectedQuality =
     quality === "medium" || quality === "large"
       ? quality
-      : loadSettings().feedImageQuality
+      : getFeedImageQuality()
   if (selectedQuality === "large") {
     return i.image_urls?.large ?? i.image_urls?.medium ?? i.image_urls?.square_medium ?? null
   }

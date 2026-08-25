@@ -7,7 +7,7 @@ import {
 } from "../api/pixiv"
 import { session } from "../api/session"
 import { imageUrlOf } from "../image/imageLoader"
-import { loadSettings } from "../store/settings"
+import { getDownloadImageQuality, loadSettings } from "../store/settings"
 import { buildUgoira } from "../ugoira/ugoira"
 import { exportMangaToCbz } from "./cbzExporter"
 import {
@@ -262,7 +262,7 @@ export async function exportAuthorIllustrationsToZip(
   illusts: PixivIllustration[],
   onProgress?: (msg: string, current: number, total: number) => void
 ): Promise<string | null> {
-  const quality = loadSettings().downloadImageQuality
+  const quality = getDownloadImageQuality()
   const safeAuthorName = sanitizeFileName(authorName || `User_${authorId}`)
   const targetDir = getAuthorDownloadDirectory(safeAuthorName, authorId, "illustrations")
 
@@ -445,7 +445,7 @@ export async function exportAuthorManga(
   format: "cbz" | "epub" = "cbz",
   onProgress?: (msg: string, current: number, total: number) => void
 ): Promise<{ totalExported: number; targetDir: string }> {
-  const quality = loadSettings().downloadImageQuality
+  const quality = getDownloadImageQuality()
   const safeAuthorName = sanitizeFileName(authorName || `User_${authorId}`)
   const targetDir = getAuthorDownloadDirectory(safeAuthorName, authorId, "manga")
 

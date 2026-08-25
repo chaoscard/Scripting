@@ -1,6 +1,6 @@
 import { downloadBinary } from "../api/client"
 import { imageUrlOf } from "../image/imageLoader"
-import { loadSettings, type DownloadImageQuality } from "../store/settings"
+import { getDownloadImageQuality, loadSettings, type DownloadImageQuality } from "../store/settings"
 import type { PixivIllustration } from "../types"
 
 /**
@@ -11,7 +11,7 @@ export function getDownloadImageUrl(
   pageIndex = 0,
   customQuality?: DownloadImageQuality
 ): string | null {
-  const quality = customQuality ?? loadSettings().downloadImageQuality
+  const quality = customQuality ?? getDownloadImageQuality()
   return imageUrlOf(illust, pageIndex, quality)
 }
 

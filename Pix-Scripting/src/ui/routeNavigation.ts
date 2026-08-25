@@ -33,3 +33,4 @@ export function requestPixivRoute(rawRoute: PixivRoute): void {
     pendingRoute = route
   }
 }
+

@@ -9,6 +9,7 @@ import {
   ZStack,
 } from "scripting"
 import { NextArtworkIntent } from "./app_intents"
+import { loadSettings } from "./src/store/settings"
 import { getCurrentWidgetArtwork, type WidgetArtwork } from "./src/store/widgetStore"
 
 // 桌面小组件单图纯画框视图
@@ -111,15 +112,19 @@ async function main() {
     return
   }
 
-  const param = Widget.parameter || ""
-  const artwork = await getCurrentWidgetArtwork(param)
+  const rawParam = Widget.parameter || ""
+  const intentParam = rawParam ? rawParam : `__family:${family}`
+  const artwork = await getCurrentWidgetArtwork(rawParam, family)
+
+  const intervalMinutes = loadSettings().widgetReloadIntervalMinutes || 60
+  const reloadDate = new Date(Date.now() + 1000 * 60 * intervalMinutes)
 
   Widget.present(
-    <PureArtworkWidgetView artwork={artwork} parameter={param} />,
+    <PureArtworkWidgetView artwork={artwork} parameter={intentParam} />,
     {
       reloadPolicy: {
         policy: "after",
-        date: new Date(Date.now() + 1000 * 60 * 30), // 30分钟后自动刷新
+        date: reloadDate,
       },
     }
   )

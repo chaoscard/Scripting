@@ -7,10 +7,10 @@
     "name": "chaoscard",
     "email": null
   },
-  "version": "0.8.95",
+  "version": "0.8.97",
   "remoteResource": {
     "url": "https://raw.githubusercontent.com/chaoscard/Scripting/main/Release/Pix-Scripting.scripting",
-    "hash": "9f24e286517a068b6df5a84f329579c0",
+    "hash": "20d996add30b38dad8273493073d849a",
     "autoUpdateInterval": null
   },
   "icon": "paintpalette",
@@ -19,9 +19,6 @@
   "permissions": null,
   "entry": "index.tsx",
   "intentInputTypes": [],
-  "localizedNames": {
-    "zh": "Pix-Scripting"
-  },
   "contributors": [],
   "localizedDescriptions": {
     "zh": "液态玻璃风格 Pixiv 客户端"

@@ -29,6 +29,8 @@ import type {
   PixivWatchlistResponse,
   PixivTrendingTag,
   PixivTrendingTagsResponse,
+  PixivTagDetail,
+  PixivTagInfoResponse,
   PixivUserDetail,
   PixivUserPreview,
   PixivUserPreviewListResponse,
@@ -1774,6 +1776,38 @@ export async function removeNovelBookmark(
     accessToken
   )
   notifyNovelBookmarkChanged(id, false)
+}
+
+// ---------- 标签百科与摘要 ----------
+
+export async function fetchTagInfo(tagName: string): Promise<PixivTagDetail | null> {
+  const cleanTag = tagName.trim()
+  if (!cleanTag) return null
+  try {
+    const url = `https://www.pixiv.net/ajax/tag/info?tag=${encodeURIComponent(cleanTag)}`
+    const json = await apiGetPublicJson<PixivTagInfoResponse>(
+      url,
+      "https://www.pixiv.net",
+      {
+        Referer: "https://www.pixiv.net/",
+      }
+    )
+    if (!json || json.error || !json.body) {
+      return null
+    }
+    const body = json.body
+    const abstract = body.abstract || body.ja?.abstract || body.en?.abstract || undefined
+    const hasEncyclopedia = Boolean(abstract || body.thumbnail)
+    return {
+      tag: body.tag || cleanTag,
+      abstract,
+      thumbnailUrl: body.thumbnail || null,
+      dicUrl: body.ja?.url || body.en?.url || null,
+      hasEncyclopedia,
+    }
+  } catch {
+    return null
+  }
 }
 
 // ---------- 通知 ----------

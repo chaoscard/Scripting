@@ -1,10 +1,11 @@
 import { downloadBinary } from "../api/client"
 import { session } from "../api/session"
 import { ranking, recommendations, followingFeed, pixivisionHome, pixivisionDetail } from "../api/pixiv"
-import { loadSettings } from "./settings"
+import { getWidgetSourceForFamily, loadSettings } from "./settings"
 import { pixivWidgetPath } from "./dataDirectory"
 import { writeDataSafely, writeTextSafely, recoverFile } from "./safeFile"
 import { cacheIllust, getCachedIllust } from "./illustCache"
+import { cacheFilePath } from "../image/imageLoader"
 import type { PixivIllustration } from "../types"
 
 export interface WidgetArtwork {
@@ -13,6 +14,7 @@ export interface WidgetArtwork {
   userId: number
   userName: string
   localImagePath: string
+  remoteImageUrl?: string
   width: number
   height: number
   aspectRatio: number
@@ -28,8 +30,18 @@ export interface WidgetPoolState {
 }
 
 const IMAGES_DIR_NAME = "images"
-const MAX_POOL_CAPACITY = 25
+const DEFAULT_POOL_CAPACITY = 20
 const MIN_PREFETCH_COUNT = 5
+
+function getPoolCapacity(): number {
+  try {
+    const settings = loadSettings()
+    if (typeof settings.widgetPoolCapacity === "number" && Number.isFinite(settings.widgetPoolCapacity)) {
+      return Math.max(10, Math.min(30, Math.round(settings.widgetPoolCapacity)))
+    }
+  } catch {}
+  return DEFAULT_POOL_CAPACITY
+}
 
 function ensureWidgetDir(subDir = ""): string {
   const dir = subDir ? pixivWidgetPath(subDir) : pixivWidgetPath()
@@ -48,31 +60,38 @@ function imagesDir(): string {
   return ensureWidgetDir(IMAGES_DIR_NAME)
 }
 
-function normalizeParameter(param?: string | null): string {
-  const defaultSource = loadSettings().widgetDefaultSource || "ranking_day"
-  if (!param || typeof param !== "string") return defaultSource
-  const trimmed = param.trim().toLowerCase()
-  if (!trimmed || trimmed === "default" || trimmed === "默认") return defaultSource
+function normalizeParameter(param?: string | null, family?: string): string {
+  if (param && typeof param === "string") {
+    const trimmed = param.trim()
+    if (trimmed.startsWith("__family:")) {
+      const extractedFamily = trimmed.replace("__family:", "").trim()
+      return getWidgetSourceForFamily(extractedFamily)
+    }
 
-  if (trimmed.includes("follow") || trimmed.includes("关注") || trimmed.includes("追更") || trimmed.includes("动态")) {
-    return "follow"
+    const lower = trimmed.toLowerCase()
+    if (lower && lower !== "default" && lower !== "默认") {
+      if (lower.includes("follow") || lower.includes("关注") || lower.includes("追更") || lower.includes("动态")) {
+        return "follow"
+      }
+      if (lower.includes("discovery") || lower.includes("recommend") || lower.includes("推荐") || lower.includes("探索")) {
+        return "discovery"
+      }
+      if (lower.includes("pixivision") || lower.includes("vision") || lower.includes("专辑") || lower.includes("特辑") || lower.includes("专栏")) {
+        return "pixivision"
+      }
+      if (lower.includes("month") || lower.includes("月榜") || lower.includes("每月")) {
+        return "ranking_month"
+      }
+      if (lower.includes("week") || lower.includes("周榜") || lower.includes("每周")) {
+        return "ranking_week"
+      }
+      if (lower.includes("day") || lower.includes("日榜") || lower.includes("每日")) {
+        return "ranking_day"
+      }
+    }
   }
-  if (trimmed.includes("discovery") || trimmed.includes("recommend") || trimmed.includes("推荐") || trimmed.includes("探索")) {
-    return "discovery"
-  }
-  if (trimmed.includes("pixivision") || trimmed.includes("vision") || trimmed.includes("专辑") || trimmed.includes("特辑") || trimmed.includes("专栏")) {
-    return "pixivision"
-  }
-  if (trimmed.includes("month") || trimmed.includes("月榜") || trimmed.includes("每月")) {
-    return "ranking_month"
-  }
-  if (trimmed.includes("week") || trimmed.includes("周榜") || trimmed.includes("每周")) {
-    return "ranking_week"
-  }
-  if (trimmed.includes("day") || trimmed.includes("日榜") || trimmed.includes("每日")) {
-    return "ranking_day"
-  }
-  return defaultSource
+
+  return getWidgetSourceForFamily(family)
 }
 
 // 严格过滤：R18/R18G 永远严禁进入小组件池子；AI 作品根据用户设置严格判定
@@ -109,8 +128,8 @@ function isSafeForWidget(item: PixivIllustration, showAI: boolean): boolean {
   return true
 }
 
-export function loadWidgetPool(param?: string): WidgetPoolState {
-  const normalized = normalizeParameter(param)
+export function loadWidgetPool(param?: string, family?: string): WidgetPoolState {
+  const normalized = normalizeParameter(param, family)
   const path = poolFilePath(normalized)
   recoverFile(path)
   if (FileManager.existsSync(path)) {
@@ -139,8 +158,8 @@ export function loadWidgetPool(param?: string): WidgetPoolState {
   }
 }
 
-export function saveWidgetPool(state: WidgetPoolState, param?: string): void {
-  const normalized = normalizeParameter(param || state.parameter)
+export function saveWidgetPool(state: WidgetPoolState, param?: string, family?: string): void {
+  const normalized = normalizeParameter(param || state.parameter, family)
   const path = poolFilePath(normalized)
   try {
     writeTextSafely(path, JSON.stringify(state, null, 2), (raw) => {
@@ -241,6 +260,16 @@ async function fetchArtworksForSource(param: string): Promise<PixivIllustration[
   return items.filter((item) => isSafeForWidget(item, showAI))
 }
 
+function syncToAppImageCache(url: string, sourcePath: string): void {
+  if (!url || !sourcePath || !FileManager.existsSync(sourcePath)) return
+  try {
+    const appCachePath = cacheFilePath(url)
+    if (!FileManager.existsSync(appCachePath)) {
+      FileManager.copyFileSync(sourcePath, appCachePath)
+    }
+  } catch {}
+}
+
 async function downloadArtworkImage(item: PixivIllustration): Promise<string | null> {
   const url = item.image_urls.large || item.image_urls.medium || item.image_urls.square_medium
   if (!url) return null
@@ -249,11 +278,12 @@ async function downloadArtworkImage(item: PixivIllustration): Promise<string | n
   const fileName = `widget_${item.id}.jpg`
   const destPath = `${targetDir}/${fileName}`
 
-  // 若已存在且大小正常，直接复用
+  // 若已存在且大小正常，直接复用并同步到主 App 缓存
   if (FileManager.existsSync(destPath)) {
     try {
       const stat = FileManager.statSync(destPath)
       if (stat && stat.size > 0) {
+        syncToAppImageCache(url, destPath)
         return destPath
       }
     } catch {}
@@ -263,6 +293,7 @@ async function downloadArtworkImage(item: PixivIllustration): Promise<string | n
   if (data) {
     try {
       writeDataSafely(destPath, data)
+      syncToAppImageCache(url, destPath)
       return destPath
     } catch {
       return null
@@ -271,56 +302,136 @@ async function downloadArtworkImage(item: PixivIllustration): Promise<string | n
   return null
 }
 
-export async function populateWidgetPool(param?: string): Promise<WidgetPoolState> {
-  const normalized = normalizeParameter(param)
-  const pool = loadWidgetPool(normalized)
+const activePopulateTasks = new Map<string, Promise<WidgetPoolState>>()
+const firstReadyEmitters = new Map<string, Set<(art: WidgetArtwork) => void>>()
 
-  const candidateItems = await fetchArtworksForSource(normalized)
-  if (candidateItems.length === 0) {
-    return pool
-  }
-
-  const existingIds = new Set(pool.artworks.map((a) => a.id))
-  const newArtworks: WidgetArtwork[] = [...pool.artworks]
-
-  for (const item of candidateItems) {
-    if (newArtworks.length >= MAX_POOL_CAPACITY) break
-    if (existingIds.has(item.id)) continue
-
-    const localPath = await downloadArtworkImage(item)
-    if (localPath) {
-      const width = item.width || 1200
-      const height = item.height || 1200
-      const art: WidgetArtwork = {
-        id: item.id,
-        title: item.title,
-        userId: item.user.id,
-        userName: item.user.name,
-        localImagePath: localPath,
-        width,
-        height,
-        aspectRatio: width > 0 && height > 0 ? width / height : 1,
-        sourceType: normalized,
-        updatedAt: Date.now(),
-      }
-      newArtworks.push(art)
-      existingIds.add(item.id)
+function emitFirstReady(key: string, art: WidgetArtwork): void {
+  const set = firstReadyEmitters.get(key)
+  if (set) {
+    for (const fn of set) {
+      try {
+        fn(art)
+      } catch {}
     }
   }
-
-  pool.artworks = newArtworks
-  pool.lastFetchTime = Date.now()
-  saveWidgetPool(pool, normalized)
-  return pool
 }
 
-export async function getCurrentWidgetArtwork(param?: string): Promise<WidgetArtwork | null> {
-  const normalized = normalizeParameter(param)
-  let pool = loadWidgetPool(normalized)
+function waitForFirstArtwork(key: string, timeoutMs = 8000): Promise<WidgetArtwork | null> {
+  return new Promise((resolve) => {
+    let timer: number | null = null
+    const handler = (art: WidgetArtwork) => {
+      if (timer != null) clearTimeout(timer)
+      cleanup()
+      resolve(art)
+    }
+    const cleanup = () => {
+      const set = firstReadyEmitters.get(key)
+      if (set) {
+        set.delete(handler)
+        if (set.size === 0) firstReadyEmitters.delete(key)
+      }
+    }
 
-  // 若当前池子为空或已有图片被系统清理，则立即拉取
+    let set = firstReadyEmitters.get(key)
+    if (!set) {
+      set = new Set()
+      firstReadyEmitters.set(key, set)
+    }
+    set.add(handler)
+
+    timer = setTimeout(() => {
+      cleanup()
+      resolve(null)
+    }, timeoutMs)
+  })
+}
+
+export async function populateWidgetPool(param?: string, family?: string): Promise<WidgetPoolState> {
+  const normalized = normalizeParameter(param, family)
+  const taskKey = normalized
+  if (activePopulateTasks.has(taskKey)) {
+    return activePopulateTasks.get(taskKey)!
+  }
+
+  const task = (async () => {
+    try {
+      const pool = loadWidgetPool(normalized, family)
+      const candidateItems = await fetchArtworksForSource(normalized)
+      if (candidateItems.length === 0) {
+        return pool
+      }
+
+      const existingIds = new Set(pool.artworks.map((a) => a.id))
+      const newArtworks: WidgetArtwork[] = [...pool.artworks]
+      const maxCapacity = getPoolCapacity()
+      let firstSaved = pool.artworks.length > 0
+
+      for (const item of candidateItems) {
+        if (newArtworks.length >= maxCapacity) break
+        if (existingIds.has(item.id)) continue
+
+        const localPath = await downloadArtworkImage(item)
+        if (localPath) {
+          const width = item.width || 1200
+          const height = item.height || 1200
+          const remoteUrl =
+            item.image_urls.large ||
+            item.image_urls.medium ||
+            item.image_urls.square_medium ||
+            ""
+          const art: WidgetArtwork = {
+            id: item.id,
+            title: item.title,
+            userId: item.user.id,
+            userName: item.user.name,
+            localImagePath: localPath,
+            remoteImageUrl: remoteUrl,
+            width,
+            height,
+            aspectRatio: width > 0 && height > 0 ? width / height : 1,
+            sourceType: normalized,
+            updatedAt: Date.now(),
+          }
+          newArtworks.push(art)
+          existingIds.add(item.id)
+
+          // 核心优化：若池子原本为空，下载好第 1 张图后立即保存一次，让首图即刻上屏
+          if (!firstSaved) {
+            firstSaved = true
+            pool.artworks = [...newArtworks]
+            pool.lastFetchTime = Date.now()
+            saveWidgetPool(pool, normalized, family)
+            emitFirstReady(taskKey, art)
+          }
+        }
+      }
+
+      pool.artworks = newArtworks
+      pool.lastFetchTime = Date.now()
+      saveWidgetPool(pool, normalized, family)
+      return pool
+    } finally {
+      activePopulateTasks.delete(taskKey)
+    }
+  })()
+
+  activePopulateTasks.set(taskKey, task)
+  return task
+}
+
+export async function getCurrentWidgetArtwork(param?: string, family?: string): Promise<WidgetArtwork | null> {
+  const normalized = normalizeParameter(param, family)
+  let pool = loadWidgetPool(normalized, family)
+
+  // 若当前池子为空或已有图片被系统清理，则触发异步拉取，并等待首图就绪
   if (pool.artworks.length === 0) {
-    pool = await populateWidgetPool(normalized)
+    const firstPromise = waitForFirstArtwork(normalized)
+    void populateWidgetPool(normalized, family)
+    const firstArt = await firstPromise
+    if (firstArt) {
+      return firstArt
+    }
+    pool = loadWidgetPool(normalized, family)
   }
 
   if (pool.artworks.length === 0) {
@@ -330,30 +441,30 @@ export async function getCurrentWidgetArtwork(param?: string): Promise<WidgetArt
   // 保证 currentIndex 在合法范围内
   if (pool.currentIndex >= pool.artworks.length) {
     pool.currentIndex = 0
-    saveWidgetPool(pool, normalized)
+    saveWidgetPool(pool, normalized, family)
   }
 
   const current = pool.artworks[pool.currentIndex]
 
   // 若当前图片不存在，自动前移到下一个有效图片
   if (!current || !FileManager.existsSync(current.localImagePath)) {
-    return advanceWidgetArtwork(normalized)
+    return advanceWidgetArtwork(normalized, family)
   }
 
   // 若剩余未看的插画数量较少，触发异步补齐
   if (pool.artworks.length - pool.currentIndex < MIN_PREFETCH_COUNT) {
-    populateWidgetPool(normalized).catch(() => {})
+    populateWidgetPool(normalized, family).catch(() => {})
   }
 
   return current
 }
 
-export async function advanceWidgetArtwork(param?: string): Promise<WidgetArtwork | null> {
-  const normalized = normalizeParameter(param)
-  let pool = loadWidgetPool(normalized)
+export async function advanceWidgetArtwork(param?: string, family?: string): Promise<WidgetArtwork | null> {
+  const normalized = normalizeParameter(param, family)
+  let pool = loadWidgetPool(normalized, family)
 
   if (pool.artworks.length === 0) {
-    pool = await populateWidgetPool(normalized)
+    pool = await populateWidgetPool(normalized, family)
   }
 
   if (pool.artworks.length === 0) {
@@ -361,11 +472,11 @@ export async function advanceWidgetArtwork(param?: string): Promise<WidgetArtwor
   }
 
   pool.currentIndex = (pool.currentIndex + 1) % pool.artworks.length
-  saveWidgetPool(pool, normalized)
+  saveWidgetPool(pool, normalized, family)
 
   // 异步补齐
   if (pool.artworks.length - pool.currentIndex < MIN_PREFETCH_COUNT) {
-    populateWidgetPool(normalized).catch(() => {})
+    populateWidgetPool(normalized, family).catch(() => {})
   }
 
   const current = pool.artworks[pool.currentIndex]
@@ -413,21 +524,32 @@ export function findArtworkInAllPools(id: number): WidgetArtwork | null {
 }
 
 /**
- * 从小组件池子预热数据到插画内存缓存，确保从小组件冷启动点进详情页时秒开、不闪白
+ * 从小组件池子预热数据到插画内存缓存，确保从小组件冷启动点进详情页时秒开、不闪白、沉浸式背景立即可用
  */
 export function seedIllustFromWidgetPool(id: number): void {
   if (!id || typeof id !== "number") return
   if (getCachedIllust(id)) return
   const found = findArtworkInAllPools(id)
   if (!found) return
+
+  const remoteUrl = found.remoteImageUrl || ""
+  if (remoteUrl && found.localImagePath && FileManager.existsSync(found.localImagePath)) {
+    try {
+      const appCachePath = cacheFilePath(remoteUrl)
+      if (!FileManager.existsSync(appCachePath)) {
+        FileManager.copyFileSync(found.localImagePath, appCachePath)
+      }
+    } catch {}
+  }
+
   cacheIllust({
     id: found.id,
     title: found.title,
     type: "illust",
     image_urls: {
-      square_medium: "",
-      medium: "",
-      large: "",
+      square_medium: remoteUrl,
+      medium: remoteUrl,
+      large: remoteUrl,
     },
     caption: "",
     user: {
@@ -446,7 +568,9 @@ export function seedIllustFromWidgetPool(id: number): void {
     height: found.height,
     x_restrict: 0,
     series: null,
-    meta_single_page: {},
+    meta_single_page: {
+      original_image_url: remoteUrl,
+    },
     meta_pages: [],
     total_view: 0,
     total_bookmarks: 0,
@@ -457,3 +581,4 @@ export function seedIllustFromWidgetPool(id: number): void {
     comment_access_control: 0,
   })
 }
+

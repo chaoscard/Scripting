@@ -2,12 +2,12 @@ import {
   Button,
   Group,
   HStack,
-  Image,
-  Menu,
   NavigationLink,
   Text,
 } from "scripting"
 import { blockTag } from "../../store/blocklist"
+import { TagPreview } from "./TagPreview"
+
 export function TagChip(props: {
   name: string
   tagName?: string
@@ -23,8 +23,24 @@ export function TagChip(props: {
       controlSize={compact ? "mini" : "small"}
       fixedSize={{ horizontal: true, vertical: false }}
       contextMenu={{
+        preview: <TagPreview tagName={tagName} translatedName={translatedName} />,
         menuItems: (
           <Group>
+            <Button
+              title="查看 Pixiv 百科"
+              systemImage="book.pages"
+              action={() => {
+                const url = `https://dic.pixiv.net/a/${encodeURIComponent(tagName)}`
+                void Safari.present(url, false)
+              }}
+            />
+            <Button
+              title="复制标签名"
+              systemImage="doc.on.doc"
+              action={() => {
+                void Pasteboard.setString(tagName)
+              }}
+            />
             <Button
               title="屏蔽该标签"
               systemImage="nosign"
@@ -59,4 +75,3 @@ export function TagChip(props: {
     </NavigationLink>
   )
 }
-

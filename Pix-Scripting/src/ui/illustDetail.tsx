@@ -48,6 +48,8 @@ import {
   type IllustAmbientPalette,
 } from "../image/colorExtractor"
 import {
+  getDetailImageQuality,
+  getDownloadImageQuality,
   loadSettings,
   onSettingsChanged,
   type AmbientIntensity,
@@ -139,7 +141,7 @@ export function IllustDetailView(props: { illustID: number }) {
       initial,
       isDark,
       settings.ambientIntensity,
-      settings.detailImageQuality
+      getDetailImageQuality(settings)
     )
   })
   const [loading, setLoading] = useState(() => !getCachedIllust(illustID))
@@ -156,7 +158,7 @@ export function IllustDetailView(props: { illustID: number }) {
   const [showComments, setShowComments] = useState(false)
   const [showAISheet, setShowAISheet] = useState(false)
   const [aiMode, setAIMode] = useState<IllustAIMode>("caption")
-  const [quality, setQuality] = useState(loadSettings().detailImageQuality)
+  const [quality, setQuality] = useState(() => getDetailImageQuality())
   const [mediaReady, setMediaReady] = useState(false)
   const guard = useAsyncGuard()
   const illustRef = useLatest(illust)
@@ -220,7 +222,7 @@ export function IllustDetailView(props: { illustID: number }) {
       }
       // 预取后续几页大图（从第 1 页开始预取；第 0 页由前台 CachedImage 赋予最高优先级 -5000 极速直出）
       const prefetchURLs: (string | null | undefined)[] = []
-      const detailQuality = loadSettings().detailImageQuality
+      const detailQuality = getDetailImageQuality()
       const total = Math.min(4, detail.page_count || detail.meta_pages?.length || 1)
       for (let k = 1; k < total; k++) {
         prefetchURLs.push(imageUrlOf(detail, k, detailQuality))
@@ -319,7 +321,7 @@ export function IllustDetailView(props: { illustID: number }) {
   useEffect(() => {
     return onSettingsChanged(() => {
       const settings = loadSettings()
-      setQuality(settings.detailImageQuality)
+      setQuality(getDetailImageQuality(settings))
       setAmbientEnabled(settings.ambientImmersion)
       setAmbientIntensity(settings.ambientIntensity)
       const current = illustRef.current
@@ -493,7 +495,7 @@ export function IllustDetailView(props: { illustID: number }) {
     if (downloading) return
     void Haptics.transient()
     setDownloading(true)
-    const downloadQuality = loadSettings().downloadImageQuality
+    const downloadQuality = getDownloadImageQuality()
     try {
       const ok = await downloadIllustToAlbum(current, downloadQuality)
       if (ok) {
@@ -508,7 +510,7 @@ export function IllustDetailView(props: { illustID: number }) {
     if (downloading) return
     void Haptics.transient()
     setDownloading(true)
-    const downloadQuality = loadSettings().downloadImageQuality
+    const downloadQuality = getDownloadImageQuality()
     try {
       const urls: string[] = []
       for (let i = 0; i < pageCount; i++) {
@@ -532,7 +534,7 @@ export function IllustDetailView(props: { illustID: number }) {
     if (downloading) return
     void Haptics.transient()
     setDownloading(true)
-    const downloadQuality = loadSettings().downloadImageQuality
+    const downloadQuality = getDownloadImageQuality()
     try {
       const pages: { pageIndex: number; url: string }[] = []
       for (let i = 0; i < pageCount; i++) {
@@ -1039,28 +1041,76 @@ function RelatedIllustrationsSection(props: {
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
+  const pagedRef = useLatest(paged)
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      pagedRef.current.reapplyFilter()
+    })
+  }, [])
+
+  if (paged.initialLoading && !enabled) {
+    return null
+  }
 
   return (
-    <VStack alignment="leading" spacing={8} padding={{ top: 8, bottom: 20 }}>
-      <Text font="headline" fontWeight="bold" padding={{ horizontal: 14 }}>
+    <VStack
+      alignment="leading"
+      spacing={8}
+      padding={{ top: 4 }}
+      frame={{ maxWidth: "infinity", alignment: "leading" }}
+    >
+      <Text
+        font="subheadline"
+        fontWeight="semibold"
+        foregroundStyle="secondaryLabel"
+        padding={{ horizontal: 14 }}
+      >
         相关作品
       </Text>
-      <IllustFlowFeed
-        paged={paged}
-        emptyMessage="暂无相关作品"
-        columns={3}
-      />
+      {paged.initialLoading ? (
+        <HStack spacing={0} frame={{ maxWidth: "infinity", height: 80 }}>
+          <Spacer />
+          <ProgressView progressViewStyle="circular" />
+          <Spacer />
+        </HStack>
+      ) : paged.error && paged.items.length === 0 ? (
+        <VStack alignment="center" spacing={8} padding={16} frame={{ maxWidth: "infinity" }}>
+          <Text font="footnote" foregroundStyle="secondaryLabel">
+            相关作品加载失败
+          </Text>
+          <Button
+            title="重试"
+            buttonStyle="glass"
+            action={() => paged.refresh()}
+          />
+        </VStack>
+      ) : paged.items.length > 0 ? (
+        <IllustFlowFeed
+          items={paged.items}
+          onLoadMore={paged.loadMore}
+          hasMore={paged.hasMore}
+          isLoading={paged.loadingMore}
+        />
+      ) : (
+        <HStack spacing={0} padding={{ horizontal: 14, vertical: 8 }} frame={{ maxWidth: "infinity", alignment: "leading" }}>
+          <Text font="footnote" foregroundStyle="secondaryLabel">
+            暂无相关作品
+          </Text>
+        </HStack>
+      )}
     </VStack>
   )
 }
 
 function filterRelatedIllustrations(
   items: PixivIllustration[],
-  currentID: number
+  currentIllustID?: number
 ): PixivIllustration[] {
   const settings = loadSettings()
-  return items.filter((item) => {
-    if (item.id === currentID) return false
-    return isIllustContentVisible(item, settings)
-  })
+  return items.filter(
+    (item) =>
+      item.id !== currentIllustID &&
+      isIllustContentVisible(item, settings)
+  )
 }

@@ -1,4 +1,4 @@
-import { loadSettings, type DownloadImageQuality } from "../store/settings"
+import { getDownloadImageQuality, loadSettings, type DownloadImageQuality } from "../store/settings"
 import { cachedFilePath, imageUrlOf } from "../image/imageLoader"
 import { fetchImageBinaryWithRetry, runConcurrentTasks } from "./downloadHelper"
 import type { PixivIllustration } from "../types"
@@ -132,7 +132,7 @@ export async function downloadIllustToAlbum(
   downloadQuality?: DownloadImageQuality,
   onProgress?: (current: number, total: number) => void
 ): Promise<boolean> {
-  const quality = downloadQuality ?? loadSettings().downloadImageQuality
+  const quality = downloadQuality ?? getDownloadImageQuality()
   const pageCount = Math.max(1, illust.page_count || illust.meta_pages?.length || 1)
   const tasks: { pageIndex: number; url: string }[] = []
 

@@ -1118,7 +1118,7 @@ export function NovelDetailView(props: { novelID: number }) {
                     name={tag.name}
                     tagName={tag.name}
                     translatedName={tag.translated_name ?? undefined}
-                    value={`tag:${encodeURIComponent(tag.name)}`}
+                    value={`novelTag:${encodeURIComponent(tag.name)}`}
                     compact
                   />
                 ))}
