@@ -6,6 +6,10 @@ import {
   VStack,
 } from "scripting"
 import {
+  fetchTagFilteredNovelsByUrl,
+  fetchTagFilteredWorksByUrl,
+  fetchUserTagFilteredNovels,
+  fetchUserTagFilteredWorks,
   nextIllustrations,
   nextNovels,
   userNovels,
@@ -32,16 +36,23 @@ export type UserWorkKind = "illust" | "manga" | "novel"
 export function UserWorksFeedSection(props: {
   userID: number
   kind: "illust" | "manga" | "novel"
+  selectedTag?: string | null
   isAuthorFollowed?: boolean
   onKindEmpty?: (kind: UserWorkKind, isEmpty: boolean) => void
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { userID, kind, isAuthorFollowed = false, onKindEmpty, onRegisterRefresh } = props
+  const { userID, kind, selectedTag = null, isAuthorFollowed = false, onKindEmpty, onRegisterRefresh } = props
 
   // 1. 插画
   const illustPaged = usePagedList<PixivIllustration>({
-    first: (token) => userWorks(userID, "illust", token),
-    more: (nextURL, token) => nextIllustrations(nextURL, token),
+    first: (token) =>
+      selectedTag
+        ? fetchUserTagFilteredWorks(userID, "illust", selectedTag, 0)
+        : userWorks(userID, "illust", token),
+    more: (nextURL, token) =>
+      nextURL.startsWith("web-tag://")
+        ? fetchTagFilteredWorksByUrl(nextURL)
+        : nextIllustrations(nextURL, token),
     filter: (items) => {
       const settings = loadSettings()
       const exempt =
@@ -53,7 +64,7 @@ export function UserWorksFeedSection(props: {
         })
       )
     },
-    deps: [userID, "illust", isAuthorFollowed],
+    deps: [userID, "illust", isAuthorFollowed, selectedTag],
     enabled: kind === "illust",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
@@ -61,8 +72,14 @@ export function UserWorksFeedSection(props: {
 
   // 2. 漫画
   const mangaPaged = usePagedList<PixivIllustration>({
-    first: (token) => userWorks(userID, "manga", token),
-    more: (nextURL, token) => nextIllustrations(nextURL, token),
+    first: (token) =>
+      selectedTag
+        ? fetchUserTagFilteredWorks(userID, "manga", selectedTag, 0)
+        : userWorks(userID, "manga", token),
+    more: (nextURL, token) =>
+      nextURL.startsWith("web-tag://")
+        ? fetchTagFilteredWorksByUrl(nextURL)
+        : nextIllustrations(nextURL, token),
     filter: (items) => {
       const settings = loadSettings()
       const exempt =
@@ -74,7 +91,7 @@ export function UserWorksFeedSection(props: {
         })
       )
     },
-    deps: [userID, "manga", isAuthorFollowed],
+    deps: [userID, "manga", isAuthorFollowed, selectedTag],
     enabled: kind === "manga",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
@@ -82,8 +99,14 @@ export function UserWorksFeedSection(props: {
 
   // 3. 小说
   const novelPaged = usePagedList<PixivNovel>({
-    first: (token) => userNovels(userID, token),
-    more: (nextURL, token) => nextNovels(nextURL, token),
+    first: (token) =>
+      selectedTag
+        ? fetchUserTagFilteredNovels(userID, selectedTag, 0)
+        : userNovels(userID, token),
+    more: (nextURL, token) =>
+      nextURL.startsWith("web-tag://")
+        ? fetchTagFilteredNovelsByUrl(nextURL)
+        : nextNovels(nextURL, token),
     filter: (items) => {
       const settings = loadSettings()
       const exempt =
@@ -95,7 +118,7 @@ export function UserWorksFeedSection(props: {
         })
       )
     },
-    deps: [userID, isAuthorFollowed],
+    deps: [userID, isAuthorFollowed, selectedTag],
     enabled: kind === "novel",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
@@ -229,9 +252,13 @@ export function UserWorksFeedSection(props: {
           text={
             illustPaged.hasFilteredContent
               ? "当前页面部分作品被内容显示设置过滤，暂时无法显示"
-              : "暂无插画投稿"
+              : selectedTag
+                ? `暂无「${selectedTag}」相关插画`
+                : "暂无插画投稿"
           }
-          systemImage={illustPaged.hasFilteredContent ? "eye.slash" : "photo"}
+          systemImage={
+            illustPaged.hasFilteredContent ? "eye.slash" : selectedTag ? "tag" : "photo"
+          }
         />
       )
     }
@@ -259,9 +286,17 @@ export function UserWorksFeedSection(props: {
           text={
             mangaPaged.hasFilteredContent
               ? "当前页面部分作品被内容显示设置过滤，暂时无法显示"
-              : "暂无漫画投稿"
+              : selectedTag
+                ? `暂无「${selectedTag}」相关漫画`
+                : "暂无漫画投稿"
           }
-          systemImage={mangaPaged.hasFilteredContent ? "eye.slash" : "photo.on.rectangle"}
+          systemImage={
+            mangaPaged.hasFilteredContent
+              ? "eye.slash"
+              : selectedTag
+                ? "tag"
+                : "photo.on.rectangle"
+          }
         />
       )
     }
@@ -288,9 +323,13 @@ export function UserWorksFeedSection(props: {
         text={
           novelPaged.hasFilteredContent
             ? "当前页面部分小说被内容显示设置过滤，暂时无法显示"
-            : "暂无小说投稿"
+            : selectedTag
+              ? `暂无「${selectedTag}」相关小说`
+              : "暂无小说投稿"
         }
-        systemImage={novelPaged.hasFilteredContent ? "eye.slash" : "book"}
+        systemImage={
+          novelPaged.hasFilteredContent ? "eye.slash" : selectedTag ? "tag" : "book"
+        }
       />
     )
   }

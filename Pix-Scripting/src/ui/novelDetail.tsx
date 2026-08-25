@@ -166,6 +166,13 @@ export function NovelDetailView(props: { novelID: number }) {
   const isUnmountingRef = useRef(false)
   const isDisappearedRef = useRef(false)
 
+  const rawSeries = novel?.series ?? (novel as any)?.novel_series
+  const rawSeriesObj = Array.isArray(rawSeries) ? rawSeries[0] : rawSeries
+  const associatedRef = getSeriesByWorkID(novelID, "novel")
+  const resolvedSeriesID = rawSeriesObj?.id ?? associatedRef?.seriesID ?? null
+  const resolvedSeriesTitle = rawSeriesObj?.title ?? associatedRef?.seriesTitle ?? null
+  const resolvedEpisodeNumber = novel?.episode_number ?? associatedRef?.episodeNumber ?? null
+
   const performScrollRestoration = useCallback((targetChunk?: string) => {
     const target = targetChunk ?? getNovelProgress(novelID)?.chunkId
     if (
@@ -239,6 +246,15 @@ export function NovelDetailView(props: { novelID: number }) {
       setNovel(detail)
       setBookmarked(detail.is_bookmarked)
       setFollowed(detail.user?.is_followed ?? false)
+      if (detail.series?.id) {
+        recordWorkSeriesAssociation(
+          detail.id,
+          "novel",
+          detail.series.id,
+          detail.series.title,
+          detail.episode_number
+        )
+      }
       const detailMarker = (detail as any)?.novel_marker?.page ?? (detail as any)?.marker?.page ?? null
       const existingCached = getCachedNovelMarker(detail.id)
       const savedProgress = getNovelProgress(detail.id)
@@ -618,12 +634,6 @@ export function NovelDetailView(props: { novelID: number }) {
   }
 
   const current = novel
-  const rawSeries = current.series ?? (current as any).novel_series
-  const rawSeriesObj = Array.isArray(rawSeries) ? rawSeries[0] : rawSeries
-  const associatedRef = getSeriesByWorkID(current.id, "novel")
-  const resolvedSeriesID = rawSeriesObj?.id ?? associatedRef?.seriesID ?? null
-  const resolvedSeriesTitle = rawSeriesObj?.title ?? associatedRef?.seriesTitle ?? null
-  const resolvedEpisodeNumber = current.episode_number ?? associatedRef?.episodeNumber ?? null
 
   if (resolvedSeriesID) {
     recordWorkSeriesAssociation(current.id, "novel", resolvedSeriesID, resolvedSeriesTitle, resolvedEpisodeNumber)

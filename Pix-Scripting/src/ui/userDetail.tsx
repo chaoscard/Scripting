@@ -25,6 +25,7 @@ import {
   fetchAllUserNovels,
 } from "../downloader"
 import {
+  fetchUserWorkTags,
   fetchWebUserDetail,
   followDetail,
   followUser,
@@ -54,6 +55,7 @@ import { useAsyncGuard, useUserAmbientPalette } from "./hooks"
 import type {
   PixivUserDetail,
   PixivWebUserDetail,
+  PixivWebUserTag,
 } from "../types"
 import {
   EmptyView,
@@ -62,6 +64,7 @@ import {
   RefreshableScrollView,
 } from "./components"
 import { UserProfileHeader } from "./UserProfileHeader"
+import { UserWorkTagFilterBar } from "./UserWorkTagFilterBar"
 import { UserWorksFeedSection, UserWorkPicker, type UserWorkKind } from "./UserWorksFeedSection"
 
 export function UserDetailView(props: { userID: number }) {
@@ -73,6 +76,8 @@ export function UserDetailView(props: { userID: number }) {
   const [detailError, setDetailError] = useState<string | null>(null)
   const [followBusy, setFollowBusy] = useState(false)
   const [kind, setKind] = useState<UserWorkKind>("illust")
+  const [selectedTag, setSelectedTag] = useState<string | null>(null)
+  const [tagsByKind, setTagsByKind] = useState<Partial<Record<UserWorkKind, PixivWebUserTag[]>>>({})
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
   const [emptyKinds, setEmptyKinds] = useState<Partial<Record<UserWorkKind, boolean>>>({})
   const { ambientBackground } = useUserAmbientPalette(detail?.profile.background_image_url)
@@ -107,6 +112,17 @@ export function UserDetailView(props: { userID: number }) {
     }
   }, [availableKinds, kind])
 
+  useEffect(() => {
+    setSelectedTag(null)
+    if (!tagsByKind[activeKind]) {
+      fetchUserWorkTags(userID, activeKind, 20)
+        .then((tags) => {
+          setTagsByKind((prev) => ({ ...prev, [activeKind]: tags }))
+        })
+        .catch(() => {})
+    }
+  }, [userID, activeKind])
+
   const handleKindEmpty = useCallback((targetKind: UserWorkKind, isEmpty: boolean) => {
     setEmptyKinds((prev) => {
       if (prev[targetKind] === isEmpty) return prev
@@ -124,11 +140,13 @@ export function UserDetailView(props: { userID: number }) {
     const followStateVersion = followStateVersionRef.current
     setDetailError(null)
     try {
-      const [result, webResult] = await Promise.all([
+      const [result, webResult, currentTags] = await Promise.all([
         session.call((token) => userDetail(userID, token)),
         fetchWebUserDetail(userID),
+        fetchUserWorkTags(userID, activeKind, 20),
       ])
       if (!g.isCurrent()) return
+      setTagsByKind((prev) => ({ ...prev, [activeKind]: currentTags }))
 
       // 优先预热背景图与头像，确保首次渲染即获得真实比例，防止头像位置跳动
       const bgUrl = result.profile.background_image_url
@@ -563,6 +581,13 @@ export function UserDetailView(props: { userID: number }) {
           webDetail={webDetail}
         />
 
+        {/* 标签筛选栏（位于关于下方，Picker上方） */}
+        <UserWorkTagFilterBar
+          tags={tagsByKind[activeKind] ?? []}
+          selectedTag={selectedTag}
+          onSelectTag={setSelectedTag}
+        />
+
         {/* 批量下载进度提示栏 */}
         {downloading ? (
           <HStack
@@ -588,7 +613,10 @@ export function UserDetailView(props: { userID: number }) {
         <UserWorkPicker
           availableKinds={availableKinds}
           kind={activeKind}
-          onChanged={setKind}
+          onChanged={(k) => {
+            setSelectedTag(null)
+            setKind(k)
+          }}
         />
 
         {availableKinds.length === 0 ? (
@@ -597,6 +625,7 @@ export function UserDetailView(props: { userID: number }) {
           <UserWorksFeedSection
             userID={userID}
             kind={activeKind}
+            selectedTag={selectedTag}
             isAuthorFollowed={followed || isOwnProfile}
             onKindEmpty={handleKindEmpty}
             onRegisterRefresh={(fn) => {

@@ -173,16 +173,6 @@ export function IllustDetailView(props: { illustID: number }) {
   const resolvedSeriesTitle = rawSeriesObj?.title ?? associatedRef?.seriesTitle ?? null
   const resolvedEpisodeNumber = currentIllust?.episode_number ?? associatedRef?.episodeNumber ?? null
 
-  const seriesNav = useSeriesEpisodeNav({
-    workID: illustID,
-    seriesID: resolvedSeriesID,
-    seriesTitleFallback: resolvedSeriesTitle,
-    kind: "manga",
-    initialEpisodeNumber: resolvedEpisodeNumber,
-  })
-
-  const episodeNumber = seriesNav.episodeNumber ?? resolvedEpisodeNumber
-
   async function load(clear = !illustRef.current) {
     const g = guard()
     if (clear) {
@@ -390,7 +380,7 @@ export function IllustDetailView(props: { illustID: number }) {
   const current = illust
 
   if (resolvedSeriesID) {
-    recordWorkSeriesAssociation(current.id, "manga", resolvedSeriesID, resolvedSeriesTitle, episodeNumber)
+    recordWorkSeriesAssociation(current.id, "manga", resolvedSeriesID, resolvedSeriesTitle, resolvedEpisodeNumber)
   }
 
   const pageCount = Math.max(1, current.page_count || current.meta_pages.length || 1)
@@ -824,12 +814,6 @@ export function IllustDetailView(props: { illustID: number }) {
                   action={() => Pasteboard.setString(`页数：${pageCount}页`)}
                 />
               )}
-              {episodeNumber != null && (
-                <Button
-                  title={`话数：第${episodeNumber}话`}
-                  action={() => Pasteboard.setString(`第${episodeNumber}话`)}
-                />
-              )}
               {Boolean(current.width && current.height) && (
                 <Button
                   title={`分辨率：${current.width}×${current.height}`}
@@ -936,11 +920,6 @@ export function IllustDetailView(props: { illustID: number }) {
                 </Text>
               </HStack>
             )}
-            {episodeNumber != null && (
-              <Text font="footnote">
-                {`第${episodeNumber}话`}
-              </Text>
-            )}
             <Text font="footnote">
               {formatDate(current.create_date)}
             </Text>
@@ -981,7 +960,7 @@ export function IllustDetailView(props: { illustID: number }) {
           seriesID={resolvedSeriesID}
           seriesTitle={resolvedSeriesTitle}
           kind="manga"
-          episodeNumber={episodeNumber}
+          episodeNumber={resolvedEpisodeNumber}
         />
 
         <RelatedIllustrationsSection

@@ -22,7 +22,7 @@ import { IllustCardAction } from "./IllustCard"
 import { useLatest, useNovelBookmark, useNovelMarker } from "../hooks"
 import { recordNovelMarker } from "../../store/bookmarkSync"
 import { loadSettings } from "../../store/settings"
-import { recordWorkSeriesAssociation } from "../../store/seriesCache"
+import { getSeriesByWorkID, recordWorkSeriesAssociation } from "../../store/seriesCache"
 import { addNovelBookmark, bookmarkDetail, bookmarkTags, followUser, novelBookmarkDetail, novelBookmarkTags, removeNovelBookmark } from "../../api/pixiv"
 import { session } from "../../api/session"
 import { novelThumbUrlOf } from "../../image/imageLoader"
@@ -192,11 +192,6 @@ export function NovelCard(props: {
                       {novel.text_length}
                     </Text>
                   </HStack>
-                ) : null}
-                {novel.episode_number != null ? (
-                  <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={1}>
-                    {`第 ${novel.episode_number} 话`}
-                  </Text>
                 ) : null}
                 {activeMarker != null ? (
                   <HStack spacing={3}>

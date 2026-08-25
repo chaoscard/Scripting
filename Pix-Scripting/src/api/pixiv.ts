@@ -33,11 +33,13 @@ import type {
   PixivUserPreview,
   PixivUserPreviewListResponse,
   PixivWebUserDetail,
+  PixivWebUserTag,
   SearchOptions,
   TextEmbeddedImage,
   UgoiraMetadataResponse,
 } from "../types"
 import { API_BASE_URL } from "../config"
+import { session } from "./session"
 import { notifyUserFollowChanged } from "../store/userFollow"
 import {
   notifyIllustBookmarkChanged,
@@ -848,15 +850,60 @@ const WEB_BASE_ORIGIN = "https://www.pixiv.net"
 const WEB_USER_AGENT =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/26.6"
 
+export function getWebHeaders(referer: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    "User-Agent": WEB_USER_AGENT,
+    Referer: referer,
+    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+  }
+  const cookie = session.webCookie
+  if (cookie) {
+    headers["Cookie"] = cookie
+  }
+  return headers
+}
+
+export async function syncWebCookies(): Promise<boolean> {
+  const webView = new WebViewController()
+  try {
+    const allCookies = await webView.getAllCookies()
+    const pixivCookies = allCookies.filter((c) => c.domain.includes("pixiv.net"))
+    const targetCookies =
+      pixivCookies.length > 0
+        ? pixivCookies
+        : await webView.getCookies("https://www.pixiv.net")
+    if (targetCookies && targetCookies.length > 0) {
+      const cookieMap = new Map<string, string>()
+      for (const c of targetCookies) {
+        if (c.name && c.value) {
+          cookieMap.set(c.name, c.value)
+        }
+      }
+      const cookieStr = Array.from(cookieMap.entries())
+        .map(([name, val]) => `${name}=${val}`)
+        .join("; ")
+      session.updateWebCookie(cookieStr)
+      return true
+    }
+    return false
+  } catch (e) {
+    console.log("syncWebCookies error:", e)
+    return false
+  } finally {
+    webView.dispose()
+  }
+}
+
 export async function fetchWebUserDetail(
   userID: number
 ): Promise<PixivWebUserDetail | null> {
   const url = `${WEB_BASE_ORIGIN}/ajax/user/${userID}?full=1`
   try {
-    const json = await apiGetPublicJson<{ error: boolean; body?: PixivWebUserDetail }>(url, WEB_BASE_ORIGIN, {
-      "User-Agent": WEB_USER_AGENT,
-      Referer: `${WEB_BASE_ORIGIN}/users/${userID}`,
-    })
+    const json = await apiGetPublicJson<{ error: boolean; body?: PixivWebUserDetail }>(
+      url,
+      WEB_BASE_ORIGIN,
+      getWebHeaders(`${WEB_BASE_ORIGIN}/users/${userID}`)
+    )
     if (json?.error === false && json?.body) {
       return json.body as PixivWebUserDetail
     }
@@ -864,6 +911,292 @@ export async function fetchWebUserDetail(
   } catch (error) {
     console.log("fetchWebUserDetail error:", error)
     return null
+  }
+}
+
+export interface WebIllustWorkItem {
+  id: string | number
+  title: string
+  illustType?: number
+  xRestrict?: number
+  restrict?: number
+  sl?: number
+  url: string
+  description?: string
+  tags?: string[]
+  userId: string | number
+  userName: string
+  width?: number
+  height?: number
+  pageCount?: number
+  bookmarkData?: unknown
+  bookmarkCount?: number
+  createDate?: string
+  aiType?: number
+  profileImageUrl?: string
+}
+
+export interface WebNovelWorkItem {
+  id: string | number
+  title: string
+  genre?: string
+  xRestrict?: number
+  restrict?: number
+  url: string
+  tags?: string[]
+  userId: string | number
+  userName: string
+  profileImageUrl?: string
+  textCount?: number
+  wordCount?: number
+  readingTime?: number
+  description?: string
+  bookmarkData?: unknown
+  bookmarkCount?: number
+  createDate?: string
+  aiType?: number
+  seriesId?: string | number
+  seriesTitle?: string
+  seriesContentOrder?: number
+}
+
+function mapWebIllustToPixivIllustration(item: WebIllustWorkItem): PixivIllustration {
+  const square = item.url || ""
+  const medium = square.includes("img-master")
+    ? square.replace("/c/250x250_80_a2/img-master/", "/c/540x540_70/img-master/").replace("_square1200.", "_master1200.")
+    : square.includes("custom-thumb")
+      ? square.replace("/c/250x250_80_a2/custom-thumb/", "/c/540x540_70/custom-thumb/").replace("_custom1200.", "_master1200.")
+      : square
+  const large = square.includes("img-master")
+    ? square.replace("/c/250x250_80_a2/img-master/", "/c/600x1200_90/img-master/").replace("_square1200.", "_master1200.")
+    : square.includes("custom-thumb")
+      ? square.replace("/c/250x250_80_a2/custom-thumb/", "/c/600x1200_90/custom-thumb/").replace("_custom1200.", "_master1200.")
+      : square
+
+  return {
+    id: Number(item.id),
+    title: item.title || "",
+    type: item.illustType === 1 ? "manga" : item.illustType === 2 ? "ugoira" : "illust",
+    image_urls: {
+      square_medium: square,
+      medium,
+      large,
+    },
+    caption: item.description || "",
+    user: {
+      id: Number(item.userId),
+      name: item.userName || "",
+      account: item.userName || "",
+      profile_image_urls: {
+        medium: item.profileImageUrl || "",
+      },
+      is_followed: false,
+    },
+    tags: (item.tags || []).map((t) => ({ name: t, translated_name: null })),
+    create_date: item.createDate || new Date().toISOString(),
+    page_count: item.pageCount || 1,
+    width: item.width || 0,
+    height: item.height || 0,
+    x_restrict: item.xRestrict || 0,
+    series: null,
+    total_view: 0,
+    total_bookmarks: item.bookmarkCount || 0,
+    is_bookmarked: item.bookmarkData != null,
+    is_muted: false,
+    illust_ai_type: item.aiType || 0,
+    total_comments: 0,
+    comment_access_control: 0,
+    meta_pages: [],
+  }
+}
+
+function mapWebNovelToPixivNovel(item: WebNovelWorkItem): PixivNovel {
+  return {
+    id: Number(item.id),
+    title: item.title || "",
+    caption: item.description || "",
+    user: {
+      id: Number(item.userId),
+      name: item.userName || "",
+      account: item.userName || "",
+      profile_image_urls: {
+        medium: item.profileImageUrl || "",
+      },
+      is_followed: false,
+    },
+    tags: (item.tags || []).map((t) => ({ name: t, translated_name: null })),
+    create_date: item.createDate || new Date().toISOString(),
+    page_count: 1,
+    x_restrict: item.xRestrict || 0,
+    total_view: 0,
+    total_bookmarks: item.bookmarkCount || 0,
+    is_bookmarked: item.bookmarkData != null,
+    is_muted: false,
+    novel_ai_type: item.aiType || 0,
+    total_comments: 0,
+    text_length: item.textCount || item.wordCount || 0,
+    visible: true,
+    series: item.seriesId
+      ? {
+          id: Number(item.seriesId),
+          title: item.seriesTitle || "",
+        }
+      : null,
+    image_urls: {
+      square_medium: item.url || "",
+      medium: item.url || "",
+      large: item.url || "",
+    },
+  }
+}
+
+export async function fetchUserWorkTags(
+  userID: number,
+  kind: "illust" | "manga" | "novel",
+  limit = 20
+): Promise<PixivWebUserTag[]> {
+  const touchUrl =
+    kind === "novel"
+      ? `${WEB_BASE_ORIGIN}/touch/ajax/user/novels?id=${userID}&sensitiveFilterMode=userSetting&lang=zh`
+      : `${WEB_BASE_ORIGIN}/touch/ajax/user/illusts?id=${userID}&type=${kind === "illust" ? "illust" : "manga"}&sensitiveFilterMode=userSetting&lang=zh`
+  try {
+    const json = await apiGetPublicJson<{
+      error: boolean
+      body?: { tags?: PixivWebUserTag[] }
+    }>(
+      touchUrl,
+      WEB_BASE_ORIGIN,
+      getWebHeaders(`${WEB_BASE_ORIGIN}/users/${userID}`)
+    )
+    if (
+      json?.error === false &&
+      Array.isArray(json.body?.tags) &&
+      json.body.tags.length > 0
+    ) {
+      return json.body.tags.slice(0, limit)
+    }
+  } catch (error) {
+    console.log("fetchUserWorkTags touch error:", error)
+  }
+
+  // Fallback to desktop ajax tags endpoint if touch endpoint fails or returns empty
+  const path = kind === "illust" ? "illusts" : kind === "manga" ? "manga" : "novels"
+  const url = `${WEB_BASE_ORIGIN}/ajax/user/${userID}/${path}/tags?lang=zh`
+  try {
+    const json = await apiGetPublicJson<{ error: boolean; body?: PixivWebUserTag[] }>(
+      url,
+      WEB_BASE_ORIGIN,
+      getWebHeaders(`${WEB_BASE_ORIGIN}/users/${userID}`)
+    )
+    if (json?.error === false && Array.isArray(json.body)) {
+      const sorted = [...json.body].sort((a, b) => (b.cnt ?? 0) - (a.cnt ?? 0))
+      return sorted.slice(0, limit)
+    }
+    return []
+  } catch (error) {
+    console.log("fetchUserWorkTags fallback error:", error)
+    return []
+  }
+}
+
+export async function fetchUserTagFilteredWorks(
+  userID: number,
+  kind: "illust" | "manga",
+  tag: string,
+  offset = 0,
+  limit = 48
+): Promise<PixivPage<PixivIllustration>> {
+  const path = kind === "illust" ? "illusts" : "manga"
+  const url = `${WEB_BASE_ORIGIN}/ajax/user/${userID}/${path}/tag?tag=${encodeURIComponent(tag)}&offset=${offset}&limit=${limit}&sensitiveFilterMode=userSetting&lang=zh`
+  try {
+    const json = await apiGetPublicJson<{
+      error: boolean
+      body?: { works: WebIllustWorkItem[]; total: number }
+    }>(
+      url,
+      WEB_BASE_ORIGIN,
+      getWebHeaders(`${WEB_BASE_ORIGIN}/users/${userID}`)
+    )
+    if (json?.error === false && json.body && Array.isArray(json.body.works)) {
+      const works = json.body.works.map(mapWebIllustToPixivIllustration)
+      const total = json.body.total ?? 0
+      const nextOffset = offset + works.length
+      const nextURL =
+        nextOffset < total && works.length > 0
+          ? `web-tag://${kind}/${userID}?tag=${encodeURIComponent(tag)}&offset=${nextOffset}&limit=${limit}`
+          : null
+      return { items: works, nextURL }
+    }
+    return { items: [], nextURL: null }
+  } catch (error) {
+    console.log("fetchUserTagFilteredWorks error:", error)
+    return { items: [], nextURL: null }
+  }
+}
+
+export async function fetchUserTagFilteredNovels(
+  userID: number,
+  tag: string,
+  offset = 0,
+  limit = 24
+): Promise<PixivPage<PixivNovel>> {
+  const url = `${WEB_BASE_ORIGIN}/ajax/user/${userID}/novels/tag?tag=${encodeURIComponent(tag)}&offset=${offset}&limit=${limit}&sensitiveFilterMode=userSetting&lang=zh`
+  try {
+    const json = await apiGetPublicJson<{
+      error: boolean
+      body?: { works: WebNovelWorkItem[]; total: number }
+    }>(
+      url,
+      WEB_BASE_ORIGIN,
+      getWebHeaders(`${WEB_BASE_ORIGIN}/users/${userID}`)
+    )
+    if (json?.error === false && json.body && Array.isArray(json.body.works)) {
+      const works = json.body.works.map(mapWebNovelToPixivNovel)
+      const total = json.body.total ?? 0
+      const nextOffset = offset + works.length
+      const nextURL =
+        nextOffset < total && works.length > 0
+          ? `web-tag://novel/${userID}?tag=${encodeURIComponent(tag)}&offset=${nextOffset}&limit=${limit}`
+          : null
+      return { items: works, nextURL }
+    }
+    return { items: [], nextURL: null }
+  } catch (error) {
+    console.log("fetchUserTagFilteredNovels error:", error)
+    return { items: [], nextURL: null }
+  }
+}
+
+export async function fetchTagFilteredWorksByUrl(
+  nextURL: string
+): Promise<PixivPage<PixivIllustration>> {
+  try {
+    const parsed = new URL(nextURL)
+    const kind = parsed.hostname as "illust" | "manga"
+    const userID = Number(parsed.pathname.replace(/^\//, ""))
+    const tag = parsed.searchParams.get("tag") || ""
+    const offset = Number(parsed.searchParams.get("offset") || "0")
+    const limit = Number(parsed.searchParams.get("limit") || "48")
+    return fetchUserTagFilteredWorks(userID, kind, tag, offset, limit)
+  } catch (e) {
+    console.log("fetchTagFilteredWorksByUrl error:", e)
+    return { items: [], nextURL: null }
+  }
+}
+
+export async function fetchTagFilteredNovelsByUrl(
+  nextURL: string
+): Promise<PixivPage<PixivNovel>> {
+  try {
+    const parsed = new URL(nextURL)
+    const userID = Number(parsed.pathname.replace(/^\//, ""))
+    const tag = parsed.searchParams.get("tag") || ""
+    const offset = Number(parsed.searchParams.get("offset") || "0")
+    const limit = Number(parsed.searchParams.get("limit") || "24")
+    return fetchUserTagFilteredNovels(userID, tag, offset, limit)
+  } catch (e) {
+    console.log("fetchTagFilteredNovelsByUrl error:", e)
+    return { items: [], nextURL: null }
   }
 }
 
@@ -1122,7 +1455,7 @@ export async function novelViewerData(
       }>(
         `${WEB_BASE_ORIGIN}/ajax/novel/${id}`,
         WEB_BASE_ORIGIN,
-        { Referer: `${WEB_BASE_ORIGIN}/novel/show.php?id=${id}` }
+        getWebHeaders(`${WEB_BASE_ORIGIN}/novel/show.php?id=${id}`)
       )
       if (webData?.body?.textEmbeddedImages) {
         textEmbeddedImages = webData.body.textEmbeddedImages

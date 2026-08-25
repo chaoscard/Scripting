@@ -160,6 +160,13 @@ export interface PixivWebWorkspace {
   [key: string]: string | null | undefined
 }
 
+export interface PixivWebUserTag {
+  tag: string
+  tag_translation?: string
+  tag_yomigana?: string
+  cnt: number
+}
+
 export interface PixivWebUserDetail {
   userId: string
   name: string

@@ -30,7 +30,7 @@ import {
   type LaunchPage,
 } from "../store/settings"
 import { loadBlocklist, onBlocklistChanged } from "../store/blocklist"
-import { editAIShowSettings } from "../api/pixiv"
+import { editAIShowSettings, syncWebCookies } from "../api/pixiv"
 import { session } from "../api/session"
 import { clearUgoiraCache, enforceUgoiraCacheLimit, ugoiraCacheUsageBytes } from "../ugoira/ugoira"
 import { useTimedFlag } from "./hooks"
@@ -284,6 +284,31 @@ export function SettingsView() {
           value={settings.enableTaskNotification}
           onChanged={(value) => update({ enableTaskNotification: value })}
         />
+        <HStack spacing={8} alignment="center">
+          <VStack alignment="leading" spacing={2}>
+            <Text font="body">Web 登录态</Text>
+            <Text font="caption" foregroundStyle="secondaryLabel">
+              {session.webCookie ? "已同步网页端登录态（支持 R-18 标签与筛选）" : "未同步，点击立即同步"}
+            </Text>
+          </VStack>
+          <Spacer />
+          <Button
+            buttonStyle="glass"
+            controlSize="small"
+            action={async () => {
+              try {
+                await syncWebCookies()
+                update({})
+              } catch (e: any) {
+                console.log("syncWebCookies error:", e?.message ?? e)
+              }
+            }}
+          >
+            <Text font="subheadline">
+              {session.webCookie ? "重新同步" : "立即同步"}
+            </Text>
+          </Button>
+        </HStack>
       </Section>
 
       <Section header={<Text>图片质量</Text>}>

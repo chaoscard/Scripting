@@ -7,6 +7,7 @@ export interface StoredCredentials {
   refreshToken: string
   expiresAt: number // epoch ms
   user: AuthUser
+  webCookie?: string | null
 }
 
 const CREDENTIALS_KEY = "pixiv_credentials_v1"
@@ -142,6 +143,7 @@ export function loadCredentials(): StoredCredentials | null {
       accessToken: parsed.accessToken,
       refreshToken: parsed.refreshToken,
       expiresAt: parsed.expiresAt,
+      webCookie: typeof parsed.webCookie === "string" ? parsed.webCookie : null,
       user: {
         id: String(parsed.user.id),
         name: parsed.user.name,
@@ -170,12 +172,14 @@ export function needsRefresh(creds: StoredCredentials): boolean {
 }
 
 export function buildCredentialsFromResponse(
-  response: AuthTokenResponse
+  response: AuthTokenResponse,
+  webCookie?: string | null
 ): StoredCredentials {
   return {
     accessToken: response.access_token,
     refreshToken: response.refresh_token,
     expiresAt: Date.now() + (Number(response.expires_in) || 3600) * 1000,
+    webCookie: webCookie ?? null,
     user: {
       id: String(response.user.id),
       name: response.user.name,

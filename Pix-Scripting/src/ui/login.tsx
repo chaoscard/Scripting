@@ -41,12 +41,34 @@ export function LoginView(props: {
     const challenge = generateCodeChallenge(verifier)
     const webView = new WebViewController()
     let authCode: string | null = null
+    let authWebCookie: string | null = null
     let authError: string | null = null
 
     webView.shouldAllowRequest = async (request) => {
       const code = extractAuthCode(request.url)
       if (code) {
         authCode = code
+        try {
+          const allCookies = await webView.getAllCookies()
+          const pixivCookies = allCookies.filter((c) => c.domain.includes("pixiv.net"))
+          const targetCookies =
+            pixivCookies.length > 0
+              ? pixivCookies
+              : await webView.getCookies("https://www.pixiv.net")
+          if (targetCookies && targetCookies.length > 0) {
+            const cookieMap = new Map<string, string>()
+            for (const c of targetCookies) {
+              if (c.name && c.value) {
+                cookieMap.set(c.name, c.value)
+              }
+            }
+            authWebCookie = Array.from(cookieMap.entries())
+              .map(([name, val]) => `${name}=${val}`)
+              .join("; ")
+          }
+        } catch (e) {
+          console.log("extract web cookies error:", e)
+        }
         webView.dismiss()
         return false
       }
@@ -70,7 +92,7 @@ export function LoginView(props: {
     if (authCode) {
       try {
         const response = await exchangeCode(authCode, verifier)
-        session.applyResponse(response)
+        session.applyResponse(response, authWebCookie)
         setIsLoading(false)
         props.onSuccess()
         return

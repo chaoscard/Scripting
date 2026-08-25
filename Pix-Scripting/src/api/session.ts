@@ -69,16 +69,28 @@ export class Session {
     return id ? Number(id) : null
   }
 
+  get webCookie(): string | null {
+    return this.creds?.webCookie ?? null
+  }
+
+  updateWebCookie(cookie: string | null): void {
+    if (!this.creds) return
+    this.creds.webCookie = cookie
+    this.dependencies.saveCredentials(this.creds)
+    this.emitAuthChanged()
+  }
+
   restore(): void {
     this.generation += 1
     this.refreshing = null
     this.creds = this.dependencies.loadCredentials()
   }
 
-  applyResponse(response: AuthTokenResponse): void {
+  applyResponse(response: AuthTokenResponse, webCookie?: string | null): void {
     this.generation += 1
     this.refreshing = null
-    this.creds = buildCredentialsFromResponse(response)
+    const existingCookie = this.creds?.webCookie ?? null
+    this.creds = buildCredentialsFromResponse(response, webCookie ?? existingCookie)
     this.dependencies.saveCredentials(this.creds)
     this.emitAuthChanged()
   }
@@ -158,7 +170,8 @@ export class Session {
       throw new PixivError(401, "登录状态已变更")
     }
 
-    this.creds = buildCredentialsFromResponse(response)
+    const existingCookie = this.creds?.webCookie ?? null
+    this.creds = buildCredentialsFromResponse(response, existingCookie)
     this.dependencies.saveCredentials(this.creds)
     this.emitAuthChanged()
     return response.access_token
