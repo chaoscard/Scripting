@@ -1,10 +1,12 @@
 import {
   Button,
   Device,
+  Group,
   HStack,
   Image,
   LazyVStack,
   LongPressGesture,
+  Menu,
   NavigationLink,
   ProgressView,
   Spacer,
@@ -19,12 +21,15 @@ import {
 } from "scripting"
 import { CachedImage, PageCountBadge } from "./CachedImage"
 import { BookmarkButton, BookmarkDetailSheet } from "./BookmarkDetailSheet"
+import { BlockWorkSheet } from "./BlockWorkSheet"
 import { FilteredContentNotice, LoadMoreTrigger } from "./RefreshableScrollView"
 import { CORNER_ICON_SIZE, formatNumber } from "./formatUtils"
-import { useIllustBookmark, useLatest } from "../hooks"
+import { useIllustBookmark, useLatest, useUserFollow } from "../hooks"
 import { cacheIllust, cacheIllusts } from "../../store/illustCache"
 import { recordWorkSeriesAssociation } from "../../store/seriesCache"
-import { loadSettings } from "../../store/settings"
+import { loadSettings, getDownloadImageQuality } from "../../store/settings"
+import { blockTag, blockUser } from "../../store/blocklist"
+import { downloadIllustToAlbum, exportUgoiraToAlbum } from "../../downloader"
 import { addBookmark, bookmarkDetail, bookmarkTags, followUser, removeBookmark } from "../../api/pixiv"
 import { session } from "../../api/session"
 import { cardThumbUrlOf } from "../../image/imageLoader"
@@ -70,8 +75,12 @@ export function IllustCard(props: {
   } = props
   cacheIllust(illust)
   const [bookmarked, setBookmarked] = useIllustBookmark(illust.id, illust.is_bookmarked)
+  const [followed, setFollowed] = useUserFollow(illust.user?.id ?? 0, illust.user?.is_followed ?? false)
   const [bookmarkBusy, setBookmarkBusy] = useState(false)
+  const [followBusy, setFollowBusy] = useState(false)
   const [showBookmarkDetail, setShowBookmarkDetail] = useState(false)
+  const [showBlockSheet, setShowBlockSheet] = useState(false)
+  const [downloading, setDownloading] = useState(false)
   // 流式卡片只在进入原生可见区后请求图片；骨架尺寸仍由作品元数据提前固定。
   const [imageVisible, setImageVisible] = useState(!flow)
   const rawRatio = illust.width > 0 && illust.height > 0 ? illust.width / illust.height : 0.75
@@ -133,11 +142,94 @@ export function IllustCard(props: {
     }
   }
 
+  const handleDownload = useCallback(async () => {
+    if (downloading) return
+    void Haptics.transient()
+    setDownloading(true)
+    try {
+      if (illust.type === "ugoira") {
+        const res = await exportUgoiraToAlbum(illust)
+        if (res.success) {
+          void Haptics.transient()
+        }
+      } else {
+        const quality = getDownloadImageQuality()
+        const ok = await downloadIllustToAlbum(illust, quality)
+        if (ok) {
+          void Haptics.transient()
+        }
+      }
+    } catch (err: any) {
+      console.log("IllustCard download error:", err?.message ?? err)
+    } finally {
+      setDownloading(false)
+    }
+  }, [illust, downloading])
+
+  const isOwnUser = Boolean(
+    session.userID && illust.user && String(illust.user.id) === String(session.userID)
+  )
+
+  const handleFollowUser = useCallback(async () => {
+    if (!illust.user || followed || followBusy) return
+    setFollowBusy(true)
+    void Haptics.transient()
+    try {
+      await session.call((token) => followUser(illust.user.id, "public", token))
+      setFollowed(true)
+      void Haptics.transient()
+    } catch (err: any) {
+      console.log("IllustCard followUser error:", err?.message ?? err)
+    } finally {
+      setFollowBusy(false)
+    }
+  }, [illust.user, followed, followBusy, setFollowed])
+
+  const resolvedContextMenu = useMemo(
+    () =>
+      renderIllustContextMenu(
+        illust,
+        downloading,
+        handleDownload,
+        followed,
+        isOwnUser,
+        followBusy,
+        handleFollowUser,
+        () => setShowBlockSheet(true),
+        contextMenu
+      ),
+    [
+      illust,
+      downloading,
+      handleDownload,
+      followed,
+      isOwnUser,
+      followBusy,
+      handleFollowUser,
+      contextMenu,
+    ]
+  )
+
   return (
     <ZStack
       alignment="topTrailing"
       frame={flowCardFrame}
-      contextMenu={contextMenu}
+      contextMenu={resolvedContextMenu}
+      sheet={
+        showBlockSheet
+          ? {
+              content: (
+                <BlockWorkSheet
+                  user={illust.user}
+                  tags={illust.tags ?? []}
+                  onClose={() => setShowBlockSheet(false)}
+                />
+              ),
+              isPresented: showBlockSheet,
+              onChanged: setShowBlockSheet,
+            }
+          : undefined
+      }
     >
       <VStack
         alignment="leading"
@@ -434,3 +526,76 @@ function distributeFlowItems(
   }
   return columns
 }
+
+function renderIllustContextMenu(
+  illust: PixivIllustration,
+  downloading: boolean,
+  onDownload: () => void,
+  followed: boolean,
+  isOwnUser: boolean,
+  followBusy: boolean,
+  onFollowUser: () => void,
+  onOpenBlockSheet: () => void,
+  customContextMenu?: any
+) {
+  const pageCount = illust.page_count ?? 1
+  const downloadTitle =
+    illust.type === "ugoira"
+      ? "下载动图 (MP4)"
+      : pageCount > 1
+        ? `下载全部图片 (共 ${pageCount} 张)`
+        : "下载图片"
+
+  const downloadIcon =
+    illust.type === "ugoira"
+      ? "film"
+      : "arrow.down.circle"
+
+  const defaultMenuItems = (
+    <Group>
+      <Button
+        title={downloading ? "下载中…" : downloadTitle}
+        systemImage={downloadIcon}
+        disabled={downloading}
+        action={onDownload}
+      />
+      {!followed && !isOwnUser && illust.user ? (
+        <Button
+          title={followBusy ? "关注中…" : "关注作者"}
+          systemImage="person.badge.plus"
+          disabled={followBusy}
+          action={onFollowUser}
+        />
+      ) : null}
+      <NavigationLink value={`relatedIllust:${illust.id}`}>
+        <Button
+          title="相关作品"
+          systemImage="sparkles"
+          action={() => {}}
+        />
+      </NavigationLink>
+      <Button
+        title="屏蔽设置"
+        systemImage="nosign"
+        role="destructive"
+        action={onOpenBlockSheet}
+      />
+    </Group>
+  )
+
+  if (!customContextMenu) {
+    return { menuItems: defaultMenuItems }
+  }
+
+  const customItems = customContextMenu.menuItems ?? customContextMenu
+  return {
+    ...customContextMenu,
+    menuItems: (
+      <Group>
+        {customItems}
+        {defaultMenuItems}
+      </Group>
+    ),
+  }
+}
+

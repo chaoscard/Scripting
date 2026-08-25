@@ -7,6 +7,7 @@ import { PixivisionDetailView } from "./pixivisionDetail"
 import { UserDetailView } from "./userDetail"
 import { NovelDetailView } from "./novelDetail"
 import { TagFeedView } from "./tagFeed"
+import { RelatedIllustFeedView } from "./relatedIllustFeed"
 import { NovelLibraryView } from "./novelLibrary"
 import { LibraryView } from "./library"
 import { HistoryView } from "./history"
@@ -112,6 +113,10 @@ export function renderDestination(rawPage: string) {
   if (page.startsWith("novelSeries:")) {
     const id = parseID(page, "novelSeries:")
     if (id != null) return <SeriesView kind="novel" seriesID={id} />
+  }
+  if (page.startsWith("relatedIllust:")) {
+    const id = parseID(page, "relatedIllust:")
+    if (id != null) return <RelatedIllustFeedView illustID={id} />
   }
   if (page.startsWith("tag:")) {
     return <TagFeedView tag={decodeTag(page.slice("tag:".length))} kind="illust" />

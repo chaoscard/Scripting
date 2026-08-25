@@ -55,6 +55,44 @@ interface HistoryNovelItem extends PixivNovel {
   viewedAt: number
 }
 
+function matchesHistoryQuery(item: HistoryIllustItem | HistoryNovelItem, query: string): boolean {
+  const trimmed = query.trim()
+  if (!trimmed) return true
+
+  const words = trimmed.toLowerCase().split(/\s+/).filter(Boolean)
+  if (words.length === 0) return true
+
+  return words.every((word) => {
+    // 1. 作品 ID
+    if (String(item.id).includes(word)) return true
+
+    // 2. 作品标题
+    if (item.title && item.title.toLowerCase().includes(word)) return true
+
+    // 3. 作者昵称与 UID
+    if (item.user) {
+      if (item.user.name && item.user.name.toLowerCase().includes(word)) return true
+      if (String(item.user.id).includes(word)) return true
+    }
+
+    // 4. 所属系列名称与 ID
+    if (item.series) {
+      if (item.series.title && item.series.title.toLowerCase().includes(word)) return true
+      if (String(item.series.id).includes(word)) return true
+    }
+
+    // 5. 标签原文与官方翻译名
+    if (item.tags && item.tags.length > 0) {
+      for (const tag of item.tags) {
+        if (tag.name && tag.name.toLowerCase().includes(word)) return true
+        if (tag.translated_name && tag.translated_name.toLowerCase().includes(word)) return true
+      }
+    }
+
+    return false
+  })
+}
+
 function loadHistoryIllusts(kind: "illustration" | "manga"): HistoryIllustItem[] {
   return getHistory(kind)
     .filter((entry): entry is Extract<HistoryEntry, { kind: "illust" }> => entry.kind === "illust")
@@ -94,6 +132,7 @@ function filterHistoryNovels(items: HistoryNovelItem[]): HistoryNovelItem[] {
 export function HistoryView() {
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
   const [kind, setKind] = useState<HistoryKind>("illustration")
+  const [searchQuery, setSearchQuery] = useState("")
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
   useEffect(() => {
@@ -115,12 +154,19 @@ export function HistoryView() {
       navigationBarTitleDisplayMode="inline"
       navigationDestination={destinationElement}
       toolbar={historyToolbar({ kind, onClear: clearCurrentKind })}
+      searchable={{
+        value: searchQuery,
+        onChanged: setSearchQuery,
+        placement: "navigationBarDrawerAlwaysDisplay",
+        prompt: "搜索标题、作者、标签或作品ID",
+      }}
       refreshable={() => refreshHandlerRef.current()}
     >
       <VStack alignment="leading" spacing={8}>
         <HistoryKindPicker kind={kind} hideNovels={hideNovels} onKindChange={setKind} />
         <HistoryFeed
           kind={kind}
+          searchQuery={searchQuery}
           onRegisterRefresh={(fn) => {
             refreshHandlerRef.current = fn
           }}
@@ -203,18 +249,25 @@ function HistoryKindPicker(props: {
 
 function HistoryFeed(props: {
   kind: HistoryKind
+  searchQuery?: string
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { kind, onRegisterRefresh } = props
+  const { kind, searchQuery = "", onRegisterRefresh } = props
 
   // 1. 插画历史流
   const illustPaged = usePagedList<HistoryIllustItem>({
-    first: async () => ({
-      items: loadHistoryIllusts("illustration"),
-      nextURL: null,
-    }),
+    first: async () => {
+      const items = loadHistoryIllusts("illustration")
+      const filtered = searchQuery.trim()
+        ? items.filter((item) => matchesHistoryQuery(item, searchQuery))
+        : items
+      return {
+        items: filtered,
+        nextURL: null,
+      }
+    },
     filter: filterHistoryIllusts,
-    deps: ["history", "illustration"],
+    deps: ["history", "illustration", searchQuery],
     enabled: kind === "illustration",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
@@ -222,12 +275,18 @@ function HistoryFeed(props: {
 
   // 2. 漫画历史流
   const mangaPaged = usePagedList<HistoryIllustItem>({
-    first: async () => ({
-      items: loadHistoryIllusts("manga"),
-      nextURL: null,
-    }),
+    first: async () => {
+      const items = loadHistoryIllusts("manga")
+      const filtered = searchQuery.trim()
+        ? items.filter((item) => matchesHistoryQuery(item, searchQuery))
+        : items
+      return {
+        items: filtered,
+        nextURL: null,
+      }
+    },
     filter: filterHistoryIllusts,
-    deps: ["history", "manga"],
+    deps: ["history", "manga", searchQuery],
     enabled: kind === "manga",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
@@ -235,12 +294,18 @@ function HistoryFeed(props: {
 
   // 3. 小说历史流
   const novelPaged = usePagedList<HistoryNovelItem>({
-    first: async () => ({
-      items: loadHistoryNovels(),
-      nextURL: null,
-    }),
+    first: async () => {
+      const items = loadHistoryNovels()
+      const filtered = searchQuery.trim()
+        ? items.filter((item) => matchesHistoryQuery(item, searchQuery))
+        : items
+      return {
+        items: filtered,
+        nextURL: null,
+      }
+    },
     filter: filterHistoryNovels,
-    deps: ["history", "novel"],
+    deps: ["history", "novel", searchQuery],
     enabled: kind === "novel",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
@@ -298,17 +363,20 @@ function HistoryFeed(props: {
           paged={illustPaged}
           kind="illustration"
           totalCount={currentCount}
+          searchQuery={searchQuery}
         />
       ) : kind === "manga" ? (
         <IllustHistoryContent
           paged={mangaPaged}
           kind="manga"
           totalCount={currentCount}
+          searchQuery={searchQuery}
         />
       ) : (
         <NovelHistoryContent
           paged={novelPaged}
           totalCount={currentCount}
+          searchQuery={searchQuery}
         />
       )}
     </VStack>
@@ -319,8 +387,9 @@ function IllustHistoryContent(props: {
   paged: ReturnType<typeof usePagedList<HistoryIllustItem>>
   kind: "illustration" | "manga"
   totalCount: number
+  searchQuery?: string
 }) {
-  const { paged, kind, totalCount } = props
+  const { paged, kind, totalCount, searchQuery = "" } = props
 
   const footerTextOf = useCallback((illust: PixivIllustration) => {
     const viewedAt = (illust as HistoryIllustItem).viewedAt
@@ -340,6 +409,8 @@ function IllustHistoryContent(props: {
     ),
   }), [])
 
+  const isSearching = Boolean(searchQuery.trim())
+
   if (paged.items.length === 0 && !paged.initialLoading) {
     if (paged.hasFilteredContent) {
       return (
@@ -349,12 +420,24 @@ function IllustHistoryContent(props: {
         />
       )
     }
+    if (isSearching) {
+      return (
+        <EmptyView
+          text={`未找到与 “${searchQuery.trim()}” 相关的${kind === "manga" ? "漫画" : "插画"}浏览记录`}
+          systemImage="magnifyingglass"
+        />
+      )
+    }
     const text =
       kind === "manga"
         ? "暂无漫画浏览记录，打开作品后会自动记录"
         : "暂无插画浏览记录，打开作品后会自动记录"
     return <EmptyView text={text} systemImage="clock" />
   }
+
+  const countSummary = isSearching
+    ? `共 ${totalCount} 条记录 · 找到 ${paged.items.length} 条`
+    : `共 ${totalCount} 条记录`
 
   return (
     <VStack alignment="leading" spacing={8}>
@@ -366,7 +449,7 @@ function IllustHistoryContent(props: {
           multilineTextAlignment="center"
           frame={{ maxWidth: "infinity", alignment: "center" }}
         >
-          共 {totalCount} 条记录
+          {countSummary}
         </Text>
       </HStack>
       <IllustFlowFeed
@@ -384,8 +467,11 @@ function IllustHistoryContent(props: {
 function NovelHistoryContent(props: {
   paged: ReturnType<typeof usePagedList<HistoryNovelItem>>
   totalCount: number
+  searchQuery?: string
 }) {
-  const { paged, totalCount } = props
+  const { paged, totalCount, searchQuery = "" } = props
+
+  const isSearching = Boolean(searchQuery.trim())
 
   if (paged.items.length === 0 && !paged.initialLoading) {
     if (paged.hasFilteredContent) {
@@ -393,6 +479,14 @@ function NovelHistoryContent(props: {
         <EmptyView
           text="当前页面部分小说被内容显示设置过滤，暂时无法显示"
           systemImage="eye.slash"
+        />
+      )
+    }
+    if (isSearching) {
+      return (
+        <EmptyView
+          text={`未找到与 “${searchQuery.trim()}” 相关的小说浏览记录`}
+          systemImage="magnifyingglass"
         />
       )
     }
@@ -405,6 +499,9 @@ function NovelHistoryContent(props: {
   }
 
   const lastNovel = paged.items[paged.items.length - 1]
+  const countSummary = isSearching
+    ? `共 ${totalCount} 条记录 · 找到 ${paged.items.length} 条`
+    : `共 ${totalCount} 条记录`
 
   return (
     <VStack alignment="leading" spacing={8}>
@@ -416,7 +513,7 @@ function NovelHistoryContent(props: {
           multilineTextAlignment="center"
           frame={{ maxWidth: "infinity", alignment: "center" }}
         >
-          共 {totalCount} 条记录
+          {countSummary}
         </Text>
       </HStack>
       <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
