@@ -147,7 +147,9 @@ export async function fetchSeriesNav(
           : []
         let currentNextURL = result.next_url ?? null
 
-        while (currentNextURL && allRawIllusts.length < 500) {
+        const visitedUrls = new Set<string>()
+        while (currentNextURL && !visitedUrls.has(currentNextURL)) {
+          visitedUrls.add(currentNextURL)
           try {
             const nextResult = await session.call((token) => nextIllustrationSeries(currentNextURL!, token))
             if (Array.isArray(nextResult.illusts) && nextResult.illusts.length > 0) {
@@ -181,7 +183,9 @@ export async function fetchSeriesNav(
           : []
         let currentNextURL = result.next_url ?? null
 
-        while (currentNextURL && allRawNovels.length < 500) {
+        const visitedUrls = new Set<string>()
+        while (currentNextURL && !visitedUrls.has(currentNextURL)) {
+          visitedUrls.add(currentNextURL)
           try {
             const nextResult = await session.call((token) => nextNovelSeries(currentNextURL!, token))
             if (Array.isArray(nextResult.novels) && nextResult.novels.length > 0) {

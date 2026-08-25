@@ -122,6 +122,7 @@ export async function streamTranslateText(
   options: StreamTranslateOptions
 ): Promise<string> {
   if (!text || !text.trim()) return ""
+  if (options.signal?.aborted) return ""
   if (!isAIAvailable()) {
     throw new Error("Scripting 助手未配置或不可用，请在设置中配置 AI 模型。")
   }
@@ -166,6 +167,7 @@ export async function streamTranslateNovel(
 ): Promise<string> {
   const cleaned = cleanNovelTextForAI(rawText)
   if (!cleaned) return ""
+  if (options.signal?.aborted) return ""
   if (!isAIAvailable()) {
     throw new Error("Scripting 助手未配置或不可用，请在设置中配置 AI 模型。")
   }
@@ -268,6 +270,7 @@ export async function streamSummarizeNovel(
 ): Promise<string> {
   const cleaned = cleanNovelTextForAI(rawText)
   if (!cleaned) return ""
+  if (options.signal?.aborted) return ""
   if (!isAIAvailable()) {
     throw new Error("Scripting 助手未配置或不可用，请在设置中配置 AI 模型。")
   }
@@ -334,6 +337,7 @@ export async function streamContinueNovel(
 ): Promise<string> {
   const cleaned = cleanNovelTextForAI(rawText)
   if (!cleaned) return ""
+  if (options.signal?.aborted) return ""
   if (!isAIAvailable()) {
     throw new Error("Scripting 助手未配置或不可用，请在设置中配置 AI 模型。")
   }
@@ -429,7 +433,15 @@ export async function streamVisionTranslateImage(
     throw new Error("无法获取图片地址")
   }
 
+  if (options.signal?.aborted) {
+    throw new Error("AI 任务已取消")
+  }
+
   const filePath = await loadImage(url)
+  if (options.signal?.aborted) {
+    throw new Error("AI 任务已取消")
+  }
+
   if (!filePath) {
     throw new Error("图片下载失败，请检查网络后重试")
   }
@@ -443,9 +455,17 @@ export async function streamVisionTranslateImage(
     throw new Error("无法解码图片数据")
   }
 
+  if (options.signal?.aborted) {
+    throw new Error("AI 任务已取消")
+  }
+
   const base64 = uiImage.toJPEGBase64String(0.85)
   if (!base64) {
     throw new Error("图片 Base64 编码失败")
+  }
+
+  if (options.signal?.aborted) {
+    throw new Error("AI 任务已取消")
   }
 
   if (!isAIAvailable()) {
@@ -475,6 +495,9 @@ export async function streamVisionTranslateImage(
 
   let fullOutput = ""
   let reasoningOutput = ""
+  let lastParsedJsonBlock = ""
+  let hasParsedClosedJson = false
+
   const stream = await Assistant.requestStreaming({
     systemPrompt,
     messages: [
@@ -501,10 +524,17 @@ export async function streamVisionTranslateImage(
     if (chunk.type === "text" && chunk.content) {
       fullOutput += chunk.content
       options.onChunk(fullOutput)
-      if (options.onBubblesParsed && fullOutput.includes("```")) {
-        const bubbles = extractOCRBubbles(fullOutput)
-        if (bubbles.length > 0) {
-          options.onBubblesParsed(bubbles)
+
+      // 仅当包含完整闭合的代码围栏且内容发生变化时，增量解析 OCR 气泡
+      if (options.onBubblesParsed && !hasParsedClosedJson) {
+        const jsonMatch = fullOutput.match(/```(?:json)?\s*(\[\s*\{[\s\S]*?\}\s*\])\s*```/)
+        if (jsonMatch && jsonMatch[1] && jsonMatch[1] !== lastParsedJsonBlock) {
+          lastParsedJsonBlock = jsonMatch[1]
+          const bubbles = extractOCRBubbles(fullOutput)
+          if (bubbles.length > 0) {
+            hasParsedClosedJson = true
+            options.onBubblesParsed(bubbles)
+          }
         }
       }
     } else if (chunk.type === "reasoning" && chunk.content) {
@@ -520,7 +550,7 @@ export async function streamVisionTranslateImage(
     options.onChunk(fullOutput)
   }
 
-  if (options.onBubblesParsed) {
+  if (options.onBubblesParsed && !hasParsedClosedJson) {
     options.onBubblesParsed(extractOCRBubbles(fullOutput))
   }
 
@@ -544,7 +574,15 @@ export async function streamGenerateTranslatedImage(
     throw new Error("无法获取图片地址")
   }
 
+  if (options.signal?.aborted) {
+    throw new Error("AI 任务已取消")
+  }
+
   const filePath = await loadImage(url)
+  if (options.signal?.aborted) {
+    throw new Error("AI 任务已取消")
+  }
+
   if (!filePath) {
     throw new Error("图片下载失败，请检查网络后重试")
   }
@@ -554,9 +592,17 @@ export async function streamGenerateTranslatedImage(
     throw new Error("无法解码图片数据")
   }
 
+  if (options.signal?.aborted) {
+    throw new Error("AI 任务已取消")
+  }
+
   const base64 = uiImage.toJPEGBase64String(0.85)
   if (!base64) {
     throw new Error("图片 Base64 编码失败")
+  }
+
+  if (options.signal?.aborted) {
+    throw new Error("AI 任务已取消")
   }
 
   if (!isAIAvailable()) {
@@ -568,6 +614,8 @@ export async function streamGenerateTranslatedImage(
 
   let fullTextOutput = ""
   let reasoningOutput = ""
+  const emittedImageHashes = new Set<string>()
+
   const stream = await Assistant.requestStreaming({
     systemPrompt,
     messages: [
@@ -594,13 +642,22 @@ export async function streamGenerateTranslatedImage(
     if (chunk.type === "text" && chunk.content) {
       fullTextOutput += chunk.content
       
-      // 检查文本中是否包含 markdown 嵌入的 base64 图片
-      const base64Match = fullTextOutput.match(/data:image\/[a-zA-Z0-9+]+;base64,([A-Za-z0-9+/=]+)/)
-      if (base64Match && base64Match[1] && options.onImageGenerated) {
-        options.onImageGenerated({
-          base64: base64Match[1],
-          mediaType: "image/png",
-        })
+      // 增量状态机提取嵌入的 Data URI 图片，保留真实 MIME 类型并去重
+      if (options.onImageGenerated && fullTextOutput.includes("data:image/")) {
+        const regex = /data:(image\/[a-zA-Z0-9+.-]+);base64,([A-Za-z0-9+/=]{100,})/g
+        let match: RegExpExecArray | null
+        while ((match = regex.exec(fullTextOutput)) !== null) {
+          const mediaType = match[1] || "image/png"
+          const imgBase64 = match[2]
+          const quickHash = `${imgBase64.length}:${imgBase64.slice(0, 30)}:${imgBase64.slice(-30)}`
+          if (!emittedImageHashes.has(quickHash)) {
+            emittedImageHashes.add(quickHash)
+            options.onImageGenerated({
+              base64: imgBase64,
+              mediaType,
+            })
+          }
+        }
       }
 
       options.onChunk(fullTextOutput)
@@ -611,10 +668,15 @@ export async function streamGenerateTranslatedImage(
       }
     } else if (chunk.type === "image" && chunk.content) {
       if (options.onImageGenerated) {
-        options.onImageGenerated({
-          base64: chunk.content.data,
-          mediaType: chunk.content.mediaType || "image/png",
-        })
+        const imgData = chunk.content.data
+        const quickHash = `chunk_img:${imgData.length}:${imgData.slice(0, 30)}`
+        if (!emittedImageHashes.has(quickHash)) {
+          emittedImageHashes.add(quickHash)
+          options.onImageGenerated({
+            base64: imgData,
+            mediaType: chunk.content.mediaType || "image/png",
+          })
+        }
       }
     }
   }

@@ -1,5 +1,6 @@
-import { fetchImageBinaryWithRetry, runConcurrentTasks } from "./downloadHelper"
+import { fetchImageBinaryWithRetry, runConcurrentTasks, type ExportResult } from "./downloadHelper"
 import { getCategoryDirectory, sanitizeFileName } from "./directoryResolver"
+import { publishPreparedFile } from "../store/safeFile"
 
 export interface MangaCbzOptions {
   id: number
@@ -27,9 +28,9 @@ function escapeXml(unsafe: string): string {
 }
 
 /**
- * 导出漫画为行业标准 CBZ 格式
+ * 导出漫画为行业标准 CBZ 格式（支持容错导出与确切结果报告）
  */
-export async function exportMangaToCbz(options: MangaCbzOptions): Promise<string | null> {
+export async function exportMangaToCbz(options: MangaCbzOptions): Promise<ExportResult> {
   const {
     id,
     title,
@@ -44,46 +45,69 @@ export async function exportMangaToCbz(options: MangaCbzOptions): Promise<string
     onProgress,
   } = options
 
-  const safeTitle = customFileName
-    ? sanitizeFileName(customFileName)
-    : sanitizeFileName(seriesTitle ? `${seriesTitle} - ${title}` : `${title}_${author}`)
-  const outputFileName = `${safeTitle}.cbz`
-  const targetDir = customTargetDir || getCategoryDirectory("manga")
-  if (!FileManager.existsSync(targetDir)) {
-    try { FileManager.createDirectorySync(targetDir, true) } catch {}
-  }
-  const targetFilePath = `${targetDir}/${outputFileName}`
-
   const tempDir = `${getCategoryDirectory("temp")}/cbz_${id}_${Date.now()}`
+  const tempZipPath = `${tempDir}.zip`
 
   try {
     FileManager.createDirectorySync(tempDir, true)
 
     onProgress?.(`下载漫画原图 (共 ${pages.length} 页)...`, 0, pages.length)
-    let downloadedCount = 0
+    const downloadedIndexes = new Set<number>()
+    const failedPages: number[] = []
 
     await runConcurrentTasks(pages, 4, async (p, idx) => {
+      const pageNum = idx + 1
       const data = await fetchImageBinaryWithRetry(p.url)
       if (data) {
-        const paddedNum = String(idx + 1).padStart(3, "0")
+        const paddedNum = String(pageNum).padStart(3, "0")
         const ext = p.url.includes(".png") ? "png" : "jpg"
         const fileName = `page_${paddedNum}.${ext}`
         FileManager.writeAsDataSync(`${tempDir}/${fileName}`, data)
-        downloadedCount++
+        downloadedIndexes.add(pageNum)
+      } else {
+        failedPages.push(pageNum)
       }
       onProgress?.(`下载漫画原图 (${idx + 1}/${pages.length})`, idx + 1, pages.length)
     })
 
-    if (downloadedCount === 0) return null
+    const downloadedCount = downloadedIndexes.size
+    failedPages.sort((a, b) => a - b)
+
+    if (downloadedCount === 0) {
+      return {
+        success: false,
+        path: null,
+        isPartial: false,
+        downloadedPages: 0,
+        totalPages: pages.length,
+        failedPages,
+        error: "全部页面下载失败",
+      }
+    }
+
+    const isPartial = downloadedCount < pages.length
+    const partialSuffix = isPartial ? `_[缺${pages.length - downloadedCount}页]` : ""
+
+    const baseName = customFileName
+      ? sanitizeFileName(customFileName)
+      : sanitizeFileName(seriesTitle ? `${seriesTitle} - ${title}` : `${title}_${author}`)
+    const outputFileName = `${baseName}${partialSuffix}.cbz`
+
+    const targetDir = customTargetDir || getCategoryDirectory("manga")
+    if (!FileManager.existsSync(targetDir)) {
+      try { FileManager.createDirectorySync(targetDir, true) } catch {}
+    }
+    const targetFilePath = `${targetDir}/${outputFileName}`
 
     // 写入 ComicInfo.xml 元数据
+    const missingNote = isPartial ? `\n[缺页说明] 本文件为容错导出，缺失第 ${failedPages.join(", ")} 页` : ""
     const comicInfoXml = `<?xml version="1.0" encoding="utf-8"?>
 <ComicInfo xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <Title>${escapeXml(title)}</Title>
   ${seriesTitle ? `<Series>${escapeXml(seriesTitle)}</Series>` : ""}
   ${seriesNumber != null ? `<Number>${escapeXml(String(seriesNumber))}</Number>` : ""}
   <Writer>${escapeXml(author)}</Writer>
-  ${description ? `<Summary>${escapeXml(description)}</Summary>` : ""}
+  ${description || isPartial ? `<Summary>${escapeXml((description || "") + missingNote)}</Summary>` : ""}
   <PageCount>${downloadedCount}</PageCount>
   <Manga>YesAndRightToLeft</Manga>
   ${tags.length > 0 ? `<Genre>${escapeXml(tags.join(", "))}</Genre>` : ""}
@@ -94,30 +118,55 @@ export async function exportMangaToCbz(options: MangaCbzOptions): Promise<string
 
     onProgress?.("正在打包 CBZ 漫画文件...", pages.length, pages.length)
 
-    if (FileManager.existsSync(targetFilePath)) {
-      try { FileManager.removeSync(targetFilePath) } catch {}
-    }
-
-    const tempZipPath = `${tempDir}.zip`
     if (FileManager.existsSync(tempZipPath)) {
       try { FileManager.removeSync(tempZipPath) } catch {}
     }
 
     await FileManager.zip(tempDir, tempZipPath)
     if (!FileManager.existsSync(tempZipPath)) {
-      return null
+      return {
+        success: false,
+        path: null,
+        isPartial,
+        downloadedPages: downloadedCount,
+        totalPages: pages.length,
+        failedPages,
+        error: "ZIP 压缩失败",
+      }
     }
 
-    await FileManager.copyFile(tempZipPath, targetFilePath)
+    // 使用 .bak 回滚与临时文件校验进行原子发布，防止损坏已有文件
+    publishPreparedFile(tempZipPath, targetFilePath)
 
-    try {
-      FileManager.removeSync(tempZipPath)
-      FileManager.removeSync(tempDir)
-    } catch {}
-
-    return targetFilePath
+    return {
+      success: true,
+      path: targetFilePath,
+      isPartial,
+      downloadedPages: downloadedCount,
+      totalPages: pages.length,
+      failedPages,
+    }
   } catch (err: any) {
     console.log("exportMangaToCbz error:", err?.message ?? err)
-    return null
+    return {
+      success: false,
+      path: null,
+      isPartial: false,
+      downloadedPages: 0,
+      totalPages: pages.length,
+      error: err?.message ?? String(err),
+    }
+  } finally {
+    // 无论成功还是失败，均幂等清理临时工作目录与临时 ZIP
+    try {
+      if (FileManager.existsSync(tempZipPath)) {
+        FileManager.removeSync(tempZipPath)
+      }
+    } catch {}
+    try {
+      if (FileManager.existsSync(tempDir)) {
+        FileManager.removeSync(tempDir)
+      }
+    } catch {}
   }
 }

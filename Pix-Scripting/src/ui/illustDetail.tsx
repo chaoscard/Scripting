@@ -515,13 +515,13 @@ export function IllustDetailView(props: { illustID: number }) {
         const url = imageUrlOf(current, i, downloadQuality) ?? pageURLs[i]
         if (url) urls.push(url)
       }
-      const zipPath = await exportIllustToZip({
+      const res = await exportIllustToZip({
         illust: current,
         imageUrls: urls,
       })
-      if (zipPath) {
+      if (res.success && res.path) {
         void Haptics.transient()
-        await ShareSheet.present([zipPath])
+        await ShareSheet.present([res.path])
       }
     } finally {
       setDownloading(false)
@@ -542,7 +542,7 @@ export function IllustDetailView(props: { illustID: number }) {
 
       let filePath: string | null = null
       if (format === "cbz") {
-        filePath = await exportMangaToCbz({
+        const res = await exportMangaToCbz({
           id: current.id,
           title: current.title,
           author: current.user?.name || "Unknown",
@@ -552,8 +552,9 @@ export function IllustDetailView(props: { illustID: number }) {
           tags: current.tags?.map((t) => t.name),
           pages,
         })
+        filePath = res.success ? (res.path ?? null) : null
       } else {
-        filePath = await exportMangaToEpub({
+        const res = await exportMangaToEpub({
           id: current.id,
           title: current.title,
           author: current.user?.name || "Unknown",
@@ -563,6 +564,7 @@ export function IllustDetailView(props: { illustID: number }) {
           tags: current.tags?.map((t) => t.name),
           pages,
         })
+        filePath = res.success ? (res.path ?? null) : null
       }
 
       if (filePath) {

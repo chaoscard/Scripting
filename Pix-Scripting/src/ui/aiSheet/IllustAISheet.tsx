@@ -52,7 +52,8 @@ export function IllustAISheet(props: {
   // 记录每一页独立翻译/生图缓存
   const [pageCaches, setPageCaches] = useState<Record<number, PageTranslationCache>>({})
 
-  const abortRef = useRef<{ aborted: boolean }>({ aborted: false })
+  const activeTaskTokenRef = useRef<{ id: number; aborted: boolean }>({ id: 0, aborted: false })
+  const activeThrottlerRef = useRef<{ cancel: () => void } | null>(null)
   const taskSeqRef = useRef(0)
   const canvasScreenshotRef = useRef<ScreenshotMaker | null>(null)
   const pageCount = Math.max(1, illust.page_count || illust.meta_pages?.length || 1)
@@ -149,7 +150,9 @@ export function IllustAISheet(props: {
   }
 
   function handleStop() {
-    abortRef.current.aborted = true
+    activeTaskTokenRef.current.aborted = true
+    activeThrottlerRef.current?.cancel()
+    activeThrottlerRef.current = null
     setStreaming(false)
     setLoading(false)
     setProgressInfo(null)
@@ -158,10 +161,10 @@ export function IllustAISheet(props: {
   async function execute(targetIndex = selectedPageIndex, forceImageGen = false) {
     if (!isPresented) return
 
-    // 终止进行中的旧请求
+    // 终止进行中的旧请求并废弃旧 Task Token
     handleStop()
-    abortRef.current = { aborted: false }
-    const currentSeq = ++taskSeqRef.current
+    const taskToken = { id: ++taskSeqRef.current, aborted: false }
+    activeTaskTokenRef.current = taskToken
 
     setLoading(true)
     setProgressInfo(null)
@@ -177,6 +180,7 @@ export function IllustAISheet(props: {
     }))
 
     const throttler = createThrottledUpdater((text) => {
+      if (activeTaskTokenRef.current.id !== taskToken.id || taskToken.aborted) return
       setPageCaches((prev) => ({
         ...prev,
         [targetIndex]: {
@@ -186,71 +190,98 @@ export function IllustAISheet(props: {
         },
       }))
     }, 65)
+    activeThrottlerRef.current = throttler
 
     try {
       if (mode === "caption") {
         if (!rawCaption) {
-          setPageCaches((prev) => ({
-            ...prev,
-            [targetIndex]: { resultText: "该作品作者未填写简介。", error: null },
-          }))
-          setLoading(false)
+          if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
+            setPageCaches((prev) => ({
+              ...prev,
+              [targetIndex]: { resultText: "该作品作者未填写简介。", error: null },
+            }))
+            setLoading(false)
+          }
           return
         }
         setStreaming(true)
         const finalResult = await streamTranslateText(rawCaption, {
-          onChunk: (text: string) => throttler.push(text),
-          signal: abortRef.current,
+          onChunk: (text: string) => {
+            if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
+              throttler.push(text)
+            }
+          },
+          signal: taskToken,
         })
-        throttler.flush(finalResult)
+        if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
+          throttler.flush(finalResult)
+        }
       } else if (mode === "ocr") {
         setProgressInfo(`正在加载第 ${targetIndex + 1} 页并请求多模态大模型视觉识别气泡…`)
         setStreaming(true)
         const finalResult = await streamVisionTranslateImage(illust, targetIndex, {
           onImageReady: (filePath) => {
-            setPageCaches((prev) => ({
-              ...prev,
-              [targetIndex]: {
-                ...prev[targetIndex],
-                imageFilePath: filePath,
-              },
-            }))
+            if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
+              setPageCaches((prev) => ({
+                ...prev,
+                [targetIndex]: {
+                  ...prev[targetIndex],
+                  imageFilePath: filePath,
+                },
+              }))
+            }
           },
           onBubblesParsed: (bubbles) => {
-            setPageCaches((prev) => ({
-              ...prev,
-              [targetIndex]: {
-                ...prev[targetIndex],
-                bubbles,
-              },
-            }))
+            if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
+              setPageCaches((prev) => ({
+                ...prev,
+                [targetIndex]: {
+                  ...prev[targetIndex],
+                  bubbles,
+                },
+              }))
+            }
           },
-          onChunk: (text: string) => throttler.push(text),
-          signal: abortRef.current,
+          onChunk: (text: string) => {
+            if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
+              throttler.push(text)
+            }
+          },
+          signal: taskToken,
         })
-        throttler.flush(finalResult)
+        if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
+          throttler.flush(finalResult)
+        }
       } else if (mode === "vision") {
         setProgressInfo(`正在请求图像生成模型对第 ${targetIndex + 1} 页进行汉化重绘…`)
         setStreaming(true)
         const finalResult = await streamGenerateTranslatedImage(illust, targetIndex, {
-          onChunk: (text: string) => throttler.push(text),
-          onImageGenerated: (imageData) => {
-            setPageCaches((prev) => ({
-              ...prev,
-              [targetIndex]: {
-                ...prev[targetIndex],
-                generatedImageBase64: imageData.base64,
-                error: null,
-              },
-            }))
+          onChunk: (text: string) => {
+            if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
+              throttler.push(text)
+            }
           },
-          signal: abortRef.current,
+          onImageGenerated: (imageData) => {
+            if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
+              setPageCaches((prev) => ({
+                ...prev,
+                [targetIndex]: {
+                  ...prev[targetIndex],
+                  generatedImageBase64: imageData.base64,
+                  error: null,
+                },
+              }))
+            }
+          },
+          signal: taskToken,
         })
-        throttler.flush(finalResult)
+        if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
+          throttler.flush(finalResult)
+        }
       }
     } catch (e: any) {
       throttler.cancel()
-      if (!abortRef.current.aborted) {
+      if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
         const errorMsg = e?.message || "AI 请求发生异常"
         setPageCaches((prev) => ({
           ...prev,
@@ -261,7 +292,7 @@ export function IllustAISheet(props: {
         }))
       }
     } finally {
-      if (taskSeqRef.current === currentSeq) {
+      if (activeTaskTokenRef.current.id === taskToken.id) {
         setLoading(false)
         setStreaming(false)
         setProgressInfo(null)

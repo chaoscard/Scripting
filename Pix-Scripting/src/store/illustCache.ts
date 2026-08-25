@@ -62,3 +62,7 @@ export function getCachedIllust(id: number): PixivIllustration | null {
   illustCache.set(id, cached)
   return cached
 }
+
+export function clearIllustMemoryCache(): void {
+  illustCache.clear()
+}

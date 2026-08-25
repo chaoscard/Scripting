@@ -460,8 +460,11 @@ export function SettingsView() {
         </HStack>
       </Section>
 
-      <Section header={<Text>缓存管理</Text>}>
-        <Picker title="图片缓存大小" value={settings.cacheLimitMB == null ? "unlimited" : String(settings.cacheLimitMB)} onChanged={(value: string) => {
+      <Section
+        header={<Text>缓存管理</Text>}
+        footer={<Text>多媒体缓存总预算按 9:1 分配给静态图片(90%)与动图转换(10%)。</Text>}
+      >
+        <Picker title="多媒体缓存上限" value={settings.cacheLimitMB == null ? "unlimited" : String(settings.cacheLimitMB)} onChanged={(value: string) => {
           const cacheLimitMB = value === "unlimited" ? null : Number(value)
           update({ cacheLimitMB })
           enforceCacheLimit()

@@ -422,6 +422,10 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
     setQuery(value)
     const trimmed = value.trim()
     if (!trimmed) {
+      tagSeq.current += 1
+      userSeq.current += 1
+      debouncedTagAutocomplete.cancel()
+      debouncedUserAutocomplete.cancel()
       setSubmitted("")
       setTagSuggestions([])
       setUserSuggestions([])
@@ -437,17 +441,28 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
   }
 
   function handleScopeChange(newScope: SearchScope) {
+    tagSeq.current += 1
+    userSeq.current += 1
+    debouncedTagAutocomplete.cancel()
+    debouncedUserAutocomplete.cancel()
     setScope(newScope)
     setAdvancedParams((prev) => ({ ...prev, scope: newScope }))
     const trimmed = query.trim()
     if (trimmed) {
       if (newScope === "user") {
         setTagSuggestions([])
+        setTagSuggestionsLoading(false)
         fetchUserSuggestions(trimmed)
       } else {
         setUserSuggestions([])
+        setUserSuggestionsLoading(false)
         fetchTagSuggestions(trimmed)
       }
+    } else {
+      setTagSuggestions([])
+      setUserSuggestions([])
+      setTagSuggestionsLoading(false)
+      setUserSuggestionsLoading(false)
     }
   }
 
@@ -459,12 +474,18 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
   function submitSearch(textToSearch: string) {
     const trimmed = textToSearch.trim()
     if (!trimmed) return
+    tagSeq.current += 1
+    userSeq.current += 1
+    debouncedTagAutocomplete.cancel()
+    debouncedUserAutocomplete.cancel()
     addSearchHistory(trimmed)
     setSubmitted(trimmed)
     setQuery(trimmed)
     setAdvancedParams((prev) => ({ ...prev, word: trimmed, scope }))
     setTagSuggestions([])
     setUserSuggestions([])
+    setTagSuggestionsLoading(false)
+    setUserSuggestionsLoading(false)
     setSearchPresented(false)
   }
 

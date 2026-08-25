@@ -42,11 +42,18 @@ export function buildAuthorizationURL(challenge: string): string {
   return `${API_BASE_URL}/web/v1/login?${params.toString()}`
 }
 
-// 从回调 URL 提取授权码
+// 从回调 URL 提取授权码（严格比对协议、域名与路径）
 export function extractAuthCode(url: string): string | null {
   try {
     const parsed = new URL(url)
-    if (!parsed.pathname.includes("/users/auth/pixiv/callback")) {
+    const expected = new URL(OAUTH_REDIRECT_URI)
+    if (
+      parsed.protocol !== expected.protocol ||
+      parsed.host !== expected.host ||
+      parsed.pathname !== expected.pathname ||
+      parsed.username ||
+      parsed.password
+    ) {
       return null
     }
     return parsed.searchParams.get("code")
@@ -80,7 +87,7 @@ export async function refreshToken(
   })
 }
 
-// 凭证持久化（Keychain + Storage 双重保障）
+// 凭证持久化：严格收敛于 Keychain，不向普通 Storage 写入敏感凭据
 export function saveCredentials(creds: StoredCredentials): void {
   const serialized = JSON.stringify(creds)
   try {
@@ -88,11 +95,10 @@ export function saveCredentials(creds: StoredCredentials): void {
   } catch (e: any) {
     console.log("Keychain save error:", e?.message ?? e)
   }
+  // 清理历史遗留的 Storage 明文副本
   try {
-    Storage.set(CREDENTIALS_KEY, creds)
-  } catch (e: any) {
-    console.log("Storage save error:", e?.message ?? e)
-  }
+    Storage.remove(CREDENTIALS_KEY)
+  } catch {}
 }
 
 function isStoredCredentials(value: unknown): value is StoredCredentials {
@@ -126,18 +132,6 @@ export function loadCredentials(): StoredCredentials | null {
     console.log("Keychain read error:", e?.message ?? e)
   }
 
-  if (!parsed || !isStoredCredentials(parsed)) {
-    try {
-      const stored = Storage.get(CREDENTIALS_KEY)
-      if (stored && isStoredCredentials(stored)) {
-        parsed = stored
-        try {
-          Keychain.set(CREDENTIALS_KEY, JSON.stringify(stored))
-        } catch {}
-      }
-    } catch {}
-  }
-
   if (isStoredCredentials(parsed)) {
     return {
       accessToken: parsed.accessToken,
@@ -157,6 +151,34 @@ export function loadCredentials(): StoredCredentials | null {
   return null
 }
 
+export function isPixivCookieDomain(domain?: string | null): boolean {
+  if (!domain) return false
+  const clean = domain.startsWith(".") ? domain.slice(1).toLowerCase() : domain.toLowerCase()
+  return clean === "pixiv.net" || clean.endsWith(".pixiv.net")
+}
+
+export async function clearPixivWebCookies(): Promise<void> {
+  try {
+    const webView = new WebViewController()
+    try {
+      const allCookies = await webView.getAllCookies()
+      for (const c of allCookies) {
+        if (isPixivCookieDomain(c.domain)) {
+          await webView.deleteCookie({
+            name: c.name,
+            domain: c.domain,
+            path: c.path || "/",
+          })
+        }
+      }
+    } finally {
+      webView.dispose()
+    }
+  } catch (e) {
+    console.log("clearPixivWebCookies error:", e)
+  }
+}
+
 export function clearCredentials(): void {
   try {
     Keychain.remove(CREDENTIALS_KEY)
@@ -164,6 +186,8 @@ export function clearCredentials(): void {
   try {
     Storage.remove(CREDENTIALS_KEY)
   } catch {}
+  // 异步清理 WebView 容器内的 Pixiv Web 会话与 Cookie，防止切号复用
+  clearPixivWebCookies().catch(() => {})
 }
 
 export function needsRefresh(creds: StoredCredentials): boolean {

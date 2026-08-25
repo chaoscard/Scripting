@@ -20,6 +20,7 @@ import { fetchImageBinaryWithRetry, runConcurrentTasks } from "./downloadHelper"
 import { exportMangaToEpub, exportNovelToEpub, type NovelChapter } from "./epubExporter"
 import { downloadIllustToAlbum, saveVideoToPixivAlbum } from "./photoAlbum"
 import { runWithBackgroundTask } from "./backgroundTaskManager"
+import { publishPreparedFile } from "../store/safeFile"
 import type { PixivIllustration, PixivNovel } from "../types"
 
 export interface SeriesCluster<T> {
@@ -385,10 +386,6 @@ export async function exportAuthorIllustrationsToZip(
         onProgress?.(packMsg, totalPages, totalPages)
         task.updateProgress({ current: totalPages, total: totalPages, statusText: packMsg })
 
-        if (FileManager.existsSync(targetFilePath)) {
-          try { FileManager.removeSync(targetFilePath) } catch {}
-        }
-
         const tempZipPath = `${tempDir}.zip`
         if (FileManager.existsSync(tempZipPath)) {
           try { FileManager.removeSync(tempZipPath) } catch {}
@@ -403,10 +400,8 @@ export async function exportAuthorIllustrationsToZip(
           return null
         }
 
-        await FileManager.copyFile(tempZipPath, targetFilePath)
-
-        cleanTemporaryPath(tempZipPath)
-        cleanTemporaryPath(tempDir)
+        // 使用 .bak 回滚与临时文件校验进行原子发布
+        publishPreparedFile(tempZipPath, targetFilePath)
 
         await task.finish({
           success: true,
@@ -416,13 +411,25 @@ export async function exportAuthorIllustrationsToZip(
         return targetFilePath
       } catch (err: any) {
         console.log("exportAuthorIllustrationsToZip error:", err?.message ?? err)
-        cleanTemporaryPath(tempDir)
         await task.finish({
           success: false,
           summary: "打包插画归档时发生异常",
           errorMessage: err?.message ?? String(err),
         })
         return null
+      } finally {
+        // 幂等清理任务临时工作目录与临时 ZIP
+        try {
+          const tempZipPath = `${tempDir}.zip`
+          if (FileManager.existsSync(tempZipPath)) {
+            FileManager.removeSync(tempZipPath)
+          }
+        } catch {}
+        try {
+          if (FileManager.existsSync(tempDir)) {
+            FileManager.removeSync(tempDir)
+          }
+        } catch {}
       }
     }
   )
@@ -455,14 +462,17 @@ export async function exportAuthorManga(
     },
     async (task) => {
       let completedTasks = 0
+      let partialTasks = 0
+      let failedTasks = 0
 
       // 1. 导出各个系列
       for (const series of clustered.seriesList) {
         const seriesTitle = series.seriesTitle || `系列_${series.seriesId}`
         const episodeCount = series.works.length
-        const statusMsg = `正在导出漫画系列「${seriesTitle}」(${completedTasks + 1}/${totalTasks})…`
-        onProgress?.(statusMsg, completedTasks, totalTasks)
-        task.updateProgress({ current: completedTasks, total: totalTasks, statusText: statusMsg })
+        const currentProgress = completedTasks + partialTasks + failedTasks
+        const statusMsg = `正在导出漫画系列「${seriesTitle}」(${currentProgress + 1}/${totalTasks})…`
+        onProgress?.(statusMsg, currentProgress, totalTasks)
+        task.updateProgress({ current: currentProgress, total: totalTasks, statusText: statusMsg })
 
         // 收集该系列所有话的所有漫画页面
         const allPages: { pageIndex: number; url: string }[] = []
@@ -480,41 +490,48 @@ export async function exportAuthorManga(
 
         const customFileName = `[${safeAuthorName}] - [系列] ${seriesTitle} (全${episodeCount}话)`
 
-        if (format === "cbz") {
-          await exportMangaToCbz({
-            id: series.seriesId,
-            title: seriesTitle,
-            author: authorName,
-            authorId,
-            seriesTitle,
-            description: `包含全部 ${episodeCount} 话连载。`,
-            pages: allPages,
-            targetDir,
-            customFileName,
-          })
-        } else {
-          await exportMangaToEpub({
-            id: series.seriesId,
-            title: seriesTitle,
-            author: authorName,
-            authorId,
-            seriesTitle,
-            description: `包含全部 ${episodeCount} 话连载。`,
-            pages: allPages,
-            targetDir,
-            customFileName,
-          })
-        }
+        const res = format === "cbz"
+          ? await exportMangaToCbz({
+              id: series.seriesId,
+              title: seriesTitle,
+              author: authorName,
+              authorId,
+              seriesTitle,
+              description: `包含全部 ${episodeCount} 话连载。`,
+              pages: allPages,
+              targetDir,
+              customFileName,
+            })
+          : await exportMangaToEpub({
+              id: series.seriesId,
+              title: seriesTitle,
+              author: authorName,
+              authorId,
+              seriesTitle,
+              description: `包含全部 ${episodeCount} 话连载。`,
+              pages: allPages,
+              targetDir,
+              customFileName,
+            })
 
-        completedTasks++
+        if (res.success) {
+          if (res.isPartial) {
+            partialTasks++
+          } else {
+            completedTasks++
+          }
+        } else {
+          failedTasks++
+        }
       }
 
       // 2. 导出不成系列的单篇漫画
       for (const single of clustered.standaloneWorks) {
         const title = single.title || `漫画_${single.id}`
-        const statusMsg = `正在导出短篇漫画「${title}」(${completedTasks + 1}/${totalTasks})…`
-        onProgress?.(statusMsg, completedTasks, totalTasks)
-        task.updateProgress({ current: completedTasks, total: totalTasks, statusText: statusMsg })
+        const currentProgress = completedTasks + partialTasks + failedTasks
+        const statusMsg = `正在导出短篇漫画「${title}」(${currentProgress + 1}/${totalTasks})…`
+        onProgress?.(statusMsg, currentProgress, totalTasks)
+        task.updateProgress({ current: currentProgress, total: totalTasks, statusText: statusMsg })
 
         const pageCount = Math.max(1, single.page_count || single.meta_pages?.length || 1)
         const pages: { pageIndex: number; url: string }[] = []
@@ -527,39 +544,51 @@ export async function exportAuthorManga(
 
         const customFileName = `[${safeAuthorName}] - [短篇] ${title}`
 
-        if (format === "cbz") {
-          await exportMangaToCbz({
-            id: single.id,
-            title,
-            author: authorName,
-            authorId,
-            description: single.caption,
-            pages,
-            targetDir,
-            customFileName,
-          })
-        } else {
-          await exportMangaToEpub({
-            id: single.id,
-            title,
-            author: authorName,
-            authorId,
-            description: single.caption,
-            pages,
-            targetDir,
-            customFileName,
-          })
-        }
+        const res = format === "cbz"
+          ? await exportMangaToCbz({
+              id: single.id,
+              title,
+              author: authorName,
+              authorId,
+              description: single.caption,
+              pages,
+              targetDir,
+              customFileName,
+            })
+          : await exportMangaToEpub({
+              id: single.id,
+              title,
+              author: authorName,
+              authorId,
+              description: single.caption,
+              pages,
+              targetDir,
+              customFileName,
+            })
 
-        completedTasks++
+        if (res.success) {
+          if (res.isPartial) {
+            partialTasks++
+          } else {
+            completedTasks++
+          }
+        } else {
+          failedTasks++
+        }
       }
 
+      const totalSuccessful = completedTasks + partialTasks
+      const summaryParts: string[] = []
+      if (completedTasks > 0) summaryParts.push(`${completedTasks} 部完整`)
+      if (partialTasks > 0) summaryParts.push(`${partialTasks} 部缺页容错`)
+      if (failedTasks > 0) summaryParts.push(`${failedTasks} 部失败`)
+
       await task.finish({
-        success: true,
-        summary: `已成功将「${safeAuthorName}」的 ${completedTasks} 部漫画导出至文件。`,
+        success: totalSuccessful > 0,
+        summary: `已将「${safeAuthorName}」的漫画导出至文件（共 ${summaryParts.join("，")}）。`,
       })
 
-      return { totalExported: completedTasks, targetDir }
+      return { totalExported: totalSuccessful, targetDir }
     }
   )
 }

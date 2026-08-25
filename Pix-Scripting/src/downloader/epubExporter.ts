@@ -1,5 +1,6 @@
-import { fetchImageBinaryWithRetry, runConcurrentTasks } from "./downloadHelper"
+import { fetchImageBinaryWithRetry, runConcurrentTasks, type ExportResult } from "./downloadHelper"
 import { getCategoryDirectory, sanitizeFileName } from "./directoryResolver"
+import { publishPreparedFile } from "../store/safeFile"
 
 export interface NovelChapter {
   id: number
@@ -204,14 +205,8 @@ async function packageEpubDirectory(
   tempEpubDir: string,
   targetOutputPath: string
 ): Promise<boolean> {
+  const tempZipPath = `${tempEpubDir}.zip`
   try {
-    if (FileManager.existsSync(targetOutputPath)) {
-      try {
-        FileManager.removeSync(targetOutputPath)
-      } catch {}
-    }
-
-    const tempZipPath = `${tempEpubDir}.zip`
     if (FileManager.existsSync(tempZipPath)) {
       try {
         FileManager.removeSync(tempZipPath)
@@ -223,17 +218,18 @@ async function packageEpubDirectory(
       return false
     }
 
-    // 移动并重命名为 .epub
-    await FileManager.copyFile(tempZipPath, targetOutputPath)
-    try {
-      FileManager.removeSync(tempZipPath)
-      FileManager.removeSync(tempEpubDir)
-    } catch {}
-
+    // 原子发布并带 .bak 备份保护，避免覆盖损坏有效文件
+    publishPreparedFile(tempZipPath, targetOutputPath)
     return true
   } catch (err: any) {
     console.log("packageEpubDirectory error:", err?.message ?? err)
     return false
+  } finally {
+    try {
+      if (FileManager.existsSync(tempZipPath)) {
+        FileManager.removeSync(tempZipPath)
+      }
+    } catch {}
   }
 }
 
@@ -469,13 +465,19 @@ export async function exportNovelToEpub(options: NovelEpubOptions): Promise<stri
   } catch (err: any) {
     console.log("exportNovelToEpub failed:", err?.message ?? err)
     return null
+  } finally {
+    try {
+      if (FileManager.existsSync(tempDir)) {
+        FileManager.removeSync(tempDir)
+      }
+    } catch {}
   }
 }
 
 /**
- * 导出漫画为固定版面 EPUB 文件
+ * 导出漫画为固定版面 EPUB 文件（支持容错导出与确切结果报告）
  */
-export async function exportMangaToEpub(options: MangaEpubOptions): Promise<string | null> {
+export async function exportMangaToEpub(options: MangaEpubOptions): Promise<ExportResult> {
   const {
     id,
     title,
@@ -487,16 +489,6 @@ export async function exportMangaToEpub(options: MangaEpubOptions): Promise<stri
     customFileName,
     onProgress,
   } = options
-
-  const safeTitle = customFileName
-    ? sanitizeFileName(customFileName)
-    : sanitizeFileName(seriesTitle ? `${seriesTitle} - ${title}` : `${title}_${author}`)
-  const outputFileName = `${safeTitle}.epub`
-  const targetDir = customTargetDir || getCategoryDirectory("manga")
-  if (!FileManager.existsSync(targetDir)) {
-    try { FileManager.createDirectorySync(targetDir, true) } catch {}
-  }
-  const targetFilePath = `${targetDir}/${outputFileName}`
 
   const tempDir = `${getCategoryDirectory("temp")}/epub_manga_${id}_${Date.now()}`
   const oebpsDir = `${tempDir}/OEBPS`
@@ -521,21 +513,50 @@ export async function exportMangaToEpub(options: MangaEpubOptions): Promise<stri
     // 并发下载所有漫画页面
     onProgress?.(`下载漫画图片 (共 ${pages.length} 页)...`, 0, pages.length)
     const downloadedPages: { index: number; fileName: string }[] = []
+    const failedPages: number[] = []
 
     await runConcurrentTasks(pages, 4, async (p, idx) => {
+      const pageNum = idx + 1
       const data = await fetchImageBinaryWithRetry(p.url)
       if (data) {
-        const paddedNum = String(idx + 1).padStart(3, "0")
+        const paddedNum = String(pageNum).padStart(3, "0")
         const ext = p.url.includes(".png") ? "png" : "jpg"
         const fileName = `page_${paddedNum}.${ext}`
         FileManager.writeAsDataSync(`${imagesDir}/${fileName}`, data)
-        downloadedPages.push({ index: idx + 1, fileName })
+        downloadedPages.push({ index: pageNum, fileName })
+      } else {
+        failedPages.push(pageNum)
       }
       onProgress?.(`下载漫画图片 (${idx + 1}/${pages.length})`, idx + 1, pages.length)
     })
 
     downloadedPages.sort((a, b) => a.index - b.index)
-    if (downloadedPages.length === 0) return null
+    failedPages.sort((a, b) => a - b)
+
+    if (downloadedPages.length === 0) {
+      return {
+        success: false,
+        path: null,
+        isPartial: false,
+        downloadedPages: 0,
+        totalPages: pages.length,
+        failedPages,
+        error: "全部漫画页面下载失败",
+      }
+    }
+
+    const isPartial = downloadedPages.length < pages.length
+    const partialSuffix = isPartial ? `_[缺${pages.length - downloadedPages.length}页]` : ""
+
+    const safeTitle = customFileName
+      ? sanitizeFileName(customFileName)
+      : sanitizeFileName(seriesTitle ? `${seriesTitle} - ${title}` : `${title}_${author}`)
+    const outputFileName = `${safeTitle}${partialSuffix}.epub`
+    const targetDir = customTargetDir || getCategoryDirectory("manga")
+    if (!FileManager.existsSync(targetDir)) {
+      try { FileManager.createDirectorySync(targetDir, true) } catch {}
+    }
+    const targetFilePath = `${targetDir}/${outputFileName}`
 
     const manifestItems: string[] = [
       `<item id="toc" href="toc.xhtml" media-type="application/xhtml+xml" properties="nav"/>`,
@@ -575,6 +596,7 @@ export async function exportMangaToEpub(options: MangaEpubOptions): Promise<stri
     })
 
     const dateStr = new Date().toISOString()
+    const missingDesc = isPartial ? ` (容错导出，缺失第 ${failedPages.join(", ")} 页)` : ""
     const contentOpf = `<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" unique-identifier="BookId" version="3.0">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
@@ -582,7 +604,7 @@ export async function exportMangaToEpub(options: MangaEpubOptions): Promise<stri
     <dc:title>${escapeXml(title)}</dc:title>
     <dc:creator>${escapeXml(author)}</dc:creator>
     <dc:language>ja</dc:language>
-    ${description ? `<dc:description>${escapeXml(description)}</dc:description>` : ""}
+    <dc:description>${escapeXml((description || "") + missingDesc)}</dc:description>
     <meta property="dcterms:modified">${dateStr}</meta>
     <meta property="rendition:layout">pre-paginated</meta>
     <meta property="rendition:orientation">auto</meta>
@@ -615,9 +637,29 @@ export async function exportMangaToEpub(options: MangaEpubOptions): Promise<stri
 
     onProgress?.("正在组装漫画 EPUB...", pages.length, pages.length)
     const success = await packageEpubDirectory(tempDir, targetFilePath)
-    return success ? targetFilePath : null
+    return {
+      success,
+      path: success ? targetFilePath : null,
+      isPartial,
+      downloadedPages: downloadedPages.length,
+      totalPages: pages.length,
+      failedPages,
+    }
   } catch (err: any) {
     console.log("exportMangaToEpub error:", err?.message ?? err)
-    return null
+    return {
+      success: false,
+      path: null,
+      isPartial: false,
+      downloadedPages: 0,
+      totalPages: pages.length,
+      error: err?.message ?? String(err),
+    }
+  } finally {
+    try {
+      if (FileManager.existsSync(tempDir)) {
+        FileManager.removeSync(tempDir)
+      }
+    } catch {}
   }
 }

@@ -186,3 +186,10 @@ export function recordNovelMarker(novelID: number, page: number | null): void {
   }
 }
 
+export function clearBookmarkMemoryCache(): void {
+  illustBookmarkCache.clear()
+  novelBookmarkCache.clear()
+  watchlistCache.clear()
+  novelMarkerCache.clear()
+}
+

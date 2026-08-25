@@ -5,6 +5,7 @@ import { loadSettings } from "./settings"
 import { pixivHistoryDirectory } from "./dataDirectory"
 import { recoverFile, writeTextSafely } from "./safeFile"
 import { clearNovelProgress } from "./novelProgress"
+import { session } from "../api/session"
 import type { PixivIllustration, PixivNovel } from "../types"
 
 export type HistoryContentKind = "illustration" | "manga" | "novel"
@@ -129,8 +130,11 @@ function fileNameForKind(kind: HistoryContentKind): string {
   }
 }
 
-export function historyFilePath(kind: HistoryContentKind): string {
-  return `${pixivHistoryDirectory()}/${fileNameForKind(kind)}`
+export function historyFilePath(
+  kind: HistoryContentKind,
+  userId?: string | number | null
+): string {
+  return `${pixivHistoryDirectory(userId ?? session.userID)}/${fileNameForKind(kind)}`
 }
 
 async function prepareSingleFile(path: string): Promise<void> {
@@ -367,6 +371,20 @@ function emitChanged(): void {
       fn()
     } catch {}
   }
+}
+
+export function clearHistoryMemoryCache(): void {
+  for (const k of ["illustration", "manga", "novel"] as const) {
+    if (saveTimers[k]) {
+      clearTimeout(saveTimers[k]!)
+      saveTimers[k] = null
+    }
+    dirtyFlags[k] = false
+  }
+  caches.illustration = null
+  caches.manga = null
+  caches.novel = null
+  emitChanged()
 }
 
 export function onHistoryChanged(fn: () => void): () => void {

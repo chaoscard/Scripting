@@ -24,71 +24,103 @@ export async function getOrCreatePixivAlbum(customTitle?: string): Promise<PHAss
   }
 }
 
+// 串行化相册资产保存与归类队列，消除并发保存时的反查资产竞态
+let albumSaveQueue: Promise<unknown> = Promise.resolve()
+
+async function enqueueAlbumOperation<T>(op: () => Promise<T>): Promise<T> {
+  const prev = albumSaveQueue
+  let resolveCurrent: () => void
+  const current = new Promise<void>((res) => {
+    resolveCurrent = res
+  })
+  albumSaveQueue = prev.then(() => current, () => current)
+  try {
+    await prev
+    return await op()
+  } finally {
+    resolveCurrent!()
+  }
+}
+
 /**
- * 将图片保存至系统相册，并自动归类至专属相簿
+ * 将图片保存至系统相册，并自动归类至专属相簿（串行化保护与时间窗口匹配）
  */
 export async function saveImageToPixivAlbum(
   source: string | Data,
   fileName?: string
 ): Promise<boolean> {
-  try {
-    let success = false
-    if (typeof source === "string") {
-      success = await Photos.savePhoto(source, { fileName })
-    } else {
-      success = await Photos.savePhoto(source, { fileName })
-    }
-    if (!success) return false
-
-    // 获取最新存入的一张照片并加入专属相簿
+  return enqueueAlbumOperation(async () => {
     try {
-      const album = await getOrCreatePixivAlbum()
-      if (album) {
-        const latestAssets = await Photos.fetchAssets({ limit: 1 })
-        if (latestAssets && latestAssets.length > 0) {
-          await album.addAssets([latestAssets[0]])
-        }
+      const beforeTimestamp = Date.now() - 3000
+      let success = false
+      if (typeof source === "string") {
+        success = await Photos.savePhoto(source, { fileName })
+      } else {
+        success = await Photos.savePhoto(source, { fileName })
       }
-    } catch (albumErr: any) {
-      console.log("add image to album error (saved to main library):", albumErr?.message ?? albumErr)
-    }
+      if (!success) return false
 
-    return true
-  } catch (err: any) {
-    console.log("saveImageToPixivAlbum error:", err?.message ?? err)
-    return false
-  }
+      // 串行化反查本次存入的最新照片并加入专属相簿
+      try {
+        const album = await getOrCreatePixivAlbum()
+        if (album) {
+          const latestAssets = await Photos.fetchAssets({
+            mediaType: "image",
+            limit: 1,
+            createdAfter: beforeTimestamp,
+          })
+          if (latestAssets && latestAssets.length > 0) {
+            await album.addAssets([latestAssets[0]])
+          }
+        }
+      } catch (albumErr: any) {
+        console.log("add image to album error (saved to main library):", albumErr?.message ?? albumErr)
+      }
+
+      return true
+    } catch (err: any) {
+      console.log("saveImageToPixivAlbum error:", err?.message ?? err)
+      return false
+    }
+  })
 }
 
 /**
- * 将动图 MP4 视频保存至系统相册，并自动归类至专属相簿
+ * 将动图 MP4 视频保存至系统相册，并自动归类至专属相簿（串行化保护与时间窗口匹配）
  */
 export async function saveVideoToPixivAlbum(
   videoPath: string,
   fileName?: string
 ): Promise<boolean> {
-  try {
-    const success = await Photos.saveVideo(videoPath, { fileName })
-    if (!success) return false
-
-    // 获取最新存入的视频资产并加入专属相簿
+  return enqueueAlbumOperation(async () => {
     try {
-      const album = await getOrCreatePixivAlbum()
-      if (album) {
-        const latestAssets = await Photos.fetchAssets({ limit: 1 })
-        if (latestAssets && latestAssets.length > 0) {
-          await album.addAssets([latestAssets[0]])
-        }
-      }
-    } catch (albumErr: any) {
-      console.log("add video to album error (saved to main library):", albumErr?.message ?? albumErr)
-    }
+      const beforeTimestamp = Date.now() - 3000
+      const success = await Photos.saveVideo(videoPath, { fileName })
+      if (!success) return false
 
-    return true
-  } catch (err: any) {
-    console.log("saveVideoToPixivAlbum error:", err?.message ?? err)
-    return false
-  }
+      // 串行化反查本次存入的视频资产并加入专属相簿
+      try {
+        const album = await getOrCreatePixivAlbum()
+        if (album) {
+          const latestAssets = await Photos.fetchAssets({
+            mediaType: "video",
+            limit: 1,
+            createdAfter: beforeTimestamp,
+          })
+          if (latestAssets && latestAssets.length > 0) {
+            await album.addAssets([latestAssets[0]])
+          }
+        }
+      } catch (albumErr: any) {
+        console.log("add video to album error (saved to main library):", albumErr?.message ?? albumErr)
+      }
+
+      return true
+    } catch (err: any) {
+      console.log("saveVideoToPixivAlbum error:", err?.message ?? err)
+      return false
+    }
+  })
 }
 
 /**

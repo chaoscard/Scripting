@@ -76,7 +76,8 @@ export function NovelAISheet(props: {
   // 续写模式自定义 prompt
   const [continueInstruction, setContinueInstruction] = useState("")
 
-  const abortRef = useRef<{ aborted: boolean }>({ aborted: false })
+  const activeTaskTokenRef = useRef<{ id: number; aborted: boolean }>({ id: 0, aborted: false })
+  const activeThrottlerRef = useRef<{ cancel: () => void } | null>(null)
   const taskSeqRef = useRef(0)
   const rawCaption = cleanHtmlCaption(novel.caption)
 
@@ -144,7 +145,9 @@ export function NovelAISheet(props: {
   }
 
   function handleStop() {
-    abortRef.current.aborted = true
+    activeTaskTokenRef.current.aborted = true
+    activeThrottlerRef.current?.cancel()
+    activeThrottlerRef.current = null
     setStreaming(false)
     setLoading(false)
     setProgressInfo(null)
@@ -170,8 +173,8 @@ export function NovelAISheet(props: {
     }
 
     handleStop()
-    abortRef.current = { aborted: false }
-    const currentSeq = ++taskSeqRef.current
+    const taskToken = { id: ++taskSeqRef.current, aborted: false }
+    activeTaskTokenRef.current = taskToken
     setLoading(true)
     setProgressInfo(null)
 
@@ -197,6 +200,7 @@ export function NovelAISheet(props: {
 
     // 引入流式节流器（约 15fps，避免海量 token 推送阻塞 UI 线程）
     const throttler = createThrottledUpdater((text) => {
+      if (activeTaskTokenRef.current.id !== taskToken.id || taskToken.aborted) return
       if (mode === "caption") {
         setCaptionCache((prev) => ({ ...prev, resultText: text, error: null }))
       } else {
@@ -216,48 +220,69 @@ export function NovelAISheet(props: {
         }))
       }
     }, 65)
+    activeThrottlerRef.current = throttler
 
     try {
       if (mode === "caption") {
         if (!rawCaption) {
-          setCaptionCache({ resultText: "该小说作者未填写简介。", error: null })
-          setLoading(false)
+          if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
+            setCaptionCache({ resultText: "该小说作者未填写简介。", error: null })
+            setLoading(false)
+          }
           return
         }
         setStreaming(true)
         const finalResult = await streamTranslateText(rawCaption, {
-          onChunk: (text: string) => throttler.push(text),
-          signal: abortRef.current,
+          onChunk: (text: string) => {
+            if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
+              throttler.push(text)
+            }
+          },
+          signal: taskToken,
         })
-        throttler.flush(finalResult)
+        if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
+          throttler.flush(finalResult)
+        }
       } else if (mode === "translate") {
         if (!cleanedText) {
-          const msg = isMultiPage ? "当前页小说正文为空。" : "未获取到小说正文文本。"
-          setPageCaches((prev) => ({
-            ...prev,
-            [currentPage]: { ...prev[currentPage], translateText: msg, error: null },
-          }))
-          setLoading(false)
+          if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
+            const msg = isMultiPage ? "当前页小说正文为空。" : "未获取到小说正文文本。"
+            setPageCaches((prev) => ({
+              ...prev,
+              [currentPage]: { ...prev[currentPage], translateText: msg, error: null },
+            }))
+            setLoading(false)
+          }
           return
         }
         setStreaming(true)
         const finalResult = await streamTranslateNovel(cleanedText, {
-          onChunk: (text: string) => throttler.push(text),
-          onProgress: ({ chunkIndex, totalChunks, percent }) => {
-            const prefix = isMultiPage ? `第 ${currentPage} 页 ` : ""
-            setProgressInfo(`正在翻译${prefix}第 ${chunkIndex}/${totalChunks} 部分 (${percent}%)`)
+          onChunk: (text: string) => {
+            if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
+              throttler.push(text)
+            }
           },
-          signal: abortRef.current,
+          onProgress: ({ chunkIndex, totalChunks, percent }) => {
+            if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
+              const prefix = isMultiPage ? `第 ${currentPage} 页 ` : ""
+              setProgressInfo(`正在翻译${prefix}第 ${chunkIndex}/${totalChunks} 部分 (${percent}%)`)
+            }
+          },
+          signal: taskToken,
         })
-        throttler.flush(finalResult)
+        if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
+          throttler.flush(finalResult)
+        }
       } else if (mode === "summary") {
         if (!cleanedText) {
-          const msg = isMultiPage ? "当前页小说正文为空。" : "未获取到小说正文文本。"
-          setPageCaches((prev) => ({
-            ...prev,
-            [currentPage]: { ...prev[currentPage], summaryText: msg, error: null },
-          }))
-          setLoading(false)
+          if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
+            const msg = isMultiPage ? "当前页小说正文为空。" : "未获取到小说正文文本。"
+            setPageCaches((prev) => ({
+              ...prev,
+              [currentPage]: { ...prev[currentPage], summaryText: msg, error: null },
+            }))
+            setLoading(false)
+          }
           return
         }
         setStreaming(true)
@@ -267,31 +292,45 @@ export function NovelAISheet(props: {
             : "AI 正在通读全篇并提炼大纲与看点…"
         )
         const finalResult = await streamSummarizeNovel(cleanedText, {
-          onChunk: (text: string) => throttler.push(text),
-          signal: abortRef.current,
+          onChunk: (text: string) => {
+            if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
+              throttler.push(text)
+            }
+          },
+          signal: taskToken,
           pageInfo: isMultiPage ? { current: currentPage, total: totalPages } : undefined,
         })
-        throttler.flush(finalResult)
+        if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
+          throttler.flush(finalResult)
+        }
       } else if (mode === "continue") {
         if (!cleanedText) {
-          setPageCaches((prev) => ({
-            ...prev,
-            [currentPage]: { ...prev[currentPage], continueText: "未获取到小说正文文本。", error: null },
-          }))
-          setLoading(false)
+          if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
+            setPageCaches((prev) => ({
+              ...prev,
+              [currentPage]: { ...prev[currentPage], continueText: "未获取到小说正文文本。", error: null },
+            }))
+            setLoading(false)
+          }
           return
         }
         setStreaming(true)
         setProgressInfo("AI 正在根据前文风格与设定续写…")
         const finalResult = await streamContinueNovel(cleanedText, continueInstruction, {
-          onChunk: (text: string) => throttler.push(text),
-          signal: abortRef.current,
+          onChunk: (text: string) => {
+            if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
+              throttler.push(text)
+            }
+          },
+          signal: taskToken,
         })
-        throttler.flush(finalResult)
+        if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
+          throttler.flush(finalResult)
+        }
       }
     } catch (e: any) {
       throttler.cancel()
-      if (!abortRef.current.aborted) {
+      if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
         const errorMsg = e?.message || "AI 请求发生异常"
         if (mode === "caption") {
           setCaptionCache((prev) => ({ ...prev, error: errorMsg }))
@@ -306,7 +345,7 @@ export function NovelAISheet(props: {
         }
       }
     } finally {
-      if (taskSeqRef.current === currentSeq) {
+      if (activeTaskTokenRef.current.id === taskToken.id) {
         setLoading(false)
         setStreaming(false)
         setProgressInfo(null)

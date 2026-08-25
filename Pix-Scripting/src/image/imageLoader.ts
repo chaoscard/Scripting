@@ -152,14 +152,14 @@ function touch(meta: CacheMeta, key: string, url: string, size: number): void {
   meta[key] = { url, size, lastAccess: Date.now() }
 }
 
-// 按 LRU 清理超出上限的缓存
+// 按 LRU 清理超出上限的缓存（静态图片分配总预算的 90%）
 export function enforceCacheLimit(): void {
   try {
     enforceUgoiraCacheLimit()
   } catch {}
   const settings = loadSettings()
   if (settings.cacheLimitMB == null) return
-  const limitBytes = settings.cacheLimitMB * 1024 * 1024
+  const limitBytes = Math.round(settings.cacheLimitMB * 1024 * 1024 * 0.9)
   const meta = loadMeta()
   const entries = Object.entries(meta)
   let total = entries.reduce((sum, [, v]) => sum + (v.size || 0), 0)

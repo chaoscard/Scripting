@@ -406,11 +406,50 @@ export async function apiGetPublicJson<T = any>(
   })
 }
 
-// 下载二进制（图片等），带 Referer；跳过 API 限速（图片 CDN 并发下载）
+export function isAllowedImageDownloadURL(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol !== "https:") return false
+    if (parsed.username !== "" || parsed.password !== "") return false
+    const host = parsed.hostname.toLowerCase()
+
+    // 拦截内网或私有 IP
+    if (
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host === "::1" ||
+      host.startsWith("192.168.") ||
+      host.startsWith("10.") ||
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host)
+    ) {
+      return false
+    }
+
+    // 允许 Pixiv / Pximg / Pixivision 官方图片与静态资源域名
+    return (
+      host === "pximg.net" ||
+      host.endsWith(".pximg.net") ||
+      host === "pixiv.net" ||
+      host.endsWith(".pixiv.net") ||
+      host === "pixivision.net" ||
+      host.endsWith(".pixivision.net") ||
+      host === "pixiv.org" ||
+      host.endsWith(".pixiv.org")
+    )
+  } catch {
+    return false
+  }
+}
+
+// 下载二进制（图片等），带 Referer 与 CDN 安全白名单；跳过 API 限速（图片 CDN 并发下载）
 export async function downloadBinary(
   url: string,
   extraHeaders?: Record<string, string>
 ): Promise<Data | null> {
+  if (!isAllowedImageDownloadURL(url)) {
+    console.log("downloadBinary rejected non-whitelisted URL:", url.slice(0, 90))
+    return null
+  }
   const { status, data } = await rawRequest(url, "GET", {
     headers: { ...imageHeaders(), ...(extraHeaders ?? {}) },
     timeout: 60,

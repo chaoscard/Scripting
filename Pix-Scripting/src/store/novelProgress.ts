@@ -1,5 +1,6 @@
 import { pixivHistoryDirectory } from "./dataDirectory"
 import { recoverFile, writeTextSafely } from "./safeFile"
+import { session } from "../api/session"
 
 export interface NovelReadingProgress {
   novelID: number
@@ -15,8 +16,17 @@ let progressCache: Map<number, NovelReadingProgress> | null = null
 let isDirty = false
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 
-function progressFilePath(): string {
-  return `${pixivHistoryDirectory()}/${PROGRESS_FILE_NAME}`
+export function clearNovelProgressMemoryCache(): void {
+  if (saveTimer) {
+    clearTimeout(saveTimer)
+    saveTimer = null
+  }
+  isDirty = false
+  progressCache = null
+}
+
+function progressFilePath(userId?: string | number | null): string {
+  return `${pixivHistoryDirectory(userId ?? session.userID)}/${PROGRESS_FILE_NAME}`
 }
 
 function loadProgressSync(): Map<number, NovelReadingProgress> {
@@ -24,6 +34,7 @@ function loadProgressSync(): Map<number, NovelReadingProgress> {
   const path = progressFilePath()
   const map = new Map<number, NovelReadingProgress>()
   try {
+    recoverFile(path)
     if (FileManager.existsSync(path)) {
       const content = FileManager.readAsStringSync(path)
       if (content && content.trim().length > 0) {
@@ -44,7 +55,6 @@ function loadProgressSync(): Map<number, NovelReadingProgress> {
     }
   } catch (err) {
     console.warn("load novel progress failed:", err)
-    recoverFile(path)
   }
   progressCache = map
   return progressCache

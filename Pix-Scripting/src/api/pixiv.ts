@@ -39,6 +39,7 @@ import type {
   UgoiraMetadataResponse,
 } from "../types"
 import { API_BASE_URL } from "../config"
+import { isPixivCookieDomain, clearPixivWebCookies } from "./auth"
 import { session } from "./session"
 import { notifyUserFollowChanged } from "../store/userFollow"
 import {
@@ -863,15 +864,18 @@ export function getWebHeaders(referer: string): Record<string, string> {
   return headers
 }
 
+export { isPixivCookieDomain, clearPixivWebCookies }
+
 export async function syncWebCookies(): Promise<boolean> {
   const webView = new WebViewController()
   try {
     const allCookies = await webView.getAllCookies()
-    const pixivCookies = allCookies.filter((c) => c.domain.includes("pixiv.net"))
-    const targetCookies =
+    const pixivCookies = allCookies.filter((c) => isPixivCookieDomain(c.domain))
+    const rawTargetCookies =
       pixivCookies.length > 0
         ? pixivCookies
         : await webView.getCookies("https://www.pixiv.net")
+    const targetCookies = rawTargetCookies.filter((c) => isPixivCookieDomain(c.domain))
     if (targetCookies && targetCookies.length > 0) {
       const cookieMap = new Map<string, string>()
       for (const c of targetCookies) {

@@ -26,3 +26,7 @@ export function recordUserFollowed(userID: number, followed: boolean): void {
     followedUserCache.set(userID, followed)
   }
 }
+
+export function clearFollowMemoryCache(): void {
+  followedUserCache.clear()
+}

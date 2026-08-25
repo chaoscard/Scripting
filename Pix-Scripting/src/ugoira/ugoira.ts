@@ -78,23 +78,48 @@ function isUsableFile(path: string): boolean {
   }
 }
 
-function touchUgoira(meta: UgoiraCacheMeta, id: string): void {
-  const entry = meta[id]
-  if (entry) {
-    entry.lastAccess = Date.now()
-    if (entry.size == null && isUsableFile(entry.mp4Path)) {
-      try {
-        entry.size = FileManager.statSync(entry.mp4Path).size
-      } catch {}
+const pendingTouches = new Map<string, { lastAccess: number; size?: number }>()
+
+function flushPendingTouches(): void {
+  if (pendingTouches.size === 0) return
+  const touches = new Map(pendingTouches)
+  pendingTouches.clear()
+  try {
+    const meta = loadMeta()
+    let changed = false
+    for (const [id, touch] of touches) {
+      const entry = meta[id]
+      if (entry) {
+        entry.lastAccess = Math.max(entry.lastAccess || 0, touch.lastAccess)
+        if (touch.size != null && touch.size > 0) {
+          entry.size = touch.size
+        }
+        changed = true
+      }
     }
-    if (ugoiraMetaSaveTimer != null) clearTimeout(ugoiraMetaSaveTimer)
-    ugoiraMetaSaveTimer = setTimeout(() => {
-      ugoiraMetaSaveTimer = null
-      try {
-        saveMeta(meta)
-      } catch {}
-    }, 3000)
+    if (changed) {
+      saveMeta(meta)
+    }
+  } catch {}
+}
+
+function touchUgoira(id: string, mp4Path?: string): void {
+  let fileSize: number | undefined
+  if (mp4Path && isUsableFile(mp4Path)) {
+    try {
+      fileSize = FileManager.statSync(mp4Path).size
+    } catch {}
   }
+  pendingTouches.set(id, {
+    lastAccess: Date.now(),
+    size: fileSize,
+  })
+
+  if (ugoiraMetaSaveTimer != null) clearTimeout(ugoiraMetaSaveTimer)
+  ugoiraMetaSaveTimer = setTimeout(() => {
+    ugoiraMetaSaveTimer = null
+    flushPendingTouches()
+  }, 3000)
 }
 
 export interface UgoiraResult {
@@ -105,13 +130,15 @@ export interface UgoiraResult {
 // 检查是否已合成
 export function cachedUgoira(illustID: number): UgoiraResult | null {
   const meta = loadMeta()
-  const entry = meta[String(illustID)]
+  const idStr = String(illustID)
+  const entry = meta[idStr]
   if (entry && Number.isFinite(entry.duration) && entry.duration > 0 && isUsableFile(entry.mp4Path)) {
-    touchUgoira(meta, String(illustID))
+    touchUgoira(idStr, entry.mp4Path)
     return { mp4Path: entry.mp4Path, duration: entry.duration }
   }
   if (entry) {
-    delete meta[String(illustID)]
+    delete meta[idStr]
+    pendingTouches.delete(idStr)
     try { saveMeta(meta) } catch { /* ignore recoverable cache metadata failure */ }
   }
   return null
@@ -207,6 +234,19 @@ async function performBuild(illustID: number): Promise<UgoiraResult> {
       fileSize = FileManager.statSync(mp4Path).size
     } catch {}
     const meta = loadMeta()
+    // 合并 pending touches 避免丢失未写盘的访问记录
+    for (const [pId, pTouch] of pendingTouches) {
+      if (meta[pId]) {
+        meta[pId].lastAccess = Math.max(meta[pId].lastAccess || 0, pTouch.lastAccess)
+        if (pTouch.size != null && pTouch.size > 0) meta[pId].size = pTouch.size
+      }
+    }
+    pendingTouches.clear()
+    if (ugoiraMetaSaveTimer != null) {
+      clearTimeout(ugoiraMetaSaveTimer)
+      ugoiraMetaSaveTimer = null
+    }
+
     meta[String(illustID)] = {
       mp4Path,
       duration,
@@ -247,11 +287,11 @@ async function extractZipEntries(zipPath: string, destDir: string): Promise<void
   }
 }
 
-// 按 LRU 清理超出上限的动图缓存
+// 按 LRU 清理超出上限的动图缓存（动图分配总预算的 10%）
 export function enforceUgoiraCacheLimit(): void {
   const settings = loadSettings()
   if (settings.cacheLimitMB == null) return
-  const limitBytes = Math.round(settings.cacheLimitMB * 1024 * 1024 * 0.4)
+  const limitBytes = Math.round(settings.cacheLimitMB * 1024 * 1024 * 0.1)
   const meta = loadMeta()
   const entries = Object.entries(meta)
 
@@ -307,6 +347,7 @@ export function ugoiraCacheUsageBytes(): number {
 // 清空动图缓存。构建任务在独立临时目录继续收尾，但旧代次不得发布。
 export function clearUgoiraCache(): void {
   cacheGeneration += 1
+  pendingTouches.clear()
   if (ugoiraMetaSaveTimer != null) {
     clearTimeout(ugoiraMetaSaveTimer)
     ugoiraMetaSaveTimer = null

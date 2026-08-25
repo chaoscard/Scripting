@@ -1,5 +1,6 @@
-import { fetchImageBinaryWithRetry, runConcurrentTasks } from "./downloadHelper"
+import { fetchImageBinaryWithRetry, runConcurrentTasks, type ExportResult } from "./downloadHelper"
 import { getCategoryDirectory, sanitizeFileName } from "./directoryResolver"
+import { publishPreparedFile } from "../store/safeFile"
 import type { PixivIllustration } from "../types"
 
 export interface IllustZipOptions {
@@ -11,44 +12,66 @@ export interface IllustZipOptions {
 }
 
 /**
- * 将插画/组图导出为包含元数据的 ZIP 归档包
+ * 将插画/组图导出为包含元数据的 ZIP 归档包（支持容错导出与确切结果报告）
  */
-export async function exportIllustToZip(options: IllustZipOptions): Promise<string | null> {
+export async function exportIllustToZip(options: IllustZipOptions): Promise<ExportResult> {
   const { illust, imageUrls, targetDir: customTargetDir, customFileName, onProgress } = options
   const authorName = illust.user?.name || "Unknown"
   const title = illust.title || "Illust"
 
-  const safeFolderName = customFileName
-    ? sanitizeFileName(customFileName)
-    : sanitizeFileName(`${authorName} - ${title} (${illust.id})`)
-  const outputFileName = `${safeFolderName}.zip`
-  const targetDir = customTargetDir || getCategoryDirectory("illustrations")
-  if (!FileManager.existsSync(targetDir)) {
-    try { FileManager.createDirectorySync(targetDir, true) } catch {}
-  }
-  const targetFilePath = `${targetDir}/${outputFileName}`
-
   const tempDir = `${getCategoryDirectory("temp")}/zip_illust_${illust.id}_${Date.now()}`
+  const tempZipPath = `${tempDir}.zip`
 
   try {
     FileManager.createDirectorySync(tempDir, true)
 
     onProgress?.(`下载插画原图 (共 ${imageUrls.length} 张)...`, 0, imageUrls.length)
-    let downloadedCount = 0
+    const downloadedIndexes = new Set<number>()
+    const failedPages: number[] = []
 
     await runConcurrentTasks(imageUrls, 4, async (url, idx) => {
+      const pageNum = idx + 1
       const data = await fetchImageBinaryWithRetry(url)
       if (data) {
-        const paddedNum = String(idx + 1).padStart(imageUrls.length >= 100 ? 3 : 2, "0")
+        const paddedNum = String(pageNum).padStart(imageUrls.length >= 100 ? 3 : 2, "0")
         const ext = url.includes(".png") ? "png" : "jpg"
         const fileName = `${paddedNum}.${ext}`
         FileManager.writeAsDataSync(`${tempDir}/${fileName}`, data)
-        downloadedCount++
+        downloadedIndexes.add(pageNum)
+      } else {
+        failedPages.push(pageNum)
       }
       onProgress?.(`下载插画原图 (${idx + 1}/${imageUrls.length})`, idx + 1, imageUrls.length)
     })
 
-    if (downloadedCount === 0) return null
+    const downloadedCount = downloadedIndexes.size
+    failedPages.sort((a, b) => a - b)
+
+    if (downloadedCount === 0) {
+      return {
+        success: false,
+        path: null,
+        isPartial: false,
+        downloadedPages: 0,
+        totalPages: imageUrls.length,
+        failedPages,
+        error: "全部插画原图下载失败",
+      }
+    }
+
+    const isPartial = downloadedCount < imageUrls.length
+    const partialSuffix = isPartial ? `_[缺${imageUrls.length - downloadedCount}张]` : ""
+
+    const safeFolderName = customFileName
+      ? sanitizeFileName(customFileName)
+      : sanitizeFileName(`${authorName} - ${title} (${illust.id})`)
+    const outputFileName = `${safeFolderName}${partialSuffix}.zip`
+
+    const targetDir = customTargetDir || getCategoryDirectory("illustrations")
+    if (!FileManager.existsSync(targetDir)) {
+      try { FileManager.createDirectorySync(targetDir, true) } catch {}
+    }
+    const targetFilePath = `${targetDir}/${outputFileName}`
 
     // 写入 info.json 元数据
     const metaJson = {
@@ -71,6 +94,10 @@ export async function exportIllustToZip(options: IllustZipOptions): Promise<stri
       urls: imageUrls,
       web_url: `https://www.pixiv.net/artworks/${illust.id}`,
       exported_at: new Date().toISOString(),
+      is_partial: isPartial,
+      downloaded_count: downloadedCount,
+      total_count: imageUrls.length,
+      failed_pages: isPartial ? failedPages : undefined,
     }
 
     FileManager.writeAsStringSync(
@@ -81,30 +108,54 @@ export async function exportIllustToZip(options: IllustZipOptions): Promise<stri
 
     onProgress?.("正在打包插画 ZIP 压缩包...", imageUrls.length, imageUrls.length)
 
-    if (FileManager.existsSync(targetFilePath)) {
-      try { FileManager.removeSync(targetFilePath) } catch {}
-    }
-
-    const tempZipPath = `${tempDir}.zip`
     if (FileManager.existsSync(tempZipPath)) {
       try { FileManager.removeSync(tempZipPath) } catch {}
     }
 
     await FileManager.zip(tempDir, tempZipPath)
     if (!FileManager.existsSync(tempZipPath)) {
-      return null
+      return {
+        success: false,
+        path: null,
+        isPartial,
+        downloadedPages: downloadedCount,
+        totalPages: imageUrls.length,
+        failedPages,
+        error: "ZIP 压缩失败",
+      }
     }
 
-    await FileManager.copyFile(tempZipPath, targetFilePath)
+    // 使用 .bak 回滚与临时文件校验进行原子发布，防止损坏已有文件
+    publishPreparedFile(tempZipPath, targetFilePath)
 
-    try {
-      FileManager.removeSync(tempZipPath)
-      FileManager.removeSync(tempDir)
-    } catch {}
-
-    return targetFilePath
+    return {
+      success: true,
+      path: targetFilePath,
+      isPartial,
+      downloadedPages: downloadedCount,
+      totalPages: imageUrls.length,
+      failedPages,
+    }
   } catch (err: any) {
     console.log("exportIllustToZip error:", err?.message ?? err)
-    return null
+    return {
+      success: false,
+      path: null,
+      isPartial: false,
+      downloadedPages: 0,
+      totalPages: imageUrls.length,
+      error: err?.message ?? String(err),
+    }
+  } finally {
+    try {
+      if (FileManager.existsSync(tempZipPath)) {
+        FileManager.removeSync(tempZipPath)
+      }
+    } catch {}
+    try {
+      if (FileManager.existsSync(tempDir)) {
+        FileManager.removeSync(tempDir)
+      }
+    } catch {}
   }
 }

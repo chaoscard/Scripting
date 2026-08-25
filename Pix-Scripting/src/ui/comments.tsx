@@ -66,11 +66,12 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number }) {
   const [text, setText] = useState("")
   const [posting, setPosting] = useState(false)
 
-  // 回复目标
+  // 回复目标（记录实际被回复的 ID 与所属顶层根评论 rootID）
   const [replyTarget, setReplyTarget] = useState<{
     id: number
     name: string
     seq: number
+    rootID: number
   } | null>(null)
 
   // 表情/贴图面板状态
@@ -114,6 +115,7 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number }) {
     setPosting(true)
     setPostError(null)
     const parentID = replyTarget?.id ?? null
+    const targetRootID = replyTarget?.rootID ?? parentID
     try {
       if (novelID != null) {
         await session.call((token) => postNovelComment(novelID, content, parentID, token))
@@ -125,8 +127,8 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number }) {
         setReplyTarget(null)
         setShowEmotePanel(false)
       })
-      if (parentID != null) {
-        await refreshRepliesFor(parentID)
+      if (targetRootID != null) {
+        await refreshRepliesFor(targetRootID)
       }
       await load()
     } catch (err: any) {
@@ -141,6 +143,7 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number }) {
     setPosting(true)
     setPostError(null)
     const parentID = replyTarget?.id ?? null
+    const targetRootID = replyTarget?.rootID ?? parentID
     try {
       if (novelID != null) {
         await session.call((token) => postNovelComment(novelID, "", parentID, token, stampID))
@@ -151,8 +154,8 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number }) {
         setReplyTarget(null)
         setShowEmotePanel(false)
       })
-      if (parentID != null) {
-        await refreshRepliesFor(parentID)
+      if (targetRootID != null) {
+        await refreshRepliesFor(targetRootID)
       }
       await load()
     } catch (err: any) {
@@ -295,11 +298,60 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number }) {
     }
   }
 
-  function handleReply(comment: PixivComment) {
+  async function retryReplies(commentID: number) {
+    setReplyStates((prev) => ({
+      ...prev,
+      [commentID]: {
+        items: prev[commentID]?.items ?? [],
+        nextURL: null,
+        loading: true,
+        loadingMore: false,
+        error: null,
+        expanded: true,
+      },
+    }))
+    try {
+      const page = await session.call((token) =>
+        novelID != null
+          ? novelCommentReplies(commentID, token)
+          : commentReplies(commentID, token)
+      )
+      setReplyStates((prev) => ({
+        ...prev,
+        [commentID]: {
+          items: dedupeByID(page.items),
+          nextURL: page.nextURL,
+          loading: false,
+          loadingMore: false,
+          error: null,
+          expanded: true,
+        },
+      }))
+    } catch (err: any) {
+      setReplyStates((prev) => ({
+        ...prev,
+        [commentID]: {
+          items: prev[commentID]?.items ?? [],
+          nextURL: null,
+          loading: false,
+          loadingMore: false,
+          error: err?.message ?? "加载回复失败",
+          expanded: true,
+        },
+      }))
+    }
+  }
+
+  function handleReply(comment: PixivComment, rootID?: number) {
     withAnimation(() => {
       setShowEmotePanel(false)
     })
-    setReplyTarget({ id: comment.id, name: comment.user.name, seq: Date.now() })
+    setReplyTarget({
+      id: comment.id,
+      name: comment.user.name,
+      seq: Date.now(),
+      rootID: rootID ?? comment.id,
+    })
   }
 
   function handleSelectEmoji(emojiCode: string) {
@@ -367,6 +419,7 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number }) {
                     onReply={handleReply}
                     replyState={replyStates[comment.id]}
                     onToggleReplies={() => toggleReplies(comment.id)}
+                    onRetryReplies={() => retryReplies(comment.id)}
                     onLoadMoreReplies={() => loadMoreReplies(comment.id)}
                   />
                 ))}
@@ -476,12 +529,13 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number }) {
 
 function CommentCard(props: {
   comment: PixivComment
-  onReply: (c: PixivComment) => void
+  onReply: (c: PixivComment, rootID?: number) => void
   replyState?: ReplyState
   onToggleReplies: () => void
+  onRetryReplies: () => void
   onLoadMoreReplies: () => void
 }) {
-  const { comment, onReply, replyState, onToggleReplies, onLoadMoreReplies } = props
+  const { comment, onReply, replyState, onToggleReplies, onRetryReplies, onLoadMoreReplies } = props
   const avatarUrl = comment.user.profile_image_urls?.medium ?? null
   const hasReplies = comment.has_replies || (comment.reply_count ?? 0) > 0
 
@@ -576,14 +630,14 @@ function CommentCard(props: {
                   ) : replyState.error ? (
                     <ErrorView
                       message={replyState.error}
-                      onRetry={onToggleReplies}
+                      onRetry={onRetryReplies}
                     />
                   ) : (
                     replyState.items.map((sub) => (
                       <SubCommentRow
                         key={sub.id}
                         comment={sub}
-                        onReply={onReply}
+                        onReply={(c) => onReply(c, comment.id)}
                       />
                     ))
                   )}

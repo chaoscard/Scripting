@@ -1,15 +1,20 @@
 import { pixivHistoryDirectory } from "./dataDirectory"
 import { recoverFile, writeTextSafely } from "./safeFile"
+import { session } from "../api/session"
 
-const KEY = "pixiv_search_history_v1"
 const SEARCH_HISTORY_FILE_NAME = "search_history.json"
 const MAX_SEARCH_HISTORY_ITEMS = 30
 
 let cachedSearchHistory: string[] | null = null
 const listeners = new Set<() => void>()
 
-function searchHistoryFilePath(): string {
-  return `${pixivHistoryDirectory()}/${SEARCH_HISTORY_FILE_NAME}`
+export function clearSearchHistoryMemoryCache(): void {
+  cachedSearchHistory = null
+  emitChanged()
+}
+
+function searchHistoryFilePath(userId?: string | number | null): string {
+  return `${pixivHistoryDirectory(userId ?? session.userID)}/${SEARCH_HISTORY_FILE_NAME}`
 }
 
 export async function prepareSearchHistoryStorage(): Promise<void> {
@@ -38,7 +43,6 @@ function persistSearchHistory(history: string[]): boolean {
   } catch (error: any) {
     console.log("searchHistory persist error:", error?.message ?? error)
   }
-  Storage.set(KEY, history)
   return true
 }
 
@@ -54,22 +58,10 @@ export function getSearchHistory(): string[] {
         cachedSearchHistory = parsed.filter(
           (item): item is string => typeof item === "string" && item.trim().length > 0
         )
-        Storage.set(KEY, cachedSearchHistory)
         return cachedSearchHistory
       }
     }
-  } catch {
-    // 降级到 Storage
-  }
-
-  const stored = Storage.get(KEY)
-  if (Array.isArray(stored)) {
-    cachedSearchHistory = stored.filter(
-      (item): item is string => typeof item === "string" && item.trim().length > 0
-    )
-    persistSearchHistory(cachedSearchHistory)
-    return cachedSearchHistory
-  }
+  } catch {}
 
   cachedSearchHistory = []
   return cachedSearchHistory

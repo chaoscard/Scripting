@@ -260,8 +260,12 @@ export async function downloadEntireMangaSeries(
         onProgress?.(exportMsg, allPages.length, allPages.length)
         task.updateProgress({ current: allPages.length, total: allPages.length, statusText: exportMsg })
 
+        let isPartial = false
+        let downloadedCount = 0
+        let totalCount = allPages.length
+
         if (format === "cbz") {
-          filePath = await exportMangaToCbz({
+          const res = await exportMangaToCbz({
             id: seriesID,
             title: seriesTitle || `漫画系列_${seriesID}`,
             author: authorName,
@@ -270,8 +274,12 @@ export async function downloadEntireMangaSeries(
             pages: allPages,
             onProgress: (msg, cur, tot) => onProgress?.(msg, cur, tot),
           })
+          filePath = res.success ? (res.path ?? null) : null
+          isPartial = Boolean(res.isPartial)
+          downloadedCount = res.downloadedPages
+          totalCount = res.totalPages
         } else {
-          filePath = await exportMangaToEpub({
+          const res = await exportMangaToEpub({
             id: seriesID,
             title: seriesTitle || `漫画系列_${seriesID}`,
             author: authorName,
@@ -280,12 +288,17 @@ export async function downloadEntireMangaSeries(
             pages: allPages,
             onProgress: (msg, cur, tot) => onProgress?.(msg, cur, tot),
           })
+          filePath = res.success ? (res.path ?? null) : null
+          isPartial = Boolean(res.isPartial)
+          downloadedCount = res.downloadedPages
+          totalCount = res.totalPages
         }
 
         if (filePath) {
+          const partialNote = isPartial ? ` (容错导出，部分缺页: ${downloadedCount}/${totalCount}P)` : ""
           await task.finish({
             success: true,
-            summary: `《${seriesTitle}》全 ${totalIllusts} 话 (${allPages.length}P) ${formatLabel} 导出成功。`,
+            summary: `《${seriesTitle}》全 ${totalIllusts} 话 (${downloadedCount}P) ${formatLabel} 导出成功${partialNote}。`,
           })
         } else {
           await task.finish({

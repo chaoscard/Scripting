@@ -69,3 +69,13 @@ export async function runConcurrentTasks<T, R>(
   await Promise.all(workers)
   return results
 }
+
+export interface ExportResult {
+  success: boolean
+  path?: string | null
+  isPartial?: boolean
+  downloadedPages: number
+  totalPages: number
+  failedPages?: number[]
+  error?: string
+}

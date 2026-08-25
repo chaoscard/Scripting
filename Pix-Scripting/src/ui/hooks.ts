@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, useColorScheme, type Color } from "scripting"
+import { useCallback, useEffect, useMemo, useRef, useState, useColorScheme, type Color } from "scripting"
 import { session } from "../api/session"
 import { getImageBatchSize, loadSettings, onSettingsChanged, type AmbientIntensity } from "../store/settings"
 import { onBlocklistChanged } from "../store/blocklist"
@@ -132,11 +132,16 @@ export function useAsyncGuard() {
   }, [])
 }
 
-// 防抖：delay 毫秒内的连续调用只触发最后一次
+export interface DebouncedFunction<T extends (...args: any[]) => void> {
+  (...args: Parameters<T>): void
+  cancel: () => void
+}
+
+// 防抖：delay 毫秒内的连续调用只触发最后一次，支持显式 cancel()
 export function useDebouncedCallback<T extends (...args: any[]) => void>(
   fn: T,
   delay: number
-): T {
+): DebouncedFunction<T> {
   const fnRef = useLatest(fn)
   const timerRef = useRef<number | null>(null)
   useEffect(() => {
@@ -144,16 +149,27 @@ export function useDebouncedCallback<T extends (...args: any[]) => void>(
       if (timerRef.current != null) clearTimeout(timerRef.current)
     }
   }, [])
-  return useCallback(
-    ((...args: any[]) => {
+  const cancel = useCallback(() => {
+    if (timerRef.current != null) {
+      clearTimeout(timerRef.current)
+      timerRef.current = null
+    }
+  }, [])
+  const debounced = useCallback(
+    (...args: Parameters<T>) => {
       if (timerRef.current != null) clearTimeout(timerRef.current)
       timerRef.current = setTimeout(() => {
         timerRef.current = null
         fnRef.current(...args)
       }, delay)
-    }) as T,
+    },
     [delay]
   )
+  return useMemo(() => {
+    const wrapped = ((...args: Parameters<T>) => debounced(...args)) as DebouncedFunction<T>
+    wrapped.cancel = cancel
+    return wrapped
+  }, [debounced, cancel])
 }
 
 // 定时翻转状态：setOn 后 duration 毫秒自动复位；组件卸载自动清理定时器

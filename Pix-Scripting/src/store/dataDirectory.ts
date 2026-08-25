@@ -31,8 +31,9 @@ function pixivCloudDirectory(subDir: string): string {
   return pixivDataPath(subDir)
 }
 
-export function pixivHistoryDirectory(): string {
-  return pixivCloudDirectory("History")
+export function pixivHistoryDirectory(userId?: string | number | null): string {
+  const uid = userId != null && String(userId).trim().length > 0 ? String(userId).trim() : "anonymous"
+  return pixivCloudDirectory(`History/users/${uid}`)
 }
 
 // 应用设置保存在 iCloud Documents，以便多设备间同步配置。
