@@ -52,3 +52,13 @@ export function pixivBlocklistDirectory(userId?: string | number | null): string
   const uid = userId != null && String(userId).trim().length > 0 ? String(userId).trim() : "anonymous"
   return pixivCloudDirectory(`Blocklist/users/${uid}`)
 }
+
+// 小组件数据池与图片保存在 App Group 共享目录，供 Widget 进程与主 App 无缝互通。
+export function pixivWidgetDirectory(): string {
+  const base = FileManager.appGroupDocumentsDirectory || FileManager.documentsDirectory
+  return ensureDirectory(`${base}/${DATA_DIR_NAME}/WidgetPool`)
+}
+
+export function pixivWidgetPath(...parts: string[]): string {
+  return [pixivWidgetDirectory(), ...parts].join("/")
+}
