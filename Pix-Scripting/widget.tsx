@@ -21,14 +21,24 @@ function PureArtworkWidgetView(props: {
   const size = Widget.displaySize
   const isTrans = Widget.isTransparentMode || Widget.isTransparentBackground
   const isBlur = Widget.isBlurMode
+  const isLarge = Widget.family === "systemLarge"
   const isExtraLarge = Widget.family === "systemExtraLarge"
-  // 加大一号：普通尺寸 38×38，iPad 特大尺寸 46×46
-  const btnSize = isExtraLarge ? 46 : 38
-  const paddingValue = isExtraLarge ? 16 : 12
+  // 尺寸阶梯：小/中号 38×38，大号 46×46，iPad 特大号 52×52
+  const btnSize = isExtraLarge ? 52 : isLarge ? 46 : 38
+  const paddingValue = isExtraLarge ? 18 : isLarge ? 16 : 12
+  const iconFont = isExtraLarge ? "title2" : isLarge ? "title3" : "subheadline"
 
-  const runUrl = artwork
+  const targetRoute =
+    artwork?.route ||
+    (artwork?.sourceType === "pixivision"
+      ? `pixivision:${artwork.id}`
+      : artwork
+      ? `illust:${artwork.id}`
+      : undefined)
+
+  const runUrl = targetRoute
     ? Script.createRunSingleURLScheme("Pix-Scripting", {
-        route: `illust:${artwork.id}`,
+        route: targetRoute,
       })
     : undefined
 
@@ -89,7 +99,7 @@ function PureArtworkWidgetView(props: {
         >
           <Image
             systemName="arrow.clockwise"
-            font={isExtraLarge ? "title3" : "subheadline"}
+            font={iconFont}
             fontWeight="bold"
             foregroundStyle="white"
             widgetAccentedRenderingMode="fullColor"

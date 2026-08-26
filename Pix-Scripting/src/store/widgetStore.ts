@@ -1,12 +1,19 @@
 import { downloadBinary } from "../api/client"
 import { session } from "../api/session"
-import { ranking, recommendations, followingFeed, pixivisionHome, pixivisionDetail } from "../api/pixiv"
+import {
+  ranking,
+  recommendations,
+  followingFeed,
+  pixivisionHome,
+  nextPixivision,
+  nextIllustrations,
+} from "../api/pixiv"
 import { getWidgetSourceForFamily, loadSettings } from "./settings"
 import { pixivWidgetPath } from "./dataDirectory"
 import { writeDataSafely, writeTextSafely, recoverFile } from "./safeFile"
 import { cacheIllust, getCachedIllust } from "./illustCache"
 import { cacheFilePath } from "../image/imageLoader"
-import type { PixivIllustration } from "../types"
+import type { PixivIllustration, PixivisionArticle } from "../types"
 
 export interface WidgetArtwork {
   id: number
@@ -19,6 +26,7 @@ export interface WidgetArtwork {
   height: number
   aspectRatio: number
   sourceType: string
+  route?: string
   updatedAt: number
 }
 
@@ -27,11 +35,13 @@ export interface WidgetPoolState {
   artworks: WidgetArtwork[]
   lastFetchTime: number
   parameter: string
+  nextURL?: string | null
 }
 
 const IMAGES_DIR_NAME = "images"
-const DEFAULT_POOL_CAPACITY = 20
+const DEFAULT_POOL_CAPACITY = 30
 const MIN_PREFETCH_COUNT = 5
+const POOL_STALE_TTL_MS = 4 * 60 * 60 * 1000 // 4小时数据过期自愈，重新拉取最新数据
 
 function getPoolCapacity(): number {
   try {
@@ -140,10 +150,15 @@ export function loadWidgetPool(param?: string, family?: string): WidgetPoolState
         return {
           currentIndex: typeof parsed.currentIndex === "number" ? parsed.currentIndex : 0,
           artworks: parsed.artworks.filter(
-            (a: WidgetArtwork) => a && a.localImagePath && FileManager.existsSync(a.localImagePath)
+            (a: WidgetArtwork) =>
+              a &&
+              a.localImagePath &&
+              FileManager.existsSync(a.localImagePath) &&
+              (normalized !== "pixivision" || (a.route && a.route.startsWith("pixivision:")))
           ),
           lastFetchTime: typeof parsed.lastFetchTime === "number" ? parsed.lastFetchTime : 0,
           parameter: normalized,
+          nextURL: typeof parsed.nextURL === "string" ? parsed.nextURL : null,
         }
       }
     } catch {
@@ -155,6 +170,7 @@ export function loadWidgetPool(param?: string, family?: string): WidgetPoolState
     artworks: [],
     lastFetchTime: 0,
     parameter: normalized,
+    nextURL: null,
   }
 }
 
@@ -171,11 +187,12 @@ export function saveWidgetPool(state: WidgetPoolState, param?: string, family?: 
   }
 }
 
-async function fetchArtworksForSource(param: string): Promise<PixivIllustration[]> {
+async function fetchArtworksForSourceWithPage(
+  param: string,
+  nextURL?: string | null
+): Promise<{ items: PixivIllustration[]; nextURL: string | null }> {
   const settings = loadSettings()
   const showAI = settings.showAI
-  let items: PixivIllustration[] = []
-
   let token: string | null = null
   try {
     token = await session.getValidToken()
@@ -183,81 +200,46 @@ async function fetchArtworksForSource(param: string): Promise<PixivIllustration[
     token = null
   }
 
+  let result: { items: PixivIllustration[]; nextURL: string | null } = {
+    items: [],
+    nextURL: null,
+  }
+
   try {
-    if (param === "follow" && token) {
-      // 关注画师最新作品
-      const res = await followingFeed("all", token)
-      items = res.items
+    if (nextURL) {
+      result = await nextIllustrations(nextURL, token ?? "")
+    } else if (param === "follow" && token) {
+      result = await followingFeed("all", token)
     } else if (param === "discovery" && token) {
-      // 首页推荐作品
-      const res = await recommendations("illustration", token)
-      items = res.items
-    } else if (param === "pixivision") {
-      // pixivision 专栏特辑
-      const homePage = await pixivisionHome()
-      const articles = homePage.items || []
-      const collected: PixivIllustration[] = []
-      for (const article of articles.slice(0, 3)) {
-        try {
-          const detail = await pixivisionDetail(article.id)
-          if (detail?.artworks) {
-            for (const aw of detail.artworks) {
-              collected.push({
-                id: aw.id,
-                title: aw.title || article.title,
-                type: "illust",
-                image_urls: {
-                  large: aw.imageURL,
-                  medium: aw.imageURL,
-                  square_medium: aw.imageURL,
-                },
-                caption: "",
-                user: {
-                  id: 0,
-                  name: "pixivision",
-                  account: "pixivision",
-                },
-                width: 1200,
-                height: 800,
-                page_count: 1,
-                x_restrict: 0,
-                total_view: 0,
-                total_bookmarks: 0,
-                is_bookmarked: false,
-                is_muted: false,
-                total_comments: 0,
-                comment_access_control: 0,
-                illust_ai_type: 1,
-                tags: [],
-                create_date: article.date,
-                meta_pages: [],
-              })
-            }
-          }
-        } catch {
-        }
-      }
-      items = collected
+      result = await recommendations("illustration", token)
     } else if (param === "ranking_month") {
-      const res = await ranking("month", null, token ?? "")
-      items = res.items
+      result = await ranking("month", null, token ?? "")
     } else if (param === "ranking_week") {
-      const res = await ranking("week", null, token ?? "")
-      items = res.items
-    } else if (param === "discovery" && token) {
-      const res = await recommendations("illustration", token)
-      items = res.items
+      result = await ranking("week", null, token ?? "")
     } else {
-      // 默认插画日榜 (ranking_day)
-      const res = await ranking("day", null, token ?? "")
-      items = res.items
+      result = await ranking("day", null, token ?? "")
     }
   } catch (error: any) {
     console.log("fetchArtworksForSource error:", error?.message ?? error)
   }
 
   // 严格安全与类型过滤
-  return items.filter((item) => isSafeForWidget(item, showAI))
+  const filtered = result.items.filter((item) => isSafeForWidget(item, showAI))
+  return { items: filtered, nextURL: result.nextURL }
+}
+
+async function fetchPixivisionWithPage(
+  nextURL?: string | null
+): Promise<{ items: PixivisionArticle[]; nextURL: string | null }> {
+  try {
+    if (nextURL) {
+      return await nextPixivision(nextURL)
+    }
+    return await pixivisionHome()
+  } catch (error: any) {
+    console.log("fetchPixivisionWithPage error:", error?.message ?? error)
+    return { items: [], nextURL: null }
+  }
 }
 
 function syncToAppImageCache(url: string, sourcePath: string): void {
@@ -270,12 +252,11 @@ function syncToAppImageCache(url: string, sourcePath: string): void {
   } catch {}
 }
 
-async function downloadArtworkImage(item: PixivIllustration): Promise<string | null> {
-  const url = item.image_urls.large || item.image_urls.medium || item.image_urls.square_medium
+async function downloadDirectImage(url: string, prefix: string, id: number): Promise<string | null> {
   if (!url) return null
 
   const targetDir = imagesDir()
-  const fileName = `widget_${item.id}.jpg`
+  const fileName = `${prefix}_${id}.jpg`
   const destPath = `${targetDir}/${fileName}`
 
   // 若已存在且大小正常，直接复用并同步到主 App 缓存
@@ -300,6 +281,49 @@ async function downloadArtworkImage(item: PixivIllustration): Promise<string | n
     }
   }
   return null
+}
+
+async function downloadArtworkImage(item: PixivIllustration): Promise<string | null> {
+  const url = item.image_urls.large || item.image_urls.medium || item.image_urls.square_medium
+  if (!url) return null
+  return downloadDirectImage(url, "widget", item.id)
+}
+
+function cleanupOrphanImages(): void {
+  try {
+    const dir = imagesDir()
+    if (!FileManager.existsSync(dir)) return
+    const allEntries = FileManager.readDirectorySync(dir)
+    if (!allEntries || allEntries.length === 0) return
+
+    const poolDir = pixivWidgetPath()
+    const activePaths = new Set<string>()
+    const poolFiles = FileManager.readDirectorySync(poolDir).filter(
+      (f) => f.startsWith("pool_") && f.endsWith(".json")
+    )
+    for (const pf of poolFiles) {
+      try {
+        const raw = FileManager.readAsStringSync(`${poolDir}/${pf}`)
+        const data = JSON.parse(raw) as WidgetPoolState
+        if (Array.isArray(data?.artworks)) {
+          for (const item of data.artworks) {
+            if (item?.localImagePath) {
+              activePaths.add(item.localImagePath)
+            }
+          }
+        }
+      } catch {}
+    }
+
+    for (const fileName of allEntries) {
+      const fullPath = `${dir}/${fileName}`
+      if (!activePaths.has(fullPath)) {
+        try {
+          FileManager.removeSync(fullPath)
+        } catch {}
+      }
+    }
+  } catch {}
 }
 
 const activePopulateTasks = new Map<string, Promise<WidgetPoolState>>()
@@ -346,9 +370,13 @@ function waitForFirstArtwork(key: string, timeoutMs = 8000): Promise<WidgetArtwo
   })
 }
 
-export async function populateWidgetPool(param?: string, family?: string): Promise<WidgetPoolState> {
+export async function populateWidgetPool(
+  param?: string,
+  family?: string,
+  options?: { forceNextPage?: boolean }
+): Promise<WidgetPoolState> {
   const normalized = normalizeParameter(param, family)
-  const taskKey = normalized
+  const taskKey = `${normalized}_${options?.forceNextPage ? "next" : "normal"}`
   if (activePopulateTasks.has(taskKey)) {
     return activePopulateTasks.get(taskKey)!
   }
@@ -356,59 +384,140 @@ export async function populateWidgetPool(param?: string, family?: string): Promi
   const task = (async () => {
     try {
       const pool = loadWidgetPool(normalized, family)
-      const candidateItems = await fetchArtworksForSource(normalized)
-      if (candidateItems.length === 0) {
+      const maxCapacity = getPoolCapacity()
+      const isPoolFull = pool.artworks.length >= maxCapacity
+      const isStale = Date.now() - (pool.lastFetchTime || 0) > POOL_STALE_TTL_MS
+
+      // 如果池子已满且未请求拉取下一页、未过期且剩余未看充裕，直接返回
+      if (
+        isPoolFull &&
+        !options?.forceNextPage &&
+        !isStale &&
+        pool.artworks.length - pool.currentIndex >= MIN_PREFETCH_COUNT
+      ) {
         return pool
+      }
+
+      // 确定拉取的 nextURL：如果需要下一页则用 pool.nextURL；如果过期且未要求下一页则重头拉取
+      let requestNextURL: string | null = null
+      if (options?.forceNextPage) {
+        requestNextURL = pool.nextURL || null
+      } else if (!isStale) {
+        requestNextURL = pool.nextURL || null
       }
 
       const existingIds = new Set(pool.artworks.map((a) => a.id))
       const newArtworks: WidgetArtwork[] = [...pool.artworks]
-      const maxCapacity = getPoolCapacity()
       let firstSaved = pool.artworks.length > 0
+      let latestNextURL = pool.nextURL || null
 
-      for (const item of candidateItems) {
-        if (newArtworks.length >= maxCapacity) break
-        if (existingIds.has(item.id)) continue
+      if (normalized === "pixivision") {
+        const res = await fetchPixivisionWithPage(requestNextURL)
+        latestNextURL = res.nextURL
+        for (const article of res.items) {
+          if (existingIds.has(article.id)) continue
+          if (!article.imageURL) continue
 
-        const localPath = await downloadArtworkImage(item)
-        if (localPath) {
-          const width = item.width || 1200
-          const height = item.height || 1200
-          const remoteUrl =
-            item.image_urls.large ||
-            item.image_urls.medium ||
-            item.image_urls.square_medium ||
-            ""
-          const art: WidgetArtwork = {
-            id: item.id,
-            title: item.title,
-            userId: item.user.id,
-            userName: item.user.name,
-            localImagePath: localPath,
-            remoteImageUrl: remoteUrl,
-            width,
-            height,
-            aspectRatio: width > 0 && height > 0 ? width / height : 1,
-            sourceType: normalized,
-            updatedAt: Date.now(),
+          const localPath = await downloadDirectImage(
+            article.imageURL,
+            "widget_pixivision",
+            article.id
+          )
+          if (localPath) {
+            const art: WidgetArtwork = {
+              id: article.id,
+              title: article.title,
+              userId: 0,
+              userName: "pixivision",
+              localImagePath: localPath,
+              remoteImageUrl: article.imageURL,
+              width: 1200,
+              height: 630,
+              aspectRatio: 1200 / 630,
+              sourceType: "pixivision",
+              route: `pixivision:${article.id}`,
+              updatedAt: Date.now(),
+            }
+            newArtworks.push(art)
+            existingIds.add(article.id)
+
+            if (!firstSaved) {
+              firstSaved = true
+              pool.artworks = [...newArtworks]
+              pool.lastFetchTime = Date.now()
+              saveWidgetPool(pool, normalized, family)
+              emitFirstReady(normalized, art)
+            }
           }
-          newArtworks.push(art)
-          existingIds.add(item.id)
+        }
+      } else {
+        const res = await fetchArtworksForSourceWithPage(normalized, requestNextURL)
+        latestNextURL = res.nextURL
+        for (const item of res.items) {
+          if (existingIds.has(item.id)) continue
 
-          // 核心优化：若池子原本为空，下载好第 1 张图后立即保存一次，让首图即刻上屏
-          if (!firstSaved) {
-            firstSaved = true
-            pool.artworks = [...newArtworks]
-            pool.lastFetchTime = Date.now()
-            saveWidgetPool(pool, normalized, family)
-            emitFirstReady(taskKey, art)
+          const localPath = await downloadArtworkImage(item)
+          if (localPath) {
+            const width = item.width || 1200
+            const height = item.height || 1200
+            const remoteUrl =
+              item.image_urls.large ||
+              item.image_urls.medium ||
+              item.image_urls.square_medium ||
+              ""
+            const art: WidgetArtwork = {
+              id: item.id,
+              title: item.title,
+              userId: item.user.id,
+              userName: item.user.name,
+              localImagePath: localPath,
+              remoteImageUrl: remoteUrl,
+              width,
+              height,
+              aspectRatio: width > 0 && height > 0 ? width / height : 1,
+              sourceType: normalized,
+              route: `illust:${item.id}`,
+              updatedAt: Date.now(),
+            }
+            newArtworks.push(art)
+            existingIds.add(item.id)
+
+            if (!firstSaved) {
+              firstSaved = true
+              pool.artworks = [...newArtworks]
+              pool.lastFetchTime = Date.now()
+              saveWidgetPool(pool, normalized, family)
+              emitFirstReady(normalized, art)
+            }
           }
         }
       }
 
+      // 滑动窗口修剪：如果追加了新数据导致总数超过最大容量
+      if (newArtworks.length > maxCapacity) {
+        const overflow = newArtworks.length - maxCapacity
+        // 优先淘汰头部已经看过的旧图片
+        if (pool.currentIndex > 0) {
+          const dropCount = Math.min(overflow, pool.currentIndex)
+          newArtworks.splice(0, dropCount)
+          pool.currentIndex = Math.max(0, pool.currentIndex - dropCount)
+        }
+        // 如果依然超出（比如一次性拉取了较多新图），截取最新的容量上限
+        if (newArtworks.length > maxCapacity) {
+          const extra = newArtworks.length - maxCapacity
+          newArtworks.splice(0, extra)
+          pool.currentIndex = Math.max(0, pool.currentIndex - extra)
+        }
+      }
+
       pool.artworks = newArtworks
+      pool.nextURL = latestNextURL
       pool.lastFetchTime = Date.now()
       saveWidgetPool(pool, normalized, family)
+
+      // 异步清理不再被任何池子引用的旧本地图片
+      cleanupOrphanImages()
+
       return pool
     } finally {
       activePopulateTasks.delete(taskKey)
@@ -451,8 +560,9 @@ export async function getCurrentWidgetArtwork(param?: string, family?: string): 
     return advanceWidgetArtwork(normalized, family)
   }
 
-  // 若剩余未看的插画数量较少，触发异步补齐
-  if (pool.artworks.length - pool.currentIndex < MIN_PREFETCH_COUNT) {
+  // 若数据已过期（4小时），或剩余未看数量较少，触发异步补齐新数据
+  const isStale = Date.now() - (pool.lastFetchTime || 0) > POOL_STALE_TTL_MS
+  if (isStale || pool.artworks.length - pool.currentIndex < MIN_PREFETCH_COUNT) {
     populateWidgetPool(normalized, family).catch(() => {})
   }
 
@@ -471,12 +581,21 @@ export async function advanceWidgetArtwork(param?: string, family?: string): Pro
     return null
   }
 
-  pool.currentIndex = (pool.currentIndex + 1) % pool.artworks.length
-  saveWidgetPool(pool, normalized, family)
+  // 1. 如果已刷到最后一张（刷完了），或者池子快用尽，立即拉取下一页新数据
+  const isAtEnd = pool.currentIndex + 1 >= pool.artworks.length
+  if (isAtEnd) {
+    pool = await populateWidgetPool(normalized, family, { forceNextPage: true })
+  }
 
-  // 异步补齐
+  // 2. 推进 currentIndex 指针
+  if (pool.artworks.length > 0) {
+    pool.currentIndex = (pool.currentIndex + 1) % pool.artworks.length
+    saveWidgetPool(pool, normalized, family)
+  }
+
+  // 3. 异步预拉取：若剩余未看的插画数量较少，触发下一页预热
   if (pool.artworks.length - pool.currentIndex < MIN_PREFETCH_COUNT) {
-    populateWidgetPool(normalized, family).catch(() => {})
+    populateWidgetPool(normalized, family, { forceNextPage: true }).catch(() => {})
   }
 
   const current = pool.artworks[pool.currentIndex]
@@ -490,7 +609,7 @@ export async function advanceWidgetArtwork(param?: string, family?: string): Pro
   )
   if (validIndex >= 0) {
     pool.currentIndex = validIndex
-    saveWidgetPool(pool, normalized)
+    saveWidgetPool(pool, normalized, family)
     return pool.artworks[validIndex]
   }
 
@@ -521,6 +640,25 @@ export function findArtworkInAllPools(id: number): WidgetArtwork | null {
     }
   } catch {}
   return null
+}
+
+/**
+ * 从小组件池子预热专辑/特辑封面图到主 App 图片缓存，确保点击专辑小组件秒开
+ */
+export function seedPixivisionFromWidgetPool(id: number): void {
+  if (!id || typeof id !== "number") return
+  const found = findArtworkInAllPools(id)
+  if (!found) return
+
+  const remoteUrl = found.remoteImageUrl || ""
+  if (remoteUrl && found.localImagePath && FileManager.existsSync(found.localImagePath)) {
+    try {
+      const appCachePath = cacheFilePath(remoteUrl)
+      if (!FileManager.existsSync(appCachePath)) {
+        FileManager.copyFileSync(found.localImagePath, appCachePath)
+      }
+    } catch {}
+  }
 }
 
 /**

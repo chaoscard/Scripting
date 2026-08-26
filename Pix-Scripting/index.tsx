@@ -7,16 +7,21 @@ import { flushNovelProgress, prepareNovelProgressStorage } from "./src/store/nov
 import { prepareSearchHistoryStorage } from "./src/store/searchHistory"
 import { flushSeriesCache, prepareSeriesCacheStorage } from "./src/store/seriesCache"
 import { requestPixivRoute } from "./src/ui/routeNavigation"
-import { populateWidgetPool, seedIllustFromWidgetPool } from "./src/store/widgetStore"
+import { populateWidgetPool, seedIllustFromWidgetPool, seedPixivisionFromWidgetPool } from "./src/store/widgetStore"
 import { normalizeRoute } from "./src/ui/routes"
 
-function seedIfIllustRoute(route?: string | null) {
+function seedIfRoute(route?: string | null) {
   if (!route) return
   const norm = normalizeRoute(route)
   if (norm.startsWith("illust:")) {
     const id = Number(norm.slice("illust:".length))
     if (Number.isFinite(id) && id > 0) {
       seedIllustFromWidgetPool(id)
+    }
+  } else if (norm.startsWith("pixivision:")) {
+    const id = Number(norm.slice("pixivision:".length))
+    if (Number.isFinite(id) && id > 0) {
+      seedPixivisionFromWidgetPool(id)
     }
   }
 }
@@ -25,18 +30,22 @@ async function main() {
   try {
     const startupRoute =
       (Script.queryParameters?.route as string | undefined) ||
-      (Script.widgetParameter ? `illust:${Script.widgetParameter}` : null)
+      (Script.widgetParameter
+        ? (Script.widgetParameter.includes(":") ? Script.widgetParameter : `illust:${Script.widgetParameter}`)
+        : null)
     if (startupRoute && typeof startupRoute === "string") {
-      seedIfIllustRoute(startupRoute)
+      seedIfRoute(startupRoute)
       requestPixivRoute(startupRoute)
     }
 
     Script.onResume((details) => {
       const resumeRoute =
         (details.queryParameters?.route as string | undefined) ||
-        (details.widgetParameter ? `illust:${details.widgetParameter}` : null)
+        (details.widgetParameter
+          ? (details.widgetParameter.includes(":") ? details.widgetParameter : `illust:${details.widgetParameter}`)
+          : null)
       if (resumeRoute && typeof resumeRoute === "string") {
-        seedIfIllustRoute(resumeRoute)
+        seedIfRoute(resumeRoute)
         requestPixivRoute(resumeRoute)
       }
     })

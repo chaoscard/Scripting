@@ -20,7 +20,7 @@ import { UserConnectionsView, type ConnectionRouteKind } from "./userConnections
 import { UserWorksView } from "./userWorks"
 import { AboutView } from "./about"
 import { RankingCustomPickerView, type CustomRankingPickerKind } from "./rankingCustomPicker"
-import { seedIllustFromWidgetPool } from "../store/widgetStore"
+import { seedIllustFromWidgetPool, seedPixivisionFromWidgetPool } from "../store/widgetStore"
 
 // 解析与规范化各类路由格式（支持 URL 编码如 %3A、纯数字 ID、Pixiv 网页链接等）
 export function normalizeRoute(rawRoute: string): string {
@@ -96,7 +96,10 @@ export function renderDestination(rawPage: string) {
   }
   if (page.startsWith("pixivision:")) {
     const id = parseID(page, "pixivision:")
-    if (id != null) return <PixivisionDetailView articleID={id} />
+    if (id != null) {
+      seedPixivisionFromWidgetPool(id)
+      return <PixivisionDetailView articleID={id} />
+    }
   }
   if (page.startsWith("user:")) {
     const id = parseID(page, "user:")

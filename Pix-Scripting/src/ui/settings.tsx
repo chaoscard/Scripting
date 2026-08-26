@@ -691,7 +691,7 @@ export function SettingsView() {
             title="小组件池大小"
             unit="张"
             value={settings.widgetPoolCapacity}
-            defaultValue={20}
+            defaultValue={30}
             min={10}
             max={30}
             onSave={(val) => update({ widgetPoolCapacity: val })}

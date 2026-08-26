@@ -180,13 +180,13 @@ const DEFAULT_SETTINGS: AppSettings = {
   customRankingMangaModes: ["day_manga", "week_manga", "month_manga", "week_rookie_manga"],
   customRankingNovelModes: ["day", "week", "week_rookie"],
   widgetSourceSmallIos: "ranking_day",
-  widgetSourceMediumIos: "ranking_day",
-  widgetSourceLargeIos: "ranking_day",
+  widgetSourceMediumIos: "pixivision",
+  widgetSourceLargeIos: "ranking_week",
   widgetSourceSmallIpad: "ranking_day",
-  widgetSourceMediumIpad: "ranking_day",
-  widgetSourceLargeIpad: "ranking_day",
-  widgetSourceExtraLargeIpad: "ranking_day",
-  widgetPoolCapacity: 20,
+  widgetSourceMediumIpad: "pixivision",
+  widgetSourceLargeIpad: "ranking_week",
+  widgetSourceExtraLargeIpad: "pixivision",
+  widgetPoolCapacity: 30,
   widgetReloadIntervalMinutes: 60,
 }
 
@@ -436,38 +436,24 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
     customRankingNovelModes: parseStringArray(stored?.customRankingNovelModes, DEFAULT_SETTINGS.customRankingNovelModes),
     widgetSourceSmallIos: isOneOf(stored?.widgetSourceSmallIos, WIDGET_DEFAULT_SOURCE_VALUES)
       ? stored.widgetSourceSmallIos
-      : isOneOf(stored?.widgetDefaultSource, WIDGET_DEFAULT_SOURCE_VALUES)
-      ? stored.widgetDefaultSource
       : DEFAULT_SETTINGS.widgetSourceSmallIos,
     widgetSourceMediumIos: isOneOf(stored?.widgetSourceMediumIos, WIDGET_DEFAULT_SOURCE_VALUES)
       ? stored.widgetSourceMediumIos
-      : isOneOf(stored?.widgetDefaultSource, WIDGET_DEFAULT_SOURCE_VALUES)
-      ? stored.widgetDefaultSource
       : DEFAULT_SETTINGS.widgetSourceMediumIos,
     widgetSourceLargeIos: isOneOf(stored?.widgetSourceLargeIos, WIDGET_DEFAULT_SOURCE_VALUES)
       ? stored.widgetSourceLargeIos
-      : isOneOf(stored?.widgetDefaultSource, WIDGET_DEFAULT_SOURCE_VALUES)
-      ? stored.widgetDefaultSource
       : DEFAULT_SETTINGS.widgetSourceLargeIos,
     widgetSourceSmallIpad: isOneOf(stored?.widgetSourceSmallIpad, WIDGET_DEFAULT_SOURCE_VALUES)
       ? stored.widgetSourceSmallIpad
-      : isOneOf(stored?.widgetDefaultSource, WIDGET_DEFAULT_SOURCE_VALUES)
-      ? stored.widgetDefaultSource
       : DEFAULT_SETTINGS.widgetSourceSmallIpad,
     widgetSourceMediumIpad: isOneOf(stored?.widgetSourceMediumIpad, WIDGET_DEFAULT_SOURCE_VALUES)
       ? stored.widgetSourceMediumIpad
-      : isOneOf(stored?.widgetDefaultSource, WIDGET_DEFAULT_SOURCE_VALUES)
-      ? stored.widgetDefaultSource
       : DEFAULT_SETTINGS.widgetSourceMediumIpad,
     widgetSourceLargeIpad: isOneOf(stored?.widgetSourceLargeIpad, WIDGET_DEFAULT_SOURCE_VALUES)
       ? stored.widgetSourceLargeIpad
-      : isOneOf(stored?.widgetDefaultSource, WIDGET_DEFAULT_SOURCE_VALUES)
-      ? stored.widgetDefaultSource
       : DEFAULT_SETTINGS.widgetSourceLargeIpad,
     widgetSourceExtraLargeIpad: isOneOf(stored?.widgetSourceExtraLargeIpad, WIDGET_DEFAULT_SOURCE_VALUES)
       ? stored.widgetSourceExtraLargeIpad
-      : isOneOf(stored?.widgetDefaultSource, WIDGET_DEFAULT_SOURCE_VALUES)
-      ? stored.widgetDefaultSource
       : DEFAULT_SETTINGS.widgetSourceExtraLargeIpad,
     widgetPoolCapacity: parseWidgetPoolCapacity(stored?.widgetPoolCapacity),
     widgetReloadIntervalMinutes: parseWidgetReloadInterval(stored?.widgetReloadIntervalMinutes),
