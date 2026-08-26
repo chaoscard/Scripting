@@ -8,6 +8,7 @@ import {
   Image,
   LazyVStack,
   Menu,
+  Navigation,
   NavigationLink,
   ProgressView,
   ScrollView,
@@ -90,6 +91,7 @@ import {
   TagChip,
 } from "./components"
 import { CommentsSheet } from "./comments"
+import { IllustGalleryView } from "./IllustGalleryView"
 import { IllustAISheet, type IllustAIMode } from "./aiSheet"
 import { cleanHtmlCaption } from "../api/aiService"
 import { UgoiraPlayerView } from "./ugoiraView"
@@ -615,6 +617,14 @@ export function IllustDetailView(props: { illustID: number }) {
     await ShareSheet.present([`https://www.pixiv.net/artworks/${current.id}`])
   }
 
+  function openGallery(pageIndex = 0) {
+    if (!current || current.type === "ugoira") return
+    void Navigation.present({
+      element: <IllustGalleryView illust={current} initialPageIndex={pageIndex} />,
+      modalPresentationStyle: "fullScreen",
+    })
+  }
+
   return (
     <ScrollView
       navigationTitle={current.title}
@@ -875,6 +885,7 @@ export function IllustDetailView(props: { illustID: number }) {
                     frame={{ maxWidth: "infinity" }}
                     priority={idx === 0 ? -5000 : idx}
                     onLoaded={idx === 0 ? () => setMediaReady(true) : undefined}
+                    onTapGesture={() => openGallery(idx)}
                   />
                 )
               })}
@@ -891,6 +902,7 @@ export function IllustDetailView(props: { illustID: number }) {
               frame={{ maxWidth: "infinity" }}
               priority={-5000}
               onLoaded={() => setMediaReady(true)}
+              onTapGesture={() => openGallery(0)}
             />
           )}
         </VStack>

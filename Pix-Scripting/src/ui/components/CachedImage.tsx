@@ -151,6 +151,7 @@ export function CachedImage(props: {
   frame?: any // 覆盖默认整宽 frame（如固定尺寸缩略图）
   onLoaded?: (success: boolean) => void
   priority?: number
+  onTapGesture?: (() => void) | { count: number; perform: () => void }
 }) {
   const {
     url,
@@ -166,6 +167,7 @@ export function CachedImage(props: {
     frame,
     onLoaded,
     priority,
+    onTapGesture,
   } = props
   const { path, isTargetLoaded, failed, cacheRevision } = useCachedImage(url, onLoaded, priority)
   const initialHitRef = useRef<boolean>(Boolean(url && cachedFilePath(url)))
@@ -465,6 +467,7 @@ export function CachedImage(props: {
       clipShape={resolvedClipShape}
       clipped={true}
       frame={containerFrame}
+      onTapGesture={onTapGesture}
     >
       {/* 1. 底层骨架占位色块（中性灰/深灰半透明，官方客户端质感） */}
       <VStack
