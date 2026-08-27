@@ -91,7 +91,7 @@ export function renderDestination(rawPage: string) {
     const id = parseID(page, "illust:")
     if (id != null) {
       seedIllustFromWidgetPool(id)
-      return <IllustDetailView illustID={id} />
+      return <IllustDetailView key={`illust-${id}`} illustID={id} />
     }
   }
   if (page.startsWith("pixivision:")) {

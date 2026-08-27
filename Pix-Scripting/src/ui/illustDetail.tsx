@@ -13,6 +13,7 @@ import {
   ProgressView,
   ScrollView,
   Spacer,
+  TabView,
   Text,
   useColorScheme,
   useEffect,
@@ -20,6 +21,7 @@ import {
   useRef,
   useState,
   VStack,
+  ZStack,
 } from "scripting"
 import {
   addBookmark,
@@ -40,7 +42,6 @@ import {
   exportMangaToCbz,
   exportMangaToEpub,
   exportUgoiraToAlbum,
-  saveImageToPixivAlbum,
 } from "../downloader"
 import { cachedFilePath, cardThumbUrlOf, imageUrlOf, loadImage, pageThumbUrlOf, prefetch } from "../image/imageLoader"
 import {
@@ -74,7 +75,12 @@ import {
 } from "../store/illustCache"
 import { getCachedIllustBookmark } from "../store/bookmarkSync"
 import { getSeriesByWorkID, recordWorkSeriesAssociation } from "../store/seriesCache"
-import { useAsyncGuard, useIllustBookmark, useLatest, usePagedList, currentBatchSize } from "./hooks"
+import {
+  getActiveFeedContext,
+  subscribeFeedContext,
+  type ActiveFeedContext,
+} from "../store/feedContext"
+import { useAsyncGuard, useIllustBookmark, useLatest, usePagedList, useUserFollow, currentBatchSize } from "./hooks"
 import type { PixivIllustration } from "../types"
 import {
   AvatarImage,
@@ -87,7 +93,6 @@ import {
   formatNumber,
   LoadingView,
   SeriesEpisodePager,
-  useSeriesEpisodeNav,
   TagChip,
 } from "./components"
 import { CommentsSheet } from "./comments"
@@ -95,7 +100,6 @@ import { IllustGalleryView } from "./IllustGalleryView"
 import { IllustAISheet, type IllustAIMode } from "./aiSheet"
 import { cleanHtmlCaption } from "../api/aiService"
 import { UgoiraPlayerView } from "./ugoiraView"
-import { buildUgoira } from "../ugoira/ugoira"
 import { renderDestination } from "./routes"
 import { requestPixivRoute } from "./routeNavigation"
 
@@ -124,52 +128,677 @@ function getInitialIllustPalette(
   return null
 }
 
+/**
+ * 插画详情页顶层视图
+ * 支持列表上下文左右连续左右滑动切图与单图直达
+ */
 export function IllustDetailView(props: { illustID: number }) {
   const { illustID } = props
   const colorScheme = useColorScheme()
   const isDark = colorScheme === "dark"
-  const [illust, setIllust] = useState<PixivIllustration | null>(() => getCachedIllust(illustID))
-  const [ambientEnabled, setAmbientEnabled] = useState(
-    () => loadSettings().ambientImmersion
-  )
-  const [ambientIntensity, setAmbientIntensity] = useState(
-    () => loadSettings().ambientIntensity
-  )
+
+  // 1. 获取关联 Feed 上下文快照
+  const feedCtx = useMemo(() => getActiveFeedContext(illustID), [illustID])
+  const [items, setItems] = useState<PixivIllustration[]>(() => {
+    if (feedCtx && feedCtx.items.length > 0) {
+      return feedCtx.items
+    }
+    const cached = getCachedIllust(illustID)
+    return cached ? [cached] : []
+  })
+
+  const initialIndex = useMemo(() => {
+    if (!feedCtx || !feedCtx.items || feedCtx.items.length === 0) return 0
+    const idx = feedCtx.items.findIndex((it) => it.id === illustID)
+    return idx >= 0 ? idx : 0
+  }, [feedCtx, illustID])
+
+  const [currentIndex, setCurrentIndex] = useState<number>(initialIndex)
+  const isPagingMode = Boolean(feedCtx && items.length > 1)
+
+  // 监听后台列表追加新数据（仅追加末尾，不影响当前浏览）
+  useEffect(() => {
+    if (!feedCtx) return
+    return subscribeFeedContext(feedCtx.id, (ctx) => {
+      setItems((prev) => {
+        if (ctx.items.length > prev.length) {
+          return [...ctx.items]
+        }
+        return prev
+      })
+    })
+  }, [feedCtx?.id])
+
+  // 当前激活插画对象
+  const currentItem = isPagingMode ? items[currentIndex] ?? null : (items[0] ?? getCachedIllust(illustID))
+  const activeIllustID = currentItem?.id ?? illustID
+  const activeIllust = getCachedIllust(activeIllustID) ?? currentItem
+
+  // 导航栏状态与 Sheet
+  const [ambientEnabled, setAmbientEnabled] = useState(() => loadSettings().ambientImmersion)
+  const [ambientIntensity, setAmbientIntensity] = useState(() => loadSettings().ambientIntensity)
   const [ambientPalette, setAmbientPalette] = useState<IllustAmbientPalette | null>(() => {
     const settings = loadSettings()
-    if (!settings.ambientImmersion) return null
-    const initial = getCachedIllust(illustID)
-    return getInitialIllustPalette(
-      initial,
-      isDark,
-      settings.ambientIntensity,
-      getDetailImageQuality(settings)
-    )
+    if (!settings.ambientImmersion || !activeIllust) return null
+    return getInitialIllustPalette(activeIllust, isDark, settings.ambientIntensity, getDetailImageQuality(settings))
   })
-  const [loading, setLoading] = useState(() => !getCachedIllust(illustID))
-  const [error, setError] = useState<string | null>(null)
+
   const [bookmarked, setBookmarked] = useIllustBookmark(
-    illustID,
-    getCachedIllust(illustID)?.is_bookmarked ?? false
+    activeIllustID,
+    activeIllust?.is_bookmarked ?? false
   )
   const [bookmarkLoading, setBookmarkLoading] = useState(false)
   const [bookmarkLongPressLocked, setBookmarkLongPressLocked] = useState(false)
   const [showBookmarkDetail, setShowBookmarkDetail] = useState(false)
-  const [followed, setFollowed] = useState(() => getCachedIllust(illustID)?.user?.is_followed ?? false)
+
+  const [followed, setFollowed] = useUserFollow(
+    activeIllust?.user?.id ?? 0,
+    activeIllust?.user?.is_followed ?? false
+  )
   const [followLoading, setFollowLoading] = useState(false)
   const [showComments, setShowComments] = useState(false)
   const [showAISheet, setShowAISheet] = useState(false)
   const [aiMode, setAIMode] = useState<IllustAIMode>("caption")
-  const [quality, setQuality] = useState(() => getDetailImageQuality())
+  const [downloading, setDownloading] = useState(false)
+
+  // 环境光平滑更新（防抖提取）
+  useEffect(() => {
+    if (!ambientEnabled || !activeIllust) {
+      setAmbientPalette(null)
+      return
+    }
+    const quality = getDetailImageQuality()
+    const candidates = [
+      cardThumbUrlOf(activeIllust),
+      activeIllust.image_urls?.medium,
+      activeIllust.image_urls?.square_medium,
+      activeIllust.image_urls?.large,
+      imageUrlOf(activeIllust, 0, quality),
+    ].filter((u): u is string => Boolean(u))
+
+    let active = true
+    for (const u of candidates) {
+      const cached = getCachedIllustAmbientPalette(u, isDark, ambientIntensity)
+      if (cached) {
+        setAmbientPalette(cached)
+        return
+      }
+    }
+    const targetUrl = candidates[0]
+    if (targetUrl) {
+      void extractIllustAmbientPalette(targetUrl).then((result) => {
+        if (!active || !result) return
+        const modeObj = isDark ? result.dark : result.light
+        setAmbientPalette(modeObj[ambientIntensity] ?? modeObj.medium)
+      })
+    }
+    return () => {
+      active = false
+    }
+  }, [activeIllust?.id, isDark, ambientEnabled, ambientIntensity])
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      const settings = loadSettings()
+      setAmbientEnabled(settings.ambientImmersion)
+      setAmbientIntensity(settings.ambientIntensity)
+    })
+  }, [])
+
+  // 左右翻页事件回调
+  const handleTabChanged = (newIdx: number) => {
+    if (typeof newIdx !== "number" || newIdx < 0 || newIdx >= items.length) return
+    setCurrentIndex(newIdx)
+    // 触碰末尾时触发加载更多
+    if (feedCtx && newIdx >= items.length - 3 && feedCtx.hasMore && feedCtx.loadMore) {
+      void feedCtx.loadMore()
+    }
+  }
+
+  // 收藏操作
+  async function toggleBookmark() {
+    if (!activeIllust || bookmarkLoading) return
+    void Haptics.transient()
+    setBookmarkLoading(true)
+    try {
+      if (bookmarked) {
+        await session.call((token) => removeBookmark(activeIllust.id, token))
+        setBookmarked(false)
+      } else {
+        await session.call((token) => addBookmark(activeIllust.id, "public", [], token))
+        setBookmarked(true)
+      }
+      updateHistoryBookmark(activeIllust.id, !bookmarked)
+    } catch {
+      // ignore
+    } finally {
+      setBookmarkLoading(false)
+    }
+  }
+
+  async function bookmarkAndFollow() {
+    if (!activeIllust || bookmarkLoading) return
+    setBookmarkLoading(true)
+    try {
+      if (!bookmarked) {
+        await session.call((token) => addBookmark(activeIllust.id, "public", [], token))
+        setBookmarked(true)
+        updateHistoryBookmark(activeIllust.id, true)
+      }
+      if (activeIllust.user?.id) {
+        await session.call((token) => followUser(activeIllust.user.id, "public", token))
+        setFollowed(true)
+      }
+    } catch {
+      // ignore
+    } finally {
+      setBookmarkLoading(false)
+    }
+  }
+
+  function handleBookmarkLongPress() {
+    const action = loadSettings().longPressBookmarkAction
+    if (action === "off") return
+    void Haptics.transient()
+    if (action === "follow") {
+      void bookmarkAndFollow()
+    } else {
+      setShowBookmarkDetail(true)
+    }
+  }
+
+  async function followWithVisibility(restrict: "public" | "private") {
+    if (!activeIllust?.user?.id || followLoading) return
+    void Haptics.transient()
+    setFollowLoading(true)
+    try {
+      await session.call((token) => followUser(activeIllust.user.id, restrict, token))
+      setFollowed(true)
+    } catch {
+      // ignore
+    } finally {
+      setFollowLoading(false)
+    }
+  }
+
+  async function toggleFollow() {
+    if (!activeIllust?.user?.id || followLoading) return
+    if (!followed) {
+      await followWithVisibility("public")
+      return
+    }
+    void Haptics.transient()
+    setFollowLoading(true)
+    try {
+      await session.call((token) => unfollowUser(activeIllust.user.id, token))
+      setFollowed(false)
+    } catch {
+      // ignore
+    } finally {
+      setFollowLoading(false)
+    }
+  }
+
+  async function shareIllust() {
+    if (!activeIllust) return
+    void Haptics.transient()
+    await ShareSheet.present([`https://www.pixiv.net/artworks/${activeIllust.id}`])
+  }
+
+  async function handleDownloadUgoira() {
+    if (!activeIllust || downloading) return
+    void Haptics.transient()
+    setDownloading(true)
+    try {
+      const res = await exportUgoiraToAlbum(activeIllust)
+      if (res.success) void Haptics.transient()
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  async function handleDownloadIllustToAlbum() {
+    if (!activeIllust || downloading) return
+    void Haptics.transient()
+    setDownloading(true)
+    const downloadQuality = getDownloadImageQuality()
+    try {
+      const ok = await downloadIllustToAlbum(activeIllust, downloadQuality)
+      if (ok) void Haptics.transient()
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  async function handleDownloadIllustToZip() {
+    if (!activeIllust || downloading) return
+    void Haptics.transient()
+    setDownloading(true)
+    const downloadQuality = getDownloadImageQuality()
+    const pageCount = Math.max(1, activeIllust.page_count || activeIllust.meta_pages?.length || 1)
+    try {
+      const urls: string[] = []
+      for (let i = 0; i < pageCount; i++) {
+        const url = imageUrlOf(activeIllust, i, downloadQuality)
+        if (url) urls.push(url)
+      }
+      const res = await exportIllustToZip({ illust: activeIllust, imageUrls: urls })
+      if (res.success && res.path) {
+        void Haptics.transient()
+        await ShareSheet.present([res.path])
+      }
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  async function handleDownloadManga(format: "cbz" | "epub") {
+    if (!activeIllust || downloading) return
+    void Haptics.transient()
+    setDownloading(true)
+    const downloadQuality = getDownloadImageQuality()
+    const pageCount = Math.max(1, activeIllust.page_count || activeIllust.meta_pages?.length || 1)
+    try {
+      const pages: { pageIndex: number; url: string }[] = []
+      for (let i = 0; i < pageCount; i++) {
+        const url = imageUrlOf(activeIllust, i, downloadQuality)
+        if (url) pages.push({ pageIndex: i + 1, url })
+      }
+      let filePath: string | null = null
+      if (format === "cbz") {
+        const res = await exportMangaToCbz({
+          id: activeIllust.id,
+          title: activeIllust.title,
+          author: activeIllust.user?.name || "Unknown",
+          authorId: activeIllust.user?.id,
+          description: activeIllust.caption,
+          tags: activeIllust.tags?.map((t) => t.name),
+          pages,
+        })
+        filePath = res.success ? (res.path ?? null) : null
+      } else {
+        const res = await exportMangaToEpub({
+          id: activeIllust.id,
+          title: activeIllust.title,
+          author: activeIllust.user?.name || "Unknown",
+          authorId: activeIllust.user?.id,
+          description: activeIllust.caption,
+          tags: activeIllust.tags?.map((t) => t.name),
+          pages,
+        })
+        filePath = res.success ? (res.path ?? null) : null
+      }
+      if (filePath) {
+        void Haptics.transient()
+        await ShareSheet.present([filePath])
+      }
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  const rawSeries = activeIllust?.series ?? (activeIllust as any)?.illust_series
+  const rawSeriesObj = Array.isArray(rawSeries) ? rawSeries[0] : rawSeries
+  const associatedRef = activeIllust ? getSeriesByWorkID(activeIllust.id, "manga") : null
+  const resolvedSeriesID = rawSeriesObj?.id ?? associatedRef?.seriesID ?? null
+  const resolvedSeriesTitle = rawSeriesObj?.title ?? associatedRef?.seriesTitle ?? null
+  const pageCount = Math.max(1, activeIllust?.page_count || activeIllust?.meta_pages?.length || 1)
+
+  const navToolbar = {
+    topBarTrailing: [
+      <Button
+        disabled={bookmarkLoading || bookmarkLongPressLocked}
+        action={toggleBookmark}
+        simultaneousGesture={
+          LongPressGesture({ minDuration: 500 }).onEnded(() => {
+            setBookmarkLongPressLocked(true)
+            handleBookmarkLongPress()
+            setTimeout(() => setBookmarkLongPressLocked(false), 1500)
+          })
+        }
+      >
+        <Image
+          systemName={bookmarked ? "heart.fill" : "heart"}
+          foregroundStyle={bookmarked ? "#FF375F" : undefined}
+        />
+      </Button>,
+      <Button
+        disabled={followLoading}
+        action={toggleFollow}
+        contextMenu={{
+          menuItems: (
+            <Group>
+              <Button
+                title={followed ? "设为私密关注" : "私密关注"}
+                systemImage="lock"
+                disabled={followLoading}
+                action={() => void followWithVisibility("private")}
+              />
+            </Group>
+          ),
+        }}
+      >
+        <Image
+          systemName={followed ? "person.fill.checkmark" : "person.badge.plus"}
+        />
+      </Button>,
+      <Menu label={<Image systemName="ellipsis.circle" />}>
+        <Button
+          title="评论"
+          systemImage="bubble.left"
+          action={() => setShowComments(true)}
+        />
+        <Menu title="助手" systemImage="sparkles">
+          {Boolean(activeIllust?.caption && cleanHtmlCaption(activeIllust.caption)) && (
+            <Button
+              title="翻译简介"
+              systemImage="text.quote"
+              action={() => {
+                setAIMode("caption")
+                setShowAISheet(true)
+              }}
+            />
+          )}
+          <Button
+            title="翻译图片（OCR）"
+            systemImage="text.viewfinder"
+            action={() => {
+              setAIMode("ocr")
+              setShowAISheet(true)
+            }}
+          />
+          <Button
+            title="翻译图片（生图）"
+            systemImage="photo.badge.magnifyingglass"
+            action={() => {
+              setAIMode("vision")
+              setShowAISheet(true)
+            }}
+          />
+        </Menu>
+        {Boolean(resolvedSeriesID) && (
+          <Button
+            title="系列"
+            systemImage="books.vertical"
+            action={() => requestPixivRoute(`mangaSeries:${resolvedSeriesID}`)}
+          />
+        )}
+        <Button
+          title="分享"
+          systemImage="square.and.arrow.up"
+          action={shareIllust}
+        />
+        {activeIllust?.type === "ugoira" ? (
+          <Button
+            title={downloading ? "下载中…" : "下载"}
+            systemImage="square.and.arrow.down"
+            disabled={downloading}
+            action={handleDownloadUgoira}
+          />
+        ) : activeIllust?.type === "manga" ? (
+          <Menu title="下载" systemImage="square.and.arrow.down">
+            <Button
+              title="下载为 CBZ 漫画包"
+              systemImage="doc.zipper"
+              disabled={downloading}
+              action={() => void handleDownloadManga("cbz")}
+            />
+            <Button
+              title="下载为 EPUB 电子书"
+              systemImage="book"
+              disabled={downloading}
+              action={() => void handleDownloadManga("epub")}
+            />
+          </Menu>
+        ) : pageCount > 1 ? (
+          <Menu title="下载" systemImage="square.and.arrow.down">
+            <Button
+              title="下载全部至相簿"
+              systemImage="photo.on.rectangle.angled"
+              disabled={downloading}
+              action={handleDownloadIllustToAlbum}
+            />
+            <Button
+              title="打包为 ZIP 归档"
+              systemImage="doc.zipper"
+              disabled={downloading}
+              action={handleDownloadIllustToZip}
+            />
+          </Menu>
+        ) : (
+          <Button
+            title={downloading ? "下载中…" : "下载"}
+            systemImage="square.and.arrow.down"
+            disabled={downloading}
+            action={handleDownloadIllustToAlbum}
+          />
+        )}
+        <Divider />
+        <Menu title="信息" systemImage="info.circle">
+          <Button
+            title={`作者：${activeIllust?.user?.name ?? "未知"}`}
+            action={() => Pasteboard.setString(activeIllust?.user?.name ?? "")}
+          />
+          <Button
+            title={`UID：${activeIllust?.user?.id ?? 0}`}
+            action={() => Pasteboard.setString(String(activeIllust?.user?.id ?? ""))}
+          />
+          <Button
+            title={`标题：${activeIllust?.title ?? "未命名"}`}
+            action={() => Pasteboard.setString(activeIllust?.title ?? "")}
+          />
+          <Button
+            title={`PID：${activeIllust?.id ?? 0}`}
+            action={() => Pasteboard.setString(String(activeIllust?.id ?? ""))}
+          />
+          {Boolean(resolvedSeriesID) && (
+            <Button
+              title={`系列：${resolvedSeriesTitle || "未命名系列"}`}
+              action={() => Pasteboard.setString(resolvedSeriesTitle ?? "")}
+            />
+          )}
+          {Boolean(resolvedSeriesID) && (
+            <Button
+              title={`SID：${resolvedSeriesID}`}
+              action={() => Pasteboard.setString(String(resolvedSeriesID))}
+            />
+          )}
+          {pageCount > 1 && (
+            <Button
+              title={`页数：${pageCount}页`}
+              action={() => Pasteboard.setString(`页数：${pageCount}页`)}
+            />
+          )}
+          {Boolean(activeIllust?.width && activeIllust?.height) && (
+            <Button
+              title={`分辨率：${activeIllust?.width}×${activeIllust?.height}`}
+              action={() => Pasteboard.setString(`分辨率：${activeIllust?.width}×${activeIllust?.height}`)}
+            />
+          )}
+        </Menu>
+      </Menu>,
+      <NavigationLink value={`user:${activeIllust?.user?.id ?? 0}`}>
+        <AvatarImage
+          url={activeIllust?.user?.profile_image_urls?.medium ?? null}
+          size={28}
+        />
+      </NavigationLink>,
+    ],
+  }
+
+  const sheetsElement = activeIllust ? (
+    <Group>
+      <VStack
+        sheet={{
+          content: (
+            <CommentsSheet
+              illustID={activeIllust.id}
+              onClose={() => setShowComments(false)}
+            />
+          ),
+          isPresented: showComments,
+          onChanged: setShowComments,
+        }}
+      />
+      <VStack
+        sheet={{
+          content: (
+            <IllustAISheet
+              illust={activeIllust}
+              mode={aiMode}
+              isPresented={showAISheet}
+              onChanged={setShowAISheet}
+            />
+          ),
+          isPresented: showAISheet,
+          onChanged: setShowAISheet,
+        }}
+      />
+      <VStack
+        sheet={{
+          content: (
+            <BookmarkDetailSheet
+              item={activeIllust}
+              bookmarked={bookmarked}
+              loadDetail={(token) => bookmarkDetail(activeIllust.id, token)}
+              loadTags={(restrict, token) =>
+                bookmarkTags(session.userID ?? 0, restrict, token)
+              }
+              save={(restrict, tags, token) =>
+                addBookmark(activeIllust.id, restrict, tags, token)
+              }
+              onSaved={() => {
+                setBookmarked(true)
+                updateHistoryBookmark(activeIllust.id, true)
+              }}
+              onClose={() => setShowBookmarkDetail(false)}
+            />
+          ),
+          isPresented: showBookmarkDetail,
+          onChanged: setShowBookmarkDetail,
+        }}
+      />
+    </Group>
+  ) : null
+
+  // 单图展示模式
+  if (!isPagingMode) {
+    return (
+      <ScrollView
+        navigationTitle={activeIllust?.title ?? "作品详情"}
+        navigationBarTitleDisplayMode="inline"
+        ignoresSafeArea={{ edges: "bottom" }}
+        toolbarBackground={
+          ambientEnabled && ambientPalette
+            ? { style: ambientPalette.topColor, bars: ["navigationBar"] }
+            : undefined
+        }
+        toolbarBackgroundVisibility={
+          ambientEnabled && ambientPalette
+            ? { visibility: "visible", bars: ["navigationBar"] }
+            : { visibility: "hidden", bars: ["navigationBar"] }
+        }
+        background={
+          ambientEnabled && ambientPalette
+            ? {
+                colors: [
+                  ambientPalette.topColor,
+                  ambientPalette.midColor,
+                  ambientPalette.backgroundColor,
+                  ambientPalette.backgroundColor,
+                ],
+                startPoint: "top",
+                endPoint: "bottom",
+              }
+            : undefined
+        }
+        toolbar={navToolbar}
+      >
+        <IllustDetailPageContent illustID={illustID} isActive={true} />
+        {sheetsElement}
+      </ScrollView>
+    )
+  }
+
+  // 多图 TabView 翻页模式（常驻 Page 槽位，绝对不闪屏、绝对不切回）
+  return (
+    <ZStack frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
+      <TabView
+        tabIndex={currentIndex}
+        onTabIndexChanged={handleTabChanged}
+        tabViewStyle="pageNeverDisplayIndex"
+        frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+        navigationTitle={activeIllust?.title ?? "作品详情"}
+        navigationBarTitleDisplayMode="inline"
+        ignoresSafeArea={{ edges: "bottom" }}
+        toolbarBackground={
+          ambientEnabled && ambientPalette
+            ? { style: ambientPalette.topColor, bars: ["navigationBar"] }
+            : undefined
+        }
+        toolbarBackgroundVisibility={
+          ambientEnabled && ambientPalette
+            ? { visibility: "visible", bars: ["navigationBar"] }
+            : { visibility: "hidden", bars: ["navigationBar"] }
+        }
+        background={
+          ambientEnabled && ambientPalette
+            ? {
+                colors: [
+                  ambientPalette.topColor,
+                  ambientPalette.midColor,
+                  ambientPalette.backgroundColor,
+                  ambientPalette.backgroundColor,
+                ],
+                startPoint: "top",
+                endPoint: "bottom",
+              }
+            : undefined
+        }
+        toolbar={navToolbar}
+      >
+        {items.map((item, idx) => (
+          <VStack
+            key={`page-slot-${item.id}`}
+            tag={idx}
+            frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          >
+            <IllustDetailPageContent
+              illustID={item.id}
+              initialIllust={item}
+              isActive={idx === currentIndex}
+            />
+          </VStack>
+        ))}
+      </TabView>
+      {sheetsElement}
+    </ZStack>
+  )
+}
+
+/**
+ * 单张作品的详情页内容组件
+ */
+function IllustDetailPageContent(props: {
+  illustID: number
+  initialIllust?: PixivIllustration | null
+  isActive: boolean
+}) {
+  const { illustID, initialIllust, isActive } = props
+
+  const [illust, setIllust] = useState<PixivIllustration | null>(
+    () => initialIllust ?? getCachedIllust(illustID)
+  )
+  const [loading, setLoading] = useState(() => !initialIllust && !getCachedIllust(illustID))
+  const [error, setError] = useState<string | null>(null)
   const [mediaReady, setMediaReady] = useState(false)
+  const [quality, setQuality] = useState(() => getDetailImageQuality())
   const guard = useAsyncGuard()
   const illustRef = useLatest(illust)
-  const errorRef = useLatest(error)
-  // 同一实例只记录一次浏览（下拉刷新/重试不重复刷新 viewedAt）；换作品时重置
   const recordedIDRef = useRef<number | null>(null)
 
   const cachedIllust = getCachedIllust(illustID)
-  const currentIllust = illust ?? cachedIllust
+  const currentIllust = illust ?? cachedIllust ?? initialIllust
   const rawSeries = currentIllust?.series ?? (currentIllust as any)?.illust_series
   const rawSeriesObj = Array.isArray(rawSeries) ? rawSeries[0] : rawSeries
   const associatedRef = getSeriesByWorkID(illustID, "manga")
@@ -199,9 +828,7 @@ export function IllustDetailView(props: { illustID: number }) {
         (detail.user?.is_followed === true ||
           (detail.user?.id != null && isUserFollowed(detail.user.id) === true) ||
           detail.is_bookmarked === true ||
-          getCachedIllustBookmark(detail.id) === true ||
-          followed ||
-          bookmarked)
+          getCachedIllustBookmark(detail.id) === true)
       const blockReason = getIllustContentBlockReason(detail, settings, undefined, {
         exemptRestrictions: isExempt,
       })
@@ -215,14 +842,10 @@ export function IllustDetailView(props: { illustID: number }) {
         return
       }
       setIllust(detail)
-      setBookmarked(detail.is_bookmarked)
-      setFollowed(detail.user.is_followed ?? false)
-      // 本地浏览记录：同一实例只记一次（与 Hanairo 的 didRecordHistory 一致）
-      if (recordedIDRef.current !== detail.id) {
+      if (isActive && recordedIDRef.current !== detail.id) {
         recordedIDRef.current = detail.id
         recordHistory(detail)
       }
-      // 预取后续几页大图（从第 1 页开始预取；第 0 页由前台 CachedImage 赋予最高优先级 -5000 极速直出）
       const prefetchURLs: (string | null | undefined)[] = []
       const detailQuality = getDetailImageQuality()
       const total = Math.min(4, detail.page_count || detail.meta_pages?.length || 1)
@@ -230,21 +853,6 @@ export function IllustDetailView(props: { illustID: number }) {
         prefetchURLs.push(imageUrlOf(detail, k, detailQuality))
       }
       prefetch(prefetchURLs)
-      // 并行加载收藏状态与关注状态（与主请求共用序号：页面切换后全部作废）
-      session
-        .call((token) => bookmarkDetail(illustID, token))
-        .then((d) => {
-          if (g.isCurrent()) setBookmarked(d.is_bookmarked)
-        })
-        .catch(() => {})
-      if (detail.user.is_followed == null) {
-        session
-          .call((token) => followDetail(detail.user.id, token))
-          .then((d) => {
-            if (g.isCurrent()) setFollowed(d.is_followed)
-          })
-          .catch(() => {})
-      }
     } catch (err: any) {
       if (g.isCurrent()) {
         if (!illustRef.current) {
@@ -256,139 +864,54 @@ export function IllustDetailView(props: { illustID: number }) {
     }
   }
 
+  // 仅在激活时发起网络加载完整详情
   useEffect(() => {
     const cached = getCachedIllust(illustID)
-    if (cached) {
-      load(false)
-    } else {
-      setIllust(null)
-      load(true)
+    if (isActive) {
+      if (cached && (cached.meta_pages || cached.meta_single_page)) {
+        load(false)
+      } else {
+        load(true)
+      }
     }
-    // 保底机制：若本体大图文件较大在 1.2 秒内仍在下载，自动放行相关作品请求，避免下方留白卡死
     const timer = setTimeout(() => {
       setMediaReady(true)
     }, 1200)
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [illustID])
+  }, [illustID, isActive])
 
   useEffect(() => {
-    return onUserFollowChanged((changedUserID, nextFollowed) => {
-      if (changedUserID === illustRef.current?.user.id) {
-        setFollowed(nextFollowed)
-      }
-    })
-  }, [])
+    if (isActive && illust && recordedIDRef.current !== illust.id) {
+      recordedIDRef.current = illust.id
+      recordHistory(illust)
+    }
+  }, [isActive, illust])
 
-  useEffect(() => {
-    if (!ambientEnabled) {
-      setAmbientPalette(null)
-      return
-    }
-    const current = illustRef.current
-    if (!current) {
-      setAmbientPalette(null)
-      return
-    }
-    const candidates = [
-      cardThumbUrlOf(current),
-      current.image_urls?.medium,
-      current.image_urls?.square_medium,
-      current.image_urls?.large,
-      imageUrlOf(current, 0, quality),
-    ].filter((u): u is string => Boolean(u))
-
-    let active = true
-    for (const u of candidates) {
-      const cached = getCachedIllustAmbientPalette(u, isDark, ambientIntensity)
-      if (cached) {
-        setAmbientPalette(cached)
-        return
-      }
-    }
-    const targetUrl = candidates[0]
-    if (targetUrl) {
-      void extractIllustAmbientPalette(targetUrl).then((result) => {
-        if (!active || !result) return
-        const modeObj = isDark ? result.dark : result.light
-        setAmbientPalette(modeObj[ambientIntensity] ?? modeObj.medium)
-      })
-    }
-    return () => {
-      active = false
-    }
-  }, [illust?.id, quality, isDark, ambientEnabled, ambientIntensity])
-
-  // 设置变化时更新图片质量与沉浸式开关；屏蔽黑名单变化时撤下或恢复已打开的内容。
   useEffect(() => {
     return onSettingsChanged(() => {
       const settings = loadSettings()
       setQuality(getDetailImageQuality(settings))
-      setAmbientEnabled(settings.ambientImmersion)
-      setAmbientIntensity(settings.ambientIntensity)
-      const current = illustRef.current
-      if (current) {
-        const isExempt =
-          settings.exemptFilterForPersonal &&
-          (current.user?.is_followed === true ||
-            (current.user?.id != null && isUserFollowed(current.user.id) === true) ||
-            current.is_bookmarked === true ||
-            getCachedIllustBookmark(current.id) === true ||
-            followed ||
-            bookmarked)
-        const blockReason = getIllustContentBlockReason(current, settings, undefined, {
-          exemptRestrictions: isExempt,
-        })
-        if (blockReason !== null) {
-          guard()
-          setIllust(null)
-          setError(
-            blockReason === "blocklist"
-              ? BLOCKED_BY_BLOCKLIST_MESSAGE
-              : BLOCKED_BY_RESTRICTION_MESSAGE
-          )
-          setLoading(false)
-        }
-      } else if (
-        !current &&
-        (errorRef.current === BLOCKED_BY_BLOCKLIST_MESSAGE ||
-          errorRef.current === BLOCKED_BY_RESTRICTION_MESSAGE)
-      ) {
-        load()
-      }
     })
-  }, [bookmarked, followed])
+  }, [])
 
-  if (loading && !illust) {
-    return (
-      <ScrollView navigationTitle="作品详情" navigationBarTitleDisplayMode="inline">
-        <LoadingView />
-      </ScrollView>
-    )
+  if (loading && !currentIllust) {
+    return <LoadingView />
   }
-  if (error && !illust) {
-    return (
-      <ScrollView navigationTitle="作品详情" navigationBarTitleDisplayMode="inline">
-        <ErrorView message={error} onRetry={() => load(true)} />
-      </ScrollView>
-    )
+  if (error && !currentIllust) {
+    return <ErrorView message={error} onRetry={() => load(true)} />
   }
-  if (!illust) {
-    return (
-      <ScrollView navigationTitle="作品详情" navigationBarTitleDisplayMode="inline">
-        <ErrorView message="作品不存在" onRetry={() => load(true)} />
-      </ScrollView>
-    )
+  if (!currentIllust) {
+    return <ErrorView message="作品不存在" onRetry={() => load(true)} />
   }
 
-  const current = illust
+  const current = currentIllust
 
   if (resolvedSeriesID) {
     recordWorkSeriesAssociation(current.id, "manga", resolvedSeriesID, resolvedSeriesTitle, resolvedEpisodeNumber)
   }
 
   const pageCount = Math.max(1, current.page_count || current.meta_pages?.length || 1)
-  // 无限滚动：一次性生成所有页的图片 URL（meta_pages 缺失时由 imageUrlOf 推导）
   const pageURLs: (string | null)[] = []
   for (let k = 0; k < pageCount; k++) {
     pageURLs.push(imageUrlOf(current, k, quality))
@@ -413,209 +936,15 @@ export function IllustDetailView(props: { illustID: number }) {
     return 0.75
   }, [current.id, current.width, current.height])
 
-  // 当为多页作品时，在详情页挂载的第一时间高优先级并发预热所有页面的中等缩略图（每张仅约 15KB），
-  // 确保用户滚动到后续各页之前所有缩略图已写入本地磁盘，首帧 0 延迟命中真实物理比例与模糊底图
   useEffect(() => {
-    if (!current || pageCount <= 1) return
+    if (!isActive || !current || pageCount <= 1) return
     for (let idx = 0; idx < pageCount; idx++) {
       const thumb = pageThumbUrlOf(current, idx)
       if (thumb && !cachedFilePath(thumb)) {
         void loadImage(thumb, idx === 0 ? -6000 : -1000 + idx)
       }
     }
-  }, [current, pageCount])
-
-  async function toggleBookmark() {
-    if (bookmarkLoading) return
-    void Haptics.transient()
-    setBookmarkLoading(true)
-    try {
-      if (bookmarked) {
-        await session.call((token) => removeBookmark(current.id, token))
-        setBookmarked(false)
-      } else {
-        await session.call((token) =>
-          addBookmark(current.id, "public", [], token)
-        )
-        setBookmarked(true)
-      }
-      // 同步本地浏览记录中的收藏状态（若该作品在历史中）
-      updateHistoryBookmark(current.id, !bookmarked)
-    } catch {
-      // ignore
-    } finally {
-      setBookmarkLoading(false)
-    }
-  }
-
-  async function bookmarkAndFollow() {
-    if (bookmarkLoading) return
-    setBookmarkLoading(true)
-    try {
-      if (!bookmarked) {
-        await session.call((token) => addBookmark(current.id, "public", [], token))
-        setBookmarked(true)
-        updateHistoryBookmark(current.id, true)
-      }
-      await session.call((token) => followUser(current.user.id, "public", token))
-      setFollowed(true)
-    } catch {
-      // ignore
-    } finally {
-      setBookmarkLoading(false)
-    }
-  }
-
-  function handleBookmarkLongPress() {
-    const action = loadSettings().longPressBookmarkAction
-    if (action === "off") return
-    void Haptics.transient()
-    if (action === "follow") {
-      void bookmarkAndFollow()
-    } else {
-      setShowBookmarkDetail(true)
-    }
-  }
-
-  const [downloading, setDownloading] = useState(false)
-
-  async function handleDownloadUgoira() {
-    if (downloading) return
-    void Haptics.transient()
-    setDownloading(true)
-    try {
-      const res = await exportUgoiraToAlbum(current)
-      if (res.success) {
-        void Haptics.transient()
-      }
-    } finally {
-      setDownloading(false)
-    }
-  }
-
-  async function handleDownloadIllustToAlbum() {
-    if (downloading) return
-    void Haptics.transient()
-    setDownloading(true)
-    const downloadQuality = getDownloadImageQuality()
-    try {
-      const ok = await downloadIllustToAlbum(current, downloadQuality)
-      if (ok) {
-        void Haptics.transient()
-      }
-    } finally {
-      setDownloading(false)
-    }
-  }
-
-  async function handleDownloadIllustToZip() {
-    if (downloading) return
-    void Haptics.transient()
-    setDownloading(true)
-    const downloadQuality = getDownloadImageQuality()
-    try {
-      const urls: string[] = []
-      for (let i = 0; i < pageCount; i++) {
-        const url = imageUrlOf(current, i, downloadQuality) ?? pageURLs[i]
-        if (url) urls.push(url)
-      }
-      const res = await exportIllustToZip({
-        illust: current,
-        imageUrls: urls,
-      })
-      if (res.success && res.path) {
-        void Haptics.transient()
-        await ShareSheet.present([res.path])
-      }
-    } finally {
-      setDownloading(false)
-    }
-  }
-
-  async function handleDownloadManga(format: "cbz" | "epub") {
-    if (downloading) return
-    void Haptics.transient()
-    setDownloading(true)
-    const downloadQuality = getDownloadImageQuality()
-    try {
-      const pages: { pageIndex: number; url: string }[] = []
-      for (let i = 0; i < pageCount; i++) {
-        const url = imageUrlOf(current, i, downloadQuality) ?? pageURLs[i]
-        if (url) pages.push({ pageIndex: i + 1, url })
-      }
-
-      let filePath: string | null = null
-      if (format === "cbz") {
-        const res = await exportMangaToCbz({
-          id: current.id,
-          title: current.title,
-          author: current.user?.name || "Unknown",
-          authorId: current.user?.id,
-          seriesTitle: resolvedSeriesTitle ?? undefined,
-          description: current.caption,
-          tags: current.tags?.map((t) => t.name),
-          pages,
-        })
-        filePath = res.success ? (res.path ?? null) : null
-      } else {
-        const res = await exportMangaToEpub({
-          id: current.id,
-          title: current.title,
-          author: current.user?.name || "Unknown",
-          authorId: current.user?.id,
-          seriesTitle: resolvedSeriesTitle ?? undefined,
-          description: current.caption,
-          tags: current.tags?.map((t) => t.name),
-          pages,
-        })
-        filePath = res.success ? (res.path ?? null) : null
-      }
-
-      if (filePath) {
-        void Haptics.transient()
-        await ShareSheet.present([filePath])
-      }
-    } finally {
-      setDownloading(false)
-    }
-  }
-
-  async function followWithVisibility(restrict: "public" | "private") {
-    if (followLoading) return
-    void Haptics.transient()
-    setFollowLoading(true)
-    try {
-      await session.call((token) => followUser(current.user.id, restrict, token))
-      setFollowed(true)
-    } catch {
-      // ignore
-    } finally {
-      setFollowLoading(false)
-    }
-  }
-
-  async function toggleFollow() {
-    if (followLoading) return
-    if (!followed) {
-      await followWithVisibility("public")
-      return
-    }
-    void Haptics.transient()
-    setFollowLoading(true)
-    try {
-      await session.call((token) => unfollowUser(current.user.id, token))
-      setFollowed(false)
-    } catch {
-      // ignore
-    } finally {
-      setFollowLoading(false)
-    }
-  }
-
-  async function shareIllust() {
-    void Haptics.transient()
-    await ShareSheet.present([`https://www.pixiv.net/artworks/${current.id}`])
-  }
+  }, [isActive, current, pageCount])
 
   function openGallery(pageIndex = 0) {
     if (!current || current.type === "ugoira") return
@@ -627,227 +956,11 @@ export function IllustDetailView(props: { illustID: number }) {
 
   return (
     <ScrollView
-      navigationTitle={current.title}
-      navigationBarTitleDisplayMode="inline"
+      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
       ignoresSafeArea={{ edges: "bottom" }}
-      toolbarBackground={
-        ambientEnabled && ambientPalette
-          ? {
-              style: ambientPalette.topColor,
-              bars: ["navigationBar"],
-            }
-          : undefined
-      }
-      toolbarBackgroundVisibility={
-        ambientEnabled && ambientPalette
-          ? {
-              visibility: "visible",
-              bars: ["navigationBar"],
-            }
-          : {
-              visibility: "hidden",
-              bars: ["navigationBar"],
-            }
-      }
-      background={
-        ambientEnabled && ambientPalette
-          ? {
-              colors: [
-                ambientPalette.topColor,
-                ambientPalette.midColor,
-                ambientPalette.backgroundColor,
-                ambientPalette.backgroundColor,
-              ],
-              startPoint: "top",
-              endPoint: "bottom",
-            }
-          : undefined
-      }
-      toolbar={{
-        topBarTrailing: [
-          <Button
-            disabled={bookmarkLoading || bookmarkLongPressLocked}
-            action={toggleBookmark}
-            simultaneousGesture={
-              LongPressGesture({ minDuration: 500 }).onEnded(() => {
-                setBookmarkLongPressLocked(true)
-                handleBookmarkLongPress()
-                setTimeout(() => setBookmarkLongPressLocked(false), 1500)
-              })
-            }
-          >
-            <Image
-              systemName={bookmarked ? "heart.fill" : "heart"}
-              foregroundStyle={bookmarked ? "#FF375F" : undefined}
-            />
-          </Button>,
-          <Button
-            disabled={followLoading}
-            action={toggleFollow}
-            contextMenu={{
-              menuItems: (
-                <Group>
-                  <Button
-                    title={followed ? "设为私密关注" : "私密关注"}
-                    systemImage="lock"
-                    disabled={followLoading}
-                    action={() => void followWithVisibility("private")}
-                  />
-                </Group>
-              ),
-            }}
-          >
-            <Image
-              systemName={followed ? "person.fill.checkmark" : "person.badge.plus"}
-            />
-          </Button>,
-          <Menu label={<Image systemName="ellipsis.circle" />}>
-            <Button
-              title="评论"
-              systemImage="bubble.left"
-              action={() => setShowComments(true)}
-            />
-            <Menu title="助手" systemImage="sparkles">
-              {Boolean(current?.caption && cleanHtmlCaption(current.caption)) && (
-                <Button
-                  title="翻译简介"
-                  systemImage="text.quote"
-                  action={() => {
-                    setAIMode("caption")
-                    setShowAISheet(true)
-                  }}
-                />
-              )}
-              <Button
-                title="翻译图片（OCR）"
-                systemImage="text.viewfinder"
-                action={() => {
-                  setAIMode("ocr")
-                  setShowAISheet(true)
-                }}
-              />
-              <Button
-                title="翻译图片（生图）"
-                systemImage="photo.badge.magnifyingglass"
-                action={() => {
-                  setAIMode("vision")
-                  setShowAISheet(true)
-                }}
-              />
-            </Menu>
-            {Boolean(resolvedSeriesID) && (
-              <Button
-                title="系列"
-                systemImage="books.vertical"
-                action={() => requestPixivRoute(`mangaSeries:${resolvedSeriesID}`)}
-              />
-            )}
-            <Button
-              title="分享"
-              systemImage="square.and.arrow.up"
-              action={shareIllust}
-            />
-            {current.type === "ugoira" ? (
-              <Button
-                title={downloading ? "下载中…" : "下载"}
-                systemImage="square.and.arrow.down"
-                disabled={downloading}
-                action={handleDownloadUgoira}
-              />
-            ) : current.type === "manga" ? (
-              <Menu title="下载" systemImage="square.and.arrow.down">
-                <Button
-                  title="下载为 CBZ 漫画包"
-                  systemImage="doc.zipper"
-                  disabled={downloading}
-                  action={() => void handleDownloadManga("cbz")}
-                />
-                <Button
-                  title="下载为 EPUB 电子书"
-                  systemImage="book"
-                  disabled={downloading}
-                  action={() => void handleDownloadManga("epub")}
-                />
-              </Menu>
-            ) : pageCount > 1 ? (
-              <Menu title="下载" systemImage="square.and.arrow.down">
-                <Button
-                  title="下载全部至相簿"
-                  systemImage="photo.on.rectangle.angled"
-                  disabled={downloading}
-                  action={handleDownloadIllustToAlbum}
-                />
-                <Button
-                  title="打包为 ZIP 归档"
-                  systemImage="doc.zipper"
-                  disabled={downloading}
-                  action={handleDownloadIllustToZip}
-                />
-              </Menu>
-            ) : (
-              <Button
-                title={downloading ? "下载中…" : "下载"}
-                systemImage="square.and.arrow.down"
-                disabled={downloading}
-                action={handleDownloadIllustToAlbum}
-              />
-            )}
-            <Divider />
-            <Menu title="信息" systemImage="info.circle">
-              <Button
-                title={`作者：${current.user?.name ?? "未知"}`}
-                action={() => Pasteboard.setString(current.user?.name ?? "")}
-              />
-              <Button
-                title={`UID：${current.user?.id ?? 0}`}
-                action={() => Pasteboard.setString(String(current.user?.id ?? ""))}
-              />
-              <Button
-                title={`标题：${current.title ?? "未命名"}`}
-                action={() => Pasteboard.setString(current.title ?? "")}
-              />
-              <Button
-                title={`PID：${current.id}`}
-                action={() => Pasteboard.setString(String(current.id))}
-              />
-              {Boolean(resolvedSeriesID) && (
-                <Button
-                  title={`系列：${resolvedSeriesTitle || "未命名系列"}`}
-                  action={() => Pasteboard.setString(resolvedSeriesTitle ?? "")}
-                />
-              )}
-              {Boolean(resolvedSeriesID) && (
-                <Button
-                  title={`SID：${resolvedSeriesID}`}
-                  action={() => Pasteboard.setString(String(resolvedSeriesID))}
-                />
-              )}
-              {pageCount > 1 && (
-                <Button
-                  title={`页数：${pageCount}页`}
-                  action={() => Pasteboard.setString(`页数：${pageCount}页`)}
-                />
-              )}
-              {Boolean(current.width && current.height) && (
-                <Button
-                  title={`分辨率：${current.width}×${current.height}`}
-                  action={() => Pasteboard.setString(`分辨率：${current.width}×${current.height}`)}
-                />
-              )}
-            </Menu>
-          </Menu>,
-          <NavigationLink value={`user:${current.user?.id ?? 0}`}>
-            <AvatarImage
-              url={current.user?.profile_image_urls?.medium ?? null}
-              size={28}
-            />
-          </NavigationLink>,
-        ],
-      }}
-     
     >
       <VStack alignment="leading" spacing={12} frame={{ maxWidth: "infinity", alignment: "leading" }}>
-        {/* 大图区：动图走播放器；图片无限向下滚动展示全部页 */}
+        {/* 大图区 */}
         <VStack
           alignment="center"
           spacing={4}
@@ -855,13 +968,24 @@ export function IllustDetailView(props: { illustID: number }) {
           padding={{ top: 0, bottom: 6 }}
         >
           {current.type === "ugoira" ? (
-            <UgoiraPlayerView
-              illustID={current.id}
-              previewUrl={pageThumbUrlOf(current, 0)}
-              aspectRatioValue={pageAspect}
-              cornerRadius={8}
-              onLoaded={() => setMediaReady(true)}
-            />
+            isActive ? (
+              <UgoiraPlayerView
+                illustID={current.id}
+                previewUrl={pageThumbUrlOf(current, 0)}
+                aspectRatioValue={pageAspect}
+                cornerRadius={8}
+                onLoaded={() => setMediaReady(true)}
+              />
+            ) : (
+              <CachedImage
+                key={`ugoira-preview-${current.id}`}
+                url={pageThumbUrlOf(current, 0)}
+                aspectRatioValue={pageAspect}
+                cornerRadius={8}
+                contentMode="fit"
+                frame={{ maxWidth: "infinity" }}
+              />
+            )
           ) : pageCount > 1 ? (
             <LazyVStack spacing={0} alignment="center">
               {pageURLs.map((url, idx) => {
@@ -948,7 +1072,7 @@ export function IllustDetailView(props: { illustID: number }) {
             routeDestination={renderDestination}
           />
 
-          {/* 标签：原生流式换行展示所有标签 */}
+          {/* 标签 */}
           {Array.isArray(current.tags) && current.tags.length > 0 ? (
             <VStack alignment="leading" spacing={6}>
               <Text font="subheadline" fontWeight="semibold" foregroundStyle="secondaryLabel">
@@ -979,62 +1103,12 @@ export function IllustDetailView(props: { illustID: number }) {
           episodeNumber={resolvedEpisodeNumber}
         />
 
+        {/* 相关作品 */}
         <RelatedIllustrationsSection
           illustID={current.id}
-          enabled={mediaReady}
+          enabled={mediaReady && isActive}
         />
       </VStack>
-
-      <VStack
-        sheet={{
-          content: (
-            <CommentsSheet
-              illustID={current.id}
-              onClose={() => setShowComments(false)}
-            />
-          ),
-          isPresented: showComments,
-          onChanged: setShowComments,
-        }}
-      />
-      <VStack
-        sheet={{
-          content: (
-            <IllustAISheet
-              illust={current}
-              mode={aiMode}
-              isPresented={showAISheet}
-              onChanged={setShowAISheet}
-            />
-          ),
-          isPresented: showAISheet,
-          onChanged: setShowAISheet,
-        }}
-      />
-      <VStack
-        sheet={{
-          content: (
-            <BookmarkDetailSheet
-              item={current}
-              bookmarked={bookmarked}
-              loadDetail={(token) => bookmarkDetail(current.id, token)}
-              loadTags={(restrict, token) =>
-                bookmarkTags(session.userID ?? 0, restrict, token)
-              }
-              save={(restrict, tags, token) =>
-                addBookmark(current.id, restrict, tags, token)
-              }
-              onSaved={() => {
-                setBookmarked(true)
-                updateHistoryBookmark(current.id, true)
-              }}
-              onClose={() => setShowBookmarkDetail(false)}
-            />
-          ),
-          isPresented: showBookmarkDetail,
-          onChanged: setShowBookmarkDetail,
-        }}
-      />
     </ScrollView>
   )
 }
