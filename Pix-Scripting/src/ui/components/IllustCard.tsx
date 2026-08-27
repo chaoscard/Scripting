@@ -10,7 +10,6 @@ import {
   NavigationLink,
   ProgressView,
   Spacer,
-  TapGesture,
   Text,
   VStack,
   ZStack,
@@ -34,11 +33,6 @@ import { downloadIllustToAlbum, exportUgoiraToAlbum } from "../../downloader"
 import { addBookmark, bookmarkDetail, bookmarkTags, followUser, removeBookmark } from "../../api/pixiv"
 import { session } from "../../api/session"
 import { cardThumbUrlOf } from "../../image/imageLoader"
-import {
-  registerOrUpdateFeedContext,
-  setActiveFeedContext,
-  updateFeedContextItems,
-} from "../../store/feedContext"
 import type { PixivIllustration } from "../../types"
 const FLOW_HORIZONTAL_PADDING = 12
 const FLOW_COLUMN_SPACING = 12
@@ -62,7 +56,6 @@ export interface IllustCardAction {
 export function IllustCard(props: {
   illust: PixivIllustration
   onAppear?: () => void
-  onCardTapped?: () => void
   flow?: boolean
   priority?: number
   cornerBadge?: any
@@ -73,7 +66,6 @@ export function IllustCard(props: {
   const {
     illust,
     onAppear,
-    onCardTapped,
     flow = false,
     priority,
     cornerBadge,
@@ -252,13 +244,6 @@ export function IllustCard(props: {
           <NavigationLink
             value={`illust:${illust.id}`}
             frame={flowCardFrame}
-            simultaneousGesture={
-              onCardTapped
-                ? TapGesture().onEnded(() => {
-                    onCardTapped()
-                  })
-                : undefined
-            }
           >
             <ZStack alignment="topLeading" frame={flowCardFrame}>
               <ZStack
@@ -306,16 +291,7 @@ export function IllustCard(props: {
             onSheetChanged={setShowBookmarkDetail}
           />
         </ZStack>
-        <NavigationLink
-          value={`illust:${illust.id}`}
-          simultaneousGesture={
-            onCardTapped
-              ? TapGesture().onEnded(() => {
-                  onCardTapped()
-                })
-              : undefined
-          }
-        >
+        <NavigationLink value={`illust:${illust.id}`}>
           <Text
             font="caption"
             fontWeight="medium"
@@ -439,36 +415,13 @@ export function IllustFlowFeed(props: {
   ) => any
 }) {
   cacheIllusts(props.items)
-  const feedIdRef = useRef<string>(
-    `feed_${Math.random().toString(36).slice(2, 9)}_${Date.now()}`
-  )
-  const feedId = feedIdRef.current
-
-  const lastItem = props.items[props.items.length - 1]
-  const lastId = lastItem ? lastItem.id : null
-  const triggerAnchor = lastId != null ? String(lastId) : ""
-
-  // 每次渲染均注册/更新 Feed 上下文映射，确保点击任何卡片时上下文 100% 就绪
-  registerOrUpdateFeedContext({
-    id: feedId,
-    items: props.items,
-    hasMore: props.hasMore,
-    loadMore: props.hasMore ? () => props.onLoadMore(triggerAnchor) : undefined,
-  })
-
   const [leading, trailing] = useMemo(
     () => distributeFlowItems(props.items),
     [props.items]
   )
-
-  useEffect(() => {
-    updateFeedContextItems(
-      feedId,
-      props.items,
-      props.hasMore,
-      props.hasMore ? () => props.onLoadMore(triggerAnchor) : undefined
-    )
-  }, [feedId, props.items, props.hasMore, props.onLoadMore, triggerAnchor])
+  const lastItem = props.items[props.items.length - 1]
+  const lastId = lastItem ? lastItem.id : null
+  const triggerAnchor = lastId != null ? String(lastId) : ""
 
   const columnViews = useMemo(
     () => {
@@ -478,15 +431,6 @@ export function IllustFlowFeed(props: {
           illust={illust}
           flow={true}
           priority={index}
-          onCardTapped={() => {
-            setActiveFeedContext({
-              id: feedId,
-              items: props.items,
-              initialIndex: index,
-              hasMore: props.hasMore,
-              loadMore: props.hasMore ? () => props.onLoadMore(triggerAnchor) : undefined,
-            })
-          }}
           cornerBadge={props.cornerBadgeOf?.(illust, index)}
           footerText={props.footerTextOf?.(illust, index)}
           topTrailingAction={props.topTrailingActionOf?.(illust, index)}
@@ -654,4 +598,3 @@ function renderIllustContextMenu(
     ),
   }
 }
-

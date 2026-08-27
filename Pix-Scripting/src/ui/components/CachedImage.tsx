@@ -469,10 +469,10 @@ export function CachedImage(props: {
       frame={containerFrame}
       onTapGesture={onTapGesture}
     >
-      {/* 1. 底层骨架占位色块（中性灰/深灰半透明，官方客户端质感） */}
+      {/* 1. 底层骨架占位色块（仅在无图或加载失败时展示占位底色，图片就绪后透明，杜绝亚像素边缘露白） */}
       <VStack
         frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-        background="tertiarySystemFill"
+        background={(!path && !previewPath && !underlayPath) || failed ? "tertiarySystemFill" : undefined}
       >
         {!url || failed ? (
           // 仅在明确加载失败或无 URL 时展示浅灰占位图标
