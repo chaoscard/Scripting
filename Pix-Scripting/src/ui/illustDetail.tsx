@@ -147,14 +147,19 @@ export function IllustDetailView(props: { illustID: number }) {
     return cached ? [cached] : []
   })
 
-  const initialIndex = useMemo(() => {
+  const targetIndex = useMemo(() => {
     if (!feedCtx || !feedCtx.items || feedCtx.items.length === 0) return 0
     const idx = feedCtx.items.findIndex((it) => it.id === illustID)
     return idx >= 0 ? idx : 0
   }, [feedCtx, illustID])
 
-  const [currentIndex, setCurrentIndex] = useState<number>(initialIndex)
+  const [currentIndex, setCurrentIndex] = useState<number>(targetIndex)
   const isPagingMode = Boolean(feedCtx && items.length > 1)
+
+  // 严格校准当前索引与传入作品对齐
+  useEffect(() => {
+    setCurrentIndex(targetIndex)
+  }, [illustID, targetIndex])
 
   // 监听后台列表追加新数据（仅追加末尾，不影响当前浏览）
   useEffect(() => {
