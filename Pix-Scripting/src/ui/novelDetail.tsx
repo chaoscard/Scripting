@@ -24,6 +24,7 @@ import {
   useState,
   VStack,
   ZStack,
+  type Color,
   type ScrollViewProxy,
 } from "scripting"
 import {
@@ -97,6 +98,14 @@ import {
 import { NovelReaderView, NovelReaderWebView } from "./novelReader"
 import { CommentsSheet } from "./comments"
 import { NovelAISheet, type NovelAIMode } from "./aiSheet"
+import { NovelTypographySheet } from "./novelTypographySheet"
+import {
+  getCustomBgPath,
+  loadNovelReaderSettings,
+  NOVEL_THEME_PALETTES,
+  onNovelReaderSettingsChanged,
+  type NovelReaderSettings,
+} from "../store/novelReaderSettings"
 import { cleanHtmlCaption } from "../api/aiService"
 import { renderDestination } from "./routes"
 import { requestPixivRoute } from "./routeNavigation"
@@ -136,6 +145,8 @@ export function NovelDetailView(props: { novelID: number }) {
   const [followLoading, setFollowLoading] = useState(false)
   const [showComments, setShowComments] = useState(false)
   const [showAISheet, setShowAISheet] = useState(false)
+  const [showTypographySheet, setShowTypographySheet] = useState(false)
+  const [readerSettings, setReaderSettings] = useState<NovelReaderSettings>(() => loadNovelReaderSettings())
   const [aiMode, setAIMode] = useState<NovelAIMode>("caption")
   const [markerPage, setMarkerPage] = useNovelMarker(novelID, null)
   const initialProgress = useMemo(() => getNovelProgress(novelID), [novelID])
@@ -146,6 +157,16 @@ export function NovelDetailView(props: { novelID: number }) {
   const [totalPages, setTotalPages] = useState(1)
   const [pagerVisible, setPagerVisible] = useState(true)
   const [markerBusy, setMarkerBusy] = useState(false)
+
+  useEffect(() => {
+    return onNovelReaderSettingsChanged((updated) => {
+      setReaderSettings(updated)
+    })
+  }, [])
+
+  const currentThemePalette = useMemo(() => {
+    return NOVEL_THEME_PALETTES[readerSettings.themeId] || NOVEL_THEME_PALETTES.default
+  }, [readerSettings.themeId])
 
   const guard = useAsyncGuard()
   const novelRef = useLatest(novel)
@@ -649,6 +670,32 @@ export function NovelDetailView(props: { novelID: number }) {
               value: scrollPos,
               anchor: "top",
             }}
+            background={
+              readerSettings.themeId === "custom" && readerSettings.customBgExists
+                ? {
+                    content: (
+                      <ZStack frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
+                        <Image
+                          filePath={getCustomBgPath()}
+                          scaleToFill={true}
+                          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+                        />
+                        <VStack
+                          background={
+                            (readerSettings.customBgMaskColor === "black"
+                              ? `rgba(0, 0, 0, ${readerSettings.customBgMaskOpacity})`
+                              : `rgba(255, 255, 255, ${readerSettings.customBgMaskOpacity})`) as Color
+                          }
+                          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+                        />
+                      </ZStack>
+                    ),
+                    alignment: "center",
+                  }
+                : currentThemePalette.backgroundColor
+                ? currentThemePalette.backgroundColor
+                : undefined
+            }
             navigationTitle={current.title}
             navigationBarTitleDisplayMode="inline"
             onAppear={() => {
@@ -874,6 +921,11 @@ export function NovelDetailView(props: { novelID: number }) {
                   />
                 </Button>,
                 <Menu label={<Image systemName="ellipsis.circle" />}>
+                  <Button
+                    title="版式设置"
+                    systemImage="textformat.size"
+                    action={() => setShowTypographySheet(true)}
+                  />
                   <Button
                     title="评论"
                     systemImage="bubble.left"
@@ -1170,6 +1222,15 @@ export function NovelDetailView(props: { novelID: number }) {
         </VStack>
       </VStack>
 
+      <VStack
+        sheet={{
+          content: (
+            <NovelTypographySheet onClose={() => setShowTypographySheet(false)} />
+          ),
+          isPresented: showTypographySheet,
+          onChanged: setShowTypographySheet,
+        }}
+      />
       <VStack
         sheet={{
           content: (

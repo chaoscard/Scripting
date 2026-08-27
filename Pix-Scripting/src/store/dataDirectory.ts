@@ -53,6 +53,11 @@ export function pixivBlocklistDirectory(userId?: string | number | null): string
   return pixivCloudDirectory(`Blocklist/users/${uid}`)
 }
 
+// 小说阅读器版式与背景保存在 iCloud Documents，多设备间无缝同步。
+export function pixivNovelReaderDirectory(): string {
+  return pixivCloudDirectory("NovelReader")
+}
+
 // 小组件数据池与图片保存在 App Group 共享目录，供 Widget 进程与主 App 无缝互通。
 export function pixivWidgetDirectory(): string {
   const base = FileManager.appGroupDocumentsDirectory || FileManager.documentsDirectory
