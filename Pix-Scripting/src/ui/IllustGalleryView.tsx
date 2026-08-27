@@ -188,6 +188,11 @@ function IllustGalleryPage(props: IllustGalleryPageProps) {
         const nextScale = Math.max(0.75, Math.min(6.0, baseScaleRef.current * v.magnification))
         scaleRef.current = nextScale
         setScale(nextScale)
+        if (nextScale > 1.05 && !isZoomed) {
+          setIsZoomed(true)
+          onZoomChange?.(true)
+          setRequestedOriginal(true)
+        }
       })
       .onEnded(() => {
         const current = scaleRef.current
@@ -218,7 +223,7 @@ function IllustGalleryPage(props: IllustGalleryPageProps) {
           setRequestedOriginal(true)
         }
       })
-  }, [onZoomChange])
+  }, [isZoomed, onZoomChange])
 
   // 单页拖拽手势：统一由单一手势处理放大时的漫游平移与未放大时的下拉收起，手势挂载恒定不变
   const singlePageDragGesture = useMemo(() => {
@@ -367,10 +372,13 @@ export function IllustGalleryView(props: {
 
   const [currentPageIndex, setCurrentPageIndex] = useState(initialPageIndex)
   const [showControls, setShowControls] = useState(true)
+  const [isZoomed, setIsZoomed] = useState(false)
   const [backgroundOpacity, setBackgroundOpacity] = useState(1.0)
   const [dismissOffsetY, setDismissOffsetY] = useState(0)
   const [dismissScale, setDismissScale] = useState(1.0)
   const [downloading, setDownloading] = useState(false)
+
+  const isNavVisible = showControls && !isZoomed
 
   const toggleControls = useCallback(() => {
     setShowControls((prev) => !prev)
@@ -464,26 +472,36 @@ export function IllustGalleryView(props: {
   }
 
   return (
-    <NavigationStack>
+    <NavigationStack preferredColorScheme="dark">
       <ZStack
         frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-        statusBarHidden={!showControls}
-        ignoresSafeArea={{ edges: "all" }}
-        navigationBarVisibility={showControls ? "visible" : "hidden"}
+        navigationTitle={!isSingle ? `${currentPageIndex + 1} / ${pageCount}` : ""}
         navigationBarTitleDisplayMode="inline"
+        statusBarHidden={!isNavVisible}
+        navigationBarVisibility={isNavVisible ? "visible" : "hidden"}
+        ignoresSafeArea={isZoomed ? { edges: "all" } : undefined}
+        toolbarBackground={{
+          style: "#000000",
+          bars: ["navigationBar"],
+        }}
         toolbarBackgroundVisibility={{
-          visibility: "hidden",
+          visibility: isNavVisible ? "visible" : "hidden",
           bars: ["navigationBar"],
         }}
         toolbar={{
           topBarLeading: [
             <Button action={handleDismiss}>
-              <Image systemName="xmark" />
+              <Image systemName="xmark" foregroundStyle="white" />
             </Button>,
           ],
+          principal: !isSingle ? (
+            <Text font="headline" fontWeight="semibold" foregroundStyle="white">
+              {`${currentPageIndex + 1} / ${pageCount}`}
+            </Text>
+          ) : undefined,
           topBarTrailing: [
             !isSingle ? (
-              <Menu label={<Image systemName="square.and.arrow.down" />}>
+              <Menu label={<Image systemName="square.and.arrow.down" foregroundStyle="white" />}>
                 <Button
                   title={`保存当前页（第 ${currentPageIndex + 1} 页）`}
                   systemImage="photo"
@@ -502,11 +520,11 @@ export function IllustGalleryView(props: {
                 disabled={downloading}
                 action={() => void handleDownloadSingle(0)}
               >
-                <Image systemName="square.and.arrow.down" />
+                <Image systemName="square.and.arrow.down" foregroundStyle="white" />
               </Button>
             ),
             <Button action={handleShare}>
-              <Image systemName="square.and.arrow.up" />
+              <Image systemName="square.and.arrow.up" foregroundStyle="white" />
             </Button>,
           ],
         }}
@@ -548,6 +566,7 @@ export function IllustGalleryView(props: {
                     isSinglePage={false}
                     onToggleControls={toggleControls}
                     onDismiss={handleDismiss}
+                    onZoomChange={setIsZoomed}
                   />
                 </VStack>
               ))}
@@ -562,28 +581,10 @@ export function IllustGalleryView(props: {
               onDismiss={handleDismiss}
               onDismissDrag={handleDismissDrag}
               onDismissDragEnd={handleDismissDragEnd}
+              onZoomChange={setIsZoomed}
             />
           )}
         </ZStack>
-
-        {/* 底部悬浮页数指示器（仅多页显示） */}
-        {showControls && !isSingle && (
-          <VStack
-            alignment="center"
-            frame={{ maxWidth: "infinity", maxHeight: "infinity", alignment: "bottom" }}
-            padding={{ bottom: 36 }}
-          >
-            <HStack
-              padding={{ horizontal: 14, vertical: 6 }}
-              background="#00000088"
-              clipShape="capsule"
-            >
-              <Text font="subheadline" fontWeight="bold" foregroundStyle="#FFFFFF">
-                {`${currentPageIndex + 1} / ${pageCount}`}
-              </Text>
-            </HStack>
-          </VStack>
-        )}
       </ZStack>
     </NavigationStack>
   )
