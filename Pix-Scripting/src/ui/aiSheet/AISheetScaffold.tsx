@@ -24,6 +24,8 @@ export function AISheetScaffold(props: {
   error: string | null
   resultText: string
   progressInfo?: string | null
+  hideResultText?: boolean
+  noHorizontalPadding?: boolean
   actionButtonType?: "copy" | "download"
   actionButtonDisabled?: boolean
   onAction?: () => void
@@ -41,6 +43,8 @@ export function AISheetScaffold(props: {
     error,
     resultText,
     progressInfo,
+    hideResultText = false,
+    noHorizontalPadding = false,
     actionButtonType = "copy",
     actionButtonDisabled,
     onAction,
@@ -119,7 +123,15 @@ export function AISheetScaffold(props: {
           ],
         }}
       >
-        <VStack spacing={16} padding={{ top: 14, leading: 16, bottom: 28, trailing: 16 }}>
+        <VStack
+          spacing={16}
+          padding={{
+            top: 14,
+            leading: noHorizontalPadding ? 0 : 16,
+            bottom: 28,
+            trailing: noHorizontalPadding ? 0 : 16,
+          }}
+        >
           {!available ? (
             <VStack spacing={14} padding={24} alignment="center">
               <Image
@@ -172,7 +184,7 @@ export function AISheetScaffold(props: {
               )}
 
               {/* 结果内容展示区（按段落分批呈现，极大降低渲染重排开销） */}
-              {Boolean(resultText) && (
+              {Boolean(resultText) && !hideResultText && (
                 <VStack spacing={14} alignment="leading">
                   {Boolean(progressInfo) && streaming && (
                     <HStack spacing={6} alignment="center">

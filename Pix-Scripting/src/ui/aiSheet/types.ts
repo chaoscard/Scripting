@@ -23,6 +23,7 @@ export interface PageTranslationCache {
   bubbles?: OCRBubble[]
   showOverlay?: boolean
   hiddenBubbleIndices?: number[]
+  loading?: boolean
 }
 
 export interface NovelPageCache {
