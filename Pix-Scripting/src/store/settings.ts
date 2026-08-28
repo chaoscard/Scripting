@@ -11,6 +11,7 @@ export type WatchlistSortOrder = "asc" | "desc"
 export type AmbientIntensity = "low" | "medium" | "high"
 export type LaunchPage = "discovery" | "ranking" | "following"
 export type ImageBatchConcurrency = number
+export type AITranslateConcurrency = number
 export type ImageFadeInDuration = number
 export type BlurCrossFadeDuration = number
 export type BackgroundPreheatDuration = number
@@ -112,6 +113,7 @@ export interface AppSettings {
   cacheLimitMB: number | null
   recordHistory: boolean
   imageBatchConcurrency: ImageBatchConcurrency
+  aiTranslateConcurrency: AITranslateConcurrency
   imageDownloadConcurrencyRatio: number
   imagePrefetchConcurrencyRatio: number
   imageFadeInDuration: ImageFadeInDuration
@@ -164,6 +166,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   cacheLimitMB: 300,
   recordHistory: true,
   imageBatchConcurrency: 30,
+  aiTranslateConcurrency: 4,
   imageDownloadConcurrencyRatio: 100,
   imagePrefetchConcurrencyRatio: 100,
   imageFadeInDuration: 150,
@@ -269,6 +272,13 @@ function parseImageConcurrency(value: unknown): number {
     return Math.max(1, Math.min(90, Math.round(value)))
   }
   return DEFAULT_SETTINGS.imageBatchConcurrency
+}
+
+function parseAITranslateConcurrency(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value) && value >= 1) {
+    return Math.max(1, Math.min(6, Math.round(value)))
+  }
+  return DEFAULT_SETTINGS.aiTranslateConcurrency
 }
 
 function parseFadeInDuration(value: unknown): number {
@@ -410,6 +420,7 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
     cacheLimitMB: cacheLimitOf(stored?.cacheLimitMB),
     recordHistory: boolOr(stored?.recordHistory, DEFAULT_SETTINGS.recordHistory),
     imageBatchConcurrency: parseImageConcurrency(stored?.imageBatchConcurrency),
+    aiTranslateConcurrency: parseAITranslateConcurrency(stored?.aiTranslateConcurrency),
     imageDownloadConcurrencyRatio: parseConcurrencyRatio(
       stored?.imageDownloadConcurrencyRatio,
       DEFAULT_SETTINGS.imageDownloadConcurrencyRatio

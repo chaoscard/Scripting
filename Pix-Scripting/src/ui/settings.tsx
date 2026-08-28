@@ -715,6 +715,15 @@ export function SettingsView() {
             onSave={(val) => update({ imageBatchConcurrency: val })}
           />
           <AdvancedNumberRow
+            title="图片翻译并发数"
+            unit="张"
+            value={settings.aiTranslateConcurrency}
+            defaultValue={4}
+            min={1}
+            max={6}
+            onSave={(val) => update({ aiTranslateConcurrency: val })}
+          />
+          <AdvancedNumberRow
             title="下载并发比例"
             unit="%"
             value={settings.imageDownloadConcurrencyRatio}

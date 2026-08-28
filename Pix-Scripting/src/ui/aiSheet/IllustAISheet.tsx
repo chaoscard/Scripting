@@ -20,6 +20,7 @@ import {
   useState,
   VStack,
   ZStack,
+  type Color,
   type VirtualNode,
 } from "scripting"
 import type { PixivIllustration } from "../../types"
@@ -34,9 +35,98 @@ import {
 import { saveImageToPixivAlbum } from "../../downloader/photoAlbum"
 import { CachedImage, ErrorView } from "../components"
 import { imageUrlOf } from "../../image/imageLoader"
+import { loadSettings } from "../../store/settings"
 import { drawOCROverlay } from "./OCRCanvas"
 import { createThrottledUpdater } from "./throttle"
 import type { IllustAIMode, PageTranslationCache, ScreenshotMaker } from "./types"
+
+/** Google 经典四色配置与流光动效 */
+const GOOGLE_COLORS: Color[] = ["#4285F4", "#EA4335", "#FBBC05", "#34A853", "#4285F4"]
+
+function GoogleSparklesLoading() {
+  const [phase, setPhase] = useState(0)
+
+  useEffect(() => {
+    let timerId: number
+    let isMounted = true
+
+    const tick = () => {
+      if (!isMounted) return
+      setPhase((prev) => (prev + 1) % 4)
+      timerId = setTimeout(tick, 450)
+    }
+
+    timerId = setTimeout(tick, 450)
+
+    return () => {
+      isMounted = false
+      clearTimeout(timerId)
+    }
+  }, [])
+
+  // 随 phase 轮转的高亮明亮纯色与外圈光晕（确保在黑底上 100% 清晰耀眼）
+  const colorConfigs = [
+    {
+      color: "#4285F4" as Color, // Google 蓝
+      shadow: "rgba(66, 133, 244, 0.85)" as Color,
+    },
+    {
+      color: "#FF453A" as Color, // Google 亮红
+      shadow: "rgba(255, 69, 58, 0.85)" as Color,
+    },
+    {
+      color: "#FFD60A" as Color, // Google 亮黄
+      shadow: "rgba(255, 214, 10, 0.85)" as Color,
+    },
+    {
+      color: "#30D158" as Color, // Google 亮绿
+      shadow: "rgba(48, 209, 88, 0.85)" as Color,
+    },
+  ]
+
+  const current = colorConfigs[phase]
+  const angleValue = phase * 90
+
+  return (
+    <ZStack
+      alignment="center"
+      frame={{ width: 68, height: 68 }}
+      background={{
+        colors: GOOGLE_COLORS,
+        center: "center",
+        startAngle: { type: "degrees", value: angleValue },
+        endAngle: { type: "degrees", value: angleValue + 360 },
+      }}
+      clipShape={{ type: "capsule", style: "continuous" }}
+      shadow={{ color: current.shadow, radius: 14, x: 0, y: 0 }}
+      animation={{
+        animation: Animation.smooth({ duration: 0.4 }),
+        value: phase,
+      }}
+    >
+      <ZStack
+        alignment="center"
+        frame={{ width: 60, height: 60 }}
+        background="rgba(16, 16, 20, 0.94)"
+        clipShape={{ type: "capsule", style: "continuous" }}
+      >
+        <Image
+          systemName="sparkles"
+          font="largeTitle"
+          foregroundStyle={current.color}
+          symbolEffect={{
+            effect: "breathe",
+            value: phase,
+          }}
+          animation={{
+            animation: Animation.smooth({ duration: 0.35 }),
+            value: phase,
+          }}
+        />
+      </ZStack>
+    </ZStack>
+  )
+}
 
 export function IllustAISheet(props: {
   illust: PixivIllustration
@@ -59,8 +149,13 @@ export function IllustAISheet(props: {
 
   const pageTokensRef = useRef<Record<number, { id: number; aborted: boolean }>>({})
   const taskSeqRef = useRef(0)
+  const isPresentedRef = useRef(isPresented)
   const canvasScreenshotRefs = useRef<Record<number, ScreenshotMaker | null>>({})
   const canvasSizesRef = useRef<Record<number, { width: number; height: number }>>({})
+
+  useEffect(() => {
+    isPresentedRef.current = isPresented
+  }, [isPresented])
 
   const pageCount = Math.max(1, illust.page_count || illust.meta_pages?.length || 1)
   const rawCaption = cleanHtmlCaption(illust.caption)
@@ -288,16 +383,66 @@ export function IllustAISheet(props: {
     }
   }
 
-  // 一键翻译所有未翻译的页面
+  // 判断某一页是否已有翻译/生成结果
+  function hasPageTranslation(idx: number): boolean {
+    const cache = pageCaches[idx]
+    if (mode === "ocr") {
+      return Boolean(cache?.bubbles && cache.bubbles.length > 0)
+    }
+    if (mode === "vision") {
+      return Boolean(cache?.generatedImageBase64)
+    }
+    return Boolean(cache?.resultText)
+  }
+
+  // 一键并发翻译所有未翻译的页面（OCR / 生图模式共用）
   async function handleTranslateAll() {
     void Haptics.transient(0.6, 0.6)
-    for (let idx = 0; idx < pageCount; idx++) {
-      const cache = pageCaches[idx]
-      const hasTranslation = Boolean(cache?.bubbles && cache.bubbles.length > 0)
-      if (!hasTranslation && !translatingIndices.includes(idx)) {
-        await executePage(idx)
+
+    // 1. 找出所有尚未完成翻译/生成的页面
+    const targetIndices = Array.from({ length: pageCount }, (_, i) => i).filter(
+      (idx) => !hasPageTranslation(idx)
+    )
+
+    if (targetIndices.length === 0) return
+
+    // 2. 只要点击了全部翻译，所有未完成页面立刻开始播放动效
+    setTranslatingIndices((prev) => Array.from(new Set([...prev, ...targetIndices])))
+
+    // 清空待处理页面的历史错误
+    setPageCaches((prev) => {
+      const next = { ...prev }
+      for (const idx of targetIndices) {
+        next[idx] = {
+          ...next[idx],
+          resultText: "",
+          generatedImageBase64: mode === "vision" ? null : next[idx]?.generatedImageBase64,
+          error: null,
+        }
       }
-    }
+      return next
+    })
+
+    // 3. 从设置中读取图片翻译并发数配置（范围 1-6，默认值 4）
+    const concurrencyLimit = Math.max(
+      1,
+      Math.min(6, loadSettings().aiTranslateConcurrency ?? 4)
+    )
+
+    // 4. 并发任务池调度
+    const queue = [...targetIndices]
+    const activeWorkers = Math.min(concurrencyLimit, queue.length)
+
+    const workers = Array.from({ length: activeWorkers }, async () => {
+      while (queue.length > 0) {
+        if (!isPresentedRef.current) break
+        const nextIndex = queue.shift()
+        if (nextIndex === undefined) break
+        await executePage(nextIndex, true)
+      }
+    })
+
+    await Promise.all(workers)
   }
 
   // 下载保存相册
@@ -308,13 +453,15 @@ export function IllustAISheet(props: {
       let savedCount = 0
 
       if (mode === "vision") {
-        const cache = pageCaches[selectedPageIndex]
-        if (cache?.generatedImageBase64) {
-          const data = Data.fromBase64String(cache.generatedImageBase64)
-          if (data) {
-            const fileName = `${illust.id}_p${selectedPageIndex}_ai_gen.jpg`
-            const ok = await saveImageToPixivAlbum(data, fileName)
-            if (ok) savedCount++
+        for (let idx = 0; idx < pageCount; idx++) {
+          const cache = pageCaches[idx]
+          if (cache?.generatedImageBase64) {
+            const data = Data.fromBase64String(cache.generatedImageBase64)
+            if (data) {
+              const fileName = `${illust.id}_p${idx}_ai_gen.jpg`
+              const ok = await saveImageToPixivAlbum(data, fileName)
+              if (ok) savedCount++
+            }
           }
         }
       } else if (mode === "ocr") {
@@ -371,7 +518,7 @@ export function IllustAISheet(props: {
     }
   }, [isPresented, mode, illust.id])
 
-  // 计算是否有已翻译的页面可供下载
+  // 计算是否有已翻译/已生成的页面可供下载
   const hasDownloadableContent = useMemo(() => {
     if (mode === "ocr") {
       return Object.values(pageCaches).some(
@@ -379,27 +526,32 @@ export function IllustAISheet(props: {
       )
     }
     if (mode === "vision") {
-      return Boolean(pageCaches[selectedPageIndex]?.generatedImageBase64)
+      return Object.values(pageCaches).some(
+        (c) => Boolean(c?.generatedImageBase64)
+      )
     }
     return false
-  }, [mode, pageCaches, selectedPageIndex])
+  }, [mode, pageCaches])
 
-  // 是否有尚未翻译的页面
+  // 是否有尚未翻译/生成的页面
   const hasUntranslatedPages = useMemo(() => {
-    if (mode !== "ocr") return false
-    for (let i = 0; i < pageCount; i++) {
-      if (!pageCaches[i]?.bubbles?.length) return true
+    if (mode === "ocr") {
+      for (let i = 0; i < pageCount; i++) {
+        if (!pageCaches[i]?.bubbles?.length) return true
+      }
+      return false
+    }
+    if (mode === "vision") {
+      for (let i = 0; i < pageCount; i++) {
+        if (!pageCaches[i]?.generatedImageBase64) return true
+      }
+      return false
     }
     return false
   }, [mode, pageCount, pageCaches])
 
   // 简介模式展示的翻译结果
   const currentCaptionResult = pageCaches[0]?.resultText || ""
-
-  const visionImage = useMemo(() => {
-    const b64 = pageCaches[selectedPageIndex]?.generatedImageBase64
-    return b64 ? UIImage.fromBase64String(b64) : null
-  }, [pageCaches, selectedPageIndex])
 
   return (
     <GeometryReader>
@@ -409,7 +561,7 @@ export function IllustAISheet(props: {
 
         return (
           <AISheetScaffold
-            title={mode === "ocr" ? "" : getSheetTitle()}
+            title={mode === "caption" ? getSheetTitle() : ""}
             subtitle={
               mode === "caption"
                 ? `作品：${illust.title} (@${illust.user?.name})`
@@ -417,8 +569,8 @@ export function IllustAISheet(props: {
             }
             loading={mode === "caption" ? isAnyTranslating : false}
             streaming={isAnyTranslating}
-            hideResultText={mode === "ocr"}
-            noHorizontalPadding={mode === "ocr"}
+            hideResultText={mode === "ocr" || mode === "vision"}
+            noHorizontalPadding={mode === "ocr" || mode === "vision"}
             error={mode === "caption" ? pageCaches[0]?.error || null : null}
             resultText={mode === "caption" ? currentCaptionResult : ""}
             actionButtonType={mode === "caption" ? "copy" : "download"}
@@ -429,7 +581,7 @@ export function IllustAISheet(props: {
             }
             onAction={mode === "caption" ? undefined : handleDownload}
             extraTrailingActions={
-              mode === "ocr" && !isAnyTranslating ? (
+              (mode === "ocr" || mode === "vision") && !isAnyTranslating ? (
                 <HStack spacing={12}>
                   {hasDownloadableContent && (
                     <Button
@@ -485,73 +637,75 @@ export function IllustAISheet(props: {
               </VStack>
             )}
 
-            {/* ────────────────── 2. OCR 漫画翻译模式 ────────────────── */}
-            {mode === "ocr" && (
+            {/* ────────────────── 2. OCR 漫画翻译模式 / 生图汉化模式 ────────────────── */}
+            {(mode === "ocr" || mode === "vision") && (
               <VStack spacing={12} frame={{ maxWidth: "infinity" }}>
-                {/* 顶部：小说排版同款字号调节器 */}
-                <VStack padding={{ horizontal: 16 }} frame={{ maxWidth: "infinity" }}>
-                  <VStack
-                    spacing={8}
-                    padding={{ horizontal: 16, vertical: 10 }}
-                    background="secondarySystemBackground"
-                    clipShape={{ type: "rect", cornerRadius: 14 }}
-                  >
-                    <HStack alignment="center">
-                      <HStack spacing={6} alignment="center">
-                        <Image
-                          systemName="textformat.size"
-                          font="subheadline"
-                          foregroundStyle="#007AFF"
-                        />
-                        <Text font="subheadline" fontWeight="semibold">
-                          气泡字号调节
+                {/* 仅 OCR 模式展示：顶部小说排版同款字号调节器 */}
+                {mode === "ocr" && (
+                  <VStack padding={{ horizontal: 16 }} frame={{ maxWidth: "infinity" }}>
+                    <VStack
+                      spacing={8}
+                      padding={{ horizontal: 16, vertical: 10 }}
+                      background="secondarySystemBackground"
+                      clipShape={{ type: "rect", cornerRadius: 14 }}
+                    >
+                      <HStack alignment="center">
+                        <HStack spacing={6} alignment="center">
+                          <Image
+                            systemName="textformat.size"
+                            font="subheadline"
+                            foregroundStyle="#007AFF"
+                          />
+                          <Text font="subheadline" fontWeight="semibold">
+                            气泡字号调节
+                          </Text>
+                        </HStack>
+                        <Spacer />
+                        <Text font="subheadline" fontWeight="medium" foregroundStyle="secondaryLabel">
+                          {Math.round(fontScale * 100)}%
                         </Text>
                       </HStack>
-                      <Spacer />
-                      <Text font="subheadline" fontWeight="medium" foregroundStyle="secondaryLabel">
-                        {Math.round(fontScale * 100)}%
-                      </Text>
-                    </HStack>
 
-                    <HStack spacing={14} alignment="center">
-                      <Button
-                        buttonStyle="plain"
-                        action={() => {
-                          const next = Math.max(0.7, Number((fontScale - 0.05).toFixed(2)))
-                          setFontScale(next)
-                          void Haptics.transient(0.3, 0.3)
-                        }}
-                      >
-                        <Text font="subheadline" fontWeight="bold" foregroundStyle="#007AFF">
-                          A -
-                        </Text>
-                      </Button>
+                      <HStack spacing={14} alignment="center">
+                        <Button
+                          buttonStyle="plain"
+                          action={() => {
+                            const next = Math.max(0.7, Number((fontScale - 0.05).toFixed(2)))
+                            setFontScale(next)
+                            void Haptics.transient(0.3, 0.3)
+                          }}
+                        >
+                          <Text font="subheadline" fontWeight="bold" foregroundStyle="#007AFF">
+                            A -
+                          </Text>
+                        </Button>
 
-                      <Slider
-                        min={0.7}
-                        max={1.5}
-                        step={0.05}
-                        value={fontScale}
-                        onChanged={(val) => setFontScale(Number(val.toFixed(2)))}
-                      />
+                        <Slider
+                          min={0.7}
+                          max={1.5}
+                          step={0.05}
+                          value={fontScale}
+                          onChanged={(val) => setFontScale(Number(val.toFixed(2)))}
+                        />
 
-                      <Button
-                        buttonStyle="plain"
-                        action={() => {
-                          const next = Math.min(1.5, Number((fontScale + 0.05).toFixed(2)))
-                          setFontScale(next)
-                          void Haptics.transient(0.3, 0.3)
-                        }}
-                      >
-                        <Text font="subheadline" fontWeight="bold" foregroundStyle="#007AFF">
-                          A +
-                        </Text>
-                      </Button>
-                    </HStack>
+                        <Button
+                          buttonStyle="plain"
+                          action={() => {
+                            const next = Math.min(1.5, Number((fontScale + 0.05).toFixed(2)))
+                            setFontScale(next)
+                            void Haptics.transient(0.3, 0.3)
+                          }}
+                        >
+                          <Text font="subheadline" fontWeight="bold" foregroundStyle="#007AFF">
+                            A +
+                          </Text>
+                        </Button>
+                      </HStack>
+                    </VStack>
                   </VStack>
-                </VStack>
+                )}
 
-                {/* 下方全图平铺连贯漫画流：0 间隔、0 冗余文字、精准可点气泡与顺畅滚动 */}
+                {/* 下方全图平铺连贯漫画流：0 间隔、0 冗余文字、精准滚动 */}
                 <VStack spacing={0} frame={{ maxWidth: "infinity" }}>
                   {Array.from({ length: pageCount }).map((_, idx) => {
                     const pageUrl = imageUrlOf(illust, idx, "large")
@@ -563,10 +717,16 @@ export function IllustAISheet(props: {
                     const hiddenIndices = new Set(cache?.hiddenBubbleIndices || [])
                     const pageError = cache?.error || null
 
+                    const hasVisionResult = Boolean(cache?.generatedImageBase64)
+                    const visionUIImage =
+                      hasVisionResult && isOverlayVisible && cache?.generatedImageBase64
+                        ? UIImage.fromBase64String(cache.generatedImageBase64)
+                        : null
+
                     return (
                       <Group key={String(idx)}>
-                        {/* 状态 A: 翻译完成 -> Canvas 图层 + 精准气泡透明按钮热区（保证ScrollView丝滑滚动同时精准响应点击） */}
-                        {hasBubbles && imageFilePath ? (
+                        {/* 状态 A1: OCR 翻译完成 -> Canvas 图层 + 精准气泡透明按钮热区 */}
+                        {mode === "ocr" && hasBubbles && imageFilePath ? (
                           <ZStack
                             alignment="topLeading"
                             frame={{ width: containerWidth, height: pageRenderHeight }}
@@ -631,8 +791,17 @@ export function IllustAISheet(props: {
                               )
                             })}
                           </ZStack>
+                        ) : mode === "vision" && hasVisionResult && visionUIImage ? (
+                          /* 状态 A2: 生图汉化完成 -> 呈现生成的重绘图像 */
+                          <ZStack alignment="center" frame={{ width: containerWidth, height: pageRenderHeight }}>
+                            <Image
+                              image={visionUIImage}
+                              resizable={true}
+                              aspectRatio={{ value: defaultAspect, contentMode: "fit" }}
+                            />
+                          </ZStack>
                         ) : (
-                          /* 状态 B: 未翻译 / 翻译中 / 失败 -> 底图 + 正中心悬浮 Sparkles */
+                          /* 状态 B: 未翻译 / 翻译中 / 失败 -> 底图 + 正中心悬浮 Sparkles / Loading */
                           <ZStack alignment="center" frame={{ maxWidth: "infinity" }}>
                             <CachedImage
                               url={pageUrl}
@@ -642,43 +811,36 @@ export function IllustAISheet(props: {
                             />
 
                             {/* 1. 未翻译状态：原始图片正中心悬浮金色 sparkles 图标（加大一号，纯图标） */}
-                            {!hasBubbles && !isPageTranslating && !pageError && (
-                              <Button
-                                buttonStyle="plain"
-                                action={() => {
-                                  if (!isPageTranslating) {
-                                    void executePage(idx)
-                                  }
-                                }}
-                              >
-                                <ZStack
-                                  alignment="center"
-                                  frame={{ width: 66, height: 66 }}
-                                  background="rgba(0, 0, 0, 0.52)"
-                                  clipShape={{ type: "capsule", style: "continuous" }}
+                            {((mode === "ocr" && !hasBubbles) || (mode === "vision" && !hasVisionResult)) &&
+                              !isPageTranslating &&
+                              !pageError && (
+                                <Button
+                                  buttonStyle="plain"
+                                  action={() => {
+                                    if (!isPageTranslating) {
+                                      void executePage(idx)
+                                    }
+                                  }}
                                 >
-                                  <Image
-                                    systemName="sparkles"
-                                    font="largeTitle"
-                                    foregroundStyle="#FFD60A"
-                                  />
-                                </ZStack>
-                              </Button>
-                            )}
+                                  <ZStack
+                                    alignment="center"
+                                    frame={{ width: 66, height: 66 }}
+                                    background="rgba(0, 0, 0, 0.52)"
+                                    clipShape={{ type: "capsule", style: "continuous" }}
+                                  >
+                                    <Image
+                                      systemName="sparkles"
+                                      font="largeTitle"
+                                      foregroundStyle="#FFD60A"
+                                    />
+                                  </ZStack>
+                                </Button>
+                              )}
 
-                            {/* 2. 正在翻译中：正中心悬浮半透明光晕 + ProgressView 特效动效（加大一号） */}
-                            {isPageTranslating && (
-                              <ZStack
-                                alignment="center"
-                                frame={{ width: 66, height: 66 }}
-                                background="rgba(0, 0, 0, 0.6)"
-                                clipShape={{ type: "capsule", style: "continuous" }}
-                              >
-                                <ProgressView />
-                              </ZStack>
-                            )}
+                            {/* 2. 正在翻译/生图中：Google 四色流光边框 + 原生 SF Symbol 星光动效 */}
+                            {isPageTranslating && <GoogleSparklesLoading />}
 
-                            {/* 3. 翻译失败：正中心悬浮重试图标（加大一号） */}
+                            {/* 3. 翻译/生图失败：正中心悬浮重试图标（加大一号） */}
                             {Boolean(pageError) && !isPageTranslating && (
                               <Button
                                 buttonStyle="plain"
@@ -704,79 +866,6 @@ export function IllustAISheet(props: {
                     )
                   })}
                 </VStack>
-              </VStack>
-            )}
-
-            {/* ────────────────── 3. 生图汉化模式 ────────────────── */}
-            {mode === "vision" && (
-              <VStack spacing={16} padding={{ horizontal: 16 }}>
-                {pageCount > 1 && (
-                  <ScrollView axes="horizontal">
-                    <HStack spacing={8}>
-                      {Array.from({ length: pageCount }).map((_, idx) => {
-                        const isSelected = selectedPageIndex === idx
-                        const cache = pageCaches[idx]
-                        const hasResult = Boolean(cache?.generatedImageBase64)
-                        const title = hasResult && !isSelected ? `P${idx + 1} ✓` : `P${idx + 1}`
-                        return (
-                          <Button
-                            key={String(idx)}
-                            title={title}
-                            buttonStyle={isSelected ? "borderedProminent" : "bordered"}
-                            action={() => {
-                              if (selectedPageIndex !== idx) {
-                                handleStopAll()
-                                setSelectedPageIndex(idx)
-                              }
-                            }}
-                          />
-                        )
-                      })}
-                    </HStack>
-                  </ScrollView>
-                )}
-
-                {!pageCaches[selectedPageIndex]?.generatedImageBase64 && !isAnyTranslating && (
-                  <VStack spacing={14} padding={{ top: 24, bottom: 20 }} alignment="center">
-                    <Image
-                      systemName="photo.badge.magnifyingglass"
-                      font="largeTitle"
-                      foregroundStyle="#FF9500"
-                    />
-                    <VStack spacing={6} alignment="center">
-                      <Text font="headline" fontWeight="bold">
-                        生图汉化模式
-                      </Text>
-                      <Text
-                        font="footnote"
-                        foregroundStyle="secondaryLabel"
-                        multilineTextAlignment="center"
-                        lineSpacing={3}
-                      >
-                        需要 Scripting 配置支持图像输出的 AI 模型{"\n"}单次重绘将生成全新图像并消耗较多 Token
-                      </Text>
-                    </VStack>
-                    <Button
-                      title={pageCount > 1 ? `确认开始第 ${selectedPageIndex + 1} 页生图汉化` : "确认开始生图汉化"}
-                      systemImage="sparkles"
-                      buttonStyle="borderedProminent"
-                      action={() => void executePage(selectedPageIndex, true)}
-                    />
-                  </VStack>
-                )}
-
-                {Boolean(visionImage) && (
-                  <VStack spacing={12}>
-                    <Text font="headline" fontWeight="bold">
-                      🎨 汉化重绘结果：
-                    </Text>
-                    <Image
-                      image={visionImage!}
-                      resizable={true}
-                      aspectRatio={{ contentMode: "fit" }}
-                    />
-                  </VStack>
-                )}
               </VStack>
             )}
           </AISheetScaffold>
