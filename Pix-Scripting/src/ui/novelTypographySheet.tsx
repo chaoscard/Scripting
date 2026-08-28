@@ -397,7 +397,7 @@ export function NovelTypographySheet(props: { onClose?: () => void }) {
                       <Text font="body" foregroundStyle="secondaryLabel">
                         {settings.fontId !== "custom"
                           ? PRESET_FONTS.find((f) => f.id === settings.fontId)?.name ?? "系统默认"
-                          : "预设字体"}
+                          : "自定义字体"}
                       </Text>
                       <Image systemName="chevron.up.chevron.down" font="caption2" foregroundStyle="tertiaryLabel" />
                     </HStack>

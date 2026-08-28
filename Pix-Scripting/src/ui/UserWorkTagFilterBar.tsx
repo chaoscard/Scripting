@@ -5,6 +5,7 @@ import {
   Text,
   VStack,
 } from "scripting"
+import { renderTagContextMenu } from "./components/TagChip"
 import type { PixivWebUserTag } from "../types"
 
 export function UserWorkTagFilterBar(props: {
@@ -40,18 +41,20 @@ export function UserWorkTagFilterBar(props: {
               action={() => {
                 onSelectTag(isSelected ? null : item.tag)
               }}
-              buttonStyle="plain"
+              buttonStyle={isSelected ? "borderedProminent" : "glass"}
+              controlSize="small"
+              fixedSize={{ horizontal: true, vertical: false }}
+              contextMenu={renderTagContextMenu(
+                item.tag,
+                item.tag_translation && item.tag_translation !== item.tag
+                  ? item.tag_translation
+                  : undefined
+              )}
             >
-              <HStack
-                spacing={3}
-                padding={{ horizontal: 10, vertical: 5 }}
-                background={isSelected ? "tintColor" : "secondarySystemFill"}
-                clipShape="capsule"
-                alignment="center"
-              >
+              <HStack spacing={3} alignment="center">
                 <Text
                   font="caption"
-                  foregroundStyle={isSelected ? "white" : "#0096FA"}
+                  foregroundStyle={isSelected ? undefined : "#0096FA"}
                   fontWeight="semibold"
                 >
                   #
@@ -59,7 +62,6 @@ export function UserWorkTagFilterBar(props: {
                 <Text
                   font="caption"
                   fontWeight={isSelected ? "semibold" : "regular"}
-                  foregroundStyle={isSelected ? "white" : "label"}
                   lineLimit={1}
                 >
                   {item.tag}
@@ -67,7 +69,7 @@ export function UserWorkTagFilterBar(props: {
                 {item.tag_translation && item.tag_translation !== item.tag ? (
                   <Text
                     font="caption"
-                    foregroundStyle={isSelected ? "white" : "secondaryLabel"}
+                    foregroundStyle={isSelected ? undefined : "secondaryLabel"}
                     lineLimit={1}
                   >
                     {item.tag_translation}

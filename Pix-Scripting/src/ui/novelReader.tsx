@@ -34,6 +34,7 @@ import {
   type NovelReaderSettings,
   type NovelThemePalette,
 } from "../store/novelReaderSettings"
+import { getNovelProgress, recordNovelProgress } from "../store/novelProgress"
 
 export function escapeHtml(text: string): string {
   if (!text) return ""
@@ -692,10 +693,11 @@ export function groupChunksByPage(chunks: NovelChunkItem[]): NovelPageBlock[] {
  * 竖向文库本文本排版 HTML 生成器
  */
 function buildVerticalHtml(
-  rawText: string,
+  chunks: NovelChunkItem[],
   settings: NovelReaderSettings,
   palette: NovelThemePalette,
-  textEmbeddedImages?: Record<string, TextEmbeddedImage>
+  targetChunkId?: string | null,
+  targetPage?: number | null
 ): string {
   const fontName = resolveFontName(settings.fontId, settings.customFontPostscriptName)
   const fontFamilyCss = fontName
@@ -710,58 +712,57 @@ function buildVerticalHtml(
   const lineSpacing = calculateLineSpacing(settings.fontSize, settings.lineSpacingLevel)
   const lineHeight = ((settings.fontSize + lineSpacing) / settings.fontSize).toFixed(2)
 
-  const lines = rawText.split(/\r?\n/)
   const bodyHtmlParts: string[] = []
+  let currentPage = 1
 
-  let pageNum = 1
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]
-    const trimmed = line.trim()
-
-    if (trimmed === "[newpage]") {
-      pageNum += 1
+  for (const chunk of chunks) {
+    if (chunk.type === "newpage") {
+      currentPage = chunk.page
       bodyHtmlParts.push(
-        `<div class="page-divider"><span class="page-badge">第 ${pageNum} 页</span></div>`
+        `<div id="${chunk.id}" class="page-divider" data-page="${chunk.page}" data-chunk-id="${chunk.id}"><span class="page-badge">第 ${chunk.page} 页</span></div>`
       )
-      continue
-    }
-
-    const chMatch = trimmed.match(/^\[chapter:\s*(.+?)\]$/)
-    if (chMatch) {
+    } else if (chunk.type === "chapter") {
       bodyHtmlParts.push(
-        `<div class="chapter-block"><div class="chapter-tag">CHAPTER</div><h2 class="chapter-title">${escapeHtml(
-          chMatch[1]
-        )}</h2></div>`
+        `<div id="${chunk.id}" class="chapter-block" data-page="${currentPage}" data-chunk-id="${chunk.id}"><div class="chapter-tag">CHAPTER</div><h2 class="chapter-title">${escapeHtml(chunk.title)}</h2></div>`
       )
-      continue
-    }
-
-    const upMatch = trimmed.match(/^\[uploadedimage:(\d+)\]$/)
-    if (upMatch) {
-      const imgId = upMatch[1]
-      const imgInfo = textEmbeddedImages ? textEmbeddedImages[imgId] : undefined
+    } else if (chunk.type === "uploadedimage") {
       const url =
-        imgInfo?.urls?.["1200x1200"] ||
-        imgInfo?.urls?.original ||
-        imgInfo?.urls?.["480mw"] ||
+        chunk.info?.urls?.["1200x1200"] ||
+        chunk.info?.urls?.original ||
+        chunk.info?.urls?.["480mw"] ||
         null
       if (url) {
         bodyHtmlParts.push(
-          `<div class="illust-block"><img class="novel-img" src="${escapeHtml(url)}" /></div>`
+          `<div id="${chunk.id}" class="illust-block" data-page="${currentPage}" data-chunk-id="${chunk.id}"><img class="novel-img" src="${escapeHtml(url)}" /></div>`
         )
       }
-      continue
+    } else if (chunk.type === "pixivimage") {
+      bodyHtmlParts.push(
+        `<div id="${chunk.id}" class="illust-block" data-page="${currentPage}" data-chunk-id="${chunk.id}"><span class="page-badge">Pixiv 插画 #${chunk.illustId}</span></div>`
+      )
+    } else if (chunk.type === "jump") {
+      bodyHtmlParts.push(
+        `<div id="${chunk.id}" class="page-divider" data-page="${currentPage}" data-chunk-id="${chunk.id}"><span class="page-badge">跳转至第 ${chunk.page} 页</span></div>`
+      )
+    } else if (chunk.type === "text") {
+      const paragraphs = chunk.text.split("\n")
+      const pParts: string[] = []
+      for (const p of paragraphs) {
+        const trimmed = p.trim()
+        if (trimmed.length === 0) {
+          pParts.push('<div class="empty-line"></div>')
+        } else {
+          pParts.push(`<p class="paragraph">${formatPixivRubyToHtml(p)}</p>`)
+        }
+      }
+      bodyHtmlParts.push(
+        `<div id="${chunk.id}" class="text-chunk-block" data-page="${currentPage}" data-chunk-id="${chunk.id}">${pParts.join("\n")}</div>`
+      )
     }
-
-    if (trimmed.length === 0) {
-      bodyHtmlParts.push('<div class="empty-line"></div>')
-      continue
-    }
-
-    // 格式化振假名与链接
-    let processed = formatPixivRubyToHtml(line)
-    bodyHtmlParts.push(`<p class="paragraph">${processed}</p>`)
   }
+
+  const safeTargetId = JSON.stringify(targetChunkId || null)
+  const safeTargetPage = JSON.stringify(typeof targetPage === "number" ? targetPage : null)
 
   return `<!DOCTYPE html>
 <html>
@@ -782,7 +783,8 @@ function buildVerticalHtml(
     -webkit-overflow-scrolling: touch;
   }
   .vertical-container {
-    height: 100vh;
+    height: 100%;
+    min-height: 100%;
     padding: 24px 20px;
     writing-mode: vertical-rl;
     -webkit-writing-mode: vertical-rl;
@@ -793,6 +795,9 @@ function buildVerticalHtml(
     font-weight: ${weightCss};
     line-height: ${lineHeight};
     letter-spacing: 0.06em;
+    display: inline-block;
+  }
+  .text-chunk-block {
     display: inline-block;
   }
   .paragraph {
@@ -859,8 +864,101 @@ function buildVerticalHtml(
 </head>
 <body>
   <div class="vertical-container">
+    <div id="novel-start-anchor" style="width: 1px; height: 100%; display: inline-block; visibility: hidden; margin: 0; padding: 0;"></div>
     ${bodyHtmlParts.join("\n")}
   </div>
+  <script>
+    var targetChunkId = ${safeTargetId};
+    var targetPage = ${safeTargetPage};
+
+    function scrollToNovelStart() {
+      var anchor = document.getElementById("novel-start-anchor");
+      if (anchor && typeof anchor.scrollIntoView === "function") {
+        try {
+          anchor.scrollIntoView({ inline: "start", block: "start", behavior: "instant" });
+        } catch (e) {
+          anchor.scrollIntoView(true);
+        }
+      }
+      var maxScroll = Math.max(
+        document.documentElement ? document.documentElement.scrollWidth : 0,
+        document.body ? document.body.scrollWidth : 0,
+        window.innerWidth || 0,
+        1000000
+      );
+      window.scrollTo(maxScroll, 0);
+      if (document.documentElement) document.documentElement.scrollLeft = maxScroll;
+      if (document.body) document.body.scrollLeft = maxScroll;
+    }
+
+    function restoreProgress() {
+      if (targetChunkId && targetChunkId !== "novel-top-anchor" && targetChunkId !== "chunk-0") {
+        var el = document.getElementById(targetChunkId);
+        if (el && typeof el.scrollIntoView === "function") {
+          try {
+            el.scrollIntoView({ inline: "start", block: "start", behavior: "instant" });
+            return true;
+          } catch (e) {
+            el.scrollIntoView(true);
+            return true;
+          }
+        }
+      }
+      if (targetPage && targetPage > 1) {
+        var pageEl = document.getElementById("page-" + targetPage);
+        if (pageEl && typeof pageEl.scrollIntoView === "function") {
+          try {
+            pageEl.scrollIntoView({ inline: "start", block: "start", behavior: "instant" });
+            return true;
+          } catch (e) {
+            pageEl.scrollIntoView(true);
+            return true;
+          }
+        }
+      }
+      scrollToNovelStart();
+      return false;
+    }
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", restoreProgress);
+    } else {
+      restoreProgress();
+    }
+    window.addEventListener("load", function() {
+      restoreProgress();
+      setTimeout(restoreProgress, 50);
+      setTimeout(restoreProgress, 150);
+      setTimeout(restoreProgress, 350);
+      setTimeout(restoreProgress, 700);
+    });
+    requestAnimationFrame(restoreProgress);
+
+    var scrollTimer = null;
+    function reportProgress() {
+      var checkX = Math.max(0, window.innerWidth - 60);
+      var checkY = Math.min(window.innerHeight / 2, 200);
+      var el = document.elementFromPoint(checkX, checkY);
+      while (el && !el.getAttribute("data-chunk-id") && el !== document.body) {
+        el = el.parentElement;
+      }
+      if (el && el.getAttribute("data-chunk-id")) {
+        var chunkId = el.getAttribute("data-chunk-id");
+        var pageNum = parseInt(el.getAttribute("data-page") || "1", 10);
+        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.onProgressChange) {
+          window.webkit.messageHandlers.onProgressChange.postMessage({
+            chunkId: chunkId,
+            page: pageNum
+          });
+        }
+      }
+    }
+
+    window.addEventListener("scroll", function() {
+      if (scrollTimer) clearTimeout(scrollTimer);
+      scrollTimer = setTimeout(reportProgress, 300);
+    }, { passive: true });
+  </script>
 </body>
 </html>`
 }
@@ -869,20 +967,47 @@ function buildVerticalHtml(
  * 竖排 Web 渲染引擎组件
  */
 function NovelVerticalReaderView(props: {
-  text: string
+  novelId?: number
+  chunks: NovelChunkItem[]
   settings: NovelReaderSettings
   palette: NovelThemePalette
-  textEmbeddedImages?: Record<string, TextEmbeddedImage>
+  targetChunkId?: string | null
+  targetPage?: number
+  onProgressChange?: (page: number, chunkId?: string) => void
 }) {
-  const { text, settings, palette, textEmbeddedImages } = props
+  const {
+    novelId,
+    chunks,
+    settings,
+    palette,
+    targetChunkId,
+    targetPage,
+    onProgressChange,
+  } = props
 
   const html = useMemo(() => {
-    return buildVerticalHtml(text, settings, palette, textEmbeddedImages)
-  }, [text, settings, palette, textEmbeddedImages])
+    return buildVerticalHtml(chunks, settings, palette, targetChunkId, targetPage)
+  }, [chunks, settings, palette, targetChunkId, targetPage])
+
+  const onProgressChangeRef = useRef(onProgressChange)
+  onProgressChangeRef.current = onProgressChange
+  const novelIdRef = useRef(novelId)
+  novelIdRef.current = novelId
 
   const controller = useMemo(() => {
     const ctrl = new WebViewController()
-    void ctrl.loadHTML(html)
+    void ctrl.addScriptMessageHandler("onProgressChange", (data: any) => {
+      if (!data) return
+      const page = typeof data.page === "number" ? data.page : 1
+      const chunkId = typeof data.chunkId === "string" ? data.chunkId : undefined
+      const id = novelIdRef.current
+      if (id) {
+        recordNovelProgress(id, page, chunkId)
+      }
+      onProgressChangeRef.current?.(page, chunkId)
+    }).catch(() => {})
+
+    void ctrl.loadHTML(html).catch(() => {})
     return ctrl
   }, [html])
 
@@ -921,12 +1046,14 @@ export function NovelReaderView(props: {
   onChunkVisible?: (chunkId: string) => void
 }) {
   const {
+    novelId,
     text,
     textEmbeddedImages,
     markerPage,
     currentPage = 1,
     onJumpToPage,
     onReady,
+    onChunkVisible,
   } = props
 
   const [settings, setSettings] = useState<NovelReaderSettings>(() => loadNovelReaderSettings())
@@ -982,12 +1109,31 @@ export function NovelReaderView(props: {
 
   // 竖向排版模式
   if (settings.layoutDirection === "vertical") {
+    if (chunks.length === 0) {
+      return (
+        <HStack spacing={0} frame={{ maxWidth: "infinity", height: 60 }}>
+          <Spacer />
+          <ProgressView progressViewStyle="circular" />
+          <Spacer />
+        </HStack>
+      )
+    }
+
+    const savedProgress = novelId ? getNovelProgress(novelId) : undefined
+    const targetChunkId = savedProgress?.chunkId ?? null
+    const targetPage = savedProgress?.page ?? currentPage ?? 1
+
     return (
       <NovelVerticalReaderView
-        text={text}
+        novelId={novelId}
+        chunks={chunks}
         settings={settings}
         palette={palette}
-        textEmbeddedImages={textEmbeddedImages}
+        targetChunkId={targetChunkId}
+        targetPage={targetPage}
+        onProgressChange={(page, chunkId) => {
+          if (chunkId) onChunkVisible?.(chunkId)
+        }}
       />
     )
   }

@@ -8,6 +8,37 @@ import {
 import { blockTag } from "../../store/blocklist"
 import { TagPreview } from "./TagPreview"
 
+export function renderTagContextMenu(tagName: string, translatedName?: string) {
+  return {
+    preview: <TagPreview tagName={tagName} translatedName={translatedName} />,
+    menuItems: (
+      <Group>
+        <Button
+          title="查看 Pixiv 百科"
+          systemImage="book.pages"
+          action={() => {
+            const url = `https://dic.pixiv.net/a/${encodeURIComponent(tagName)}`
+            void Safari.present(url, false)
+          }}
+        />
+        <Button
+          title="复制标签名"
+          systemImage="doc.on.doc"
+          action={() => {
+            void Pasteboard.setString(tagName)
+          }}
+        />
+        <Button
+          title="屏蔽该标签"
+          systemImage="nosign"
+          role="destructive"
+          action={() => blockTag(tagName)}
+        />
+      </Group>
+    ),
+  }
+}
+
 export function TagChip(props: {
   name: string
   tagName?: string
@@ -22,34 +53,7 @@ export function TagChip(props: {
       buttonStyle="glass"
       controlSize={compact ? "mini" : "small"}
       fixedSize={{ horizontal: true, vertical: false }}
-      contextMenu={{
-        preview: <TagPreview tagName={tagName} translatedName={translatedName} />,
-        menuItems: (
-          <Group>
-            <Button
-              title="查看 Pixiv 百科"
-              systemImage="book.pages"
-              action={() => {
-                const url = `https://dic.pixiv.net/a/${encodeURIComponent(tagName)}`
-                void Safari.present(url, false)
-              }}
-            />
-            <Button
-              title="复制标签名"
-              systemImage="doc.on.doc"
-              action={() => {
-                void Pasteboard.setString(tagName)
-              }}
-            />
-            <Button
-              title="屏蔽该标签"
-              systemImage="nosign"
-              role="destructive"
-              action={() => blockTag(tagName)}
-            />
-          </Group>
-        ),
-      }}
+      contextMenu={renderTagContextMenu(tagName, translatedName)}
     >
       <HStack spacing={3} alignment="center">
         <Text
