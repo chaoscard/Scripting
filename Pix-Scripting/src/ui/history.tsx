@@ -150,6 +150,7 @@ export function HistoryView() {
 
   return (
     <RefreshableScrollView
+      navigationTitle="浏览记录"
       navigationBarTitleDisplayMode="inline"
       toolbar={historyToolbar({ kind, onClear: clearCurrentKind })}
       searchable={{
@@ -176,11 +177,6 @@ export function HistoryView() {
 
 function historyToolbar(props: { kind: HistoryKind; onClear: () => void }) {
   return {
-    principal: [
-      <Text font="title2" fontWeight="bold">
-        浏览历史
-      </Text>,
-    ],
     topBarTrailing: [
       <Button
         action={() => {}}

@@ -72,6 +72,7 @@ export function LibraryView() {
 
   return (
     <RefreshableScrollView
+      navigationTitle="我的收藏"
       navigationBarTitleDisplayMode="inline"
       toolbar={libraryToolbar({ restrict, onRestrictChange: setRestrict })}
       refreshable={() => refreshHandlerRef.current()}
@@ -96,11 +97,6 @@ function libraryToolbar(props: {
   onRestrictChange: (restrict: Visibility) => void
 }) {
   return {
-    principal: [
-      <Text font="title2" fontWeight="bold">
-        我的收藏
-      </Text>,
-    ],
     topBarTrailing: [
       <Menu label={<Image systemName="ellipsis.circle" />}>
         <Picker
