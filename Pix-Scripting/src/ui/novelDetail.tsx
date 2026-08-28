@@ -922,14 +922,14 @@ export function NovelDetailView(props: { novelID: number }) {
                 </Button>,
                 <Menu label={<Image systemName="ellipsis.circle" />}>
                   <Button
-                    title="版式设置"
-                    systemImage="textformat.size"
-                    action={() => setShowTypographySheet(true)}
-                  />
-                  <Button
                     title="评论"
                     systemImage="bubble.left"
                     action={() => setShowComments(true)}
+                  />
+                  <Button
+                    title="版式"
+                    systemImage="a.square"
+                    action={() => setShowTypographySheet(true)}
                   />
                   <Menu title="助手" systemImage="sparkles">
                     {Boolean(current?.caption && cleanHtmlCaption(current.caption)) && (

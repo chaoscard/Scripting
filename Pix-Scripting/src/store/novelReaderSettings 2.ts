@@ -1,4 +1,4 @@
-import type { Color } from "scripting"
+import { type Color } from "scripting"
 import { pixivNovelReaderDirectory } from "./dataDirectory"
 import { recoverFile, writeDataSafely, writeTextSafely } from "./safeFile"
 
@@ -141,6 +141,20 @@ export function getCustomBgPath(): string {
 
 let cachedSettings: NovelReaderSettings | null = null
 const listeners = new Set<(settings: NovelReaderSettings) => void>()
+let saveTimer: any = null
+let pendingSaveSettings: NovelReaderSettings | null = null
+
+function flushSettingsToDisk() {
+  if (!pendingSaveSettings) return
+  const toSave = pendingSaveSettings
+  pendingSaveSettings = null
+  try {
+    const path = getSettingsPath()
+    writeTextSafely(path, JSON.stringify(toSave, null, 2))
+  } catch {
+    // 写入异常不阻塞 UI
+  }
+}
 
 export function onNovelReaderSettingsChanged(
   listener: (settings: NovelReaderSettings) => void
@@ -195,39 +209,48 @@ export function loadNovelReaderSettings(): NovelReaderSettings {
   return cachedSettings
 }
 
-let saveTimer: ReturnType<typeof setTimeout> | null = null
-
-function scheduleSettingsPersist(settings: NovelReaderSettings) {
-  if (saveTimer !== null) {
-    clearTimeout(saveTimer)
-  }
-  saveTimer = setTimeout(() => {
-    saveTimer = null
-    try {
-      const path = getSettingsPath()
-      writeTextSafely(path, JSON.stringify(settings, null, 2))
-    } catch {
-      // 写入异常不阻塞 UI
-    }
-  }, 150)
-}
-
 export function saveNovelReaderSettings(
-  partial: Partial<NovelReaderSettings>
+  partial: Partial<NovelReaderSettings>,
+  immediateFlush = false
 ): NovelReaderSettings {
   const current = loadNovelReaderSettings()
-  const customBgExists =
-    typeof partial.customBgExists === "boolean"
-      ? partial.customBgExists
-      : current.customBgExists
+
+  let hasChange = false
+  for (const key of Object.keys(partial) as (keyof NovelReaderSettings)[]) {
+    if (current[key] !== partial[key]) {
+      hasChange = true
+      break
+    }
+  }
+
+  if (!hasChange) {
+    return current
+  }
+
   const updated: NovelReaderSettings = {
     ...current,
     ...partial,
-    customBgExists,
   }
 
   cachedSettings = updated
-  scheduleSettingsPersist(updated)
+  pendingSaveSettings = updated
+
+  if (immediateFlush) {
+    if (saveTimer) {
+      clearTimeout(saveTimer)
+      saveTimer = null
+    }
+    flushSettingsToDisk()
+  } else {
+    if (saveTimer) {
+      clearTimeout(saveTimer)
+    }
+    saveTimer = setTimeout(() => {
+      flushSettingsToDisk()
+      saveTimer = null
+    }, 250)
+  }
+
   notifySettingsChanged(updated)
   return updated
 }
@@ -241,7 +264,7 @@ export async function saveCustomBackground(image: UIImage): Promise<boolean> {
     if (!data) return false
     const path = getCustomBgPath()
     writeDataSafely(path, data)
-    saveNovelReaderSettings({ customBgExists: true, themeId: "custom" })
+    saveNovelReaderSettings({ customBgExists: true, themeId: "custom" }, true)
     return true
   } catch {
     return false
@@ -262,7 +285,7 @@ export function removeCustomBackground(): void {
   }
   const current = loadNovelReaderSettings()
   const nextTheme: NovelThemeId = current.themeId === "custom" ? "default" : current.themeId
-  saveNovelReaderSettings({ customBgExists: false, themeId: nextTheme })
+  saveNovelReaderSettings({ customBgExists: false, themeId: nextTheme }, true)
 }
 
 /**
