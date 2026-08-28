@@ -44,6 +44,7 @@ export function UgoiraPlayerView(props: {
   const [result, setResult] = useState<UgoiraResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [videoReady, setVideoReady] = useState(false)
   const [previewPath, setPreviewPath] = useState<string | null>(() => (
     previewUrl ? cachedFilePath(previewUrl) : null
   ))
@@ -71,6 +72,10 @@ export function UgoiraPlayerView(props: {
   }, [previewUrl])
 
   useEffect(() => {
+    setVideoReady(false)
+  }, [illustID])
+
+  useEffect(() => {
     if (!previewUrl) {
       setPreviewPath(null)
       return
@@ -93,10 +98,11 @@ export function UgoiraPlayerView(props: {
     }
   }, [previewUrl])
 
-  useEffect(() => {
+  const doBuild = useCallback(() => {
     const seq = ++seqRef.current
     hasNotifiedRef.current = false
     setError(null)
+    setVideoReady(false)
     const cached = cachedUgoira(illustID)
     if (cached) {
       setResult(cached)
@@ -122,11 +128,15 @@ export function UgoiraPlayerView(props: {
       .finally(() => {
         if (seq === seqRef.current) setLoading(false)
       })
+  }, [illustID, notifyLoaded])
+
+  useEffect(() => {
+    doBuild()
     return () => {
       // 卸载/换 id：使在途合成结果失效
       seqRef.current++
     }
-  }, [illustID, notifyLoaded])
+  }, [doBuild])
 
   const previewBlurredImage = useMemo(() => {
     if (!previewPath) return null
@@ -200,20 +210,37 @@ export function UgoiraPlayerView(props: {
           />
         ) : null}
 
-        {/* 3. 高清静态海报层（由模糊预览消融至高清首帧静图，消融完成后剥离 Transition 修饰符防止状态重绘闪屏） */}
-        {previewPath ? (
+        {/* 3. 动图播放器层：合成完成后即在底层挂载初始化并静默起播，黑屏初始化完全被顶层海报遮挡 */}
+        {result ? (
+          <UgoiraVideo
+            key={result.mp4Path}
+            mp4Path={result.mp4Path}
+            aspectRatioValue={stableAspect}
+            onPlayingReady={() => setVideoReady(true)}
+          />
+        ) : null}
+
+        {/* 4. 高清静态海报层：置于播放器之上，在视频出帧就绪前（!videoReady）持续常驻；移除时使用 identity 零动画直切，杜绝 fade 离场残影与黑闪 */}
+        {previewPath && (!result || !videoReady) ? (
           <Image
             key={`sharp-poster-${illustID}`}
             filePath={previewPath}
             resizable={true}
             aspectRatio={{ value: stableAspect, contentMode: "fit" }}
             frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-            transition={initialHitRef.current ? undefined : (crossFadeDuration > 0 ? Transition.fade(crossFadeDuration) : undefined)}
+            transition={
+              initialHitRef.current
+                ? undefined
+                : Transition.asymmetric(
+                    crossFadeDuration > 0 ? Transition.fade(crossFadeDuration) : Transition.identity(),
+                    Transition.identity()
+                  )
+            }
           />
         ) : null}
 
-        {/* 4. 加载中状态（覆盖在海报层之上） */}
-        {loading && !result ? (
+        {/* 5. 加载中状态（覆盖在海报层之上，与海报层在视频真正就绪时原子同步消失，消除分阶段突变） */}
+        {(loading || (result && !videoReady)) && !error ? (
           <VStack
             alignment="center"
             spacing={8}
@@ -226,7 +253,7 @@ export function UgoiraPlayerView(props: {
           </VStack>
         ) : null}
 
-        {/* 5. 错误与重试 */}
+        {/* 6. 错误与重试 */}
         {error && !result ? (
           <VStack
             alignment="center"
@@ -241,39 +268,9 @@ export function UgoiraPlayerView(props: {
             <Button
               title="重试"
               buttonStyle="glass"
-              action={() => {
-                const seq = ++seqRef.current
-                hasNotifiedRef.current = false
-                setError(null)
-                setLoading(true)
-                buildUgoira(illustID)
-                  .then((r) => {
-                    if (seq === seqRef.current) {
-                      setResult(r)
-                      notifyLoaded(true)
-                    }
-                  })
-                  .catch((err: any) => {
-                    if (seq === seqRef.current) {
-                      setError(err?.message ?? "动图合成失败")
-                      notifyLoaded(false)
-                    }
-                  })
-                  .finally(() => {
-                    if (seq === seqRef.current) setLoading(false)
-                  })
-              }}
+              action={doBuild}
             />
           </VStack>
-        ) : null}
-
-        {/* 6. 动图播放器：视频真正就绪后直接硬切接管第 3 层的同像素静态海报，彻底避免 AVPlayerViewController 原生黑色底色在透明度渐变期间引起的黑闪 */}
-        {result ? (
-          <UgoiraVideo
-            key={result.mp4Path}
-            mp4Path={result.mp4Path}
-            aspectRatioValue={stableAspect}
-          />
         ) : null}
       </ZStack>
 
@@ -291,24 +288,36 @@ export function UgoiraPlayerView(props: {
 function UgoiraVideo(props: {
   mp4Path: string
   aspectRatioValue: number
+  onPlayingReady?: () => void
 }) {
-  const { mp4Path, aspectRatioValue } = props
-  const [isPlaying, setIsPlaying] = useState(false)
+  const { mp4Path, aspectRatioValue, onPlayingReady } = props
   const [loadError, setLoadError] = useState(false)
   const [retrySeq, setRetrySeq] = useState(0)
+  const onPlayingReadyRef = useLatest(onPlayingReady)
+  const hasNotifiedReadyRef = useRef(false)
 
   const player = useMemo(() => {
     try {
+      hasNotifiedReadyRef.current = false
       const p = new AVPlayer()
+      const notifyReady = () => {
+        if (!hasNotifiedReadyRef.current) {
+          hasNotifiedReadyRef.current = true
+          // 延迟 80ms，确保 AVPlayerViewController 原生渲染层已完成首帧上屏绘制
+          setTimeout(() => {
+            onPlayingReadyRef.current?.()
+          }, 80)
+        }
+      }
       p.onTimeControlStatusChanged = (status) => {
         // status 2 为 playing 状态（已就绪并开始循环渲染视频帧）
         if (status === 2 || (typeof status === "string" && status === "playing")) {
-          setIsPlaying(true)
+          notifyReady()
         }
       }
       p.onReadyToPlay = () => {
         p.play()
-        setIsPlaying(true)
+        notifyReady()
       }
       const ok = p.setSource(mp4Path)
       if (ok) {
@@ -324,7 +333,7 @@ function UgoiraVideo(props: {
       setLoadError(true)
       return null
     }
-  }, [mp4Path, retrySeq])
+  }, [mp4Path, retrySeq, onPlayingReadyRef])
 
   useEffect(() => {
     return () => {
@@ -349,19 +358,11 @@ function UgoiraVideo(props: {
           buttonStyle="glass"
           action={() => {
             setLoadError(false)
-            setIsPlaying(false)
             setRetrySeq((v) => v + 1)
           }}
         />
       </VStack>
     )
-  }
-
-  // 核心防闪：在播放器实际解码出视频帧进入 playing 状态前不渲染 VideoPlayer（此时屏幕上完美显示第 3 层同像素的高清静态帧）。
-  // 当 playing 为 true 时直接呈现 VideoPlayer，不加 Transition.fade，
-  // 彻底避免原生 AVPlayerViewController 的纯黑背景在透明度插值期间叠加造成的黑闪与画面抽搐。
-  if (!isPlaying) {
-    return null
   }
 
   return (

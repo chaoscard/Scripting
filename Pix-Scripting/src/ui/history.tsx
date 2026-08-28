@@ -41,21 +41,20 @@ import {
   isNovelContentVisible,
 } from "../store/contentFilter"
 import { cardThumbUrlOf, novelThumbUrlOf, prefetch } from "../image/imageLoader"
-import { destinationElement } from "./routes"
 import { currentBatchSize, useLatest, usePagedList } from "./hooks"
 import type { PixivIllustration, PixivNovel } from "../types"
 
-type HistoryKind = HistoryContentKind
+export type HistoryKind = HistoryContentKind
 
-interface HistoryIllustItem extends PixivIllustration {
+export interface HistoryIllustItem extends PixivIllustration {
   viewedAt: number
 }
 
-interface HistoryNovelItem extends PixivNovel {
+export interface HistoryNovelItem extends PixivNovel {
   viewedAt: number
 }
 
-function matchesHistoryQuery(item: HistoryIllustItem | HistoryNovelItem, query: string): boolean {
+export function matchesHistoryQuery(item: HistoryIllustItem | HistoryNovelItem, query: string): boolean {
   const trimmed = query.trim()
   if (!trimmed) return true
 
@@ -93,7 +92,7 @@ function matchesHistoryQuery(item: HistoryIllustItem | HistoryNovelItem, query: 
   })
 }
 
-function loadHistoryIllusts(kind: "illustration" | "manga"): HistoryIllustItem[] {
+export function loadHistoryIllusts(kind: "illustration" | "manga"): HistoryIllustItem[] {
   return getHistory(kind)
     .filter((entry): entry is Extract<HistoryEntry, { kind: "illust" }> => entry.kind === "illust")
     .map((entry) => ({
@@ -102,7 +101,7 @@ function loadHistoryIllusts(kind: "illustration" | "manga"): HistoryIllustItem[]
     }))
 }
 
-function loadHistoryNovels(): HistoryNovelItem[] {
+export function loadHistoryNovels(): HistoryNovelItem[] {
   return getHistory("novel")
     .filter((entry): entry is Extract<HistoryEntry, { kind: "novel" }> => entry.kind === "novel")
     .map((entry) => ({
@@ -111,7 +110,7 @@ function loadHistoryNovels(): HistoryNovelItem[] {
     }))
 }
 
-function filterHistoryIllusts(items: HistoryIllustItem[]): HistoryIllustItem[] {
+export function filterHistoryIllusts(items: HistoryIllustItem[]): HistoryIllustItem[] {
   const settings = loadSettings()
   return items.filter((item) =>
     isIllustContentVisible(item, settings, undefined, {
@@ -120,7 +119,7 @@ function filterHistoryIllusts(items: HistoryIllustItem[]): HistoryIllustItem[] {
   )
 }
 
-function filterHistoryNovels(items: HistoryNovelItem[]): HistoryNovelItem[] {
+export function filterHistoryNovels(items: HistoryNovelItem[]): HistoryNovelItem[] {
   const settings = loadSettings()
   return items.filter((item) =>
     isNovelContentVisible(item, settings, undefined, {
@@ -152,13 +151,12 @@ export function HistoryView() {
   return (
     <RefreshableScrollView
       navigationBarTitleDisplayMode="inline"
-      navigationDestination={destinationElement}
       toolbar={historyToolbar({ kind, onClear: clearCurrentKind })}
       searchable={{
         value: searchQuery,
         onChanged: setSearchQuery,
         placement: "navigationBarDrawerAlwaysDisplay",
-        prompt: "搜索标题、作者、标签或作品ID",
+        prompt: "搜索作者、标题和标签",
       }}
       refreshable={() => refreshHandlerRef.current()}
     >
@@ -180,7 +178,7 @@ function historyToolbar(props: { kind: HistoryKind; onClear: () => void }) {
   return {
     principal: [
       <Text font="title2" fontWeight="bold">
-        浏览记录
+        浏览历史
       </Text>,
     ],
     topBarTrailing: [
