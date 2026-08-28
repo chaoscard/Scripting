@@ -50,6 +50,11 @@ export function NovelCard(props: {
     recordNovelMarker(novel.id, markerPage)
   }
 
+  const episodeNumber =
+    novel.episode_number ??
+    getSeriesByWorkID(novel.id, "novel")?.episodeNumber ??
+    null
+
   const [bookmarked, setBookmarked] = useNovelBookmark(novel.id, novel.is_bookmarked)
   const [activeMarker] = useNovelMarker(novel.id, markerPage ?? null)
   const [bookmarkBusy, setBookmarkBusy] = useState(false)
@@ -192,6 +197,11 @@ export function NovelCard(props: {
                       {novel.text_length}
                     </Text>
                   </HStack>
+                ) : null}
+                {episodeNumber != null ? (
+                  <Text font="caption2" foregroundStyle="secondaryLabel">
+                    {`第${episodeNumber}话`}
+                  </Text>
                 ) : null}
                 {activeMarker != null ? (
                   <HStack spacing={3}>

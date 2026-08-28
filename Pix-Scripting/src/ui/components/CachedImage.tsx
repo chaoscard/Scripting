@@ -584,10 +584,10 @@ export function AvatarImage(props: {
 // topTrailingAction 只传操作语义，按钮布局与命中区域由统一卡片模板负责。
 // 注意：属性名不能叫 badge，那是 SwiftUI 保留修饰符名（只接受 string|number），
 // 会导致 JSX 类型检查报错。
-export function ImageNumberBadge(props: { number: number; foregroundStyle?: any }) {
+export function ImageNumberBadge(props: { number: number; foregroundStyle?: any; font?: any }) {
   return (
     <Text
-      font="body"
+      font={props.font ?? "body"}
       fontWeight="bold"
       foregroundStyle={props.foregroundStyle ?? "primaryLabel"}
       offset={{ x: 4, y: 4 }}

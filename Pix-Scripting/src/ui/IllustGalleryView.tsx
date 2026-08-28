@@ -6,6 +6,7 @@ import {
   Navigation,
   NavigationStack,
   ProgressView,
+  Spacer,
   TabView,
   Text,
   TapGesture,
@@ -92,6 +93,15 @@ function IllustGalleryPage(props: IllustGalleryPageProps) {
   offsetRef.current = offset
   const baseOffsetRef = useRef(baseOffset)
   baseOffsetRef.current = baseOffset
+  const isZoomedRef = useRef(isZoomed)
+  isZoomedRef.current = isZoomed
+
+  const onZoomChangeRef = useRef(onZoomChange)
+  onZoomChangeRef.current = onZoomChange
+  const onDismissDragRef = useRef(onDismissDrag)
+  onDismissDragRef.current = onDismissDrag
+  const onDismissDragEndRef = useRef(onDismissDragEnd)
+  onDismissDragEndRef.current = onDismissDragEnd
 
   // 1. 缩略图加载（优先级极高，毫秒级就绪）
   useEffect(() => {
@@ -138,7 +148,7 @@ function IllustGalleryPage(props: IllustGalleryPageProps) {
   // 当切换到其他页面时，仅在当前页处于缩放状态时复位缩放与位移
   useEffect(() => {
     if (!isActive) {
-      if (scaleRef.current !== 1.0 || offsetRef.current.x !== 0 || offsetRef.current.y !== 0 || isZoomed) {
+      if (scaleRef.current !== 1.0 || offsetRef.current.x !== 0 || offsetRef.current.y !== 0 || isZoomedRef.current) {
         setScale(1.0)
         setBaseScale(1.0)
         setOffset({ x: 0, y: 0 })
@@ -147,39 +157,46 @@ function IllustGalleryPage(props: IllustGalleryPageProps) {
         baseScaleRef.current = 1.0
         offsetRef.current = { x: 0, y: 0 }
         baseOffsetRef.current = { x: 0, y: 0 }
+        isZoomedRef.current = false
         setIsZoomed(false)
-        onZoomChange?.(false)
+        onZoomChangeRef.current?.(false)
       }
     }
-  }, [isActive, isZoomed, onZoomChange])
+  }, [isActive])
 
   // 双击手势：1.0x 与 2.5x 互切
   const handleDoubleTap = useCallback(() => {
-    if (scaleRef.current > 1.05 || isZoomed) {
-      setScale(1.0)
-      setBaseScale(1.0)
-      setOffset({ x: 0, y: 0 })
-      setBaseOffset({ x: 0, y: 0 })
+    if (scaleRef.current > 1.05 || isZoomedRef.current) {
+      withAnimation(Animation.spring({ duration: 0.3, bounce: 0.15 }), () => {
+        setScale(1.0)
+        setBaseScale(1.0)
+        setOffset({ x: 0, y: 0 })
+        setBaseOffset({ x: 0, y: 0 })
+      })
       scaleRef.current = 1.0
       baseScaleRef.current = 1.0
       offsetRef.current = { x: 0, y: 0 }
       baseOffsetRef.current = { x: 0, y: 0 }
+      isZoomedRef.current = false
       setIsZoomed(false)
-      onZoomChange?.(false)
+      onZoomChangeRef.current?.(false)
     } else {
-      setScale(2.5)
-      setBaseScale(2.5)
-      setOffset({ x: 0, y: 0 })
-      setBaseOffset({ x: 0, y: 0 })
+      withAnimation(Animation.spring({ duration: 0.3, bounce: 0.15 }), () => {
+        setScale(2.5)
+        setBaseScale(2.5)
+        setOffset({ x: 0, y: 0 })
+        setBaseOffset({ x: 0, y: 0 })
+      })
       scaleRef.current = 2.5
       baseScaleRef.current = 2.5
       offsetRef.current = { x: 0, y: 0 }
       baseOffsetRef.current = { x: 0, y: 0 }
+      isZoomedRef.current = true
       setIsZoomed(true)
-      onZoomChange?.(true)
+      onZoomChangeRef.current?.(true)
       setRequestedOriginal(true)
     }
-  }, [isZoomed, onZoomChange])
+  }, [])
 
   // 双指捏合缩放：在捏合过程中仅做纯粹视觉变换，状态提交延后至松手结束，避免中途重建手势引发卡顿
   const magnifyGesture = useMemo(() => {
@@ -188,42 +205,50 @@ function IllustGalleryPage(props: IllustGalleryPageProps) {
         const nextScale = Math.max(0.75, Math.min(6.0, baseScaleRef.current * v.magnification))
         scaleRef.current = nextScale
         setScale(nextScale)
-        if (nextScale > 1.05 && !isZoomed) {
-          setIsZoomed(true)
-          onZoomChange?.(true)
-          setRequestedOriginal(true)
-        }
       })
       .onEnded(() => {
         const current = scaleRef.current
         if (current <= 1.05) {
-          setScale(1.0)
-          setBaseScale(1.0)
-          setOffset({ x: 0, y: 0 })
-          setBaseOffset({ x: 0, y: 0 })
+          withAnimation(Animation.spring({ duration: 0.25, bounce: 0.1 }), () => {
+            setScale(1.0)
+            setBaseScale(1.0)
+            setOffset({ x: 0, y: 0 })
+            setBaseOffset({ x: 0, y: 0 })
+          })
           scaleRef.current = 1.0
           baseScaleRef.current = 1.0
           offsetRef.current = { x: 0, y: 0 }
           baseOffsetRef.current = { x: 0, y: 0 }
-          setIsZoomed(false)
-          onZoomChange?.(false)
+          if (isZoomedRef.current) {
+            isZoomedRef.current = false
+            setIsZoomed(false)
+            onZoomChangeRef.current?.(false)
+          }
         } else if (current > 5.0) {
-          setScale(5.0)
-          setBaseScale(5.0)
+          withAnimation(Animation.spring({ duration: 0.25, bounce: 0.1 }), () => {
+            setScale(5.0)
+            setBaseScale(5.0)
+          })
           scaleRef.current = 5.0
           baseScaleRef.current = 5.0
-          setIsZoomed(true)
-          onZoomChange?.(true)
+          if (!isZoomedRef.current) {
+            isZoomedRef.current = true
+            setIsZoomed(true)
+            onZoomChangeRef.current?.(true)
+          }
           setRequestedOriginal(true)
         } else {
           setBaseScale(current)
           baseScaleRef.current = current
-          setIsZoomed(true)
-          onZoomChange?.(true)
+          if (!isZoomedRef.current) {
+            isZoomedRef.current = true
+            setIsZoomed(true)
+            onZoomChangeRef.current?.(true)
+          }
           setRequestedOriginal(true)
         }
       })
-  }, [isZoomed, onZoomChange])
+  }, [])
 
   // 单页拖拽手势：统一由单一手势处理放大时的漫游平移与未放大时的下拉收起，手势挂载恒定不变
   const singlePageDragGesture = useMemo(() => {
@@ -235,26 +260,26 @@ function IllustGalleryPage(props: IllustGalleryPageProps) {
           const newPos = { x: nx, y: ny }
           offsetRef.current = newPos
           setOffset(newPos)
-        } else if (d.translation.height > 0 && onDismissDrag) {
+        } else if (d.translation.height > 0 && onDismissDragRef.current) {
           const dy = d.translation.height
           const sc = Math.max(0.75, 1 - dy / 1200)
           const op = Math.max(0.15, 1 - dy / 350)
-          onDismissDrag(dy, sc, op)
+          onDismissDragRef.current(dy, sc, op)
         }
       })
       .onEnded((d) => {
         if (scaleRef.current > 1.05) {
           baseOffsetRef.current = offsetRef.current
           setBaseOffset(offsetRef.current)
-        } else if (onDismissDragEnd) {
+        } else if (onDismissDragEndRef.current) {
           if (d.translation.height > 100 || d.velocity.height > 300) {
-            onDismissDragEnd(true)
+            onDismissDragEndRef.current(true)
           } else {
-            onDismissDragEnd(false)
+            onDismissDragEndRef.current(false)
           }
         }
       })
-  }, [onDismissDrag, onDismissDragEnd])
+  }, [])
 
   // 多页放大平移漫游手势
   const multiPagePanGesture = useMemo(() => {
@@ -278,12 +303,12 @@ function IllustGalleryPage(props: IllustGalleryPageProps) {
 
   const activeGesture = isSinglePage ? singlePageDragGesture : isZoomed ? multiPagePanGesture : undefined
 
-  // 物理纵横比（支持多页中不同页面不同尺寸）
+  // 物理纵横比（优先使用插画元数据或小图检测，避免读取十几兆的原图大文件）
   const detectedAspect = useMemo(() => {
     if (pageIndex === 0 && illust.width && illust.height && illust.width > 0 && illust.height > 0) {
       return illust.width / illust.height
     }
-    const checkPath = originalPath ?? largePath ?? thumbPath
+    const checkPath = thumbPath ?? largePath ?? originalPath
     if (checkPath) {
       try {
         const img = UIImage.fromFile(checkPath)
@@ -296,7 +321,7 @@ function IllustGalleryPage(props: IllustGalleryPageProps) {
       return illust.width / illust.height
     }
     return 0.75
-  }, [pageIndex, illust.width, illust.height, originalPath, largePath, thumbPath])
+  }, [pageIndex, illust.width, illust.height, thumbPath, largePath])
 
   // 基础底图（大图优先，缩略图次之）
   const baseImagePath = largePath ?? thumbPath
@@ -304,18 +329,19 @@ function IllustGalleryPage(props: IllustGalleryPageProps) {
   return (
     <ZStack
       frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+      ignoresSafeArea={isZoomed ? { edges: "all" } : undefined}
     >
       {/* 1. 独立图片展示层：纯粹响应 scaleEffect 和 offset，无任何动态手势修饰符，彻底绝缘视图重建闪屏 */}
       <ZStack
         scaleEffect={scale}
         offset={offset}
         frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+        ignoresSafeArea={isZoomed ? { edges: "all" } : undefined}
       >
         {/* 未命中任何图片缓存时的居中轻量加载指示器 */}
         {!baseImagePath && !originalPath && (
           <ProgressView
             controlSize="regular"
-            tint="white"
           />
         )}
 
@@ -345,6 +371,7 @@ function IllustGalleryPage(props: IllustGalleryPageProps) {
         frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
         background="clear"
         contentShape="rect"
+        ignoresSafeArea={isZoomed ? { edges: "all" } : undefined}
         gesture={activeGesture}
         simultaneousGesture={magnifyGesture}
         highPriorityGesture={
@@ -378,10 +405,20 @@ export function IllustGalleryView(props: {
   const [dismissScale, setDismissScale] = useState(1.0)
   const [downloading, setDownloading] = useState(false)
 
-  const isNavVisible = showControls && !isZoomed
+  const isNavVisible = showControls
+  const shouldIgnoreSafeArea = isZoomed || !isNavVisible
 
   const toggleControls = useCallback(() => {
-    setShowControls((prev) => !prev)
+    withAnimation(Animation.spring({ duration: 0.25, bounce: 0.1 }), () => {
+      setShowControls((prev) => !prev)
+    })
+  }, [])
+
+  const handleZoomChange = useCallback((zoomed: boolean) => {
+    setIsZoomed(zoomed)
+    if (zoomed) {
+      setShowControls(false)
+    }
   }, [])
 
   const handleDismiss = useCallback(() => {
@@ -472,36 +509,28 @@ export function IllustGalleryView(props: {
   }
 
   return (
-    <NavigationStack preferredColorScheme="dark">
+    <NavigationStack>
       <ZStack
         frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
         navigationTitle={!isSingle ? `${currentPageIndex + 1} / ${pageCount}` : ""}
         navigationBarTitleDisplayMode="inline"
         statusBarHidden={!isNavVisible}
         navigationBarVisibility={isNavVisible ? "visible" : "hidden"}
-        ignoresSafeArea={isZoomed ? { edges: "all" } : undefined}
-        toolbarBackground={{
-          style: "#000000",
-          bars: ["navigationBar"],
-        }}
-        toolbarBackgroundVisibility={{
-          visibility: isNavVisible ? "visible" : "hidden",
-          bars: ["navigationBar"],
-        }}
+        ignoresSafeArea={shouldIgnoreSafeArea ? { edges: "all" } : undefined}
         toolbar={{
           topBarLeading: [
             <Button action={handleDismiss}>
-              <Image systemName="xmark" foregroundStyle="white" />
+              <Image systemName="xmark" />
             </Button>,
           ],
           principal: !isSingle ? (
-            <Text font="headline" fontWeight="semibold" foregroundStyle="white">
+            <Text font="headline" fontWeight="semibold">
               {`${currentPageIndex + 1} / ${pageCount}`}
             </Text>
           ) : undefined,
           topBarTrailing: [
             !isSingle ? (
-              <Menu label={<Image systemName="square.and.arrow.down" foregroundStyle="white" />}>
+              <Menu label={<Image systemName="square.and.arrow.down" />}>
                 <Button
                   title={`保存当前页（第 ${currentPageIndex + 1} 页）`}
                   systemImage="photo"
@@ -520,26 +549,19 @@ export function IllustGalleryView(props: {
                 disabled={downloading}
                 action={() => void handleDownloadSingle(0)}
               >
-                <Image systemName="square.and.arrow.down" foregroundStyle="white" />
+                <Image systemName="square.and.arrow.down" />
               </Button>
             ),
             <Button action={handleShare}>
-              <Image systemName="square.and.arrow.up" foregroundStyle="white" />
+              <Image systemName="square.and.arrow.up" />
             </Button>,
           ],
         }}
       >
-        {/* 沉浸式纯黑背景 */}
-        <VStack
-          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-          background="black"
-          opacity={backgroundOpacity}
-          ignoresSafeArea={{ edges: "all" }}
-        />
-
         {/* 中间大图展示区：使用 iOS 原生 TabView page 模式实现可预测物理交互翻页动画 */}
         <ZStack
           frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          ignoresSafeArea={shouldIgnoreSafeArea ? { edges: "all" } : undefined}
           offset={{ x: 0, y: dismissOffsetY }}
           scaleEffect={dismissScale}
         >
@@ -558,6 +580,7 @@ export function IllustGalleryView(props: {
                   key={idx}
                   tag={idx}
                   frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+                  ignoresSafeArea={shouldIgnoreSafeArea ? { edges: "all" } : undefined}
                 >
                   <IllustGalleryPage
                     illust={illust}
@@ -566,7 +589,7 @@ export function IllustGalleryView(props: {
                     isSinglePage={false}
                     onToggleControls={toggleControls}
                     onDismiss={handleDismiss}
-                    onZoomChange={setIsZoomed}
+                    onZoomChange={handleZoomChange}
                   />
                 </VStack>
               ))}
@@ -581,7 +604,7 @@ export function IllustGalleryView(props: {
               onDismiss={handleDismiss}
               onDismissDrag={handleDismissDrag}
               onDismissDragEnd={handleDismissDragEnd}
-              onZoomChange={setIsZoomed}
+              onZoomChange={handleZoomChange}
             />
           )}
         </ZStack>
