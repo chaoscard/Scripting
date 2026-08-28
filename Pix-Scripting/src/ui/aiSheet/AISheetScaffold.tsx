@@ -1,20 +1,144 @@
 import {
   Button,
   Divider,
+  GeometryReader,
   Group,
   HStack,
   Image,
+  Markdown,
   NavigationStack,
   ProgressView,
   ScrollView,
   Spacer,
   Text,
   VStack,
+  useEffect,
   useMemo,
+  useState,
   type VirtualNode,
 } from "scripting"
 import { isAIAvailable } from "../../api/aiService"
 import { ErrorView } from "../components"
+
+/**
+ * 极简微光骨架呼吸条
+ */
+export function AISkeletonParagraph() {
+  const [pulse, setPulse] = useState(false)
+
+  useEffect(() => {
+    let timerId: number
+    let isMounted = true
+
+    const tick = () => {
+      if (!isMounted) return
+      setPulse((prev) => !prev)
+      timerId = setTimeout(tick, 750)
+    }
+
+    timerId = setTimeout(tick, 750)
+
+    return () => {
+      isMounted = false
+      clearTimeout(timerId)
+    }
+  }, [])
+
+  return (
+    <GeometryReader>
+      {(proxy) => {
+        const fullW = proxy.size.width || 340
+        const p1 = [fullW, fullW * 0.9, fullW * 0.72]
+        const p2 = [fullW * 0.95, fullW * 0.58]
+
+        return (
+          <VStack spacing={20} alignment="leading" padding={{ vertical: 8 }}>
+            {/* 段落 1 骨架 */}
+            <VStack spacing={10} alignment="leading">
+              {p1.map((w, idx) => (
+                <HStack
+                  key={String(idx)}
+                  frame={{ width: w, height: 14 }}
+                  background="tertiarySystemFill"
+                  clipShape={{ type: "rect", cornerRadius: 7 }}
+                  opacity={pulse ? 0.35 : 0.85}
+                />
+              ))}
+            </VStack>
+            {/* 段落 2 骨架 */}
+            <VStack spacing={10} alignment="leading">
+              {p2.map((w, idx) => (
+                <HStack
+                  key={String(idx)}
+                  frame={{ width: w, height: 14 }}
+                  background="tertiarySystemFill"
+                  clipShape={{ type: "rect", cornerRadius: 7 }}
+                  opacity={pulse ? 0.4 : 0.9}
+                />
+              ))}
+            </VStack>
+          </VStack>
+        )
+      }}
+    </GeometryReader>
+  )
+}
+
+/**
+ * 优雅的原文折叠卡片组件
+ */
+export function OriginalCaptionCollapsible(props: {
+  rawCaption: string
+  showOriginal: boolean
+  onToggle: () => void
+}) {
+  const { rawCaption, showOriginal, onToggle } = props
+  if (!rawCaption) return null
+
+  return (
+    <VStack spacing={8} frame={{ maxWidth: "infinity" }}>
+      <Button
+        action={() => {
+          onToggle()
+          void Haptics.transient(0.3, 0.3)
+        }}
+      >
+        <HStack spacing={6} alignment="center">
+          <Image
+            systemName={showOriginal ? "chevron.down" : "chevron.right"}
+            font="caption2"
+            foregroundStyle="secondaryLabel"
+          />
+          <Text font="footnote" fontWeight="medium" foregroundStyle="secondaryLabel">
+            原文
+          </Text>
+          <Spacer />
+          <Text font="caption2" foregroundStyle="tertiaryLabel">
+            {showOriginal ? "点击收起" : "点击展开"}
+          </Text>
+        </HStack>
+      </Button>
+
+      {showOriginal && (
+        <VStack
+          padding={12}
+          background="secondarySystemBackground"
+          clipShape={{ type: "rect", cornerRadius: 10 }}
+          frame={{ maxWidth: "infinity" }}
+          alignment="leading"
+        >
+          <Text
+            font="footnote"
+            foregroundStyle="secondaryLabel"
+            lineSpacing={4}
+          >
+            {rawCaption}
+          </Text>
+        </VStack>
+      )}
+    </VStack>
+  )
+}
 
 export function AISheetScaffold(props: {
   title: string
@@ -26,6 +150,7 @@ export function AISheetScaffold(props: {
   progressInfo?: string | null
   hideResultText?: boolean
   noHorizontalPadding?: boolean
+  useMarkdown?: boolean
   actionButtonType?: "copy" | "download"
   actionButtonDisabled?: boolean
   onAction?: () => void
@@ -45,6 +170,7 @@ export function AISheetScaffold(props: {
     progressInfo,
     hideResultText = false,
     noHorizontalPadding = false,
+    useMarkdown = false,
     actionButtonType = "copy",
     actionButtonDisabled,
     onAction,
@@ -162,17 +288,21 @@ export function AISheetScaffold(props: {
               {/* 自定义顶部内容（如输入框、页码切换、原文折叠等） */}
               {children ? <Group>{children}</Group> : null}
 
-              {/* 进度或加载状态 */}
-              {loading && !resultText && (
-                <VStack spacing={12} padding={{ top: 32, bottom: 32 }} alignment="center">
-                  <ProgressView />
-                  <Text
-                    font="footnote"
-                    foregroundStyle="secondaryLabel"
-                  >
-                    {progressInfo || "AI 正在深度思考与生成中…"}
-                  </Text>
-                </VStack>
+              {/* 进度或骨架屏加载状态 */}
+              {loading && !resultText && !hideResultText && !error && (
+                progressInfo ? (
+                  <VStack spacing={12} padding={{ top: 32, bottom: 32 }} alignment="center">
+                    <ProgressView />
+                    <Text
+                      font="footnote"
+                      foregroundStyle="secondaryLabel"
+                    >
+                      {progressInfo}
+                    </Text>
+                  </VStack>
+                ) : (
+                  <AISkeletonParagraph />
+                )
               )}
 
               {/* 错误态 */}
@@ -183,9 +313,9 @@ export function AISheetScaffold(props: {
                 />
               )}
 
-              {/* 结果内容展示区（按段落分批呈现，极大降低渲染重排开销） */}
+              {/* 结果内容展示区（支持原生 Markdown 渲染或分段纯文本） */}
               {Boolean(resultText) && !hideResultText && (
-                <VStack spacing={14} alignment="leading">
+                <VStack spacing={14} alignment="leading" frame={{ maxWidth: "infinity" }}>
                   {Boolean(progressInfo) && streaming && (
                     <HStack spacing={6} alignment="center">
                       <ProgressView />
@@ -197,15 +327,23 @@ export function AISheetScaffold(props: {
                       </Text>
                     </HStack>
                   )}
-                  {paragraphs.map((para, idx) => (
-                    <Text
-                      key={String(idx)}
-                      font="body"
-                      lineSpacing={5}
-                    >
-                      {para}
-                    </Text>
-                  ))}
+                  {useMarkdown ? (
+                    <Markdown
+                      content={resultText}
+                      theme="basic"
+                      scrollable={false}
+                    />
+                  ) : (
+                    paragraphs.map((para, idx) => (
+                      <Text
+                        key={String(idx)}
+                        font="body"
+                        lineSpacing={5}
+                      >
+                        {para}
+                      </Text>
+                    ))
+                  )}
                 </VStack>
               )}
             </>

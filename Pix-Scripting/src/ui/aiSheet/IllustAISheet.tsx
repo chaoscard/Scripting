@@ -1,4 +1,4 @@
-import { AISheetScaffold } from "./AISheetScaffold"
+import { AISheetScaffold, OriginalCaptionCollapsible } from "./AISheetScaffold"
 import {
   Button,
   Canvas,
@@ -561,12 +561,8 @@ export function IllustAISheet(props: {
 
         return (
           <AISheetScaffold
-            title={mode === "caption" ? getSheetTitle() : ""}
-            subtitle={
-              mode === "caption"
-                ? `作品：${illust.title} (@${illust.user?.name})`
-                : undefined
-            }
+            title=""
+            subtitle={undefined}
             loading={mode === "caption" ? isAnyTranslating : false}
             streaming={isAnyTranslating}
             hideResultText={mode === "ocr" || mode === "vision"}
@@ -618,23 +614,11 @@ export function IllustAISheet(props: {
           >
             {/* ────────────────── 1. 简介翻译模式 ────────────────── */}
             {mode === "caption" && Boolean(rawCaption) && (
-              <VStack spacing={6}>
-                <HStack alignment="center">
-                  <Text font="subheadline" fontWeight="semibold" foregroundStyle="secondaryLabel">
-                    原文
-                  </Text>
-                  <Spacer />
-                  <Button
-                    title={showOriginalCaption ? "收起" : "展开"}
-                    action={() => setShowOriginalCaption(!showOriginalCaption)}
-                  />
-                </HStack>
-                {showOriginalCaption && (
-                  <Text font="footnote" foregroundStyle="secondaryLabel" lineSpacing={3}>
-                    {rawCaption}
-                  </Text>
-                )}
-              </VStack>
+              <OriginalCaptionCollapsible
+                rawCaption={rawCaption}
+                showOriginal={showOriginalCaption}
+                onToggle={() => setShowOriginalCaption(!showOriginalCaption)}
+              />
             )}
 
             {/* ────────────────── 2. OCR 漫画翻译模式 / 生图汉化模式 ────────────────── */}

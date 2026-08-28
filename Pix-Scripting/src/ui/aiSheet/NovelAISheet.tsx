@@ -1,4 +1,4 @@
-import { AISheetScaffold } from "./AISheetScaffold"
+import { AISheetScaffold, OriginalCaptionCollapsible } from "./AISheetScaffold"
 import {
   Button,
   Divider,
@@ -61,6 +61,7 @@ export function NovelAISheet(props: {
 
   const isMultiPage = totalPages > 1
 
+  const [selectedPage, setSelectedPage] = useState(currentPage)
   const [loading, setLoading] = useState(false)
   const [streaming, setStreaming] = useState(false)
   const [progressInfo, setProgressInfo] = useState<string | null>(null)
@@ -81,8 +82,15 @@ export function NovelAISheet(props: {
   const taskSeqRef = useRef(0)
   const rawCaption = cleanHtmlCaption(novel.caption)
 
+  // 当 sheet 未展开或外部 currentPage 变动时，实时同步当前页
+  useEffect(() => {
+    if (!isPresented) {
+      setSelectedPage(currentPage)
+    }
+  }, [isPresented, currentPage])
+
   // 当前页的缓存数据
-  const currentPageCache = pageCaches[currentPage] || {}
+  const currentPageCache = pageCaches[selectedPage] || {}
 
   function getCurrentResultText(): string {
     switch (mode) {
@@ -107,42 +115,13 @@ export function NovelAISheet(props: {
   const currentResultText = getCurrentResultText()
   const currentError = getCurrentError()
 
-  // 对于多页小说的翻译和总结，只取当前页的文本；单页小说或续写取全文
+  // 对于多页小说的翻译、总结与续写，取当前选中页的文本；单页小说取全文
   const targetRawText =
-    isMultiPage && (mode === "translate" || mode === "summary")
-      ? getNovelPageText(fullText, currentPage)
+    isMultiPage && (mode === "translate" || mode === "summary" || mode === "continue")
+      ? getNovelPageText(fullText, selectedPage)
       : fullText
 
   const cleanedText = cleanNovelTextForAI(targetRawText)
-
-  function getSheetTitle() {
-    switch (mode) {
-      case "caption":
-        return "AI 简介翻译"
-      case "translate":
-        return isMultiPage
-          ? `AI 小说翻译 (第 ${currentPage} / ${totalPages} 页)`
-          : "AI 小说全篇翻译"
-      case "summary":
-        return isMultiPage
-          ? `AI 小说总结 (第 ${currentPage} / ${totalPages} 页)`
-          : "AI 小说导读与总结"
-      case "continue":
-        return "AI 小说续写与脑洞"
-      default:
-        return "助手"
-    }
-  }
-
-  function getSheetSubtitle() {
-    if (mode === "caption") {
-      return `作品：${novel.title} (@${novel.user?.name})`
-    }
-    if (isMultiPage) {
-      return `作品：${novel.title} · 第 ${currentPage} / ${totalPages} 页`
-    }
-    return `作品：${novel.title} (@${novel.user?.name})`
-  }
 
   function handleStop() {
     activeTaskTokenRef.current.aborted = true
@@ -190,8 +169,8 @@ export function NovelAISheet(props: {
           : "continueText"
       setPageCaches((prev) => ({
         ...prev,
-        [currentPage]: {
-          ...prev[currentPage],
+        [selectedPage]: {
+          ...prev[selectedPage],
           [field]: "",
           error: null,
         },
@@ -212,8 +191,8 @@ export function NovelAISheet(props: {
             : "continueText"
         setPageCaches((prev) => ({
           ...prev,
-          [currentPage]: {
-            ...prev[currentPage],
+          [selectedPage]: {
+            ...prev[selectedPage],
             [field]: text,
             error: null,
           },
@@ -242,6 +221,7 @@ export function NovelAISheet(props: {
         })
         if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
           throttler.flush(finalResult)
+          void Haptics.transient(0.8, 0.8)
         }
       } else if (mode === "translate") {
         if (!cleanedText) {
@@ -249,7 +229,7 @@ export function NovelAISheet(props: {
             const msg = isMultiPage ? "当前页小说正文为空。" : "未获取到小说正文文本。"
             setPageCaches((prev) => ({
               ...prev,
-              [currentPage]: { ...prev[currentPage], translateText: msg, error: null },
+              [selectedPage]: { ...prev[selectedPage], translateText: msg, error: null },
             }))
             setLoading(false)
           }
@@ -262,16 +242,11 @@ export function NovelAISheet(props: {
               throttler.push(text)
             }
           },
-          onProgress: ({ chunkIndex, totalChunks, percent }) => {
-            if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
-              const prefix = isMultiPage ? `第 ${currentPage} 页 ` : ""
-              setProgressInfo(`正在翻译${prefix}第 ${chunkIndex}/${totalChunks} 部分 (${percent}%)`)
-            }
-          },
           signal: taskToken,
         })
         if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
           throttler.flush(finalResult)
+          void Haptics.transient(0.8, 0.8)
         }
       } else if (mode === "summary") {
         if (!cleanedText) {
@@ -279,18 +254,13 @@ export function NovelAISheet(props: {
             const msg = isMultiPage ? "当前页小说正文为空。" : "未获取到小说正文文本。"
             setPageCaches((prev) => ({
               ...prev,
-              [currentPage]: { ...prev[currentPage], summaryText: msg, error: null },
+              [selectedPage]: { ...prev[selectedPage], summaryText: msg, error: null },
             }))
             setLoading(false)
           }
           return
         }
         setStreaming(true)
-        setProgressInfo(
-          isMultiPage
-            ? `AI 正在总结第 ${currentPage} 页核心看点…`
-            : "AI 正在通读全篇并提炼大纲与看点…"
-        )
         const finalResult = await streamSummarizeNovel(cleanedText, {
           onChunk: (text: string) => {
             if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
@@ -298,24 +268,24 @@ export function NovelAISheet(props: {
             }
           },
           signal: taskToken,
-          pageInfo: isMultiPage ? { current: currentPage, total: totalPages } : undefined,
+          pageInfo: isMultiPage ? { current: selectedPage, total: totalPages } : undefined,
         })
         if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
           throttler.flush(finalResult)
+          void Haptics.transient(0.8, 0.8)
         }
       } else if (mode === "continue") {
         if (!cleanedText) {
           if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
             setPageCaches((prev) => ({
               ...prev,
-              [currentPage]: { ...prev[currentPage], continueText: "未获取到小说正文文本。", error: null },
+              [selectedPage]: { ...prev[selectedPage], continueText: "未获取到小说正文文本。", error: null },
             }))
             setLoading(false)
           }
           return
         }
         setStreaming(true)
-        setProgressInfo("AI 正在根据前文风格与设定续写…")
         const finalResult = await streamContinueNovel(cleanedText, continueInstruction, {
           onChunk: (text: string) => {
             if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
@@ -326,6 +296,7 @@ export function NovelAISheet(props: {
         })
         if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
           throttler.flush(finalResult)
+          void Haptics.transient(0.8, 0.8)
         }
       }
     } catch (e: any) {
@@ -337,8 +308,8 @@ export function NovelAISheet(props: {
         } else {
           setPageCaches((prev) => ({
             ...prev,
-            [currentPage]: {
-              ...prev[currentPage],
+            [selectedPage]: {
+              ...prev[selectedPage],
               error: errorMsg,
             },
           }))
@@ -361,24 +332,25 @@ export function NovelAISheet(props: {
 
   useEffect(() => {
     if (isPresented) {
-      // 仅简介模式在未缓存时自动开始，其余模式（translate、summary、continue）等待用户手动确认触发
-      if (mode === "caption") {
+      // 简介、翻译、总结在未缓存时自动开始触发
+      if (mode === "caption" || mode === "translate" || mode === "summary") {
         void execute(false)
       }
     } else {
       handleStop()
     }
-  }, [isPresented, mode, currentPage])
+  }, [isPresented, mode, selectedPage])
 
   return (
     <AISheetScaffold
-      title={getSheetTitle()}
-      subtitle={getSheetSubtitle()}
+      title=""
+      subtitle={undefined}
       loading={loading}
       streaming={streaming}
       error={currentError}
       resultText={currentResultText}
       progressInfo={progressInfo}
+      useMarkdown={true}
       onDismiss={() => {
         handleStop()
         onChanged(false)
@@ -386,139 +358,85 @@ export function NovelAISheet(props: {
       onRetry={() => void execute(true)}
       onStop={handleStop}
     >
-      {/* 简介模式：支持折叠查看日文原文 */}
+      {/* 1. 简介模式：支持折叠查看原文 */}
       {mode === "caption" && Boolean(rawCaption) && (
-        <VStack spacing={6}>
-          <HStack alignment="center">
-            <Text
-              font="subheadline"
-              fontWeight="semibold"
-              foregroundStyle="secondaryLabel"
-            >
-              原文简介
-            </Text>
-            <Spacer />
-            <Button
-              title={showOriginalCaption ? "收起" : "展开"}
-              action={() => setShowOriginalCaption(!showOriginalCaption)}
-            />
-          </HStack>
-          {showOriginalCaption && (
-            <Text
-              font="footnote"
-              foregroundStyle="secondaryLabel"
-              lineSpacing={3}
-            >
-              {rawCaption}
-            </Text>
-          )}
-        </VStack>
+        <OriginalCaptionCollapsible
+          rawCaption={rawCaption}
+          showOriginal={showOriginalCaption}
+          onToggle={() => setShowOriginalCaption(!showOriginalCaption)}
+        />
       )}
 
-      {/* 翻译小说模式确认 */}
-      {mode === "translate" && !loading && !currentResultText && !currentError && (
-        <VStack
-          spacing={14}
-          padding={{ top: 28, bottom: 20 }}
+      {/* 2. 多页小说的轻量分页胶囊切换栏 */}
+      {isMultiPage && mode !== "caption" && (
+        <HStack
+          padding={{ horizontal: 12, vertical: 8 }}
+          background="secondarySystemBackground"
+          clipShape={{ type: "rect", cornerRadius: 10 }}
           alignment="center"
         >
-          <Image
-            systemName="character.book.closed"
-            font="largeTitle"
-            foregroundStyle="secondaryLabel"
-          />
-          <VStack spacing={4} alignment="center">
-            <Text font="headline" fontWeight="semibold">
-              {isMultiPage ? `第 ${currentPage} / ${totalPages} 页小说正文` : "全篇小说正文"}
-            </Text>
-            <Text
-              font="footnote"
-              foregroundStyle="secondaryLabel"
-              multilineTextAlignment="center"
-            >
-              {cleanedText ? `待翻译文本约 ${cleanedText.length} 字` : "暂无正文内容"}
-            </Text>
-          </VStack>
           <Button
-            title={isMultiPage ? `开始翻译第 ${currentPage} 页` : "开始全篇翻译"}
-            systemImage="sparkles"
-            buttonStyle="borderedProminent"
-            disabled={!cleanedText}
-            action={() => void execute(true)}
+            title=""
+            systemImage="chevron.left"
+            disabled={selectedPage <= 1 || loading || streaming}
+            action={() => {
+              setSelectedPage((p) => Math.max(1, p - 1))
+              void Haptics.transient(0.3, 0.3)
+            }}
           />
-        </VStack>
-      )}
-
-      {/* 总结小说模式确认 */}
-      {mode === "summary" && !loading && !currentResultText && !currentError && (
-        <VStack
-          spacing={14}
-          padding={{ top: 28, bottom: 20 }}
-          alignment="center"
-        >
-          <Image
-            systemName="doc.text.magnifyingglass"
-            font="largeTitle"
-            foregroundStyle="secondaryLabel"
-          />
-          <VStack spacing={4} alignment="center">
-            <Text font="headline" fontWeight="semibold">
-              {isMultiPage ? `第 ${currentPage} / ${totalPages} 页剧情总结` : "全篇小说导读与总结"}
-            </Text>
-            <Text
-              font="footnote"
-              foregroundStyle="secondaryLabel"
-              multilineTextAlignment="center"
-            >
-              {cleanedText ? "点击下方按钮由 AI 深度提炼核心大纲、登场人物与亮点" : "暂无正文内容"}
-            </Text>
-          </VStack>
-          <Button
-            title={isMultiPage ? `开始总结第 ${currentPage} 页` : "开始总结"}
-            systemImage="sparkles"
-            buttonStyle="borderedProminent"
-            disabled={!cleanedText}
-            action={() => void execute(true)}
-          />
-        </VStack>
-      )}
-
-      {/* 续写模式：支持输入自定义提示词和预设选项 */}
-      {mode === "continue" && (
-        <VStack spacing={10}>
-          <Text
-            font="subheadline"
-            fontWeight="medium"
-            foregroundStyle="secondaryLabel"
-          >
-            自定义续写要求（可选）：
+          <Spacer />
+          <Text font="subheadline" fontWeight="medium" foregroundStyle="secondaryLabel">
+            第 {selectedPage} / {totalPages} 页
           </Text>
-          <TextField
-            title="续写要求"
-            prompt="例如：续写男女主表白甜蜜结局 / 以反派视角展开"
-            value={continueInstruction}
-            onChanged={setContinueInstruction}
+          <Spacer />
+          <Button
+            title=""
+            systemImage="chevron.right"
+            disabled={selectedPage >= totalPages || loading || streaming}
+            action={() => {
+              setSelectedPage((p) => Math.min(totalPages, p + 1))
+              void Haptics.transient(0.3, 0.3)
+            }}
           />
+        </HStack>
+      )}
+
+      {/* 3. 续写模式：轻量 Chips 预设与走向输入栏 */}
+      {mode === "continue" && (
+        <VStack spacing={10} frame={{ maxWidth: "infinity" }}>
           <ScrollView axes="horizontal">
-            <HStack spacing={8}>
-              {PRESET_CONTINUE_PROMPTS.map((prompt: string) => (
-                <Button
-                  key={prompt}
-                  title={prompt}
-                  buttonStyle="bordered"
-                  action={() => {
-                    setContinueInstruction(prompt)
-                  }}
-                />
-              ))}
+            <HStack spacing={8} padding={{ vertical: 2 }}>
+              {PRESET_CONTINUE_PROMPTS.map((prompt: string) => {
+                const isSelected = continueInstruction === prompt
+                return (
+                  <Button
+                    key={prompt}
+                    title={prompt}
+                    buttonStyle={isSelected ? "borderedProminent" : "bordered"}
+                    action={() => {
+                      setContinueInstruction(isSelected ? "" : prompt)
+                      void Haptics.transient(0.3, 0.3)
+                    }}
+                  />
+                )
+              })}
             </HStack>
           </ScrollView>
-          <Button
-            title="开始续写"
-            buttonStyle="borderedProminent"
-            disabled={loading || streaming}
-            action={execute}
-          />
+          <HStack spacing={8} alignment="center">
+            <TextField
+              title="续写要求"
+              prompt="输入走向提示词（选填）…"
+              value={continueInstruction}
+              onChanged={setContinueInstruction}
+            />
+            <Button
+              title="续写"
+              systemImage="wand.and.stars"
+              buttonStyle="borderedProminent"
+              disabled={loading || streaming}
+              action={() => void execute(true)}
+            />
+          </HStack>
         </VStack>
       )}
     </AISheetScaffold>
