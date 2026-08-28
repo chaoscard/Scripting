@@ -14,6 +14,7 @@ import { HistoryView } from "./history"
 import { NotificationViewMoreView, NotificationsView } from "./notifications"
 import { BlockedSettingsView } from "./blockedSettings"
 import { SettingsView } from "./settings"
+import { CustomAISettingsView } from "./customAISettings"
 import { SeriesView } from "./seriesView"
 import { UserBookmarksView } from "./userBookmarks"
 import { UserConnectionsView, type ConnectionRouteKind } from "./userConnections"
@@ -184,6 +185,7 @@ export function renderDestination(rawPage: string) {
     }
   }
   if (page === "blockedSettings") return <BlockedSettingsView />
+  if (page === "customAISettings") return <CustomAISettingsView />
   if (page === "settings") return <SettingsView />
   if (page === "about") return <AboutView />
   // 未知路由静默兜底（内部路由表固定，正常不会走到）

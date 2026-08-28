@@ -33,6 +33,13 @@ import {
   type WidgetDefaultSource,
 } from "../store/settings"
 import { loadBlocklist, onBlocklistChanged } from "../store/blocklist"
+import {
+  loadCustomAIProfile,
+  onCustomAIConfigChanged,
+  updateCustomAIProfile,
+  isScriptingPro,
+  type CustomAIProfile,
+} from "../store/customAI"
 import { editAIShowSettings, syncWebCookies } from "../api/pixiv"
 import { session } from "../api/session"
 import { clearUgoiraCache, enforceUgoiraCacheLimit, ugoiraCacheUsageBytes } from "../ugoira/ugoira"
@@ -43,6 +50,7 @@ const CACHE_LIMIT_OPTIONS = [300, 500, 1000, 2000] as const
 export function SettingsView() {
   const [settings, setSettings] = useState(loadSettings())
   const [blocklist, setBlocklist] = useState(loadBlocklist())
+  const [aiProfile, setAiProfile] = useState<CustomAIProfile>(() => loadCustomAIProfile())
   const [settingsReset, setSettingsReset] = useTimedFlag()
   const [cacheSize, setCacheSize] = useState<number | null>(null)
   const [cacheCleared, setCacheCleared] = useTimedFlag()
@@ -73,10 +81,14 @@ export function SettingsView() {
     const unsubscribeHistory = onHistoryChanged(() => {
       refreshHistoryTotal()
     })
+    const unsubscribeCustomAI = onCustomAIConfigChanged((updated) => {
+      setAiProfile({ ...updated })
+    })
     return () => {
       unsubscribeSettings()
       unsubscribeBlocklist()
       unsubscribeHistory()
+      unsubscribeCustomAI()
     }
   }, [])
 
@@ -337,6 +349,69 @@ export function SettingsView() {
             )}
           </Button>
         </HStack>
+      </Section>
+
+      <Section
+        header={<Text>AI 助手</Text>}
+        footer={
+          <Text>
+            {aiProfile.enabled
+              ? "已启用自定义 AI 模型（优先级高于 Scripting 原生助手）。配置与密钥已通过 Keychain 加密安全存储，支持 iCloud 跨设备同步。"
+              : isScriptingPro()
+              ? "当前已激活 Scripting PRO 会员（默认使用原生 Assistant）。开启自定义模型后可解锁 OpenAI Responses、DeepSeek-R1 深度思考流等更多专属定制玩法。"
+              : "当前未开通 Scripting PRO 会员。开启自定义 AI 模型并填入您的 API 密钥（如 DeepSeek、OpenAI、Gemini、Claude 等），即可免费使用完整 AI 翻译、小说总结续写与漫画 OCR 汉化功能。"}
+          </Text>
+        }
+      >
+        <HStack spacing={8} alignment="center">
+          <Text font="body">AI 助手状态</Text>
+          <Spacer />
+          {aiProfile.enabled && aiProfile.general.model ? (
+            <HStack spacing={4} alignment="center">
+              <Image systemName="bolt.fill" font="caption" foregroundStyle="systemGreen" />
+              <Text font="caption" foregroundStyle="systemGreen">
+                自定义模型 ({aiProfile.general.model})
+              </Text>
+            </HStack>
+          ) : isScriptingPro() ? (
+            <HStack spacing={4} alignment="center">
+              <Image systemName="crown.fill" font="caption" foregroundStyle="systemYellow" />
+              <Text font="caption" foregroundStyle="systemBlue">
+                Scripting PRO (原生 Assistant)
+              </Text>
+            </HStack>
+          ) : (
+            <HStack spacing={4} alignment="center">
+              <Image systemName="info.circle" font="caption" foregroundStyle="systemOrange" />
+              <Text font="caption" foregroundStyle="systemOrange">
+                未开启 (建议配置自定义 AI)
+              </Text>
+            </HStack>
+          )}
+        </HStack>
+
+        <Toggle
+          title="启用自定义 AI 模型"
+          value={aiProfile.enabled}
+          onChanged={(value) => {
+            const next = updateCustomAIProfile({ enabled: value })
+            setAiProfile(next)
+          }}
+        />
+
+        {aiProfile.enabled ? (
+          <NavigationLink value="customAISettings">
+            <HStack spacing={8}>
+              <Text font="body">模型配置与端点管理</Text>
+              <Spacer />
+              <Text font="caption" foregroundStyle="secondaryLabel">
+                {aiProfile.general.model
+                  ? `${aiProfile.general.model}`
+                  : "点击配置"}
+              </Text>
+            </HStack>
+          </NavigationLink>
+        ) : null}
       </Section>
 
       <Section

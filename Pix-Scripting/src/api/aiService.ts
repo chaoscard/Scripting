@@ -1,15 +1,50 @@
 /**
  * AI 服务核心层：负责文本清洗、语义分块、流式翻译、OCR识别与总结续写
+ * 支持优先调度自定义 AI 协议 (OpenAI Responses / Chat, Gemini, Claude, DALL-E, FLUX 等)，
+ * 并向下兼容回退原生 Assistant.requestStreaming
  */
 import { loadImage, imageUrlOf } from "../image/imageLoader"
-import type { PixivIllustration, PixivNovel } from "../types"
+import type { PixivIllustration } from "../types"
+import {
+  loadCustomAIProfile,
+  isCustomAIConfigured,
+  getEffectiveImageGenKey,
+  isScriptingPro,
+} from "../store/customAI"
+import {
+  streamCustomChat,
+  requestCustomImageGen,
+  type AdapterMessage,
+  type AdapterMessageContentPart,
+} from "./aiAdapters"
 
+/**
+ * 检查 AI 服务是否可用：
+ * 1. 优先检查自定义 AI 是否有效配置（无需 PRO 会员）
+ * 2. 否则检查用户是否具备 Scripting PRO 且原生 Assistant 可用
+ */
 export function isAIAvailable(): boolean {
-  try {
-    return typeof Assistant !== "undefined" && Boolean(Assistant.isAvailable)
-  } catch {
-    return false
+  if (isCustomAIConfigured()) {
+    return true
   }
+  if (isScriptingPro()) {
+    try {
+      return typeof Assistant !== "undefined" && Boolean(Assistant.isAvailable)
+    } catch {
+      return false
+    }
+  }
+  return false
+}
+
+/**
+ * 获取友好的 AI 不可用引导提示
+ */
+export function getAIUnavailableErrorMessage(): string {
+  if (isScriptingPro()) {
+    return "Scripting 原生 AI 助手未配置或暂不可用，请在 Scripting App 设置中配置模型，或在 Pix-Scripting「设置 ➔ AI 助手」中开启自定义模型。"
+  }
+  return "当前未检测到 Scripting PRO 会员。您可以前往「设置 ➔ AI 助手」开启自定义 AI 模型并填入您的 API 密钥（支持 DeepSeek、OpenAI、Gemini、Claude 等），即可免费解锁完整 AI 功能。"
 }
 
 /**
@@ -111,7 +146,119 @@ export function splitNovelChunks(text: string, targetSize = 1800): string[] {
 export interface StreamTranslateOptions {
   onChunk: (chunkText: string) => void
   onProgress?: (info: { chunkIndex: number; totalChunks: number; percent: number }) => void
-  signal?: { aborted: boolean }
+  signal?: { aborted?: boolean }
+}
+
+/**
+ * 内部统一流式调度执行器（优先自定义 AI，回退原生 Assistant）
+ */
+async function executeUniversalAI(params: {
+  systemPrompt?: string
+  messages: AdapterMessage[]
+  temperature?: number
+  options: {
+    onChunk: (chunkText: string) => void
+    onReasoning?: (reasoningText: string) => void
+    onImage?: (image: { base64: string; mediaType: string }) => void
+    signal?: { aborted?: boolean }
+  }
+}): Promise<string> {
+  const { systemPrompt, messages, temperature, options } = params
+
+  if (options.signal?.aborted) {
+    return ""
+  }
+
+  // 1. 优先检查自定义 AI 模型
+  if (isCustomAIConfigured()) {
+    const profile = loadCustomAIProfile()
+    let fullOutput = ""
+    let reasoningOutput = ""
+
+    const res = await streamCustomChat(profile.general, {
+      systemPrompt,
+      messages,
+      temperature,
+      signal: options.signal,
+      onChunk: (delta) => {
+        if (options.signal?.aborted) return
+        fullOutput += delta
+        options.onChunk(fullOutput)
+      },
+      onReasoning: (reasoning) => {
+        if (options.signal?.aborted) return
+        reasoningOutput += reasoning
+        options.onReasoning?.(reasoning)
+        if (!fullOutput) {
+          options.onChunk(reasoningOutput)
+        }
+      },
+      onImage: (img) => {
+        options.onImage?.(img)
+      },
+    })
+
+    const finalResult = fullOutput || res.text || reasoningOutput || res.reasoning
+    return finalResult
+  }
+
+  // 2. 回退原生 Assistant.requestStreaming（需具备 Scripting PRO 权限）
+  if (isScriptingPro() && typeof Assistant !== "undefined" && Boolean(Assistant.isAvailable)) {
+    let fullOutput = ""
+    let reasoningOutput = ""
+
+    // 转换消息为 Assistant 兼容结构
+    const assistantMessages = messages.map((m) => {
+      if (typeof m.content === "string") {
+        return { role: m.role, content: m.content }
+      }
+      const parts = m.content.map((part) => {
+        if (part.type === "text") {
+          return { type: "text", content: part.text || "" }
+        }
+        const mime = part.mimeType || "image/jpeg"
+        const dataUri = part.imageBase64?.startsWith("data:")
+          ? part.imageBase64
+          : `data:${mime};base64,${part.imageBase64 || ""}`
+        return { type: "image", content: dataUri }
+      })
+      return { role: m.role, content: parts }
+    })
+
+    const stream = await Assistant.requestStreaming({
+      systemPrompt,
+      messages: assistantMessages as any,
+    })
+
+    for await (const chunk of stream) {
+      if (options.signal?.aborted) break
+
+      if (chunk.type === "text" && chunk.content) {
+        fullOutput += chunk.content
+        options.onChunk(fullOutput)
+      } else if (chunk.type === "reasoning" && chunk.content) {
+        reasoningOutput += chunk.content
+        options.onReasoning?.(chunk.content)
+        if (!fullOutput) {
+          options.onChunk(reasoningOutput)
+        }
+      } else if (chunk.type === "image" && chunk.content) {
+        options.onImage?.({
+          base64: chunk.content.data,
+          mediaType: chunk.content.mediaType || "image/png",
+        })
+      }
+    }
+
+    if (!fullOutput && reasoningOutput) {
+      fullOutput = reasoningOutput
+      options.onChunk(fullOutput)
+    }
+
+    return fullOutput
+  }
+
+  throw new Error(getAIUnavailableErrorMessage())
 }
 
 /**
@@ -124,7 +271,7 @@ export async function streamTranslateText(
   if (!text || !text.trim()) return ""
   if (options.signal?.aborted) return ""
   if (!isAIAvailable()) {
-    throw new Error("Scripting 助手未配置或不可用，请在设置中配置 AI 模型。")
+    throw new Error(getAIUnavailableErrorMessage())
   }
 
   const systemPrompt =
@@ -134,8 +281,7 @@ export async function streamTranslateText(
     "2. 人名、社团名、展会名等专有名词保留规范称呼。\n" +
     "3. 直接输出翻译后的中文，不要输出任何多余的解释、前缀或开场白。"
 
-  let fullOutput = ""
-  const stream = await Assistant.requestStreaming({
+  return executeUniversalAI({
     systemPrompt,
     messages: [
       {
@@ -143,19 +289,11 @@ export async function streamTranslateText(
         content: `请翻译以下内容：\n\n${text}`,
       },
     ],
+    options: {
+      onChunk: options.onChunk,
+      signal: options.signal,
+    },
   })
-
-  for await (const chunk of stream) {
-    if (options.signal?.aborted) {
-      break
-    }
-    if (chunk.type === "text" && chunk.content) {
-      fullOutput += chunk.content
-      options.onChunk(fullOutput)
-    }
-  }
-
-  return fullOutput
 }
 
 /**
@@ -169,7 +307,7 @@ export async function streamTranslateNovel(
   if (!cleaned) return ""
   if (options.signal?.aborted) return ""
   if (!isAIAvailable()) {
-    throw new Error("Scripting 助手未配置或不可用，请在设置中配置 AI 模型。")
+    throw new Error(getAIUnavailableErrorMessage())
   }
 
   const chunks = splitNovelChunks(cleaned, 1800)
@@ -185,9 +323,7 @@ export async function streamTranslateNovel(
     "3. 严禁遗漏任何正文细节，直接输出正文译文，严禁包含任何前缀、附注或多余寒暄。"
 
   for (let i = 0; i < totalChunks; i++) {
-    if (options.signal?.aborted) {
-      break
-    }
+    if (options.signal?.aborted) break
 
     if (options.onProgress) {
       options.onProgress({
@@ -205,7 +341,7 @@ export async function streamTranslateNovel(
     userPrompt += `【请完整翻译以下正文第 ${i + 1}/${totalChunks} 部分：】\n${currentChunk}`
 
     let chunkOutput = ""
-    const stream = await Assistant.requestStreaming({
+    const chunkResult = await executeUniversalAI({
       systemPrompt: baseSystemPrompt,
       messages: [
         {
@@ -213,30 +349,24 @@ export async function streamTranslateNovel(
           content: userPrompt,
         },
       ],
+      options: {
+        onChunk: (text) => {
+          chunkOutput = text
+          const currentCombined = accumulatedResult
+            ? accumulatedResult + "\n\n" + chunkOutput
+            : chunkOutput
+          options.onChunk(currentCombined)
+        },
+        signal: options.signal,
+      },
     })
 
-    for await (const chunk of stream) {
-      if (options.signal?.aborted) {
-        break
-      }
-      if (chunk.type === "text" && chunk.content) {
-        chunkOutput += chunk.content
-        const currentCombined = accumulatedResult
-          ? accumulatedResult + "\n\n" + chunkOutput
-          : chunkOutput
-        options.onChunk(currentCombined)
-      }
-    }
-
-    if (options.signal?.aborted) {
-      break
-    }
+    if (options.signal?.aborted) break
 
     accumulatedResult = accumulatedResult
-      ? accumulatedResult + "\n\n" + chunkOutput
-      : chunkOutput
+      ? accumulatedResult + "\n\n" + (chunkOutput || chunkResult)
+      : (chunkOutput || chunkResult)
 
-    // 提取当前 chunk 结尾 150 字作为下一个 chunk 的上下文提示
     previousContextTail = currentChunk.slice(-150)
   }
 
@@ -272,12 +402,11 @@ export async function streamSummarizeNovel(
   if (!cleaned) return ""
   if (options.signal?.aborted) return ""
   if (!isAIAvailable()) {
-    throw new Error("Scripting 助手未配置或不可用，请在设置中配置 AI 模型。")
+    throw new Error(getAIUnavailableErrorMessage())
   }
 
   const isSinglePageOfMulti = Boolean(options.pageInfo && options.pageInfo.total > 1)
 
-  // 若文本极长（超过 15,000 字），为了保证总结质量且不超上下文，进行安全采样（开头+中间段+结尾）
   let sampleText = cleaned
   if (cleaned.length > 15000) {
     const head = cleaned.slice(0, 6000)
@@ -301,8 +430,7 @@ export async function streamSummarizeNovel(
       "### ⚠️ 阅读提示与预警\n- (如有虐心、致郁、雷点或特殊癖好请明确标注，若无则注明“全年龄温馨向/无明显雷点”)\n\n" +
       "注意：直接输出Markdown内容，语言生动精练，不要添加额外的问候语。"
 
-  let fullOutput = ""
-  const stream = await Assistant.requestStreaming({
+  return executeUniversalAI({
     systemPrompt,
     messages: [
       {
@@ -312,19 +440,11 @@ export async function streamSummarizeNovel(
           : `请为以下小说生成导读总结：\n\n${sampleText}`,
       },
     ],
+    options: {
+      onChunk: options.onChunk,
+      signal: options.signal,
+    },
   })
-
-  for await (const chunk of stream) {
-    if (options.signal?.aborted) {
-      break
-    }
-    if (chunk.type === "text" && chunk.content) {
-      fullOutput += chunk.content
-      options.onChunk(fullOutput)
-    }
-  }
-
-  return fullOutput
 }
 
 /**
@@ -339,10 +459,9 @@ export async function streamContinueNovel(
   if (!cleaned) return ""
   if (options.signal?.aborted) return ""
   if (!isAIAvailable()) {
-    throw new Error("Scripting 助手未配置或不可用，请在设置中配置 AI 模型。")
+    throw new Error(getAIUnavailableErrorMessage())
   }
 
-  // 提取小说末尾 3000 字作为续写上下文基底
   const contextTail = cleaned.slice(-3000)
 
   const systemPrompt =
@@ -359,8 +478,7 @@ export async function streamContinueNovel(
   }
   userPrompt += "请基于以上内容开始续写后续篇章："
 
-  let fullOutput = ""
-  const stream = await Assistant.requestStreaming({
+  return executeUniversalAI({
     systemPrompt,
     messages: [
       {
@@ -368,19 +486,11 @@ export async function streamContinueNovel(
         content: userPrompt,
       },
     ],
+    options: {
+      onChunk: options.onChunk,
+      signal: options.signal,
+    },
   })
-
-  for await (const chunk of stream) {
-    if (options.signal?.aborted) {
-      break
-    }
-    if (chunk.type === "text" && chunk.content) {
-      fullOutput += chunk.content
-      options.onChunk(fullOutput)
-    }
-  }
-
-  return fullOutput
 }
 
 export interface OCRBubble {
@@ -421,7 +531,7 @@ export interface StreamVisionTranslateOptions extends StreamTranslateOptions {
 }
 
 /**
- * 多模态大模型视觉深度解析与气泡翻译（替代简单本地OCR，精准识别竖排日文、对话气泡与拟声词）
+ * 多模态大模型视觉深度解析与气泡翻译（精准识别竖排日文、对话气泡与拟声词）
  */
 export async function streamVisionTranslateImage(
   illust: PixivIllustration,
@@ -469,7 +579,7 @@ export async function streamVisionTranslateImage(
   }
 
   if (!isAIAvailable()) {
-    throw new Error("Scripting 助手未配置或不可用，请在设置中配置 AI 模型。")
+    throw new Error(getAIUnavailableErrorMessage())
   }
 
   const systemPrompt =
@@ -493,62 +603,48 @@ export async function streamVisionTranslateImage(
     "- **原文**：原文台词\n" +
     "- **译文**：中文翻译"
 
-  let fullOutput = ""
-  let reasoningOutput = ""
   let lastParsedJsonBlock = ""
   let hasParsedClosedJson = false
 
-  const stream = await Assistant.requestStreaming({
+  const contentParts: AdapterMessageContentPart[] = [
+    {
+      type: "text",
+      text: "请识别并定位这张漫画/插画中的所有气泡与文字，返回坐标 JSON 和中文汉化翻译：",
+    },
+    {
+      type: "image",
+      imageBase64: base64,
+      mimeType: "image/jpeg",
+    },
+  ]
+
+  const fullOutput = await executeUniversalAI({
     systemPrompt,
     messages: [
       {
         role: "user",
-        content: [
-          {
-            type: "text",
-            content: "请识别并定位这张漫画/插画中的所有气泡与文字，返回坐标 JSON 和中文汉化翻译：",
-          },
-          {
-            type: "image",
-            content: `data:image/jpeg;base64,${base64}`,
-          },
-        ],
+        content: contentParts,
       },
     ],
-  })
+    options: {
+      onChunk: (text) => {
+        options.onChunk(text)
 
-  for await (const chunk of stream) {
-    if (options.signal?.aborted) {
-      break
-    }
-    if (chunk.type === "text" && chunk.content) {
-      fullOutput += chunk.content
-      options.onChunk(fullOutput)
-
-      // 仅当包含完整闭合的代码围栏且内容发生变化时，增量解析 OCR 气泡
-      if (options.onBubblesParsed && !hasParsedClosedJson) {
-        const jsonMatch = fullOutput.match(/```(?:json)?\s*(\[\s*\{[\s\S]*?\}\s*\])\s*```/)
-        if (jsonMatch && jsonMatch[1] && jsonMatch[1] !== lastParsedJsonBlock) {
-          lastParsedJsonBlock = jsonMatch[1]
-          const bubbles = extractOCRBubbles(fullOutput)
-          if (bubbles.length > 0) {
-            hasParsedClosedJson = true
-            options.onBubblesParsed(bubbles)
+        if (options.onBubblesParsed && !hasParsedClosedJson) {
+          const jsonMatch = text.match(/```(?:json)?\s*(\[\s*\{[\s\S]*?\}\s*\])\s*```/)
+          if (jsonMatch && jsonMatch[1] && jsonMatch[1] !== lastParsedJsonBlock) {
+            lastParsedJsonBlock = jsonMatch[1]
+            const bubbles = extractOCRBubbles(text)
+            if (bubbles.length > 0) {
+              hasParsedClosedJson = true
+              options.onBubblesParsed(bubbles)
+            }
           }
         }
-      }
-    } else if (chunk.type === "reasoning" && chunk.content) {
-      reasoningOutput += chunk.content
-      if (!fullOutput) {
-        options.onChunk(reasoningOutput)
-      }
-    }
-  }
-
-  if (!fullOutput && reasoningOutput) {
-    fullOutput = reasoningOutput
-    options.onChunk(fullOutput)
-  }
+      },
+      signal: options.signal,
+    },
+  })
 
   if (options.onBubblesParsed && !hasParsedClosedJson) {
     options.onBubblesParsed(extractOCRBubbles(fullOutput))
@@ -606,86 +702,93 @@ export async function streamGenerateTranslatedImage(
   }
 
   if (!isAIAvailable()) {
-    throw new Error("Scripting 助手未配置或不可用，请在设置中配置 AI 模型。")
+    throw new Error(getAIUnavailableErrorMessage())
   }
 
+  // 1. 如果用户启用了独立的自定义生图模型配置
+  if (isCustomAIConfigured()) {
+    const profile = loadCustomAIProfile()
+    if (profile.imageGen.enabled) {
+      options.onChunk("正在使用自定义生图模型生成汉化图片...\n")
+      const effectiveKey = getEffectiveImageGenKey(profile)
+      const prompt =
+        "Fully translate and typeset all comic speech bubbles and text into Simplified Chinese, keeping original art, screentones, and style intact."
+      
+      const genResult = await requestCustomImageGen(profile.imageGen, effectiveKey, {
+        prompt,
+        referenceImageBase64: base64,
+        signal: options.signal,
+      })
+
+      if (genResult.base64 && options.onImageGenerated) {
+        options.onImageGenerated({
+          base64: genResult.base64,
+          mediaType: genResult.mediaType || "image/png",
+        })
+      }
+
+      const finishMsg = "汉化生图已完成！"
+      options.onChunk(finishMsg)
+      return finishMsg
+    }
+  }
+
+  // 2. 默认通用生图 Prompt
   const systemPrompt =
     "You are an expert AI manga localization and inpainting artist. Your task is to directly generate and output the fully translated manga page image where speech bubbles and text (in Japanese, English, Korean, or other languages) are seamlessly translated and typeset into Simplified Chinese, keeping the original artwork, screentones, characters, and panels intact."
 
-  let fullTextOutput = ""
-  let reasoningOutput = ""
+  const contentParts: AdapterMessageContentPart[] = [
+    {
+      type: "text",
+      text: "Please generate and output the translated image with all dialogue and text translated and typeset into Simplified Chinese:",
+    },
+    {
+      type: "image",
+      imageBase64: base64,
+      mimeType: "image/jpeg",
+    },
+  ]
+
   const emittedImageHashes = new Set<string>()
 
-  const stream = await Assistant.requestStreaming({
+  return executeUniversalAI({
     systemPrompt,
     messages: [
       {
         role: "user",
-        content: [
-          {
-            type: "text",
-            content: "Please generate and output the translated image with all dialogue and text translated and typeset into Simplified Chinese:",
-          },
-          {
-            type: "image",
-            content: `data:image/jpeg;base64,${base64}`,
-          },
-        ],
+        content: contentParts,
       },
     ],
-  })
-
-  for await (const chunk of stream) {
-    if (options.signal?.aborted) {
-      break
-    }
-    if (chunk.type === "text" && chunk.content) {
-      fullTextOutput += chunk.content
-      
-      // 增量状态机提取嵌入的 Data URI 图片，保留真实 MIME 类型并去重
-      if (options.onImageGenerated && fullTextOutput.includes("data:image/")) {
-        const regex = /data:(image\/[a-zA-Z0-9+.-]+);base64,([A-Za-z0-9+/=]{100,})/g
-        let match: RegExpExecArray | null
-        while ((match = regex.exec(fullTextOutput)) !== null) {
-          const mediaType = match[1] || "image/png"
-          const imgBase64 = match[2]
-          const quickHash = `${imgBase64.length}:${imgBase64.slice(0, 30)}:${imgBase64.slice(-30)}`
-          if (!emittedImageHashes.has(quickHash)) {
-            emittedImageHashes.add(quickHash)
-            options.onImageGenerated({
-              base64: imgBase64,
-              mediaType,
-            })
+    options: {
+      onChunk: (text) => {
+        if (options.onImageGenerated && text.includes("data:image/")) {
+          const regex = /data:(image\/[a-zA-Z0-9+.-]+);base64,([A-Za-z0-9+/=]{100,})/g
+          let match: RegExpExecArray | null
+          while ((match = regex.exec(text)) !== null) {
+            const mediaType = match[1] || "image/png"
+            const imgBase64 = match[2]
+            const quickHash = `${imgBase64.length}:${imgBase64.slice(0, 30)}:${imgBase64.slice(-30)}`
+            if (!emittedImageHashes.has(quickHash)) {
+              emittedImageHashes.add(quickHash)
+              options.onImageGenerated({
+                base64: imgBase64,
+                mediaType,
+              })
+            }
           }
         }
-      }
-
-      options.onChunk(fullTextOutput)
-    } else if (chunk.type === "reasoning" && chunk.content) {
-      reasoningOutput += chunk.content
-      if (!fullTextOutput) {
-        options.onChunk(reasoningOutput)
-      }
-    } else if (chunk.type === "image" && chunk.content) {
-      if (options.onImageGenerated) {
-        const imgData = chunk.content.data
-        const quickHash = `chunk_img:${imgData.length}:${imgData.slice(0, 30)}`
-        if (!emittedImageHashes.has(quickHash)) {
-          emittedImageHashes.add(quickHash)
-          options.onImageGenerated({
-            base64: imgData,
-            mediaType: chunk.content.mediaType || "image/png",
-          })
+        options.onChunk(text)
+      },
+      onImage: (img) => {
+        if (options.onImageGenerated) {
+          const quickHash = `chunk_img:${img.base64.length}:${img.base64.slice(0, 30)}`
+          if (!emittedImageHashes.has(quickHash)) {
+            emittedImageHashes.add(quickHash)
+            options.onImageGenerated(img)
+          }
         }
-      }
-    }
-  }
-
-  // 兜底：如果正文为空但有思考分析内容，输出思考内容
-  if (!fullTextOutput && reasoningOutput) {
-    fullTextOutput = reasoningOutput
-    options.onChunk(fullTextOutput)
-  }
-
-  return fullTextOutput
+      },
+      signal: options.signal,
+    },
+  })
 }
