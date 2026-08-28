@@ -217,9 +217,9 @@ export function CachedImage(props: {
   }, [isTargetLoaded, path])
 
   // 过渡动画状态管理：
-  // 1. 首帧命中或显式禁用淡入时，直接标记为已完成，不挂载任何 Transition 修饰符；
-  // 2. 异步大图下载并就绪时启动过渡，在消融/淡入动画结束（duration + 50ms 缓冲）后标记完成并剥离 Transition，
-  //    彻底杜绝后续父组件状态变化（如 mediaReady、ambientPalette、收藏操作、滚动）二次触发 Transition 导致消融后闪屏。
+  // 1. 首帧命中或显式禁用淡入时，直接标记为已完成；
+  // 2. 异步大图下载并就绪时启动过渡计时器，在消融/淡入动画结束（duration + 50ms 缓冲）后标记完成，
+  //    用于及时卸载底层垫底图与恢复透明背景，释放位图内存并杜绝亚像素边缘露白。
   const [transitionCompleted, setTransitionCompleted] = useState(
     () => initialHitRef.current || disableFadeIn
   )
@@ -451,13 +451,15 @@ export function CachedImage(props: {
     }
   }, [cornerRadius])
 
-  // 首帧已命中缓存或过渡已完成时直接硬切呈现（0ms 动画），秒开无延时无白闪；
+  // 首帧已命中缓存或显式禁用淡入时直接硬切呈现（0ms 动画），秒开无延时无白闪；
   // 异步加载完成后：
   // 1. 有旧图垫底或本地模糊预览图垫底时，采用配置的模糊消融（0-250ms，默认 150ms），平滑过渡；
-  // 2. 无本地预览图垫底时（如多页漫画后续页/冷启动），使用标准设置淡入，避免在灰色底色上误触发消融产生灰白闪屏。
-  const imageTransition = disableFadeIn || initialHitRef.current || transitionCompleted
+  // 2. 无本地预览图垫底时（如普通卡片/冷启动），使用标准设置淡入。
+  // 注意：此 transition 属性在首次决定后必须保持稳定，绝不可在 transitionCompleted 后动态变更为 undefined，
+  // 否则会因修改已挂载视图的修饰符结构（_ModifiedContent -> 原生 View）触发 SwiftUI 视图销毁重建，在淡入动画结束瞬间引发闪屏！
+  const imageTransition = disableFadeIn || initialHitRef.current
     ? undefined
-    : (showBlurPreview || underlayPath)
+    : (previewUrl || previousLoadedPathRef.current)
       ? (crossFadeDuration > 0 ? Transition.fade(crossFadeDuration) : undefined)
       : (fadeDuration > 0 ? Transition.fade(fadeDuration) : undefined)
 
@@ -469,10 +471,16 @@ export function CachedImage(props: {
       frame={containerFrame}
       onTapGesture={onTapGesture}
     >
-      {/* 1. 底层骨架占位色块（仅在无图或加载失败时展示占位底色，图片就绪后透明，杜绝亚像素边缘露白） */}
+      {/* 1. 底层骨架占位色块（在无图、加载失败或淡入未完成且无垫底图时展示占位底色，图片完全就绪后透明，杜绝亚像素边缘露白） */}
       <VStack
         frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-        background={(!path && !previewPath && !underlayPath) || failed ? "tertiarySystemFill" : undefined}
+        background={
+          (!path && !previewPath && !underlayPath) ||
+          failed ||
+          (!transitionCompleted && !previewPath && !underlayPath)
+            ? "tertiarySystemFill"
+            : undefined
+        }
       >
         {!url || failed ? (
           // 仅在明确加载失败或无 URL 时展示浅灰占位图标

@@ -208,7 +208,7 @@ export function UgoiraPlayerView(props: {
             resizable={true}
             aspectRatio={{ value: stableAspect, contentMode: "fit" }}
             frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-            transition={initialHitRef.current || transitionCompleted ? undefined : (crossFadeDuration > 0 ? Transition.fade(crossFadeDuration) : undefined)}
+            transition={initialHitRef.current ? undefined : (crossFadeDuration > 0 ? Transition.fade(crossFadeDuration) : undefined)}
           />
         ) : null}
 
@@ -219,7 +219,10 @@ export function UgoiraPlayerView(props: {
             spacing={8}
             frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
           >
-            <ProgressView progressViewStyle="circular" />
+            <ProgressView
+              controlSize="large"
+              progressViewStyle="circular"
+            />
           </VStack>
         ) : null}
 
