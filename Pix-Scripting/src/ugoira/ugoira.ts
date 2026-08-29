@@ -5,34 +5,51 @@ import { loadSettings } from "../store/settings"
 import { pixivDataPath } from "../store/dataDirectory"
 import { publishPreparedFile, recoverFile, writeTextSafely } from "../store/safeFile"
 import type { UgoiraFrame } from "../types"
+import { exportFramesToGif, exportFramesToMp4 } from "./ffmpegExporter"
 
-// Ugoira 动图：下载 zip 帧 → 解压 → 合成 mp4 → 播放/保存
+export interface UgoiraFramesResult {
+  illustID: number
+  framesDir: string
+  frames: UgoiraFrame[]
+  totalDurationMs: number
+  width?: number
+  height?: number
+  zipPath?: string
+}
 
-const UGOIRA_DIR_NAME = "UgoiraCache"
-const CACHE_META_KEY = "pixiv_ugoira_cache_v1"
-
-export interface UgoiraCacheMetaEntry {
+export interface UgoiraResult {
   mp4Path: string
   duration: number
+}
+
+interface UgoiraCacheEntry {
+  frames: UgoiraFrame[]
+  totalDurationMs: number
+  width?: number
+  height?: number
+  lastAccess: number
   size?: number
-  lastAccess?: number
 }
 
 interface UgoiraCacheMeta {
-  [illustID: string]: UgoiraCacheMetaEntry
+  [illustID: string]: UgoiraCacheEntry
 }
+
+const UGOIRA_DIR_NAME = "UgoiraCache"
+const CACHE_META_KEY = "pixiv_ugoira_cache_v2"
 
 let baseDir: string | null = null
 let cacheGeneration = 0
 let taskSequence = 0
 let ugoiraMetaSaveTimer: number | null = null
-const inflightBuilds = new Map<number, Promise<UgoiraResult>>()
+const inflightTasks = new Map<number, Promise<UgoiraFramesResult>>()
+const memoryFramesCache = new Map<number, UgoiraFramesResult>()
 
 function joinPath(...parts: string[]): string {
   return parts.join("/")
 }
 
-function ensureDir(): string {
+function ensureBaseDir(): string {
   const dir = baseDir ?? pixivDataPath(UGOIRA_DIR_NAME)
   if (!FileManager.existsSync(dir)) {
     FileManager.createDirectorySync(dir, true)
@@ -42,7 +59,7 @@ function ensureDir(): string {
 }
 
 function cacheMetaPath(): string {
-  return joinPath(ensureDir(), CACHE_META_KEY)
+  return joinPath(ensureBaseDir(), CACHE_META_KEY)
 }
 
 function loadMeta(): UgoiraCacheMeta {
@@ -52,7 +69,7 @@ function loadMeta(): UgoiraCacheMeta {
   try {
     const parsed = JSON.parse(FileManager.readAsStringSync(path, "utf-8"))
     return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? parsed as UgoiraCacheMeta
+      ? (parsed as UgoiraCacheMeta)
       : {}
   } catch {
     return {}
@@ -76,6 +93,23 @@ function isUsableFile(path: string): boolean {
   } catch {
     return false
   }
+}
+
+function calculateDirSize(dir: string): number {
+  if (!FileManager.existsSync(dir)) return 0
+  let total = 0
+  try {
+    for (const name of FileManager.readDirectorySync(dir, true)) {
+      try {
+        const full = joinPath(dir, name)
+        if (FileManager.isFileSync(full)) {
+          const s = FileManager.statSync(full).size
+          if (s > 0) total += s
+        }
+      } catch {}
+    }
+  } catch {}
+  return total
 }
 
 const pendingTouches = new Map<string, { lastAccess: number; size?: number }>()
@@ -103,16 +137,16 @@ function flushPendingTouches(): void {
   } catch {}
 }
 
-function touchUgoira(id: string, mp4Path?: string): void {
-  let fileSize: number | undefined
-  if (mp4Path && isUsableFile(mp4Path)) {
+function touchUgoira(id: string, workDir?: string): void {
+  let dirSize: number | undefined
+  if (workDir && FileManager.existsSync(workDir)) {
     try {
-      fileSize = FileManager.statSync(mp4Path).size
+      dirSize = calculateDirSize(workDir)
     } catch {}
   }
   pendingTouches.set(id, {
     lastAccess: Date.now(),
-    size: fileSize,
+    size: dirSize,
   })
 
   if (ugoiraMetaSaveTimer != null) clearTimeout(ugoiraMetaSaveTimer)
@@ -122,53 +156,83 @@ function touchUgoira(id: string, mp4Path?: string): void {
   }, 3000)
 }
 
-export interface UgoiraResult {
-  mp4Path: string
-  duration: number
+function ugoiraWorkDir(illustID: number): string {
+  return joinPath(ensureBaseDir(), String(illustID))
 }
 
-// 检查是否已合成
-export function cachedUgoira(illustID: number): UgoiraResult | null {
-  const meta = loadMeta()
-  const idStr = String(illustID)
-  const entry = meta[idStr]
-  if (entry && Number.isFinite(entry.duration) && entry.duration > 0 && isUsableFile(entry.mp4Path)) {
-    touchUgoira(idStr, entry.mp4Path)
-    return { mp4Path: entry.mp4Path, duration: entry.duration }
+/**
+ * 检查动图序列帧是否已在缓存中完好就绪
+ */
+export function cachedUgoiraFrames(illustID: number): UgoiraFramesResult | null {
+  const mem = memoryFramesCache.get(illustID)
+  if (mem && FileManager.existsSync(mem.framesDir)) {
+    return mem
   }
+
+  const idStr = String(illustID)
+  const meta = loadMeta()
+  const entry = meta[idStr]
+  const workDir = ugoiraWorkDir(illustID)
+  const framesDir = joinPath(workDir, "frames")
+  const zipPath = joinPath(workDir, "frames.zip")
+
+  if (entry && Array.isArray(entry.frames) && entry.frames.length > 0 && FileManager.existsSync(framesDir)) {
+    // 校验首帧和尾帧存在
+    const firstPath = joinPath(framesDir, entry.frames[0].file)
+    const lastPath = joinPath(framesDir, entry.frames[entry.frames.length - 1].file)
+    if (isUsableFile(firstPath) && isUsableFile(lastPath)) {
+      touchUgoira(idStr, workDir)
+      const res: UgoiraFramesResult = {
+        illustID,
+        framesDir,
+        frames: entry.frames,
+        totalDurationMs: entry.totalDurationMs || entry.frames.reduce((sum, f) => sum + (f.delay || 0), 0),
+        width: entry.width,
+        height: entry.height,
+        zipPath: FileManager.existsSync(zipPath) ? zipPath : undefined,
+      }
+      memoryFramesCache.set(illustID, res)
+      return res
+    }
+  }
+
+  // 缓存损坏则清理元数据
+  memoryFramesCache.delete(illustID)
   if (entry) {
     delete meta[idStr]
     pendingTouches.delete(idStr)
-    try { saveMeta(meta) } catch { /* ignore recoverable cache metadata failure */ }
+    try { saveMeta(meta) } catch {}
   }
   return null
 }
 
-// 合成（或复用缓存）；同一作品的所有调用者共享一个构建 Promise。
-export function buildUgoira(illustID: number): Promise<UgoiraResult> {
-  const cached = cachedUgoira(illustID)
+/**
+ * 准备动图序列帧（下载 zip、解压并缓存），支持多请求并发合并
+ */
+export function prepareUgoira(illustID: number): Promise<UgoiraFramesResult> {
+  const cached = cachedUgoiraFrames(illustID)
   if (cached) return Promise.resolve(cached)
-  const active = inflightBuilds.get(illustID)
+
+  const active = inflightTasks.get(illustID)
   if (active) return active
 
-  let task: Promise<UgoiraResult>
-  task = performBuild(illustID).finally(() => {
-    if (inflightBuilds.get(illustID) === task) {
-      inflightBuilds.delete(illustID)
+  let task: Promise<UgoiraFramesResult>
+  task = performPrepare(illustID).finally(() => {
+    if (inflightTasks.get(illustID) === task) {
+      inflightTasks.delete(illustID)
     }
   })
-  inflightBuilds.set(illustID, task)
+  inflightTasks.set(illustID, task)
   return task
 }
 
-async function performBuild(illustID: number): Promise<UgoiraResult> {
+async function performPrepare(illustID: number): Promise<UgoiraFramesResult> {
   const generation = cacheGeneration
   const taskID = `${illustID}_${Date.now()}_${++taskSequence}`
-  const taskDir = joinPath(FileManager.temporaryDirectory, `PixivUgoira_${taskID}`)
-  const zipPath = joinPath(taskDir, "frames.zip")
-  const framesDir = joinPath(taskDir, "frames")
-  const taskOutput = joinPath(taskDir, "output.mp4")
-  FileManager.createDirectorySync(framesDir, true)
+  const taskDir = joinPath(FileManager.temporaryDirectory, `PixivUgoiraPrep_${taskID}`)
+  const tempZipPath = joinPath(taskDir, "frames.zip")
+  const tempFramesDir = joinPath(taskDir, "frames")
+  FileManager.createDirectorySync(tempFramesDir, true)
 
   try {
     const metadata = await session.call((token) => ugoiraMetadata(illustID, token))
@@ -181,88 +245,111 @@ async function performBuild(illustID: number): Promise<UgoiraResult> {
     if (!zipData || generation !== cacheGeneration) {
       throw new Error(generation !== cacheGeneration ? "动图缓存已清空，请重试" : "动图帧下载失败")
     }
-    FileManager.writeAsDataSync(zipPath, zipData)
-    await extractZipEntries(zipPath, framesDir)
-    validateFrames(framesDir, frames)
+    FileManager.writeAsDataSync(tempZipPath, zipData)
+    await extractZipEntries(tempZipPath, tempFramesDir)
+    validateFrames(tempFramesDir, frames)
 
-    const firstFramePath = joinPath(framesDir, frames[0].file)
-    let renderWidth = 640
-    let renderHeight = 360
+    const totalDurationMs = frames.reduce((acc, f) => acc + (f.delay || 0), 0)
+    let width = 0
+    let height = 0
     try {
-      const img = UIImage.fromFile(firstFramePath)
-      if (img) {
-        const maxW = 1280
-        const scale = Math.min(1, maxW / Math.max(1, img.width))
-        renderWidth = Math.round(img.width * scale)
-        renderHeight = Math.round(img.height * scale)
+      const firstImg = UIImage.fromFile(joinPath(tempFramesDir, frames[0].file))
+      if (firstImg) {
+        width = firstImg.width
+        height = firstImg.height
       }
-    } catch {
-      // 保持默认
-    }
-
-    const videoItems = frames.map((frame) => ({
-      imagePath: joinPath(framesDir, frame.file),
-      duration: MediaTime.make({
-        seconds: Math.max(0.05, frame.delay / 1000),
-        preferredTimescale: 600,
-      }),
-    }))
-
-    const result = await MediaComposer.composeAndExport({
-      exportPath: taskOutput,
-      timeline: { videoItems, audioClips: [] },
-      exportOptions: {
-        renderSize: { width: renderWidth, height: renderHeight },
-        frameRate: 30,
-        presetName: "MediumQuality",
-      },
-      overwrite: true,
-    })
-
-    const duration = result.duration.getSeconds()
-    if (generation !== cacheGeneration) throw new Error("动图缓存已清空，请重试")
-    if (!Number.isFinite(duration) || duration <= 0 || !isUsableFile(taskOutput)) {
-      throw new Error("动图合成结果无效")
-    }
-
-    // 发布区间无 await：清缓存不能插入到 generation 检查与文件/meta 提交之间。
-    const dir = ensureDir()
-    const mp4Path = joinPath(dir, `ugoira_${illustID}.mp4`)
-    publishPreparedFile(taskOutput, mp4Path)
-    let fileSize = 0
-    try {
-      fileSize = FileManager.statSync(mp4Path).size
     } catch {}
-    const meta = loadMeta()
-    // 合并 pending touches 避免丢失未写盘的访问记录
-    for (const [pId, pTouch] of pendingTouches) {
-      if (meta[pId]) {
-        meta[pId].lastAccess = Math.max(meta[pId].lastAccess || 0, pTouch.lastAccess)
-        if (pTouch.size != null && pTouch.size > 0) meta[pId].size = pTouch.size
-      }
-    }
-    pendingTouches.clear()
-    if (ugoiraMetaSaveTimer != null) {
-      clearTimeout(ugoiraMetaSaveTimer)
-      ugoiraMetaSaveTimer = null
-    }
 
+    if (generation !== cacheGeneration) throw new Error("动图缓存已清空，请重试")
+
+    // 发布到稳定存储目录
+    const workDir = ugoiraWorkDir(illustID)
+    if (FileManager.existsSync(workDir)) {
+      try { FileManager.removeSync(workDir) } catch {}
+    }
+    FileManager.createDirectorySync(workDir, true)
+    const finalFramesDir = joinPath(workDir, "frames")
+    const finalZipPath = joinPath(workDir, "frames.zip")
+
+    // 移动/发布临时帧文件与 zip
+    publishPreparedFile(tempZipPath, finalZipPath)
+    publishPreparedFile(tempFramesDir, finalFramesDir)
+
+    const dirSize = calculateDirSize(workDir)
+    const meta = loadMeta()
     meta[String(illustID)] = {
-      mp4Path,
-      duration,
-      size: fileSize,
+      frames,
+      totalDurationMs,
+      width,
+      height,
       lastAccess: Date.now(),
+      size: dirSize,
     }
     saveMeta(meta)
     enforceUgoiraCacheLimit()
-    return { mp4Path, duration }
+
+    const result: UgoiraFramesResult = {
+      illustID,
+      framesDir: finalFramesDir,
+      frames,
+      totalDurationMs,
+      width,
+      height,
+      zipPath: finalZipPath,
+    }
+    memoryFramesCache.set(illustID, result)
+    return result
   } finally {
     try {
       if (FileManager.existsSync(taskDir)) FileManager.removeSync(taskDir)
-    } catch {
-      // ignore task-owned cleanup failure
-    }
+    } catch {}
   }
+}
+
+/**
+ * 将动图序列帧通过 FFmpeg 合成指定格式并返回本地输出路径（供导出使用）
+ */
+export async function buildUgoira(
+  illustID: number,
+  format: "mp4" | "gif" = "mp4"
+): Promise<UgoiraResult> {
+  const prep = await prepareUgoira(illustID)
+  const workDir = ugoiraWorkDir(illustID)
+  const duration = Math.max(0.1, prep.totalDurationMs / 1000)
+
+  if (format === "gif") {
+    const gifPath = joinPath(workDir, `ugoira_${illustID}.gif`)
+    if (isUsableFile(gifPath)) {
+      touchUgoira(String(illustID), workDir)
+      return { mp4Path: gifPath, duration }
+    }
+    await exportFramesToGif(prep.framesDir, prep.frames, gifPath)
+    touchUgoira(String(illustID), workDir)
+    return { mp4Path: gifPath, duration }
+  } else {
+    const mp4Path = joinPath(workDir, `ugoira_${illustID}.mp4`)
+    if (isUsableFile(mp4Path)) {
+      touchUgoira(String(illustID), workDir)
+      return { mp4Path, duration }
+    }
+    await exportFramesToMp4(prep.framesDir, prep.frames, mp4Path)
+    touchUgoira(String(illustID), workDir)
+    return { mp4Path, duration }
+  }
+}
+
+/**
+ * 兼容旧版的 cachedUgoira 查询（若已有 MP4 直接返回）
+ */
+export function cachedUgoira(illustID: number): UgoiraResult | null {
+  const workDir = ugoiraWorkDir(illustID)
+  const mp4Path = joinPath(workDir, `ugoira_${illustID}.mp4`)
+  if (isUsableFile(mp4Path)) {
+    const prep = cachedUgoiraFrames(illustID)
+    const duration = prep ? prep.totalDurationMs / 1000 : 1
+    return { mp4Path, duration }
+  }
+  return null
 }
 
 function validateFrames(framesDir: string, frames: UgoiraFrame[]): void {
@@ -276,7 +363,6 @@ function validateFrames(framesDir: string, frames: UgoiraFrame[]): void {
   }
 }
 
-// 用 Archive 逐条解压 zip 条目到目标目录（仅提取文件，忽略目录/路径穿越）
 async function extractZipEntries(zipPath: string, destDir: string): Promise<void> {
   const archive = Archive.openForMode(zipPath, "read")
   const entries = archive.getEntryPaths()
@@ -287,18 +373,21 @@ async function extractZipEntries(zipPath: string, destDir: string): Promise<void
   }
 }
 
-// 按 LRU 清理超出上限的动图缓存（动图分配总预算的 10%）
+/**
+ * 按 LRU 清理超出上限的动图缓存
+ */
 export function enforceUgoiraCacheLimit(): void {
   const settings = loadSettings()
   if (settings.cacheLimitMB == null) return
-  const limitBytes = Math.round(settings.cacheLimitMB * 1024 * 1024 * 0.1)
+  const limitBytes = Math.round(settings.cacheLimitMB * 1024 * 1024 * 0.15)
   const meta = loadMeta()
   const entries = Object.entries(meta)
 
-  for (const [, v] of entries) {
-    if (v.size == null && isUsableFile(v.mp4Path)) {
+  for (const [id, v] of entries) {
+    const workDir = ugoiraWorkDir(Number(id))
+    if (v.size == null && FileManager.existsSync(workDir)) {
       try {
-        v.size = FileManager.statSync(v.mp4Path).size
+        v.size = calculateDirSize(workDir)
       } catch {}
     }
     if (v.lastAccess == null) {
@@ -312,9 +401,10 @@ export function enforceUgoiraCacheLimit(): void {
   const sorted = entries.sort((a, b) => (a[1].lastAccess || 0) - (b[1].lastAccess || 0))
   for (const [id, v] of sorted) {
     if (total <= limitBytes) break
+    const workDir = ugoiraWorkDir(Number(id))
     try {
-      if (FileManager.existsSync(v.mp4Path)) {
-        FileManager.removeSync(v.mp4Path)
+      if (FileManager.existsSync(workDir)) {
+        FileManager.removeSync(workDir)
       }
     } catch {}
     delete meta[id]
@@ -325,39 +415,29 @@ export function enforceUgoiraCacheLimit(): void {
   } catch {}
 }
 
-// 动图缓存占用（字节），用于与图片缓存统一展示。
+/**
+ * 动图缓存占用（字节）
+ */
 export function ugoiraCacheUsageBytes(): number {
-  const dir = ensureDir()
-  let total = 0
-  try {
-    for (const name of FileManager.readDirectorySync(dir)) {
-      try {
-        const stat = FileManager.statSync(joinPath(dir, name))
-        total += stat.size > 0 ? stat.size : 0
-      } catch {
-        // 忽略不可读的缓存条目。
-      }
-    }
-  } catch {
-    // 缓存目录暂不可读时按零处理。
-  }
-  return total
+  const dir = ensureBaseDir()
+  return calculateDirSize(dir)
 }
 
-// 清空动图缓存。构建任务在独立临时目录继续收尾，但旧代次不得发布。
+/**
+ * 清空动图缓存
+ */
 export function clearUgoiraCache(): void {
   cacheGeneration += 1
   pendingTouches.clear()
+  memoryFramesCache.clear()
   if (ugoiraMetaSaveTimer != null) {
     clearTimeout(ugoiraMetaSaveTimer)
     ugoiraMetaSaveTimer = null
   }
-  const dir = ensureDir()
+  const dir = ensureBaseDir()
   try {
     if (FileManager.existsSync(dir)) FileManager.removeSync(dir)
     FileManager.createDirectorySync(dir, true)
-  } catch {
-    // ignore
-  }
+  } catch {}
   baseDir = null
 }

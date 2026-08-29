@@ -597,6 +597,17 @@ export function SettingsView() {
         }
       >
         <Picker
+          title="动图导出格式"
+          value={settings.ugoiraExportFormat}
+          onChanged={(value: string) =>
+            update({ ugoiraExportFormat: value as "mp4" | "gif" })
+          }
+        >
+          <Text tag="mp4">MP4 视频</Text>
+          <Text tag="gif">GIF 动图</Text>
+        </Picker>
+
+        <Picker
           title="存储模式"
           value={settings.downloadStorageMode}
           onChanged={(value: string) =>

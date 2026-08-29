@@ -9,6 +9,7 @@ import { session } from "../api/session"
 import { imageUrlOf } from "../image/imageLoader"
 import { getDownloadImageQuality, loadSettings } from "../store/settings"
 import { buildUgoira } from "../ugoira/ugoira"
+import { exportUgoiraToAlbum } from "./ugoiraExporter"
 import { exportMangaToCbz } from "./cbzExporter"
 import {
   cleanTemporaryPath,
@@ -227,12 +228,8 @@ export async function downloadAuthorIllustrationsToAlbum(
 
         try {
           if (item.type === "ugoira") {
-            const ugoiraRes = await buildUgoira(item.id)
-            if (ugoiraRes?.mp4Path) {
-              const safeTitle = sanitizeFileName(`${item.title}_${authorName}_${item.id}`)
-              const ok = await saveVideoToPixivAlbum(ugoiraRes.mp4Path, `${safeTitle}.mp4`)
-              if (ok) successCount++
-            }
+            const res = await exportUgoiraToAlbum(item)
+            if (res.success) successCount++
           } else {
             const ok = await downloadIllustToAlbum(item)
             if (ok) successCount++
@@ -299,15 +296,16 @@ export async function exportAuthorIllustrationsToZip(
           const pageCount = Math.max(1, item.page_count || item.meta_pages?.length || 1)
 
           if (item.type === "ugoira") {
-            // 动图导出为 mp4 放入根目录
+            // 动图按用户设置格式导出放入根目录
+            const format = loadSettings().ugoiraExportFormat ?? "mp4"
             const statusMsg = `正在合成动图 (${i + 1}/${illusts.length}): ${item.title}`
             onProgress?.(statusMsg, processedPages, totalPages)
             task.updateProgress({ current: processedPages, total: totalPages, statusText: statusMsg })
             try {
-              const ugoiraRes = await buildUgoira(item.id)
+              const ugoiraRes = await buildUgoira(item.id, format)
               if (ugoiraRes?.mp4Path && FileManager.existsSync(ugoiraRes.mp4Path)) {
-                const destMp4 = `${tempDir}/${item.id}_${safeTitle}.mp4`
-                await FileManager.copyFile(ugoiraRes.mp4Path, destMp4)
+                const destPath = `${tempDir}/${item.id}_${safeTitle}.${format}`
+                await FileManager.copyFile(ugoiraRes.mp4Path, destPath)
               }
             } catch (ugErr: any) {
               console.log(`Ugoira export error in batch ${item.id}:`, ugErr?.message ?? ugErr)

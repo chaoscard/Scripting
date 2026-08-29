@@ -539,16 +539,19 @@ function renderIllustContextMenu(
   customContextMenu?: any
 ) {
   const pageCount = illust.page_count ?? 1
+  const ugoiraFormat = loadSettings().ugoiraExportFormat ?? "mp4"
   const downloadTitle =
     illust.type === "ugoira"
-      ? "下载动图 (MP4)"
+      ? `下载动图 (${ugoiraFormat.toUpperCase()})`
       : pageCount > 1
         ? `下载全部图片 (共 ${pageCount} 张)`
         : "下载图片"
 
   const downloadIcon =
     illust.type === "ugoira"
-      ? "film"
+      ? ugoiraFormat === "gif"
+        ? "photo.stack"
+        : "film"
       : "arrow.down.circle"
 
   const defaultMenuItems = (

@@ -5,6 +5,7 @@ import { recoverFile, writeTextSafely } from "./safeFile"
 export type FeedImageQuality = "medium" | "large"
 export type DetailImageQuality = "large" | "original"
 export type DownloadImageQuality = "large" | "original"
+export type UgoiraExportFormat = "mp4" | "gif"
 export type DownloadStorageMode = "local" | "icloud"
 export type CloseButtonAction = "minimize" | "exit"
 export type WatchlistSortOrder = "asc" | "desc"
@@ -105,6 +106,7 @@ export interface AppSettings {
   detailImageQualityIpad: DetailImageQuality
   downloadImageQualityIos: DownloadImageQuality
   downloadImageQualityIpad: DownloadImageQuality
+  ugoiraExportFormat: UgoiraExportFormat
   downloadStorageMode: DownloadStorageMode
   downloadCustomDirectoryBookmark: string | null
   downloadCustomDirectoryPath: string | null
@@ -158,6 +160,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   detailImageQualityIpad: "large",
   downloadImageQualityIos: "original",
   downloadImageQualityIpad: "original",
+  ugoiraExportFormat: "mp4",
   downloadStorageMode: "local",
   downloadCustomDirectoryBookmark: null,
   downloadCustomDirectoryPath: null,
@@ -208,6 +211,7 @@ const WATCHLIST_SORT_VALUES: readonly WatchlistSortOrder[] = ["asc", "desc"]
 const FEED_QUALITY_VALUES: readonly FeedImageQuality[] = ["medium", "large"]
 const DETAIL_QUALITY_VALUES: readonly DetailImageQuality[] = ["large", "original"]
 const DOWNLOAD_QUALITY_VALUES: readonly DownloadImageQuality[] = ["large", "original"]
+const UGOIRA_EXPORT_FORMAT_VALUES: readonly UgoiraExportFormat[] = ["mp4", "gif"]
 const DOWNLOAD_STORAGE_MODE_VALUES: readonly DownloadStorageMode[] = ["local", "icloud"]
 const LONG_PRESS_ACTION_VALUES: readonly AppSettings["longPressBookmarkAction"][] = ["off", "follow", "detail"]
 const CLOSE_BUTTON_ACTION_VALUES: readonly CloseButtonAction[] = ["minimize", "exit"]
@@ -401,6 +405,9 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
       : isOneOf(stored?.downloadImageQuality, DOWNLOAD_QUALITY_VALUES)
       ? stored.downloadImageQuality
       : DEFAULT_SETTINGS.downloadImageQualityIpad,
+    ugoiraExportFormat: isOneOf(stored?.ugoiraExportFormat, UGOIRA_EXPORT_FORMAT_VALUES)
+      ? stored.ugoiraExportFormat
+      : DEFAULT_SETTINGS.ugoiraExportFormat,
     downloadStorageMode: isOneOf(stored?.downloadStorageMode, DOWNLOAD_STORAGE_MODE_VALUES)
       ? stored.downloadStorageMode
       : DEFAULT_SETTINGS.downloadStorageMode,

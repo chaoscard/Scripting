@@ -3,20 +3,20 @@ import {
   Image,
   ProgressView,
   Text,
+  TimelineCanvas,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
   VStack,
-  VideoPlayer,
   ZStack,
 } from "scripting"
 import { cachedFilePath, loadImage } from "../image/imageLoader"
 import { loadSettings } from "../store/settings"
 import { useLatest } from "./hooks"
-import { buildUgoira, cachedUgoira } from "../ugoira/ugoira"
-import type { UgoiraResult } from "../ugoira/ugoira"
+import { cachedUgoiraFrames, prepareUgoira } from "../ugoira/ugoira"
+import type { UgoiraFramesResult } from "../ugoira/ugoira"
 
 function blurCrossFadeDurationSec(): number {
   const ms = loadSettings().blurCrossFadeDuration ?? 150
@@ -41,10 +41,12 @@ export function UgoiraPlayerView(props: {
     frame,
     onLoaded,
   } = props
-  const [result, setResult] = useState<UgoiraResult | null>(null)
-  const [loading, setLoading] = useState(false)
+
+  // 1. 同步尝试从缓存（内存/磁盘）中读取帧数据
+  const initialFrames = useMemo(() => cachedUgoiraFrames(illustID), [illustID])
+  const [framesData, setFramesData] = useState<UgoiraFramesResult | null>(initialFrames)
+  const [loading, setLoading] = useState(() => !initialFrames)
   const [error, setError] = useState<string | null>(null)
-  const [videoReady, setVideoReady] = useState(false)
   const [previewPath, setPreviewPath] = useState<string | null>(() => (
     previewUrl ? cachedFilePath(previewUrl) : null
   ))
@@ -58,7 +60,7 @@ export function UgoiraPlayerView(props: {
     }
   }, [onLoadedRef])
 
-  // 竞态防护：illustID 切换（或组件卸载）后，旧作品的合成结果直接丢弃
+  // 竞态防护：illustID 切换后丢弃旧数据
   const seqRef = useRef(0)
   const initialHitRef = useRef(Boolean(previewPath))
   const [transitionCompleted, setTransitionCompleted] = useState(() => initialHitRef.current)
@@ -71,10 +73,20 @@ export function UgoiraPlayerView(props: {
     setTransitionCompleted(false)
   }, [previewUrl])
 
+  // 当 illustID 变更时，更新 framesData 状态
   useEffect(() => {
-    setVideoReady(false)
-  }, [illustID])
+    const cached = cachedUgoiraFrames(illustID)
+    if (cached) {
+      setFramesData(cached)
+      setLoading(false)
+      notifyLoaded(true)
+    } else {
+      setFramesData(null)
+      setLoading(true)
+    }
+  }, [illustID, notifyLoaded])
 
+  // 加载海报预览图
   useEffect(() => {
     if (!previewUrl) {
       setPreviewPath(null)
@@ -98,30 +110,29 @@ export function UgoiraPlayerView(props: {
     }
   }, [previewUrl])
 
-  const doBuild = useCallback(() => {
+  const doLoadFrames = useCallback(() => {
     const seq = ++seqRef.current
     hasNotifiedRef.current = false
     setError(null)
-    setVideoReady(false)
-    const cached = cachedUgoira(illustID)
+    const cached = cachedUgoiraFrames(illustID)
     if (cached) {
-      setResult(cached)
+      setFramesData(cached)
       setLoading(false)
       notifyLoaded(true)
       return
     }
-    setResult(null)
+    setFramesData(null)
     setLoading(true)
-    buildUgoira(illustID)
+    prepareUgoira(illustID)
       .then((r) => {
         if (seq === seqRef.current) {
-          setResult(r)
+          setFramesData(r)
           notifyLoaded(true)
         }
       })
       .catch((err: any) => {
         if (seq === seqRef.current) {
-          setError(err?.message ?? "动图合成失败")
+          setError(err?.message ?? "动图资源加载失败")
           notifyLoaded(false)
         }
       })
@@ -131,12 +142,11 @@ export function UgoiraPlayerView(props: {
   }, [illustID, notifyLoaded])
 
   useEffect(() => {
-    doBuild()
+    doLoadFrames()
     return () => {
-      // 卸载/换 id：使在途合成结果失效
       seqRef.current++
     }
-  }, [doBuild])
+  }, [doLoadFrames])
 
   const previewBlurredImage = useMemo(() => {
     if (!previewPath) return null
@@ -150,6 +160,9 @@ export function UgoiraPlayerView(props: {
   }, [previewPath, blurPreviewRadius])
 
   const intrinsicAspect = useMemo(() => {
+    if (framesData && framesData.width && framesData.height && framesData.width > 0 && framesData.height > 0) {
+      return framesData.width / framesData.height
+    }
     if (!previewPath) return null
     try {
       const image = UIImage.fromFile(previewPath)
@@ -160,7 +173,7 @@ export function UgoiraPlayerView(props: {
       return null
     }
     return null
-  }, [previewPath])
+  }, [framesData, previewPath])
 
   // 锁定宽高比，偏差 <2% 时沿用传入比例，防止尺寸微小偏差导致二次重排
   const stableAspect = useMemo(() => {
@@ -186,6 +199,8 @@ export function UgoiraPlayerView(props: {
     return () => clearTimeout(timer)
   }, [previewPath, crossFadeDuration, transitionCompleted])
 
+  const durationSec = framesData ? (framesData.totalDurationMs / 1000).toFixed(1) : null
+
   return (
     <VStack alignment="center" spacing={6} frame={{ maxWidth: "infinity" }}>
       <ZStack
@@ -200,8 +215,8 @@ export function UgoiraPlayerView(props: {
           background="tertiarySystemFill"
         />
 
-        {/* 2. 预模糊位图垫底层（位图直出，消融完成后自动卸载释放；与播放器严格统一使用 fit 比例模式） */}
-        {!transitionCompleted && previewBlurredImage ? (
+        {/* 2. 预模糊位图垫底层（在未准备好动图时展示） */}
+        {!framesData && !transitionCompleted && previewBlurredImage ? (
           <Image
             image={previewBlurredImage}
             resizable={true}
@@ -210,37 +225,28 @@ export function UgoiraPlayerView(props: {
           />
         ) : null}
 
-        {/* 3. 动图播放器层：合成完成后即在底层挂载初始化并静默起播，黑屏初始化完全被顶层海报遮挡 */}
-        {result ? (
-          <UgoiraVideo
-            key={result.mp4Path}
-            mp4Path={result.mp4Path}
-            aspectRatioValue={stableAspect}
-            onPlayingReady={() => setVideoReady(true)}
-          />
-        ) : null}
-
-        {/* 4. 高清静态海报层：置于播放器之上，在视频出帧就绪前（!videoReady）持续常驻；移除时使用 identity 零动画直切，杜绝 fade 离场残影与黑闪 */}
-        {previewPath && (!result || !videoReady) ? (
+        {/* 3. 高清静态海报层（仅在动图帧数据未完成准备时展示） */}
+        {!framesData && previewPath ? (
           <Image
             key={`sharp-poster-${illustID}`}
             filePath={previewPath}
             resizable={true}
             aspectRatio={{ value: stableAspect, contentMode: "fit" }}
             frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-            transition={
-              initialHitRef.current
-                ? undefined
-                : Transition.asymmetric(
-                    crossFadeDuration > 0 ? Transition.fade(crossFadeDuration) : Transition.identity(),
-                    Transition.identity()
-                  )
-            }
           />
         ) : null}
 
-        {/* 5. 加载中状态（覆盖在海报层之上，与海报层在视频真正就绪时原子同步消失，消除分阶段突变） */}
-        {(loading || (result && !videoReady)) && !error ? (
+        {/* 4. Canvas 逐帧动图播放器层（只要动图帧就绪，立即挂载播放，0 延迟起播） */}
+        {framesData ? (
+          <UgoiraCanvasPlayer
+            key={`canvas-${illustID}`}
+            framesData={framesData}
+            aspectRatioValue={stableAspect}
+          />
+        ) : null}
+
+        {/* 5. 加载中状态指示器（仅在真正处于网络下载/解压中且无帧数据时显示） */}
+        {loading && !framesData && !error ? (
           <VStack
             alignment="center"
             spacing={8}
@@ -254,7 +260,7 @@ export function UgoiraPlayerView(props: {
         ) : null}
 
         {/* 6. 错误与重试 */}
-        {error && !result ? (
+        {error && !framesData ? (
           <VStack
             alignment="center"
             spacing={10}
@@ -268,108 +274,74 @@ export function UgoiraPlayerView(props: {
             <Button
               title="重试"
               buttonStyle="glass"
-              action={doBuild}
+              action={doLoadFrames}
             />
           </VStack>
         ) : null}
       </ZStack>
 
-      {/* 预留固定行高并以透明度过渡，避免文本出现时容器高度突变引起页面跳动闪屏 */}
+      {/* 底部信息栏 */}
       <Text
         font="caption2"
-        foregroundStyle={result ? "secondaryLabel" : "clear"}
+        foregroundStyle={framesData ? "secondaryLabel" : "clear"}
       >
-        {result ? `动图 · ${result.duration.toFixed(1)} 秒` : "动图"}
+        {framesData
+          ? `动图 · ${framesData.frames.length} 帧 · ${durationSec} 秒`
+          : "动图"}
       </Text>
     </VStack>
   )
 }
 
-function UgoiraVideo(props: {
-  mp4Path: string
+/**
+ * 基于 TimelineCanvas 的高精度逐帧 Canvas 动图播放器
+ */
+function UgoiraCanvasPlayer(props: {
+  framesData: UgoiraFramesResult
   aspectRatioValue: number
-  onPlayingReady?: () => void
 }) {
-  const { mp4Path, aspectRatioValue, onPlayingReady } = props
-  const [loadError, setLoadError] = useState(false)
-  const [retrySeq, setRetrySeq] = useState(0)
-  const onPlayingReadyRef = useLatest(onPlayingReady)
-  const hasNotifiedReadyRef = useRef(false)
+  const { framesData } = props
+  const { framesDir, frames, totalDurationMs } = framesData
 
-  const player = useMemo(() => {
-    try {
-      hasNotifiedReadyRef.current = false
-      const p = new AVPlayer()
-      const notifyReady = () => {
-        if (!hasNotifiedReadyRef.current) {
-          hasNotifiedReadyRef.current = true
-          // 延迟 80ms，确保 AVPlayerViewController 原生渲染层已完成首帧上屏绘制
-          setTimeout(() => {
-            onPlayingReadyRef.current?.()
-          }, 80)
-        }
-      }
-      p.onTimeControlStatusChanged = (status) => {
-        // status 2 为 playing 状态（已就绪并开始循环渲染视频帧）
-        if (status === 2 || (typeof status === "string" && status === "playing")) {
-          notifyReady()
-        }
-      }
-      p.onReadyToPlay = () => {
-        p.play()
-        notifyReady()
-      }
-      const ok = p.setSource(mp4Path)
-      if (ok) {
-        p.numberOfLoops = -1
-        p.play()
-        return p
-      } else {
-        setLoadError(true)
-        p.dispose()
-        return null
-      }
-    } catch {
-      setLoadError(true)
-      return null
+  // 预先计算累积时间轴断点数组，单位秒
+  const cumulativeTimeArray = useMemo(() => {
+    const arr: number[] = []
+    let acc = 0
+    for (const f of frames) {
+      acc += f.delay || 50
+      arr.push(acc / 1000)
     }
-  }, [mp4Path, retrySeq, onPlayingReadyRef])
+    return arr
+  }, [frames])
 
-  useEffect(() => {
-    return () => {
-      player?.dispose()
-    }
-  }, [player])
-
-  if (loadError || !player) {
-    return (
-      <VStack
-        alignment="center"
-        spacing={8}
-        padding={20}
-        frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-        background="rgba(0, 0, 0, 0.4)"
-      >
-        <Text font="footnote" foregroundStyle="white">
-          动图播放器加载失败
-        </Text>
-        <Button
-          title="重试"
-          buttonStyle="glass"
-          action={() => {
-            setLoadError(false)
-            setRetrySeq((v) => v + 1)
-          }}
-        />
-      </VStack>
-    )
-  }
+  const totalDurationSec = useMemo(() => {
+    return Math.max(0.05, totalDurationMs / 1000)
+  }, [totalDurationMs])
 
   return (
-    <VideoPlayer
-      player={player}
-      aspectRatio={{ value: aspectRatioValue, contentMode: "fit" }}
+    <TimelineCanvas
       frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+      draw={(ctx, size, time) => {
+        if (!frames || frames.length === 0) return
+
+        // 1. 计算当前循环周期内的相对时间秒
+        const loopTime = time % totalDurationSec
+
+        // 2. 匹配当前帧索引
+        let frameIndex = 0
+        for (let i = 0; i < cumulativeTimeArray.length; i++) {
+          if (loopTime < cumulativeTimeArray[i]) {
+            frameIndex = i
+            break
+          }
+        }
+
+        const targetFrame = frames[frameIndex] ?? frames[0]
+        if (targetFrame) {
+          const frameFilePath = `${framesDir}/${targetFrame.file}`
+          ctx.drawImage({ filePath: frameFilePath }, 0, 0, size.width, size.height)
+        }
+      }}
     />
   )
 }

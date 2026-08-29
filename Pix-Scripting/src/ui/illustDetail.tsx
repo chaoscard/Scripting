@@ -40,6 +40,7 @@ import {
   exportMangaToCbz,
   exportMangaToEpub,
   exportUgoiraToAlbum,
+  exportUgoiraZip,
   saveImageToPixivAlbum,
 } from "../downloader"
 import { cachedFilePath, cardThumbUrlOf, imageUrlOf, loadImage, pageThumbUrlOf, prefetch } from "../image/imageLoader"
@@ -95,7 +96,6 @@ import { IllustGalleryView } from "./IllustGalleryView"
 import { IllustAISheet, type IllustAIMode } from "./aiSheet"
 import { cleanHtmlCaption } from "../api/aiService"
 import { UgoiraPlayerView } from "./ugoiraView"
-import { buildUgoira } from "../ugoira/ugoira"
 import { renderDestination } from "./routes"
 import { requestPixivRoute } from "./routeNavigation"
 
@@ -134,6 +134,9 @@ export function IllustDetailView(props: { illustID: number }) {
   )
   const [ambientIntensity, setAmbientIntensity] = useState(
     () => loadSettings().ambientIntensity
+  )
+  const [ugoiraExportFormat, setUgoiraExportFormat] = useState(
+    () => loadSettings().ugoiraExportFormat ?? "mp4"
   )
   const [ambientPalette, setAmbientPalette] = useState<IllustAmbientPalette | null>(() => {
     const settings = loadSettings()
@@ -326,6 +329,7 @@ export function IllustDetailView(props: { illustID: number }) {
       setQuality(getDetailImageQuality(settings))
       setAmbientEnabled(settings.ambientImmersion)
       setAmbientIntensity(settings.ambientIntensity)
+      setUgoiraExportFormat(settings.ugoiraExportFormat ?? "mp4")
       const current = illustRef.current
       if (current) {
         const isExempt =
@@ -487,6 +491,21 @@ export function IllustDetailView(props: { illustID: number }) {
       const res = await exportUgoiraToAlbum(current)
       if (res.success) {
         void Haptics.transient()
+      }
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  async function handleDownloadUgoiraZip() {
+    if (downloading) return
+    void Haptics.transient()
+    setDownloading(true)
+    try {
+      const res = await exportUgoiraZip(current)
+      if (res.success && res.savedPath) {
+        void Haptics.transient()
+        await ShareSheet.present([res.savedPath])
       }
     } finally {
       setDownloading(false)
@@ -748,12 +767,20 @@ export function IllustDetailView(props: { illustID: number }) {
               action={shareIllust}
             />
             {current.type === "ugoira" ? (
-              <Button
-                title={downloading ? "下载中…" : "下载"}
-                systemImage="square.and.arrow.down"
-                disabled={downloading}
-                action={handleDownloadUgoira}
-              />
+              <Menu title={downloading ? "下载中…" : "下载"} systemImage="square.and.arrow.down">
+                <Button
+                  title={`下载动图 (${ugoiraExportFormat.toUpperCase()})`}
+                  systemImage={ugoiraExportFormat === "gif" ? "photo.stack" : "film"}
+                  disabled={downloading}
+                  action={handleDownloadUgoira}
+                />
+                <Button
+                  title="下载原生 ZIP 帧包"
+                  systemImage="doc.zipper"
+                  disabled={downloading}
+                  action={handleDownloadUgoiraZip}
+                />
+              </Menu>
             ) : current.type === "manga" ? (
               <Menu title="下载" systemImage="square.and.arrow.down">
                 <Button
