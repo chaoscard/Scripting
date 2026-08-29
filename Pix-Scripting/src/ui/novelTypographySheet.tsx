@@ -15,6 +15,7 @@ import {
   useState,
   VStack,
 } from "scripting"
+import { isScriptingPro } from "../store/customAI"
 import {
   DEFAULT_NOVEL_READER_SETTINGS,
   loadNovelReaderSettings,
@@ -41,6 +42,7 @@ export function NovelTypographySheet(props: { onClose?: () => void }) {
   const { onClose } = props
   const [settings, setSettings] = useState<NovelReaderSettings>(() => loadNovelReaderSettings())
   const [isPickingFont, setIsPickingFont] = useState(false)
+  const [fontError, setFontError] = useState<string | null>(null)
   const [isPickingPhoto, setIsPickingPhoto] = useState(false)
   const [photoError, setPhotoError] = useState<string | null>(null)
 
@@ -58,6 +60,26 @@ export function NovelTypographySheet(props: { onClose?: () => void }) {
   const handlePickFont = useCallback(async () => {
     if (isPickingFont) return
     setIsPickingFont(true)
+    setFontError(null)
+
+    // 1. 检查 Scripting PRO 会员权限
+    if (!isScriptingPro()) {
+      setIsPickingFont(false)
+      const msg = "从系统字体库选取第三方已安装字体需要 Scripting PRO 会员。\n\n您可以直接在上方「字体」菜单中免费选用经典宋体、优美楷体、柔和圆体等精选预设字体。"
+      try {
+        if (typeof Dialog !== "undefined" && typeof Dialog.alert === "function") {
+          await Dialog.alert({
+            title: "需要 Scripting PRO",
+            message: msg,
+          })
+          return
+        }
+      } catch {}
+      setFontError("从系统字体库选取需要 Scripting PRO，建议使用上方预设字体")
+      return
+    }
+
+    // 2. PRO 用户调用系统字体选择器
     try {
       if (typeof FontPicker !== "undefined" && typeof FontPicker.pickFont === "function") {
         const picked = await FontPicker.pickFont()
@@ -67,9 +89,11 @@ export function NovelTypographySheet(props: { onClose?: () => void }) {
             customFontPostscriptName: picked.trim(),
           })
         }
+      } else {
+        setFontError("当前运行环境暂不支持系统字体选择器")
       }
-    } catch {
-      // 忽略选择器异常
+    } catch (e: any) {
+      console.log("FontPicker error:", e?.message ?? e)
     } finally {
       setIsPickingFont(false)
     }
@@ -421,7 +445,24 @@ export function NovelTypographySheet(props: { onClose?: () => void }) {
 
               {/* 第二行：自定义字体 */}
               <HStack alignment="center" padding={{ horizontal: 16, vertical: 13 }} frame={{ maxWidth: "infinity" }}>
-                <Text font="body">自定义字体</Text>
+                <HStack spacing={6} alignment="center">
+                  <Text font="body">自定义字体</Text>
+                  {!isScriptingPro() ? (
+                    <HStack
+                      padding={{ horizontal: 5, vertical: 1.5 }}
+                      background="#FF950020"
+                      clipShape={{ type: "capsule", style: "continuous" }}
+                    >
+                      <Text
+                        font="caption2"
+                        fontWeight="bold"
+                        foregroundStyle="#FF9500"
+                      >
+                        PRO
+                      </Text>
+                    </HStack>
+                  ) : null}
+                </HStack>
                 <Spacer />
                 <Button
                   buttonStyle="plain"
@@ -441,6 +482,12 @@ export function NovelTypographySheet(props: { onClose?: () => void }) {
                   </HStack>
                 </Button>
               </HStack>
+
+              {fontError ? (
+                <Text font="caption2" foregroundStyle="#FF3B30" padding={{ horizontal: 16, bottom: 8 }}>
+                  {fontError}
+                </Text>
+              ) : null}
 
               <Divider padding={{ leading: 16 }} />
 

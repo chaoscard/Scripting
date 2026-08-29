@@ -40,11 +40,17 @@ export async function beginBackgroundTask(
   const taskId = options.taskId || `task_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
   const settings = loadSettings()
   
-  // 1. 开启系统后台保活
+  // 1. 开启系统后台保活（校验返回值与多任务安全配对）
+  let isKeptAlive = false
   try {
-    if (typeof BackgroundKeeper !== "undefined" && BackgroundKeeper.keepAlive) {
-      await BackgroundKeeper.keepAlive()
-      activeTasksCount++
+    if (typeof BackgroundKeeper !== "undefined" && typeof BackgroundKeeper.keepAlive === "function") {
+      const started = await BackgroundKeeper.keepAlive()
+      if (started) {
+        isKeptAlive = true
+        activeTasksCount++
+      } else {
+        console.log("BackgroundKeeper.keepAlive: system refused or non-PRO mode active")
+      }
     }
   } catch (e: any) {
     console.log("BackgroundKeeper.keepAlive error:", e?.message ?? e)
@@ -183,15 +189,18 @@ export async function beginBackgroundTask(
     } catch {}
 
     // 4.3 释放后台保活
-    try {
-      if (typeof BackgroundKeeper !== "undefined" && BackgroundKeeper.stopKeepAlive) {
-        if (activeTasksCount > 0) {
-          activeTasksCount--
+    if (isKeptAlive) {
+      isKeptAlive = false
+      try {
+        if (typeof BackgroundKeeper !== "undefined" && typeof BackgroundKeeper.stopKeepAlive === "function") {
+          if (activeTasksCount > 0) {
+            activeTasksCount--
+          }
           await BackgroundKeeper.stopKeepAlive()
         }
+      } catch (e: any) {
+        console.log("BackgroundKeeper.stopKeepAlive error:", e?.message ?? e)
       }
-    } catch (e: any) {
-      console.log("BackgroundKeeper.stopKeepAlive error:", e?.message ?? e)
     }
   }
 

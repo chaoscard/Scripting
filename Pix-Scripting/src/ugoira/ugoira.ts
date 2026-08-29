@@ -363,14 +363,72 @@ function validateFrames(framesDir: string, frames: UgoiraFrame[]): void {
   }
 }
 
-async function extractZipEntries(zipPath: string, destDir: string): Promise<void> {
-  const archive = Archive.openForMode(zipPath, "read")
-  const entries = archive.getEntryPaths()
-  for (const entry of entries) {
-    const name = entry.split("/").pop()
-    if (!name || name === "." || name === "..") continue
-    archive.extractToSync(entry, joinPath(destDir, name))
+async function extractZipWithPython(zipPath: string, destDir: string): Promise<boolean> {
+  try {
+    if (typeof Python === "undefined" || !Python.run) {
+      return false
+    }
+    const pyCode = `
+import zipfile, os, sys
+
+zip_path = ${JSON.stringify(zipPath)}
+dest_dir = ${JSON.stringify(destDir)}
+
+try:
+    with zipfile.ZipFile(zip_path, 'r') as zf:
+        for member in zf.infolist():
+            filename = os.path.basename(member.filename)
+            if not filename or filename.startswith('.'):
+                continue
+            target_path = os.path.join(dest_dir, filename)
+            with zf.open(member) as source, open(target_path, 'wb') as target:
+                target.write(source.read())
+    print('SUCCESS')
+except Exception as e:
+    sys.stderr.write(str(e))
+    sys.exit(1)
+`
+    const res = await Python.run(pyCode)
+    return Boolean(res && res.exitCode === 0)
+  } catch (err) {
+    console.log("extractZipWithPython exception:", err)
+    return false
   }
+}
+
+async function extractZipWithArchive(zipPath: string, destDir: string): Promise<boolean> {
+  try {
+    if (typeof Archive === "undefined" || !Archive.openForMode) {
+      return false
+    }
+    const archive = Archive.openForMode(zipPath, "read")
+    const entries = archive.getEntryPaths()
+    for (const entry of entries) {
+      const name = entry.split("/").pop()
+      if (!name || name === "." || name === "..") continue
+      archive.extractToSync(entry, joinPath(destDir, name))
+    }
+    return true
+  } catch (err) {
+    console.log("extractZipWithArchive exception:", err)
+    return false
+  }
+}
+
+async function extractZipEntries(zipPath: string, destDir: string): Promise<void> {
+  // 1. 优先使用免 PRO 的 Python zipfile 标准库解压（快速、稳定、无会员限制）
+  const pySuccess = await extractZipWithPython(zipPath, destDir)
+  if (pySuccess) {
+    return
+  }
+
+  // 2. 若 Python 不可用，回退尝试原生 Archive
+  const archiveSuccess = await extractZipWithArchive(zipPath, destDir)
+  if (archiveSuccess) {
+    return
+  }
+
+  throw new Error("动图压缩包解压失败：系统解压组件不可用")
 }
 
 /**
