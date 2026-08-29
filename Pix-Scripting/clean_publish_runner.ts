@@ -20,10 +20,7 @@ const body = `1. 基于 TimelineCanvas 的动图即时逐帧播放引擎 (Instan
 4. 动图下载交互与设置偏好 (Ugoira Download Menu & Preferences) :
    - 在「设置 ➔ 下载与存储」中新增「动图导出格式」配置项 (MP4 视频 / GIF 动图)；
    - 作品详情页动图下载按钮展开为原生下拉菜单，清晰提供「下载动图 (MP4/GIF)」与「下载原生 ZIP 帧包」；
-   - 卡片快捷下载与画师全量作品批量下载自动按用户设置格式调度 FFmpeg 后台转码。
-
-5. 项目文档与更新日志体系 (Repository Documentation & Full Changelog) :
-   - 建立结构化 CHANGELOG.md 与精美 README.md，同步维护至仓库根目录与项目源码。`
+   - 卡片快捷下载与画师全量作品批量下载自动按用户设置格式调度 FFmpeg 后台转码。`
 
 const run = async () => {
   const query = JSON.stringify({
@@ -31,9 +28,7 @@ const run = async () => {
     subject,
     body,
   })
-  console.log("Starting publish runner with structured commit body...")
-  
-  // 运行 publish.tsx
+  console.log("Re-publishing clean lightweight package...")
   const publishPath = "/var/mobile/Library/Mobile Documents/iCloud~com~thomfang~Scripting/Documents/scripting-agent/workspace/E34C6E40-297D-4BCC-AAE1-8A0967C04D73/publish.tsx"
   const res = await Shell.run(`scripting-ts run "${publishPath}" --queryparameters '${query}' --timeout 180`)
   console.log("Publish result exitCode:", res.exitCode)
