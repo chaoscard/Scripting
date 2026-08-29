@@ -261,31 +261,81 @@ function processLineIntoNovelItems(
     return
   }
 
-  const upImgMatch = trimmed.match(/^\[uploadedimage:(\d+)\]$/)
-  if (upImgMatch) {
-    flushTextBuffer(state)
-    const imageId = upImgMatch[1]
-    const info = textEmbeddedImages ? textEmbeddedImages[imageId] : undefined
-    state.items.push({
-      type: "uploadedimage",
-      id: `up-${imageId}-${state.items.length}`,
-      imageId,
-      info,
-    })
+  // 4. 行内或整行 [uploadedimage: xxx]
+  const UP_IMG_INLINE = /\[(?:uploadedimage|uploadimage)\s*[:：]\s*([a-zA-Z0-9_\-]+)\s*\]/gi
+  if (UP_IMG_INLINE.test(line)) {
+    UP_IMG_INLINE.lastIndex = 0
+    let cursor = 0
+    let match: RegExpExecArray | null
+    while ((match = UP_IMG_INLINE.exec(line)) != null) {
+      const before = line.slice(cursor, match.index)
+      if (before) {
+        state.currentBuffer.push(before)
+        state.currentBufferChars += before.length
+      }
+      cursor = UP_IMG_INLINE.lastIndex
+      flushTextBuffer(state)
+      const imageId = match[1].trim()
+      const info = textEmbeddedImages
+        ? textEmbeddedImages[imageId] ||
+          (textEmbeddedImages as any)[Number(imageId)] ||
+          Object.values(textEmbeddedImages).find(
+            (img: any) => img?.novelImageId === imageId || img?.id === imageId
+          )
+        : undefined
+      state.items.push({
+        type: "uploadedimage",
+        id: `up-${imageId}-${state.items.length}`,
+        imageId,
+        info,
+      })
+    }
+    if (cursor < line.length) {
+      const remaining = line.slice(cursor)
+      if (remaining) {
+        state.currentBuffer.push(remaining)
+        state.currentBufferChars += remaining.length + 1
+      }
+    }
+    if (state.currentBufferChars > 1500) {
+      flushTextBuffer(state)
+    }
     return
   }
 
-  const pxImgMatch = trimmed.match(/^\[pixivimage:(\d+)(?:-(\d+))?\]$/)
-  if (pxImgMatch) {
-    flushTextBuffer(state)
-    const illustId = parseInt(pxImgMatch[1], 10)
-    const page = pxImgMatch[2] ? parseInt(pxImgMatch[2], 10) : undefined
-    state.items.push({
-      type: "pixivimage",
-      id: `px-${illustId}-${page || 0}-${state.items.length}`,
-      illustId,
-      page,
-    })
+  // 5. 行内或整行 [pixivimage: xxx]
+  const PX_IMG_INLINE = /\[pixivimage\s*[:：]\s*(\d+)(?:-(\d+))?\s*\]/gi
+  if (PX_IMG_INLINE.test(line)) {
+    PX_IMG_INLINE.lastIndex = 0
+    let cursor = 0
+    let match: RegExpExecArray | null
+    while ((match = PX_IMG_INLINE.exec(line)) != null) {
+      const before = line.slice(cursor, match.index)
+      if (before) {
+        state.currentBuffer.push(before)
+        state.currentBufferChars += before.length
+      }
+      cursor = PX_IMG_INLINE.lastIndex
+      flushTextBuffer(state)
+      const illustId = parseInt(match[1], 10)
+      const page = match[2] ? parseInt(match[2], 10) : undefined
+      state.items.push({
+        type: "pixivimage",
+        id: `px-${illustId}-${page || 0}-${state.items.length}`,
+        illustId,
+        page,
+      })
+    }
+    if (cursor < line.length) {
+      const remaining = line.slice(cursor)
+      if (remaining) {
+        state.currentBuffer.push(remaining)
+        state.currentBufferChars += remaining.length + 1
+      }
+    }
+    if (state.currentBufferChars > 1500) {
+      flushTextBuffer(state)
+    }
     return
   }
 
@@ -415,11 +465,17 @@ function NovelUploadedImageItemView(props: {
     imageInfo?.urls?.["1200x1200"] ||
     imageInfo?.urls?.original ||
     imageInfo?.urls?.["480mw"] ||
+    (imageInfo as any)?.urls?.large ||
+    (imageInfo as any)?.urls?.medium ||
+    (imageInfo as any)?.url ||
     null
 
   const previewUrl =
     imageInfo?.urls?.["240mw"] ||
     imageInfo?.urls?.["128x128"] ||
+    (imageInfo as any)?.urls?.small ||
+    (imageInfo as any)?.urls?.thumb ||
+    (imageInfo as any)?.previewUrl ||
     null
 
   if (!highResUrl && !previewUrl) {

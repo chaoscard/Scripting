@@ -661,43 +661,98 @@ export function NovelDetailView(props: { novelID: number }) {
   }
 
   return (
-    <ScrollViewReader>
-      {(proxy) => {
-        proxyRef.current = proxy
-        return (
-          <ScrollView
-            scrollPosition={{
-              value: scrollPos,
-              anchor: "top",
-            }}
-            background={
-              readerSettings.themeId === "custom" && readerSettings.customBgExists
-                ? {
-                    content: (
-                      <ZStack frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
-                        <Image
-                          filePath={getCustomBgPath()}
-                          scaleToFill={true}
-                          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-                        />
-                        <VStack
-                          background={
-                            (readerSettings.customBgMaskColor === "black"
-                              ? `rgba(0, 0, 0, ${readerSettings.customBgMaskOpacity})`
-                              : `rgba(255, 255, 255, ${readerSettings.customBgMaskOpacity})`) as Color
-                          }
-                          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-                        />
-                      </ZStack>
-                    ),
-                    alignment: "center",
-                  }
-                : currentThemePalette.backgroundColor
-                ? currentThemePalette.backgroundColor
-                : undefined
-            }
-            navigationTitle={current.title}
-            navigationBarTitleDisplayMode="inline"
+    <ZStack
+      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+      preferredColorScheme={currentThemePalette.isDark ? "dark" : undefined}
+    >
+      {/* 全屏底层背景（覆盖顶部状态栏/灵动岛与底部安全区） */}
+      <ZStack
+        frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+        ignoresSafeArea={true}
+      >
+        {readerSettings.themeId === "custom" && readerSettings.customBgExists ? (
+          <ZStack frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
+            <Image
+              filePath={getCustomBgPath()}
+              resizable={true}
+              aspectRatio={{ contentMode: "fill" }}
+              frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+              clipped={true}
+            />
+            <VStack
+              background={
+                (readerSettings.customBgMaskColor === "black"
+                  ? `rgba(0, 0, 0, ${readerSettings.customBgMaskOpacity})`
+                  : `rgba(255, 255, 255, ${readerSettings.customBgMaskOpacity})`) as Color
+              }
+              frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+            />
+          </ZStack>
+        ) : currentThemePalette.backgroundColor ? (
+          <VStack
+            background={currentThemePalette.backgroundColor}
+            frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          />
+        ) : null}
+      </ZStack>
+
+      {/* 滚动容器（ScrollViewReader 的子函数直接返回 ScrollView） */}
+      <ScrollViewReader>
+        {(proxy) => {
+          proxyRef.current = proxy
+          return (
+            <ScrollView
+              scrollPosition={{
+                value: scrollPos,
+                anchor: "top",
+              }}
+              ignoresSafeArea={{ edges: "bottom" }}
+              background={
+                readerSettings.themeId === "custom" && readerSettings.customBgExists
+                  ? {
+                      content: (
+                        <ZStack frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
+                          <Image
+                            filePath={getCustomBgPath()}
+                            resizable={true}
+                            aspectRatio={{ contentMode: "fill" }}
+                            frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+                            clipped={true}
+                          />
+                          <VStack
+                            background={
+                              (readerSettings.customBgMaskColor === "black"
+                                ? `rgba(0, 0, 0, ${readerSettings.customBgMaskOpacity})`
+                                : `rgba(255, 255, 255, ${readerSettings.customBgMaskOpacity})`) as Color
+                            }
+                            frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+                          />
+                        </ZStack>
+                      ),
+                      alignment: "center",
+                    }
+                  : currentThemePalette.backgroundColor
+                  ? currentThemePalette.backgroundColor
+                  : undefined
+              }
+              toolbarBackground={
+                currentThemePalette.backgroundColor
+                  ? {
+                      style: currentThemePalette.backgroundColor,
+                      bars: ["navigationBar", "tabBar", "bottomBar"],
+                    }
+                  : undefined
+              }
+              toolbarBackgroundVisibility={
+                currentThemePalette.backgroundColor || readerSettings.customBgExists
+                  ? {
+                      visibility: "visible",
+                      bars: ["navigationBar", "tabBar", "bottomBar"],
+                    }
+                  : undefined
+              }
+              navigationTitle={current.title}
+              navigationBarTitleDisplayMode="inline"
             onAppear={() => {
               isDisappearedRef.current = false
               const saved = getNovelProgress(novelID)
@@ -1285,6 +1340,7 @@ export function NovelDetailView(props: { novelID: number }) {
         )
       }}
     </ScrollViewReader>
+  </ZStack>
   )
 }
 
