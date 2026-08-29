@@ -122,8 +122,8 @@ export function OriginalCaptionCollapsible(props: {
       {showOriginal && (
         <VStack
           padding={12}
-          background="secondarySystemBackground"
-          clipShape={{ type: "rect", cornerRadius: 10 }}
+          glassEffect={{ type: "rect", cornerRadius: 12 }}
+          contentShape={{ type: "rect", cornerRadius: 12 }}
           frame={{ maxWidth: "infinity" }}
           alignment="leading"
         >

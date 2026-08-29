@@ -43,7 +43,7 @@ export function drawOCROverlay(
   bubbles: OCRBubble[],
   showOverlay: boolean,
   hiddenIndices?: Set<number>,
-  fontScale: number = 1.0
+  scale: number = 1.0
 ) {
   // 1. 绘制底层原始漫画/插画
   try {
@@ -55,6 +55,8 @@ export function drawOCROverlay(
   if (!showOverlay || !bubbles || bubbles.length === 0) {
     return
   }
+
+  const effectiveScale = Math.max(0.5, Math.min(2.0, scale || 1.0))
 
   // 2. 逐一绘制识别到的气泡遮罩与汉化文字（跳过用户单点隐藏的气泡）
   for (let idx = 0; idx < bubbles.length; idx++) {
@@ -73,13 +75,21 @@ export function drawOCROverlay(
     const rawW = ((Math.max(0, Math.min(xmax, 1000)) - Math.max(0, Math.min(xmin, 1000))) / 1000) * size.width
     const rawH = ((Math.max(0, Math.min(ymax, 1000)) - Math.max(0, Math.min(ymin, 1000))) / 1000) * size.height
 
+    // 以气泡几何中心为中心锚点联动缩放底板与文字
+    const centerX = rawX + rawW / 2
+    const centerY = rawY + rawH / 2
+    const scaledW = rawW * effectiveScale
+    const scaledH = rawH * effectiveScale
+    const scaledX = centerX - scaledW / 2
+    const scaledY = centerY - scaledH / 2
+
     // 边缘轻微内缩 1.5% 防相邻紧邻气泡粘连
-    const shrinkX = Math.min(1.5, rawW * 0.015)
-    const shrinkY = Math.min(1.5, rawH * 0.015)
-    const x = rawX + shrinkX
-    const y = rawY + shrinkY
-    const w = Math.max(4, rawW - shrinkX * 2)
-    const h = Math.max(4, rawH - shrinkY * 2)
+    const shrinkX = Math.min(1.5, scaledW * 0.015)
+    const shrinkY = Math.min(1.5, scaledH * 0.015)
+    const x = scaledX + shrinkX
+    const y = scaledY + shrinkY
+    const w = Math.max(4, scaledW - shrinkX * 2)
+    const h = Math.max(4, scaledH - shrinkY * 2)
 
     if (w < 6 || h < 6) continue
 
@@ -138,15 +148,15 @@ export function drawOCROverlay(
     const maxTextWidth = Math.max(6, w * (1 - insetRatio))
     const maxTextHeight = Math.max(6, h * (1 - insetRatio))
 
-    // 精细化小字号自适应计算（基准范围 6.5~11pt，结合 fontScale 调节）
+    // 精细化字号自适应计算（基准范围 6.5~11pt，结合 scale 联动缩放）
     const cleanText = translation.trim()
     const charCount = Math.max(1, cleanText.length)
     const baseFontSize = Math.min(11, Math.max(6.5, Math.floor(Math.sqrt((maxTextWidth * maxTextHeight) / (charCount * 1.8)))))
-    let fontSize = Math.max(4.5, baseFontSize * (fontScale || 1.0))
+    let fontSize = Math.max(4.5, baseFontSize * effectiveScale)
     let lines: string[] = []
     let lineHeight = fontSize * 1.2
 
-    // 优化 H3: 纯 JS 字符估算收敛字号，消除跨语言 bridge 调用风暴
+    // 纯 JS 字符估算收敛字号，消除跨语言 bridge 调用风暴
     for (let step = 0; step < 8; step++) {
       lines = layoutTextLines(cleanText, fontSize, maxTextWidth)
       lineHeight = fontSize * 1.2
@@ -163,12 +173,12 @@ export function drawOCROverlay(
 
     const totalTextHeight = lines.length * lineHeight
     const startY = y + (h - totalTextHeight) / 2 + lineHeight / 2
-    const centerX = x + w / 2
+    const bubbleCenterX = x + w / 2
 
     ctx.fillStyle = "#111111"
     for (let i = 0; i < lines.length; i++) {
       const lineY = startY + i * lineHeight
-      ctx.fillText(lines[i], centerX, lineY, maxTextWidth)
+      ctx.fillText(lines[i], bubbleCenterX, lineY, maxTextWidth)
     }
 
     ctx.restore()

@@ -230,7 +230,16 @@ export function IllustAISheet(props: {
     let hitIndex = -1
     for (let i = bubbles.length - 1; i >= 0; i--) {
       const [ymin, xmin, ymax, xmax] = bubbles[i].box_2d
-      if (normX >= xmin - 20 && normX <= xmax + 20 && normY >= ymin - 20 && normY <= ymax + 20) {
+      const cX = (xmin + xmax) / 2
+      const cY = (ymin + ymax) / 2
+      const halfW = ((xmax - xmin) / 2) * fontScale + 20
+      const halfH = ((ymax - ymin) / 2) * fontScale + 20
+      if (
+        normX >= cX - halfW &&
+        normX <= cX + halfW &&
+        normY >= cY - halfH &&
+        normY <= cY + halfH
+      ) {
         hitIndex = i
         break
       }
@@ -630,8 +639,9 @@ export function IllustAISheet(props: {
                     <VStack
                       spacing={8}
                       padding={{ horizontal: 16, vertical: 10 }}
-                      background="secondarySystemBackground"
-                      clipShape={{ type: "rect", cornerRadius: 14 }}
+                      glassEffect={{ type: "rect", cornerRadius: 14 }}
+                      contentShape={{ type: "rect", cornerRadius: 14 }}
+                      frame={{ maxWidth: "infinity" }}
                     >
                       <HStack alignment="center">
                         <HStack spacing={6} alignment="center">
@@ -641,7 +651,7 @@ export function IllustAISheet(props: {
                             foregroundStyle="#007AFF"
                           />
                           <Text font="subheadline" fontWeight="semibold">
-                            气泡字号调节
+                            气泡与文字大小
                           </Text>
                         </HStack>
                         <Spacer />
@@ -748,25 +758,33 @@ export function IllustAISheet(props: {
                               }}
                             />
 
-                            {/* 叠加各气泡透明热区 Button（Native Button 完美兼顾 ScrollView 滚动让位与轻点响应） */}
+                            {/* 叠加各气泡透明热区 Button（Native Button 完美兼顾 ScrollView 滚动让位与轻点响应，尺寸与缩放联动） */}
                             {cache!.bubbles!.map((bubble, bIdx) => {
                               const [ymin, xmin, ymax, xmax] = bubble.box_2d || [0, 0, 0, 0]
                               const rawW = ((Math.max(0, Math.min(xmax, 1000)) - Math.max(0, Math.min(xmin, 1000))) / 1000) * containerWidth
                               const rawH = ((Math.max(0, Math.min(ymax, 1000)) - Math.max(0, Math.min(ymin, 1000))) / 1000) * pageRenderHeight
-                              const bLeft = (Math.max(0, Math.min(xmin, 1000)) / 1000) * containerWidth
-                              const bTop = (Math.max(0, Math.min(ymin, 1000)) / 1000) * pageRenderHeight
+                              const rawX = (Math.max(0, Math.min(xmin, 1000)) / 1000) * containerWidth
+                              const rawY = (Math.max(0, Math.min(ymin, 1000)) / 1000) * pageRenderHeight
+
+                              // 联动中心锚点与缩放比例
+                              const cX = rawX + rawW / 2
+                              const cY = rawY + rawH / 2
+                              const hitW = Math.max(30, rawW * fontScale)
+                              const hitH = Math.max(30, rawH * fontScale)
+                              const hitLeft = cX - hitW / 2
+                              const hitTop = cY - hitH / 2
 
                               return (
                                 <Button
                                   key={String(bIdx)}
                                   buttonStyle="plain"
-                                  offset={{ x: bLeft, y: bTop }}
+                                  offset={{ x: hitLeft, y: hitTop }}
                                   action={() => handleToggleBubbleIndex(idx, bIdx)}
                                 >
                                   <VStack
                                     frame={{
-                                      width: Math.max(30, rawW),
-                                      height: Math.max(30, rawH),
+                                      width: hitW,
+                                      height: hitH,
                                     }}
                                     background="rgba(0, 0, 0, 0.001)"
                                     contentShape="rect"

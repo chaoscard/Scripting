@@ -371,8 +371,8 @@ export function NovelAISheet(props: {
       {isMultiPage && mode !== "caption" && (
         <HStack
           padding={{ horizontal: 12, vertical: 8 }}
-          background="secondarySystemBackground"
-          clipShape={{ type: "rect", cornerRadius: 10 }}
+          glassEffect="capsule"
+          contentShape="capsule"
           alignment="center"
         >
           <Button
