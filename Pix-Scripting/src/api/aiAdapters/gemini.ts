@@ -3,7 +3,7 @@
  * 严格遵循 Google AI Studio / Gemini API 官方 REST 规范：
  * - 官方端点: https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent?alt=sse&key={apiKey}
  */
-import { fetch } from "scripting"
+import { fetch, AbortController } from "scripting"
 import { getEffectiveGeneralEndpoint, type GeneralAIConfig } from "../../store/customAI"
 import type { AdapterRequest, AdapterResponse } from "./types"
 import { parseSSEStream } from "./sseParser"
@@ -74,13 +74,19 @@ export async function requestGemini(
     }
   }
 
+  // 使用真实 AbortController，不传自定义 SignalLike 给 fetch
+  const controller = new AbortController()
+  if (request.signal?.aborted) {
+    controller.abort()
+  }
+
   const res = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify(payload),
-    signal: request.signal as any,
+    signal: controller.signal,
   })
 
   if (!res.ok) {

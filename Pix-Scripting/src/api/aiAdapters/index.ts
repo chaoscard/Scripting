@@ -1,13 +1,14 @@
 /**
  * 自定义 AI 协议适配器统一分发与连接测试层
  */
+import { AbortController } from "scripting"
 import {
   getEffectiveGeneralEndpoint,
   getEffectiveImageGenEndpoint,
   type GeneralAIConfig,
   type ImageGenAIConfig,
 } from "../../store/customAI"
-import type { AdapterRequest, AdapterResponse, TestResult, SignalLike } from "./types"
+import type { AdapterRequest, AdapterResponse, TestResult } from "./types"
 import { requestOpenAIResponses } from "./openaiResponses"
 import { requestOpenAIChat } from "./openaiChat"
 import { requestGemini } from "./gemini"
@@ -60,9 +61,9 @@ export async function testCustomAIConnection(
   }
 
   const startTime = Date.now()
-  const signal: SignalLike = { aborted: false }
+  const controller = new AbortController()
   const timeoutId = setTimeout(() => {
-    signal.aborted = true
+    controller.abort()
   }, 15000)
 
   try {
@@ -75,7 +76,7 @@ export async function testCustomAIConnection(
         },
       ],
       temperature: 0.1,
-      signal,
+      signal: { get aborted() { return controller.signal.aborted } },
     })
 
     clearTimeout(timeoutId)
@@ -90,7 +91,7 @@ export async function testCustomAIConnection(
   } catch (e: any) {
     clearTimeout(timeoutId)
     const latencyMs = Date.now() - startTime
-    const isTimeout = signal.aborted || e?.name === "AbortError" || String(e).includes("abort")
+    const isTimeout = controller.signal.aborted || e?.name === "AbortError" || String(e).includes("abort")
     return {
       success: false,
       latencyMs,
@@ -107,9 +108,9 @@ export async function testCustomImageGenConnection(
   effectiveApiKey: string
 ): Promise<TestResult> {
   const startTime = Date.now()
-  const signal: SignalLike = { aborted: false }
+  const controller = new AbortController()
   const timeoutId = setTimeout(() => {
-    signal.aborted = true
+    controller.abort()
   }, 20000)
 
   try {
@@ -120,7 +121,7 @@ export async function testCustomImageGenConnection(
 
     const result = await requestCustomImageGen(config, effectiveApiKey, {
       prompt: "A tiny cute red apple icon on white background",
-      signal,
+      signal: { get aborted() { return controller.signal.aborted } },
     })
 
     clearTimeout(timeoutId)
@@ -134,7 +135,7 @@ export async function testCustomImageGenConnection(
   } catch (e: any) {
     clearTimeout(timeoutId)
     const latencyMs = Date.now() - startTime
-    const isTimeout = signal.aborted || e?.name === "AbortError" || String(e).includes("abort")
+    const isTimeout = controller.signal.aborted || e?.name === "AbortError" || String(e).includes("abort")
     return {
       success: false,
       latencyMs,

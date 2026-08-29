@@ -5,6 +5,7 @@ import {
   List,
   Picker,
   Section,
+  SecureField,
   Spacer,
   Text,
   TextField,
@@ -96,6 +97,7 @@ export function CustomAISettingsView() {
       endpoint: "",
       model: preset.defaultModel,
       supportsVision: preset.supportsVision,
+      apiKey: "",
     })
     setRemoteModels([])
     setFetchError(null)
@@ -348,22 +350,29 @@ export function CustomAISettingsView() {
 
         <HStack spacing={8} alignment="center">
           <Text font="body" frame={{ width: 80 }}>API 密钥</Text>
-          <TextField
-            title="API 密钥"
-            prompt="sk-..."
-            value={
-              showKeyText
-                ? profile.general.apiKey
-                : profile.general.apiKey
-                ? "••••••••••••••••••••••••"
-                : ""
-            }
-            onChanged={(val) => {
-              if (showKeyText || !profile.general.apiKey) {
-                updateGeneral({ apiKey: val })
-              }
-            }}
-          />
+          {showKeyText ? (
+            <TextField
+              title="API 密钥"
+              prompt="sk-..."
+              value={profile.general.apiKey}
+              onChanged={(val) => updateGeneral({ apiKey: val })}
+              textContentType="password"
+              autocorrectionDisabled={true}
+              textInputAutocapitalization="never"
+              keyboardType="asciiCapable"
+            />
+          ) : (
+            <SecureField
+              title="API 密钥"
+              prompt="sk-..."
+              value={profile.general.apiKey}
+              onChanged={(val) => updateGeneral({ apiKey: val })}
+              textContentType="password"
+              autocorrectionDisabled={true}
+              textInputAutocapitalization="never"
+              keyboardType="asciiCapable"
+            />
+          )}
           <Button
             buttonStyle="plain"
             action={() => setShowKeyText(!showKeyText)}
@@ -545,22 +554,29 @@ export function CustomAISettingsView() {
             {!profile.imageGen.reuseGeneralKey ? (
               <HStack spacing={8} alignment="center">
                 <Text font="body" frame={{ width: 80 }}>生图密钥</Text>
-                <TextField
-                  title="生图密钥"
-                  prompt="sk-..."
-                  value={
-                    showImageKeyText
-                      ? profile.imageGen.apiKey
-                      : profile.imageGen.apiKey
-                      ? "••••••••••••••••••••••••"
-                      : ""
-                  }
-                  onChanged={(val) => {
-                    if (showImageKeyText || !profile.imageGen.apiKey) {
-                      updateImageGen({ apiKey: val })
-                    }
-                  }}
-                />
+                {showImageKeyText ? (
+                  <TextField
+                    title="生图密钥"
+                    prompt="sk-..."
+                    value={profile.imageGen.apiKey}
+                    onChanged={(val) => updateImageGen({ apiKey: val })}
+                    textContentType="password"
+                    autocorrectionDisabled={true}
+                    textInputAutocapitalization="never"
+                    keyboardType="asciiCapable"
+                  />
+                ) : (
+                  <SecureField
+                    title="生图密钥"
+                    prompt="sk-..."
+                    value={profile.imageGen.apiKey}
+                    onChanged={(val) => updateImageGen({ apiKey: val })}
+                    textContentType="password"
+                    autocorrectionDisabled={true}
+                    textInputAutocapitalization="never"
+                    keyboardType="asciiCapable"
+                  />
+                )}
                 <Button
                   buttonStyle="plain"
                   action={() => setShowImageKeyText(!showImageKeyText)}

@@ -2,7 +2,7 @@
  * OpenAI Chat Completions 兼容协议 (/v1/chat/completions 或 /chat/completions) 适配器
  * 严格遵循 OpenAI、DeepSeek、OpenRouter、SiliconFlow 等官方规范
  */
-import { fetch } from "scripting"
+import { fetch, AbortController } from "scripting"
 import { getEffectiveGeneralEndpoint, type GeneralAIConfig } from "../../store/customAI"
 import type { AdapterRequest, AdapterResponse } from "./types"
 import { parseSSEStream } from "./sseParser"
@@ -98,11 +98,18 @@ export async function requestOpenAIChat(
     headers["X-Title"] = "Pix-Scripting"
   }
 
+  // 使用真实 AbortController，不传自定义 SignalLike 给 fetch
+  const controller = new AbortController()
+  // 若外部已标记中止，则立即abort
+  if (request.signal?.aborted) {
+    controller.abort()
+  }
+
   const res = await fetch(url, {
     method: "POST",
     headers,
     body: JSON.stringify(payload),
-    signal: request.signal as any,
+    signal: controller.signal,
   })
 
   if (!res.ok) {

@@ -58,7 +58,7 @@ export const AI_PRESETS: AIPreset[] = [
     id: "deepseek-chat",
     name: "DeepSeek",
     provider: "DeepSeek",
-    protocol: "openai-chat",
+    protocol: "openai-responses",
     defaultEndpoint: "https://api.deepseek.com",
     defaultModel: "deepseek-chat",
     supportsVision: false,
@@ -133,7 +133,7 @@ export const DEFAULT_CUSTOM_AI_PROFILE: CustomAIProfile = {
   syncToICloud: true,
   general: {
     preset: "deepseek-chat",
-    protocol: "openai-chat",
+    protocol: "openai-responses",
     endpoint: "",
     model: "deepseek-chat",
     apiKey: "",
@@ -194,11 +194,6 @@ function validateAndSanitizeProfile(raw: unknown): CustomAIProfile {
 
   let preset = typeof generalRaw.preset === "string" ? generalRaw.preset : undefined
   const rawEndpoint = typeof generalRaw.endpoint === "string" ? generalRaw.endpoint.trim() : ""
-
-  // 自动纠偏：DeepSeek 官方 API 采用标准 OpenAI Chat Completions 协议，若历史缓存残留 responses 协议则自动纠偏
-  if ((preset === "deepseek-chat" || rawEndpoint.includes("api.deepseek.com")) && generalProtocol === "openai-responses") {
-    generalProtocol = "openai-chat"
-  }
 
   if (!preset) {
     const found = AI_PRESETS.find(
@@ -418,7 +413,6 @@ export function getEffectiveImageGenEndpoint(imageGen: ImageGenAIConfig): string
  */
 export function isCustomAIConfigured(): boolean {
   const profile = loadCustomAIProfile()
-  if (!profile.enabled) return false
   const gen = profile.general
   const effectiveEndpoint = getEffectiveGeneralEndpoint(gen)
   return Boolean(effectiveEndpoint && gen.model && gen.apiKey)

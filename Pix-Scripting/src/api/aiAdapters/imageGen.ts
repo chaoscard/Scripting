@@ -2,7 +2,7 @@
  * 独立生图模型适配器
  * 支持 OpenAI DALL-E / FLUX (/v1/images/generations)、OpenAI Responses 生图与 Gemini Imagen
  */
-import { fetch } from "scripting"
+import { fetch, AbortController } from "scripting"
 import { getEffectiveImageGenEndpoint, type ImageGenAIConfig } from "../../store/customAI"
 import type { SignalLike } from "./types"
 import { normalizeResponsesEndpoint } from "./openaiResponses"
@@ -65,6 +65,12 @@ export async function requestCustomImageGen(
       modalities: ["text", "image"],
     }
 
+    // 使用真实 AbortController
+    const controller = new AbortController()
+    if (request.signal?.aborted) {
+      controller.abort()
+    }
+
     const res = await fetch(url, {
       method: "POST",
       headers: {
@@ -72,7 +78,7 @@ export async function requestCustomImageGen(
         Authorization: `Bearer ${effectiveApiKey}`,
       },
       body: JSON.stringify(payload),
-      signal: request.signal as any,
+      signal: controller.signal,
     })
 
     if (!res.ok) {
@@ -109,6 +115,12 @@ export async function requestCustomImageGen(
     response_format: "b64_json",
   }
 
+  // 使用真实 AbortController
+  const controller2 = new AbortController()
+  if (request.signal?.aborted) {
+    controller2.abort()
+  }
+
   const res = await fetch(url, {
     method: "POST",
     headers: {
@@ -116,7 +128,7 @@ export async function requestCustomImageGen(
       Authorization: `Bearer ${effectiveApiKey}`,
     },
     body: JSON.stringify(payload),
-    signal: request.signal as any,
+    signal: controller2.signal,
   })
 
   if (!res.ok) {

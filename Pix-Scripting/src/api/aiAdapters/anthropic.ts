@@ -4,7 +4,7 @@
  * - 官方端点: https://api.anthropic.com/v1/messages
  * - DeepSeek Anthropic 兼容端点: https://api.deepseek.com/anthropic/v1/messages
  */
-import { fetch } from "scripting"
+import { fetch, AbortController } from "scripting"
 import { getEffectiveGeneralEndpoint, type GeneralAIConfig } from "../../store/customAI"
 import type { AdapterRequest, AdapterResponse } from "./types"
 import { parseSSEStream } from "./sseParser"
@@ -87,11 +87,17 @@ export async function requestAnthropic(
     "anthropic-version": "2023-06-01",
   }
 
+  // 使用真实 AbortController，不传自定义 SignalLike 给 fetch
+  const controller = new AbortController()
+  if (request.signal?.aborted) {
+    controller.abort()
+  }
+
   const res = await fetch(url, {
     method: "POST",
     headers,
     body: JSON.stringify(payload),
-    signal: request.signal as any,
+    signal: controller.signal,
   })
 
   if (!res.ok) {
