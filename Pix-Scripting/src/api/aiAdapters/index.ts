@@ -1,7 +1,12 @@
 /**
  * 自定义 AI 协议适配器统一分发与连接测试层
  */
-import type { GeneralAIConfig, ImageGenAIConfig } from "../../store/customAI"
+import {
+  getEffectiveGeneralEndpoint,
+  getEffectiveImageGenEndpoint,
+  type GeneralAIConfig,
+  type ImageGenAIConfig,
+} from "../../store/customAI"
 import type { AdapterRequest, AdapterResponse, TestResult, SignalLike } from "./types"
 import { requestOpenAIResponses } from "./openaiResponses"
 import { requestOpenAIChat } from "./openaiChat"
@@ -45,6 +50,15 @@ export async function streamCustomChat(
 export async function testCustomAIConnection(
   config: GeneralAIConfig
 ): Promise<TestResult> {
+  const effectiveEndpoint = getEffectiveGeneralEndpoint(config)
+  if (!effectiveEndpoint || !config.model || !config.apiKey) {
+    return {
+      success: false,
+      latencyMs: 0,
+      error: "请先填写完整的模型名称与 API 密钥",
+    }
+  }
+
   const startTime = Date.now()
   const signal: SignalLike = { aborted: false }
   const timeoutId = setTimeout(() => {
@@ -99,8 +113,9 @@ export async function testCustomImageGenConnection(
   }, 20000)
 
   try {
-    if (!config.endpoint || !effectiveApiKey) {
-      throw new Error("请先填写生图端点与 API 密钥")
+    const effectiveEndpoint = getEffectiveImageGenEndpoint(config)
+    if (!effectiveEndpoint || !effectiveApiKey) {
+      throw new Error("请先填写有效的 API 密钥")
     }
 
     const result = await requestCustomImageGen(config, effectiveApiKey, {

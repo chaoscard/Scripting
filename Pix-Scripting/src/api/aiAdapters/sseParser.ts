@@ -1,6 +1,7 @@
 /**
- * 健壮的 Server-Sent Events (SSE) 流式解析器
- * 兼容标准 SSE 协议（event + data）、单行 data 模式以及 chunk 粘包/断包处理
+ * 健壮的 Server-Sent Events (SSE) 流式与纯 JSON 响应解析器
+ * 兼容标准 SSE 协议（event + data）、单行 data 模式、chunk 粘包/断包处理，
+ * 并支持业务级提前终止（onMessage 返回 true）、[DONE] 信号提前释放与普通 JSON 降级解析
  */
 import { Response } from "scripting"
 import type { SignalLike } from "./types"
@@ -12,16 +13,38 @@ export interface SSEMessage {
 
 export async function parseSSEStream(
   response: Response,
-  onMessage: (message: SSEMessage) => void,
+  onMessage: (message: SSEMessage) => boolean | void,
   signal?: SignalLike
 ): Promise<void> {
-  if (!response.body) {
+  const contentType = response.headers?.get?.("content-type") || ""
+
+  // 若明确为普通 JSON 响应，直接读取全文解析
+  if (contentType.includes("application/json") || !response.body) {
     const fullText = await response.text()
-    parseSSETxt(fullText, onMessage)
+    if (!parseSSETxt(fullText, onMessage)) {
+      const trimmed = fullText.trim()
+      if (trimmed) {
+        onMessage({ data: trimmed })
+      }
+    }
     return
   }
 
-  const reader = response.body.getReader()
+  let reader: any = null
+  try {
+    reader = response.body.getReader()
+  } catch {
+    // 降级为 text 读取
+    const fullText = await response.text()
+    if (!parseSSETxt(fullText, onMessage)) {
+      const trimmed = fullText.trim()
+      if (trimmed) {
+        onMessage({ data: trimmed })
+      }
+    }
+    return
+  }
+
   const decoder = new TextDecoder("utf-8")
   let buffer = ""
 
@@ -44,12 +67,26 @@ export async function parseSSEStream(
       const lines = buffer.split(/\r\n|\r|\n/)
       buffer = lines.pop() ?? ""
 
-      for (const line of lines) {
+      for (const rawLine of lines) {
+        const line = rawLine.replace(/\r$/, "")
         const trimmed = line.trim()
+
         if (!trimmed) {
           if (currentDataLines.length > 0) {
             const dataStr = currentDataLines.join("\n")
-            onMessage({ event: currentEvent, data: dataStr })
+            if (dataStr === "[DONE]") {
+              try {
+                await reader.cancel()
+              } catch {}
+              return
+            }
+            const shouldStop = onMessage({ event: currentEvent, data: dataStr })
+            if (shouldStop) {
+              try {
+                await reader.cancel()
+              } catch {}
+              return
+            }
             currentEvent = undefined
             currentDataLines = []
           }
@@ -57,24 +94,30 @@ export async function parseSSEStream(
         }
 
         if (trimmed.startsWith(":")) {
+          // SSE 注释 / 心跳保活
           continue
         }
 
-        if (trimmed.startsWith("event:")) {
-          currentEvent = trimmed.slice(6).trim()
-        } else if (trimmed.startsWith("data:")) {
-          currentDataLines.push(trimmed.slice(5).trim())
+        if (line.startsWith("event:")) {
+          currentEvent = line.slice(6).trim()
+        } else if (line.startsWith("data:")) {
+          const dataContent = line.slice(5).replace(/^ /, "")
+          currentDataLines.push(dataContent)
         }
       }
     }
 
     if (buffer.trim()) {
-      const line = buffer.trim()
+      const line = buffer.replace(/\r$/, "")
       if (line.startsWith("data:")) {
-        currentDataLines.push(line.slice(5).trim())
+        const dataContent = line.slice(5).replace(/^ /, "")
+        currentDataLines.push(dataContent)
       }
       if (currentDataLines.length > 0) {
-        onMessage({ event: currentEvent, data: currentDataLines.join("\n") })
+        const dataStr = currentDataLines.join("\n")
+        if (dataStr !== "[DONE]") {
+          onMessage({ event: currentEvent, data: dataStr })
+        }
       }
     }
   } finally {
@@ -86,17 +129,28 @@ export async function parseSSEStream(
 
 function parseSSETxt(
   fullText: string,
-  onMessage: (message: SSEMessage) => void
-): void {
+  onMessage: (message: SSEMessage) => boolean | void
+): boolean {
   const lines = fullText.split(/\r\n|\r|\n/)
   let currentEvent: string | undefined = undefined
   let currentDataLines: string[] = []
+  let hasDispatched = false
 
-  for (const line of lines) {
+  for (const rawLine of lines) {
+    const line = rawLine.replace(/\r$/, "")
     const trimmed = line.trim()
+
     if (!trimmed) {
       if (currentDataLines.length > 0) {
-        onMessage({ event: currentEvent, data: currentDataLines.join("\n") })
+        const dataStr = currentDataLines.join("\n")
+        if (dataStr === "[DONE]") {
+          return true
+        }
+        const shouldStop = onMessage({ event: currentEvent, data: dataStr })
+        hasDispatched = true
+        if (shouldStop) {
+          return true
+        }
         currentEvent = undefined
         currentDataLines = []
       }
@@ -105,14 +159,21 @@ function parseSSETxt(
 
     if (trimmed.startsWith(":")) continue
 
-    if (trimmed.startsWith("event:")) {
-      currentEvent = trimmed.slice(6).trim()
-    } else if (trimmed.startsWith("data:")) {
-      currentDataLines.push(trimmed.slice(5).trim())
+    if (line.startsWith("event:")) {
+      currentEvent = line.slice(6).trim()
+    } else if (line.startsWith("data:")) {
+      const dataContent = line.slice(5).replace(/^ /, "")
+      currentDataLines.push(dataContent)
     }
   }
 
   if (currentDataLines.length > 0) {
-    onMessage({ event: currentEvent, data: currentDataLines.join("\n") })
+    const dataStr = currentDataLines.join("\n")
+    if (dataStr !== "[DONE]") {
+      onMessage({ event: currentEvent, data: dataStr })
+      hasDispatched = true
+    }
   }
+
+  return hasDispatched
 }

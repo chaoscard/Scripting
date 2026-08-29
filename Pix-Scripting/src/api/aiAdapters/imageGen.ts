@@ -3,7 +3,7 @@
  * 支持 OpenAI DALL-E / FLUX (/v1/images/generations)、OpenAI Responses 生图与 Gemini Imagen
  */
 import { fetch } from "scripting"
-import type { ImageGenAIConfig } from "../../store/customAI"
+import { getEffectiveImageGenEndpoint, type ImageGenAIConfig } from "../../store/customAI"
 import type { SignalLike } from "./types"
 import { normalizeResponsesEndpoint } from "./openaiResponses"
 
@@ -38,9 +38,10 @@ export async function requestCustomImageGen(
   request: CustomImageGenRequest
 ): Promise<CustomImageGenResponse> {
   const protocol = config.protocol
+  const effectiveEndpoint = getEffectiveImageGenEndpoint(config)
 
   if (protocol === "openai-responses") {
-    const url = normalizeResponsesEndpoint(config.endpoint)
+    const url = normalizeResponsesEndpoint(effectiveEndpoint)
     const inputContent: any[] = [
       {
         type: "input_text",
@@ -99,7 +100,7 @@ export async function requestCustomImageGen(
   }
 
   // 默认：OpenAI Images (/v1/images/generations) 协议
-  const url = normalizeImagesEndpoint(config.endpoint)
+  const url = normalizeImagesEndpoint(effectiveEndpoint)
   const payload: Record<string, any> = {
     model: config.model || "dall-e-3",
     prompt: request.prompt,

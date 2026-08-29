@@ -16,6 +16,7 @@ export type ImageGenAIProtocol =
   | "gemini-imagen"
 
 export interface GeneralAIConfig {
+  preset?: string
   protocol: GeneralAIProtocol
   endpoint: string
   model: string
@@ -55,53 +56,13 @@ export interface AIPreset {
 export const AI_PRESETS: AIPreset[] = [
   {
     id: "deepseek-chat",
-    name: "DeepSeek (V3 / R1)",
+    name: "DeepSeek",
     provider: "DeepSeek",
     protocol: "openai-chat",
     defaultEndpoint: "https://api.deepseek.com",
     defaultModel: "deepseek-chat",
     supportsVision: false,
     description: "高性价比、二次元与轻小说翻译能力极强",
-  },
-  {
-    id: "openai-responses",
-    name: "OpenAI Responses (最新协议)",
-    provider: "OpenAI",
-    protocol: "openai-responses",
-    defaultEndpoint: "https://api.openai.com",
-    defaultModel: "gpt-4o",
-    supportsVision: true,
-    description: "OpenAI 最新标准，原生支持视觉与流式推理",
-  },
-  {
-    id: "openai-chat",
-    name: "OpenAI Chat (标准接口)",
-    provider: "OpenAI",
-    protocol: "openai-chat",
-    defaultEndpoint: "https://api.openai.com",
-    defaultModel: "gpt-4o-mini",
-    supportsVision: true,
-    description: "通用主流接口，兼容绝大多数中转与自建服务",
-  },
-  {
-    id: "openrouter",
-    name: "OpenRouter (多模型聚合)",
-    provider: "OpenRouter",
-    protocol: "openai-chat",
-    defaultEndpoint: "https://openrouter.ai/api",
-    defaultModel: "deepseek/deepseek-chat",
-    supportsVision: true,
-    description: "聚合各大主流大模型，支持按需切换",
-  },
-  {
-    id: "siliconflow",
-    name: "SiliconFlow (硅基流动)",
-    provider: "SiliconFlow",
-    protocol: "openai-chat",
-    defaultEndpoint: "https://api.siliconflow.cn",
-    defaultModel: "deepseek-ai/DeepSeek-V3",
-    supportsVision: false,
-    description: "国内稳定高速的开源模型 API 托管平台",
   },
   {
     id: "gemini",
@@ -123,6 +84,46 @@ export const AI_PRESETS: AIPreset[] = [
     supportsVision: true,
     description: "文学素养高，行文流畅细腻",
   },
+  {
+    id: "openai-chat",
+    name: "OpenAI Chat",
+    provider: "OpenAI",
+    protocol: "openai-chat",
+    defaultEndpoint: "https://api.openai.com",
+    defaultModel: "gpt-4o-mini",
+    supportsVision: true,
+    description: "通用主流接口，兼容绝大多数中转与自建服务",
+  },
+  {
+    id: "openai-responses",
+    name: "OpenAI Responses",
+    provider: "OpenAI",
+    protocol: "openai-responses",
+    defaultEndpoint: "https://api.openai.com",
+    defaultModel: "gpt-4o",
+    supportsVision: true,
+    description: "OpenAI 最新标准，原生支持视觉与流式推理",
+  },
+  {
+    id: "openrouter",
+    name: "OpenRouter",
+    provider: "OpenRouter",
+    protocol: "openai-chat",
+    defaultEndpoint: "https://openrouter.ai/api",
+    defaultModel: "deepseek/deepseek-chat",
+    supportsVision: true,
+    description: "聚合各大主流大模型，支持按需切换",
+  },
+  {
+    id: "siliconflow",
+    name: "SiliconFlow",
+    provider: "SiliconFlow",
+    protocol: "openai-chat",
+    defaultEndpoint: "https://api.siliconflow.cn",
+    defaultModel: "deepseek-ai/DeepSeek-V3",
+    supportsVision: false,
+    description: "国内稳定高速的开源模型 API 托管平台",
+  },
 ]
 
 const KEYCHAIN_KEY = "pixiv_custom_ai_profile_v1"
@@ -131,8 +132,9 @@ export const DEFAULT_CUSTOM_AI_PROFILE: CustomAIProfile = {
   enabled: false,
   syncToICloud: true,
   general: {
+    preset: "deepseek-chat",
     protocol: "openai-chat",
-    endpoint: "https://api.deepseek.com",
+    endpoint: "",
     model: "deepseek-chat",
     apiKey: "",
     supportsVision: false,
@@ -141,7 +143,7 @@ export const DEFAULT_CUSTOM_AI_PROFILE: CustomAIProfile = {
   imageGen: {
     enabled: false,
     protocol: "openai-images",
-    endpoint: "https://api.openai.com",
+    endpoint: "",
     model: "dall-e-3",
     apiKey: "",
     reuseGeneralKey: true,
@@ -181,7 +183,7 @@ function validateAndSanitizeProfile(raw: unknown): CustomAIProfile {
   const syncToICloud = obj.syncToICloud !== false
 
   const generalRaw = obj.general || {}
-  const generalProtocol: GeneralAIProtocol = [
+  let generalProtocol: GeneralAIProtocol = [
     "openai-responses",
     "openai-chat",
     "gemini",
@@ -190,9 +192,32 @@ function validateAndSanitizeProfile(raw: unknown): CustomAIProfile {
     ? generalRaw.protocol
     : "openai-chat"
 
+  let preset = typeof generalRaw.preset === "string" ? generalRaw.preset : undefined
+  const rawEndpoint = typeof generalRaw.endpoint === "string" ? generalRaw.endpoint.trim() : ""
+
+  // 自动纠偏：DeepSeek 官方 API 采用标准 OpenAI Chat Completions 协议，若历史缓存残留 responses 协议则自动纠偏
+  if ((preset === "deepseek-chat" || rawEndpoint.includes("api.deepseek.com")) && generalProtocol === "openai-responses") {
+    generalProtocol = "openai-chat"
+  }
+
+  if (!preset) {
+    const found = AI_PRESETS.find(
+      (p) =>
+        p.protocol === generalProtocol &&
+        (p.defaultEndpoint === rawEndpoint || p.defaultModel === generalRaw.model)
+    )
+    if (found) {
+      preset = found.id
+    } else if (!rawEndpoint) {
+      const byProto = AI_PRESETS.find((p) => p.protocol === generalProtocol)
+      preset = byProto ? byProto.id : AI_PRESETS[0].id
+    }
+  }
+
   const general: GeneralAIConfig = {
+    preset,
     protocol: generalProtocol,
-    endpoint: typeof generalRaw.endpoint === "string" ? generalRaw.endpoint.trim() : "https://api.deepseek.com",
+    endpoint: rawEndpoint,
     model: typeof generalRaw.model === "string" ? generalRaw.model.trim() : "deepseek-chat",
     apiKey: typeof generalRaw.apiKey === "string" ? generalRaw.apiKey.trim() : "",
     supportsVision: Boolean(generalRaw.supportsVision),
@@ -211,7 +236,7 @@ function validateAndSanitizeProfile(raw: unknown): CustomAIProfile {
   const imageGen: ImageGenAIConfig = {
     enabled: Boolean(imageRaw.enabled),
     protocol: imageProtocol,
-    endpoint: typeof imageRaw.endpoint === "string" ? imageRaw.endpoint.trim() : "https://api.openai.com",
+    endpoint: typeof imageRaw.endpoint === "string" ? imageRaw.endpoint.trim() : "",
     model: typeof imageRaw.model === "string" ? imageRaw.model.trim() : "dall-e-3",
     apiKey: typeof imageRaw.apiKey === "string" ? imageRaw.apiKey.trim() : "",
     reuseGeneralKey: imageRaw.reuseGeneralKey !== false,
@@ -363,13 +388,40 @@ export function isScriptingPro(): boolean {
 }
 
 /**
+ * 获取通用模型的有效端点（若未填写自定义端点，则自动回退到预设或协议默认端点）
+ */
+export function getEffectiveGeneralEndpoint(general: GeneralAIConfig): string {
+  const raw = (general.endpoint || "").trim()
+  if (raw) return raw
+  if (general.preset) {
+    const preset = AI_PRESETS.find((p) => p.id === general.preset)
+    if (preset) return preset.defaultEndpoint
+  }
+  if (general.protocol === "gemini") return "https://generativelanguage.googleapis.com"
+  if (general.protocol === "anthropic") return "https://api.anthropic.com"
+  if (general.protocol === "openai-responses") return "https://api.openai.com"
+  return "https://api.deepseek.com"
+}
+
+/**
+ * 获取生图模型的有效端点（若未填写，则自动回退到默认端点）
+ */
+export function getEffectiveImageGenEndpoint(imageGen: ImageGenAIConfig): string {
+  const raw = (imageGen.endpoint || "").trim()
+  if (raw) return raw
+  if (imageGen.protocol === "gemini-imagen") return "https://generativelanguage.googleapis.com"
+  return "https://api.openai.com"
+}
+
+/**
  * 快速判断自定义 AI 是否处于有效启用状态
  */
 export function isCustomAIConfigured(): boolean {
   const profile = loadCustomAIProfile()
   if (!profile.enabled) return false
   const gen = profile.general
-  return Boolean(gen.endpoint && gen.model && gen.apiKey)
+  const effectiveEndpoint = getEffectiveGeneralEndpoint(gen)
+  return Boolean(effectiveEndpoint && gen.model && gen.apiKey)
 }
 
 /**
@@ -381,3 +433,51 @@ export function getEffectiveImageGenKey(profile: CustomAIProfile): string {
   }
   return profile.imageGen.apiKey
 }
+
+/**
+ * 解析并获取当前自定义 AI 配置的服务商/厂商名称（到厂商一级）
+ */
+export function getCustomAIProviderName(profile: CustomAIProfile): string {
+  if (profile.general.preset && !profile.general.endpoint) {
+    const preset = AI_PRESETS.find((p) => p.id === profile.general.preset)
+    if (preset) return preset.name
+  }
+
+  const endpoint = getEffectiveGeneralEndpoint(profile.general).toLowerCase()
+  const model = (profile.general.model || "").toLowerCase()
+  const protocol = profile.general.protocol
+
+  if (endpoint.includes("deepseek") || model.includes("deepseek")) return "DeepSeek"
+  if (endpoint.includes("siliconflow") || endpoint.includes("silicon")) return "SiliconFlow"
+  if (endpoint.includes("openrouter")) return "OpenRouter"
+  if (endpoint.includes("anthropic") || protocol === "anthropic" || model.includes("claude")) return "Anthropic"
+  if (
+    endpoint.includes("google") ||
+    endpoint.includes("googleapis") ||
+    protocol === "gemini" ||
+    model.includes("gemini")
+  ) {
+    return "Google Gemini"
+  }
+  if (
+    endpoint.includes("openai") ||
+    protocol === "openai-responses" ||
+    model.startsWith("gpt") ||
+    model.startsWith("o1") ||
+    model.startsWith("o3") ||
+    model.startsWith("chatgpt")
+  ) {
+    return "OpenAI"
+  }
+  if (endpoint.includes("groq")) return "Groq"
+  if (endpoint.includes("moonshot") || model.includes("moonshot") || model.includes("kimi")) return "Moonshot"
+  if (endpoint.includes("aliyun") || endpoint.includes("dashscope") || model.includes("qwen")) return "通义千问"
+  if (endpoint.includes("zhipu") || model.includes("glm")) return "智谱清言"
+  if (endpoint.includes("minimax")) return "MiniMax"
+  if (endpoint.includes("baichuan")) return "百川智能"
+  if (endpoint.includes("x.ai") || model.includes("grok")) return "xAI"
+  if (endpoint.includes("together")) return "Together AI"
+
+  return "OpenAI 兼容"
+}
+

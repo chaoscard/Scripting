@@ -1,19 +1,28 @@
 /**
- * OpenAI Responses API (/v1/responses) 适配器
- * 支持 OpenAI 最新 Responses 标准：独立 instructions、input 结构、原生推理流与多模态
+ * OpenAI / DeepSeek Responses API (/v1/responses 或 /responses) 适配器
+ * 严格遵循 OpenAI 与 DeepSeek 官方最新 Responses API 规范：
+ * - DeepSeek 官方端点: https://api.deepseek.com/responses 或 /v1/responses
+ * - OpenAI 官方端点: https://api.openai.com/v1/responses
+ * - 流式事件支持: response.output_text.delta, response.text.delta, response.reasoning_text.delta, response.reasoning.delta
+ * - 结束信号支持: response.completed, response.incomplete, response.failed, [DONE]
  */
 import { fetch } from "scripting"
-import type { GeneralAIConfig } from "../../store/customAI"
+import { getEffectiveGeneralEndpoint, type GeneralAIConfig } from "../../store/customAI"
 import type { AdapterRequest, AdapterResponse } from "./types"
 import { parseSSEStream } from "./sseParser"
 
 export function normalizeResponsesEndpoint(rawEndpoint: string): string {
-  let ep = rawEndpoint.trim().replace(/\/+$/, "")
-  if (!ep) ep = "https://api.openai.com"
+  let ep = (rawEndpoint || "").trim().replace(/\/+$/, "")
+  if (!ep) ep = "https://api.deepseek.com"
+
   if (ep.endsWith("/responses")) {
     return ep
   }
   if (ep.endsWith("/v1")) {
+    return `${ep}/responses`
+  }
+  // DeepSeek 官方根端点直挂 /responses，通用 OpenAI 端点挂 /v1/responses
+  if (ep.includes("api.deepseek.com")) {
     return `${ep}/responses`
   }
   return `${ep}/v1/responses`
@@ -23,9 +32,10 @@ export async function requestOpenAIResponses(
   config: GeneralAIConfig,
   request: AdapterRequest
 ): Promise<AdapterResponse> {
-  const url = normalizeResponsesEndpoint(config.endpoint)
+  const effectiveEndpoint = getEffectiveGeneralEndpoint(config)
+  const url = normalizeResponsesEndpoint(effectiveEndpoint)
 
-  // 构造 input items
+  // 构造 input items（支持纯文本与多模态图文输入）
   const inputItems: any[] = []
 
   for (const msg of request.messages) {
@@ -101,7 +111,7 @@ export async function requestOpenAIResponses(
     } catch {
       errDetail = await res.text()
     }
-    throw new Error(`OpenAI Responses 请求失败 (${res.status}): ${errDetail || res.statusText}`)
+    throw new Error(`Responses 请求失败 (${res.status}): ${errDetail || res.statusText}`)
   }
 
   let fullText = ""
@@ -111,29 +121,64 @@ export async function requestOpenAIResponses(
   await parseSSEStream(
     res,
     (msg) => {
-      if (!msg.data || msg.data === "[DONE]") return
+      if (!msg.data || msg.data === "[DONE]") {
+        return true
+      }
 
       try {
         const json = JSON.parse(msg.data)
         const eventType = msg.event || json.type
 
-        // 1. 文本增量
-        if (eventType === "response.text.delta" || eventType === "response.output_item.delta") {
-          const delta = json.delta || json.delta?.text || ""
+        // 1. 结束事件（DeepSeek 与 OpenAI Responses 规范：response.completed / incomplete / failed，无 [DONE] 消息）
+        if (
+          eventType === "response.completed" ||
+          eventType === "response.done" ||
+          eventType === "response.incomplete" ||
+          eventType === "response.failed" ||
+          json.status === "completed"
+        ) {
+          if (Array.isArray(json.response?.output)) {
+            for (const item of json.response.output) {
+              if (item.type === "message" && Array.isArray(item.content)) {
+                for (const c of item.content) {
+                  if (c.type === "output_text" && c.text && !fullText) {
+                    fullText = c.text
+                    request.onChunk?.(c.text)
+                  }
+                }
+              }
+            }
+          }
+          return true
+        }
+
+        // 2. 文本增量：
+        // DeepSeek 规范为 response.output_text.delta；OpenAI 规范为 response.text.delta 或 response.output_item.delta
+        if (
+          eventType === "response.output_text.delta" ||
+          eventType === "response.text.delta" ||
+          eventType === "response.output_item.delta"
+        ) {
+          const delta = typeof json.delta === "string" ? json.delta : json.delta?.text || json.text || ""
           if (typeof delta === "string" && delta) {
             fullText += delta
             request.onChunk?.(delta)
           }
         }
-        // 2. 推理增量
-        else if (eventType === "response.reasoning.delta" || eventType === "response.thought.delta") {
-          const delta = json.delta || ""
+        // 3. 思维链/推理增量：
+        // DeepSeek 规范为 response.reasoning_text.delta；OpenAI 规范为 response.reasoning.delta 或 response.thought.delta
+        else if (
+          eventType === "response.reasoning_text.delta" ||
+          eventType === "response.reasoning.delta" ||
+          eventType === "response.thought.delta"
+        ) {
+          const delta = typeof json.delta === "string" ? json.delta : json.delta?.text || json.text || ""
           if (typeof delta === "string" && delta) {
             fullReasoning += delta
             request.onReasoning?.(delta)
           }
         }
-        // 3. 输出完成 / 图片项
+        // 4. 输出完成 / 图片项
         else if (eventType === "response.output_item.done") {
           const item = json.item
           if (item?.type === "image" && item.image_base64) {
@@ -145,19 +190,30 @@ export async function requestOpenAIResponses(
             request.onImage?.(img)
           }
         }
-        // 4. 兼容 choices 风格（部分中转服务可能包装成通用格式）
+        // 5. 兼容 choices 风格（部分中转服务可能包装成通用格式）
         else if (json.choices && Array.isArray(json.choices)) {
-          const deltaObj = json.choices[0]?.delta
+          const choice = json.choices[0]
+          const deltaObj = choice?.delta || choice?.message
           if (deltaObj?.content) {
             fullText += deltaObj.content
             request.onChunk?.(deltaObj.content)
           }
-          if (deltaObj?.reasoning_content) {
-            fullReasoning += deltaObj.reasoning_content
-            request.onReasoning?.(deltaObj.reasoning_content)
+          if (deltaObj?.reasoning_content || deltaObj?.reasoning) {
+            const r = deltaObj.reasoning_content || deltaObj.reasoning
+            fullReasoning += r
+            request.onReasoning?.(r)
+          }
+          if (choice?.finish_reason) {
+            return true
           }
         }
-      } catch (e) {
+        // 6. 兼容普通非流式 output_text
+        else if (json.output_text) {
+          fullText = json.output_text
+          request.onChunk?.(json.output_text)
+          return true
+        }
+      } catch {
         // 非 JSON 行，忽略
       }
     },

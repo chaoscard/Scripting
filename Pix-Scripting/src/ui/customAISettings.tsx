@@ -11,11 +11,14 @@ import {
   Toggle,
   VStack,
   useEffect,
+  useMemo,
   useState,
 } from "scripting"
 import {
   AI_PRESETS,
   deleteCustomAIProfile,
+  getEffectiveGeneralEndpoint,
+  getEffectiveImageGenEndpoint,
   getEffectiveImageGenKey,
   loadCustomAIProfile,
   onCustomAIConfigChanged,
@@ -43,7 +46,6 @@ export function CustomAISettingsView() {
   const [remoteModels, setRemoteModels] = useState<RemoteModelItem[]>([])
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [fetchSuccessCount, setFetchSuccessCount] = useState<number | null>(null)
-  const [manualModelInput, setManualModelInput] = useState(false)
 
   // 通用模型测试状态
   const [testingGeneral, setTestingGeneral] = useState(false)
@@ -87,9 +89,11 @@ export function CustomAISettingsView() {
   function applyPreset(presetId: string) {
     const preset = AI_PRESETS.find((p) => p.id === presetId)
     if (!preset) return
+    void Haptics.transient(0.3, 0.3)
     updateGeneral({
+      preset: preset.id,
       protocol: preset.protocol,
-      endpoint: preset.defaultEndpoint,
+      endpoint: "",
       model: preset.defaultModel,
       supportsVision: preset.supportsVision,
     })
@@ -115,10 +119,12 @@ export function CustomAISettingsView() {
     setFetchSuccessCount(null)
 
     try {
+      const effectiveEndpoint = getEffectiveGeneralEndpoint(profile.general)
       const res = await fetchRemoteModelList(
         profile.general.protocol,
-        profile.general.endpoint,
-        profile.general.apiKey
+        effectiveEndpoint,
+        profile.general.apiKey,
+        profile.general.preset
       )
 
       if (res.success && res.models.length > 0) {
@@ -153,10 +159,11 @@ export function CustomAISettingsView() {
   }
 
   async function handleTestGeneralConnection() {
-    if (!profile.general.endpoint || !profile.general.model || !profile.general.apiKey) {
+    const effectiveEndpoint = getEffectiveGeneralEndpoint(profile.general)
+    if (!effectiveEndpoint || !profile.general.model || !profile.general.apiKey) {
       void Dialog.alert({
         title: "配置不完整",
-        message: "请先填写完整的端点地址、模型名称与 API 密钥后再进行连接测试。",
+        message: "请先填写完整的模型名称与 API 密钥后再进行连接测试。",
       })
       return
     }
@@ -173,10 +180,11 @@ export function CustomAISettingsView() {
 
   async function handleTestImageConnection() {
     const effectiveKey = getEffectiveImageGenKey(profile)
-    if (!profile.imageGen.endpoint || !profile.imageGen.model || !effectiveKey) {
+    const effectiveEndpoint = getEffectiveImageGenEndpoint(profile.imageGen)
+    if (!effectiveEndpoint || !profile.imageGen.model || !effectiveKey) {
       void Dialog.alert({
         title: "生图配置不完整",
-        message: "请先填写完整的生图端点、模型名称与有效 API 密钥。",
+        message: "请先填写完整的模型名称与有效 API 密钥。",
       })
       return
     }
@@ -215,6 +223,32 @@ export function CustomAISettingsView() {
     }
   }
 
+  const currentPreset = useMemo(() => {
+    if (profile.general.preset) {
+      const p = AI_PRESETS.find((item) => item.id === profile.general.preset)
+      if (p) return p
+    }
+    const match = AI_PRESETS.find(
+      (p) =>
+        (profile.general.endpoint && p.defaultEndpoint === profile.general.endpoint) ||
+        p.protocol === profile.general.protocol
+    )
+    return match || AI_PRESETS[0]
+  }, [profile.general.preset, profile.general.endpoint, profile.general.protocol])
+
+  const matchedPresetId = currentPreset.id
+
+  const defaultGeneralEndpointPlaceholder = useMemo(() => {
+    return currentPreset?.defaultEndpoint || "https://api.deepseek.com"
+  }, [currentPreset])
+
+  const defaultImageGenEndpointPlaceholder = useMemo(() => {
+    if (profile.imageGen.protocol === "gemini-imagen") {
+      return "https://generativelanguage.googleapis.com"
+    }
+    return "https://api.openai.com"
+  }, [profile.imageGen.protocol])
+
   const imageGenCandidates = remoteModels.filter((m) => m.isImageGenRecommended)
 
   return (
@@ -234,7 +268,7 @@ export function CustomAISettingsView() {
                 已激活 Scripting PRO
               </Text>
               <Text font="caption" foregroundStyle="secondaryLabel">
-                Scripting 原生 Assistant 已就绪。配置自定义模型后将优先走您的专属大模型，享受 OpenAI Responses、DeepSeek-R1 深度推理等高级定制体验。
+                Scripting 原生 Assistant 已就绪。配置自定义模型后将优先走您的专属大模型，享受高级定制体验。
               </Text>
             </VStack>
           </HStack>
@@ -246,7 +280,7 @@ export function CustomAISettingsView() {
                 自定义 AI 免费解锁
               </Text>
               <Text font="caption" foregroundStyle="secondaryLabel">
-                无需 Scripting PRO 会员。只需在下方填入您自备的 API Key（如 DeepSeek、OpenAI、Gemini、Claude 等），即可免费使用完整 AI 翻译、小说总结续写与漫画 OCR 气泡汉化。
+                当前未开通 Scripting PRO 会员。开启自定义 AI 服务并填入您的 API 密钥（支持 DeepSeek、OpenAI、Google、Anthropic 等主流厂商），即可免费使用完整AI助手功能
               </Text>
             </VStack>
           </HStack>
@@ -256,16 +290,15 @@ export function CustomAISettingsView() {
       {/* 预设与快速填充 */}
       <Section
         header={<Text>快速预设配置</Text>}
-        footer={<Text>选择预设可快速填入对应提供商的默认端点与推荐模型，您只需填入个人 API Key 即可一键拉取与使用。</Text>}
+        footer={<Text>选择预设后，端点地址将自动使用官方默认地址（可留空不填写）。若您自建代理或使用中转服务，可在下方端点地址中输入自定义地址。</Text>}
       >
         <Picker
           title="选择提供商预设"
-          value=""
+          value={matchedPresetId}
           onChanged={(value: string) => {
             if (value) applyPreset(value)
           }}
         >
-          <Text tag="">点击选择预设并一键填入…</Text>
           {AI_PRESETS.map((preset) => (
             <Text key={preset.id} tag={preset.id}>
               {preset.name}
@@ -279,7 +312,7 @@ export function CustomAISettingsView() {
         header={<Text>通用模型配置（翻译 / OCR / 总结续写）</Text>}
         footer={
           <Text>
-            填入 API Key 后点击“校验密钥并拉取模型”，即可从服务商获取完整可用模型列表并智能识别视觉（Vision）能力。
+            端点地址留空将默认使用所选预设的官方端点。填入 API 密钥后点击“校验密钥并拉取模型”，即可从服务商获取完整可用模型列表。
           </Text>
         }
       >
@@ -287,22 +320,27 @@ export function CustomAISettingsView() {
           title="协议类型"
           value={profile.general.protocol}
           onChanged={(val: string) => {
-            updateGeneral({ protocol: val as GeneralAIProtocol })
+            const newProtocol = val as GeneralAIProtocol
+            const matched = AI_PRESETS.find((p) => p.protocol === newProtocol)
+            updateGeneral({
+              protocol: newProtocol,
+              preset: matched ? matched.id : undefined,
+            })
             setRemoteModels([])
             setFetchSuccessCount(null)
           }}
         >
-          <Text tag="openai-responses">OpenAI Responses (/v1/responses)</Text>
-          <Text tag="openai-chat">OpenAI Chat (/v1/chat/completions)</Text>
-          <Text tag="gemini">Google Gemini (GenerateContent)</Text>
-          <Text tag="anthropic">Anthropic Claude (/v1/messages)</Text>
+          <Text tag="openai-responses">OpenAI Responses</Text>
+          <Text tag="openai-chat">OpenAI Chat</Text>
+          <Text tag="gemini">Google Gemini</Text>
+          <Text tag="anthropic">Anthropic Claude</Text>
         </Picker>
 
         <HStack spacing={8} alignment="center">
           <Text font="body" frame={{ width: 80 }}>端点地址</Text>
           <TextField
             title="端点地址"
-            prompt="例如 https://api.openai.com"
+            prompt={defaultGeneralEndpointPlaceholder}
             value={profile.general.endpoint}
             onChanged={(val) => updateGeneral({ endpoint: val })}
           />
@@ -373,8 +411,8 @@ export function CustomAISettingsView() {
           ) : null}
         </HStack>
 
-        {/* 模型选择：远端列表 Picker 或 手动输入 TextField */}
-        {remoteModels.length > 0 && !manualModelInput ? (
+        {/* 模型选择：远端拉取到则使用 Picker 选择器，未拉取到则使用 TextField 输入框 */}
+        {remoteModels.length > 0 ? (
           <Picker
             title="选择模型"
             value={profile.general.model}
@@ -397,20 +435,6 @@ export function CustomAISettingsView() {
             />
           </HStack>
         )}
-
-        {remoteModels.length > 0 ? (
-          <HStack spacing={8} alignment="center">
-            <Spacer />
-            <Button
-              buttonStyle="plain"
-              action={() => setManualModelInput(!manualModelInput)}
-            >
-              <Text font="caption" foregroundStyle="systemBlue">
-                {manualModelInput ? "切换为从已拉取列表中选择" : "手动输入自定义模型名称"}
-              </Text>
-            </Button>
-          </HStack>
-        ) : null}
 
         <Toggle
           title="模型支持视觉识别 (Vision / OCR)"
@@ -472,25 +496,25 @@ export function CustomAISettingsView() {
               value={profile.imageGen.protocol}
               onChanged={(val: string) => updateImageGen({ protocol: val as ImageGenAIProtocol })}
             >
-              <Text tag="openai-images">OpenAI Images (/v1/images/generations)</Text>
-              <Text tag="openai-responses">OpenAI Responses (多模态输出)</Text>
-              <Text tag="gemini-imagen">Google Imagen (predict)</Text>
+              <Text tag="openai-images">OpenAI Images</Text>
+              <Text tag="openai-responses">OpenAI Responses</Text>
+              <Text tag="gemini-imagen">Google Imagen</Text>
             </Picker>
 
             <HStack spacing={8} alignment="center">
               <Text font="body" frame={{ width: 80 }}>端点地址</Text>
               <TextField
                 title="端点地址"
-                prompt="例如 https://api.openai.com"
+                prompt={defaultImageGenEndpointPlaceholder}
                 value={profile.imageGen.endpoint}
                 onChanged={(val) => updateImageGen({ endpoint: val })}
               />
             </HStack>
 
-            {/* 若远端拉取到了生图候选模型，展示快捷 Picker */}
+            {/* 若远端拉取到了生图候选模型，展示快捷 Picker；否则展示 TextField */}
             {imageGenCandidates.length > 0 ? (
               <Picker
-                title="推荐生图模型"
+                title="生图模型"
                 value={profile.imageGen.model}
                 onChanged={(val: string) => updateImageGen({ model: val })}
               >
@@ -500,17 +524,17 @@ export function CustomAISettingsView() {
                   </Text>
                 ))}
               </Picker>
-            ) : null}
-
-            <HStack spacing={8} alignment="center">
-              <Text font="body" frame={{ width: 80 }}>模型名称</Text>
-              <TextField
-                title="模型名称"
-                prompt="例如 dall-e-3 / flux-1.1-pro"
-                value={profile.imageGen.model}
-                onChanged={(val) => updateImageGen({ model: val })}
-              />
-            </HStack>
+            ) : (
+              <HStack spacing={8} alignment="center">
+                <Text font="body" frame={{ width: 80 }}>模型名称</Text>
+                <TextField
+                  title="模型名称"
+                  prompt="例如 dall-e-3 / flux-1.1-pro"
+                  value={profile.imageGen.model}
+                  onChanged={(val) => updateImageGen({ model: val })}
+                />
+              </HStack>
+            )}
 
             <Toggle
               title="复用通用模型 API 密钥"

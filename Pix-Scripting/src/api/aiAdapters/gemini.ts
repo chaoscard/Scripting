@@ -1,16 +1,18 @@
 /**
  * Google Gemini 原生协议 (:streamGenerateContent) 适配器
+ * 严格遵循 Google AI Studio / Gemini API 官方 REST 规范：
+ * - 官方端点: https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent?alt=sse&key={apiKey}
  */
 import { fetch } from "scripting"
-import type { GeneralAIConfig } from "../../store/customAI"
+import { getEffectiveGeneralEndpoint, type GeneralAIConfig } from "../../store/customAI"
 import type { AdapterRequest, AdapterResponse } from "./types"
 import { parseSSEStream } from "./sseParser"
 
 export function normalizeGeminiEndpoint(rawEndpoint: string, model: string, apiKey: string): string {
-  let ep = rawEndpoint.trim().replace(/\/+$/, "")
+  let ep = (rawEndpoint || "").trim().replace(/\/+$/, "")
   if (!ep) ep = "https://generativelanguage.googleapis.com"
-  
-  if (ep.includes(":streamGenerateContent")) {
+
+  if (ep.includes(":streamGenerateContent") || ep.includes(":generateContent")) {
     if (!ep.includes("key=") && apiKey) {
       const sep = ep.includes("?") ? "&" : "?"
       return `${ep}${sep}key=${encodeURIComponent(apiKey)}`
@@ -29,7 +31,8 @@ export async function requestGemini(
   config: GeneralAIConfig,
   request: AdapterRequest
 ): Promise<AdapterResponse> {
-  const url = normalizeGeminiEndpoint(config.endpoint, config.model, config.apiKey)
+  const effectiveEndpoint = getEffectiveGeneralEndpoint(config)
+  const url = normalizeGeminiEndpoint(effectiveEndpoint, config.model, config.apiKey)
 
   const contents: any[] = []
 
@@ -97,22 +100,28 @@ export async function requestGemini(
   await parseSSEStream(
     res,
     (msg) => {
-      if (!msg.data || msg.data === "[DONE]") return
+      if (!msg.data || msg.data === "[DONE]") return true
 
       try {
         const json = JSON.parse(msg.data)
-        const parts = json.candidates?.[0]?.content?.parts
-        if (Array.isArray(parts)) {
-          for (const part of parts) {
-            if (part.text) {
-              if (part.thought) {
-                fullReasoning += part.text
-                request.onReasoning?.(part.text)
-              } else {
-                fullText += part.text
-                request.onChunk?.(part.text)
+        const candidate = json.candidates?.[0]
+        if (candidate) {
+          const parts = candidate.content?.parts
+          if (Array.isArray(parts)) {
+            for (const part of parts) {
+              if (part.text) {
+                if (part.thought) {
+                  fullReasoning += part.text
+                  request.onReasoning?.(part.text)
+                } else {
+                  fullText += part.text
+                  request.onChunk?.(part.text)
+                }
               }
             }
+          }
+          if (candidate.finishReason) {
+            return true
           }
         }
       } catch (e) {

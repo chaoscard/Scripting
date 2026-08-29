@@ -1,14 +1,18 @@
 /**
  * Anthropic Claude (/v1/messages) 适配器
+ * 严格遵循 Anthropic 官方 Messages API 规范与 DeepSeek Anthropic 兼容模式：
+ * - 官方端点: https://api.anthropic.com/v1/messages
+ * - DeepSeek Anthropic 兼容端点: https://api.deepseek.com/anthropic/v1/messages
  */
 import { fetch } from "scripting"
-import type { GeneralAIConfig } from "../../store/customAI"
+import { getEffectiveGeneralEndpoint, type GeneralAIConfig } from "../../store/customAI"
 import type { AdapterRequest, AdapterResponse } from "./types"
 import { parseSSEStream } from "./sseParser"
 
 export function normalizeAnthropicEndpoint(rawEndpoint: string): string {
-  let ep = rawEndpoint.trim().replace(/\/+$/, "")
+  let ep = (rawEndpoint || "").trim().replace(/\/+$/, "")
   if (!ep) ep = "https://api.anthropic.com"
+
   if (ep.endsWith("/messages")) {
     return ep
   }
@@ -22,7 +26,8 @@ export async function requestAnthropic(
   config: GeneralAIConfig,
   request: AdapterRequest
 ): Promise<AdapterResponse> {
-  const url = normalizeAnthropicEndpoint(config.endpoint)
+  const effectiveEndpoint = getEffectiveGeneralEndpoint(config)
+  const url = normalizeAnthropicEndpoint(effectiveEndpoint)
 
   const messages: any[] = []
 
@@ -106,11 +111,15 @@ export async function requestAnthropic(
   await parseSSEStream(
     res,
     (msg) => {
-      if (!msg.data || msg.data === "[DONE]") return
+      if (!msg.data || msg.data === "[DONE]") return true
 
       try {
         const json = JSON.parse(msg.data)
         const eventType = msg.event || json.type
+
+        if (eventType === "message_stop") {
+          return true
+        }
 
         if (eventType === "content_block_delta") {
           const delta = json.delta
