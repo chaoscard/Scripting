@@ -31,26 +31,27 @@ import {
 } from "../store/customAI"
 import {
   fetchRemoteModelList,
-  testCustomAIConnection,
   testCustomImageGenConnection,
   type RemoteModelItem,
   type TestResult,
 } from "../api/aiAdapters"
 
+declare const Pasteboard: any
+declare const Safari: any
+declare const Haptics: any
+declare const Dialog: any
+
 export function CustomAISettingsView() {
   const [profile, setProfile] = useState<CustomAIProfile>(() => loadCustomAIProfile())
   const [showKeyText, setShowKeyText] = useState(false)
   const [showImageKeyText, setShowImageKeyText] = useState(false)
+  const [showAdvanced, setShowAdvanced] = useState(false)
 
-  // 远程模型列表拉取状态
+  // 远程模型拉取与一体化连通状态
   const [fetchingModels, setFetchingModels] = useState(false)
   const [remoteModels, setRemoteModels] = useState<RemoteModelItem[]>([])
   const [fetchError, setFetchError] = useState<string | null>(null)
-  const [fetchSuccessCount, setFetchSuccessCount] = useState<number | null>(null)
-
-  // 通用模型测试状态
-  const [testingGeneral, setTestingGeneral] = useState(false)
-  const [generalTestResult, setGeneralTestResult] = useState<TestResult | null>(null)
+  const [fetchLatency, setFetchLatency] = useState<number | null>(null)
 
   // 生图模型测试状态
   const [testingImage, setTestingImage] = useState(false)
@@ -73,7 +74,6 @@ export function CustomAISettingsView() {
       },
     })
     setProfile(next)
-    setGeneralTestResult(null)
   }
 
   function updateImageGen(patch: Partial<CustomAIProfile["imageGen"]>) {
@@ -95,31 +95,91 @@ export function CustomAISettingsView() {
       preset: preset.id,
       protocol: preset.protocol,
       endpoint: "",
-      model: preset.defaultModel,
+      model: "",
       supportsVision: preset.supportsVision,
       apiKey: "",
     })
     setRemoteModels([])
     setFetchError(null)
-    setFetchSuccessCount(null)
+    setFetchLatency(null)
+  }
+
+  const currentPreset = useMemo(() => {
+    if (profile.general.preset) {
+      const p = AI_PRESETS.find((item) => item.id === profile.general.preset)
+      if (p) return p
+    }
+    return null
+  }, [profile.general.preset])
+
+  const selectedPresetId = currentPreset?.id || ""
+
+  const defaultGeneralEndpointPlaceholder = useMemo(() => {
+    if (currentPreset?.defaultEndpoint) return currentPreset.defaultEndpoint
+    if (profile.general.protocol === "gemini") return "https://generativelanguage.googleapis.com"
+    if (profile.general.protocol === "anthropic") return "https://api.anthropic.com"
+    return "https://api.openai.com"
+  }, [currentPreset, profile.general.protocol])
+
+  const defaultImageGenEndpointPlaceholder = useMemo(() => {
+    if (profile.imageGen.protocol === "gemini-imagen") {
+      return "https://generativelanguage.googleapis.com"
+    }
+    return "https://api.openai.com"
+  }, [profile.imageGen.protocol])
+
+  /**
+   * 一键从剪贴板粘贴 API Key
+   */
+  async function handlePasteApiKey() {
+    try {
+      const text = await Pasteboard.getString()
+      if (text && typeof text === "string" && text.trim()) {
+        const trimmed = text.trim()
+        updateGeneral({ apiKey: trimmed })
+        void Haptics.transient(0.3, 0.4)
+      } else {
+        void Dialog.alert({
+          title: "剪贴板未包含有效文本",
+          message: "请先复制 API 密钥后再点击粘贴。",
+        })
+      }
+    } catch (e) {
+      console.log("Paste error:", e)
+    }
   }
 
   /**
-   * 校验 API Key 并拉取远程可用模型列表
+   * 打开对应提供商的官方获取 API Key 控制台
+   */
+  async function handleOpenApiKeyConsole() {
+    if (currentPreset?.apiKeyUrl) {
+      void Haptics.transient(0.2, 0.2)
+      try {
+        await Safari.present(currentPreset.apiKeyUrl)
+      } catch {
+        void Safari.openURL(currentPreset.apiKeyUrl)
+      }
+    }
+  }
+
+  /**
+   * 校验 API Key 并拉取远程可用模型列表（一体化连通性测试）
    */
   async function handleFetchRemoteModels() {
     if (!profile.general.apiKey) {
       void Dialog.alert({
         title: "请输入 API 密钥",
-        message: "校验与拉取模型列表需要提供有效的 API Key。",
+        message: "请先填入或粘贴有效的 API Key 后再进行连接验证。",
       })
       return
     }
 
     setFetchingModels(true)
     setFetchError(null)
-    setFetchSuccessCount(null)
+    setFetchLatency(null)
 
+    const startTime = Date.now()
     try {
       const effectiveEndpoint = getEffectiveGeneralEndpoint(profile.general)
       const res = await fetchRemoteModelList(
@@ -129,22 +189,28 @@ export function CustomAISettingsView() {
         profile.general.preset
       )
 
+      const latency = Date.now() - startTime
+      setFetchLatency(latency)
+
       if (res.success && res.models.length > 0) {
         setRemoteModels(res.models)
-        setFetchSuccessCount(res.models.length)
+        void Haptics.transient(0.4, 0.6)
 
-        // 若当前模型不在列表中且列表不为空，自动选中第一个
+        // 若当前模型未设置或不在列表中，自动选中第一个推荐模型
         const currentModelInList = res.models.some((m) => m.id === profile.general.model)
-        if (!currentModelInList && res.models.length > 0) {
-          const firstModel = res.models[0]
+        if (!currentModelInList || !profile.general.model) {
+          const recommended = res.models.find((m) => m.isVisionRecommended) || res.models[0]
           updateGeneral({
-            model: firstModel.id,
-            supportsVision: Boolean(firstModel.isVisionRecommended),
+            model: recommended.id,
+            supportsVision: Boolean(recommended.isVisionRecommended),
           })
         }
       } else {
         setFetchError(res.error || "未在远端获取到可用模型")
+        void Haptics.transient(0.5, 0.2)
       }
+    } catch (err: any) {
+      setFetchError(err?.message || "连接失败，请检查网络或密钥有效性")
     } finally {
       setFetchingModels(false)
     }
@@ -160,33 +226,13 @@ export function CustomAISettingsView() {
     })
   }
 
-  async function handleTestGeneralConnection() {
-    const effectiveEndpoint = getEffectiveGeneralEndpoint(profile.general)
-    if (!effectiveEndpoint || !profile.general.model || !profile.general.apiKey) {
-      void Dialog.alert({
-        title: "配置不完整",
-        message: "请先填写完整的模型名称与 API 密钥后再进行连接测试。",
-      })
-      return
-    }
-
-    setTestingGeneral(true)
-    setGeneralTestResult(null)
-    try {
-      const res = await testCustomAIConnection(profile.general)
-      setGeneralTestResult(res)
-    } finally {
-      setTestingGeneral(false)
-    }
-  }
-
   async function handleTestImageConnection() {
     const effectiveKey = getEffectiveImageGenKey(profile)
     const effectiveEndpoint = getEffectiveImageGenEndpoint(profile.imageGen)
     if (!effectiveEndpoint || !profile.imageGen.model || !effectiveKey) {
       void Dialog.alert({
         title: "生图配置不完整",
-        message: "请先填写完整的模型名称与有效 API 密钥。",
+        message: "请先填写完整的生图模型名称与有效 API 密钥。",
       })
       return
     }
@@ -203,7 +249,7 @@ export function CustomAISettingsView() {
 
   async function handleDeleteAll() {
     const confirmed = await Dialog.confirm({
-      title: "删除所有自定义 AI 配置",
+      title: "清空所有自定义 AI 配置",
       message:
         "此操作将永久清空本地 Keychain 与 iCloud 钥匙串中保存的端点、模型与 API 密钥。确定继续吗？",
       confirmLabel: "彻底删除",
@@ -214,42 +260,15 @@ export function CustomAISettingsView() {
       deleteCustomAIProfile()
       setProfile(loadCustomAIProfile())
       setRemoteModels([])
-      setFetchSuccessCount(null)
+      setFetchLatency(null)
       setFetchError(null)
-      setGeneralTestResult(null)
       setImageTestResult(null)
       void Dialog.alert({
         title: "已清空",
-        message: "自定义 AI 配置及 iCloud 钥匙串凭证已彻底删除。",
+        message: "自定义 AI 配置已彻底删除。",
       })
     }
   }
-
-  const currentPreset = useMemo(() => {
-    if (profile.general.preset) {
-      const p = AI_PRESETS.find((item) => item.id === profile.general.preset)
-      if (p) return p
-    }
-    const match = AI_PRESETS.find(
-      (p) =>
-        (profile.general.endpoint && p.defaultEndpoint === profile.general.endpoint) ||
-        p.protocol === profile.general.protocol
-    )
-    return match || AI_PRESETS[0]
-  }, [profile.general.preset, profile.general.endpoint, profile.general.protocol])
-
-  const matchedPresetId = currentPreset.id
-
-  const defaultGeneralEndpointPlaceholder = useMemo(() => {
-    return currentPreset?.defaultEndpoint || "https://api.deepseek.com"
-  }, [currentPreset])
-
-  const defaultImageGenEndpointPlaceholder = useMemo(() => {
-    if (profile.imageGen.protocol === "gemini-imagen") {
-      return "https://generativelanguage.googleapis.com"
-    }
-    return "https://api.openai.com"
-  }, [profile.imageGen.protocol])
 
   const imageGenCandidates = remoteModels.filter((m) => m.isImageGenRecommended)
 
@@ -259,9 +278,7 @@ export function CustomAISettingsView() {
       navigationBarTitleDisplayMode="inline"
     >
       {/* 顶部 PRO 会员状态与免 PRO 解锁提示横幅 */}
-      <Section
-        header={<Text>会员与运行环境</Text>}
-      >
+      <Section header={<Text>运行环境</Text>}>
         {isScriptingPro() ? (
           <HStack spacing={10} alignment="top">
             <Image systemName="crown.fill" font="title3" foregroundStyle="systemYellow" />
@@ -270,7 +287,7 @@ export function CustomAISettingsView() {
                 已激活 Scripting PRO
               </Text>
               <Text font="caption" foregroundStyle="secondaryLabel">
-                Scripting 原生 Assistant 已就绪。配置自定义模型后将优先走您的专属大模型，享受高级定制体验。
+                Scripting 原生 Assistant 已就绪。配置自定义模型后将优先调用您的专属大模型。
               </Text>
             </VStack>
           </HStack>
@@ -282,21 +299,28 @@ export function CustomAISettingsView() {
                 自定义 AI 免费解锁
               </Text>
               <Text font="caption" foregroundStyle="secondaryLabel">
-                当前未开通 Scripting PRO 会员。开启自定义 AI 服务并填入您的 API 密钥（支持 DeepSeek、OpenAI、Google、Anthropic 等主流厂商），即可免费使用完整AI助手功能
+                未开通 PRO 会员？填入您的 API 密钥（支持 DeepSeek、OpenAI、OpenCode、Gemini 等），即可免费使用完整 AI 助手功能。
               </Text>
             </VStack>
           </HStack>
         )}
       </Section>
 
-      {/* 预设与快速填充 */}
+      {/* 核心配置（小白极简三步上手） */}
       <Section
-        header={<Text>快速预设配置</Text>}
-        footer={<Text>选择预设后，端点地址将自动使用官方默认地址（可留空不填写）。若您自建代理或使用中转服务，可在下方端点地址中输入自定义地址。</Text>}
+        header={<Text>AI 助手配置</Text>}
+        footer={
+          <Text>
+            {currentPreset?.description
+              ? `当前提供商：${currentPreset.description}。配置完成后，简介翻译、轻小说 AI 总结/续写与漫画 OCR 将自动生效。`
+              : "配置完成后，简介翻译、轻小说 AI 总结/续写与漫画 OCR 将自动生效。"}
+          </Text>
+        }
       >
+        {/* 1. 提供商选择 */}
         <Picker
-          title="选择提供商预设"
-          value={matchedPresetId}
+          title="服务提供商"
+          value={selectedPresetId}
           onChanged={(value: string) => {
             if (value) applyPreset(value)
           }}
@@ -307,53 +331,14 @@ export function CustomAISettingsView() {
             </Text>
           ))}
         </Picker>
-      </Section>
 
-      {/* 通用模型配置 */}
-      <Section
-        header={<Text>通用模型配置（翻译 / OCR / 总结续写）</Text>}
-        footer={
-          <Text>
-            端点地址留空将默认使用所选预设的官方端点。填入 API 密钥后点击“校验密钥并拉取模型”，即可从服务商获取完整可用模型列表。
-          </Text>
-        }
-      >
-        <Picker
-          title="协议类型"
-          value={profile.general.protocol}
-          onChanged={(val: string) => {
-            const newProtocol = val as GeneralAIProtocol
-            const matched = AI_PRESETS.find((p) => p.protocol === newProtocol)
-            updateGeneral({
-              protocol: newProtocol,
-              preset: matched ? matched.id : undefined,
-            })
-            setRemoteModels([])
-            setFetchSuccessCount(null)
-          }}
-        >
-          <Text tag="openai-responses">OpenAI Responses</Text>
-          <Text tag="openai-chat">OpenAI Chat</Text>
-          <Text tag="gemini">Google Gemini</Text>
-          <Text tag="anthropic">Anthropic Claude</Text>
-        </Picker>
-
+        {/* 2. API 密钥输入（带粘贴与明密文查看） */}
         <HStack spacing={8} alignment="center">
-          <Text font="body" frame={{ width: 80 }}>端点地址</Text>
-          <TextField
-            title="端点地址"
-            prompt={defaultGeneralEndpointPlaceholder}
-            value={profile.general.endpoint}
-            onChanged={(val) => updateGeneral({ endpoint: val })}
-          />
-        </HStack>
-
-        <HStack spacing={8} alignment="center">
-          <Text font="body" frame={{ width: 80 }}>API 密钥</Text>
+          <Text font="body" frame={{ width: 80, alignment: "leading" }}>API 密钥</Text>
           {showKeyText ? (
             <TextField
               title="API 密钥"
-              prompt="sk-..."
+              prompt="在此粘贴 sk-..."
               value={profile.general.apiKey}
               onChanged={(val) => updateGeneral({ apiKey: val })}
               textContentType="password"
@@ -364,7 +349,7 @@ export function CustomAISettingsView() {
           ) : (
             <SecureField
               title="API 密钥"
-              prompt="sk-..."
+              prompt="在此粘贴 sk-..."
               value={profile.general.apiKey}
               onChanged={(val) => updateGeneral({ apiKey: val })}
               textContentType="password"
@@ -373,6 +358,15 @@ export function CustomAISettingsView() {
               keyboardType="asciiCapable"
             />
           )}
+          <Button
+            buttonStyle="plain"
+            action={handlePasteApiKey}
+          >
+            <HStack spacing={2} alignment="center">
+              <Image systemName="doc.on.clipboard" foregroundStyle="systemBlue" />
+              <Text font="caption" foregroundStyle="systemBlue">粘贴</Text>
+            </HStack>
+          </Button>
           <Button
             buttonStyle="plain"
             action={() => setShowKeyText(!showKeyText)}
@@ -384,300 +378,299 @@ export function CustomAISettingsView() {
           </Button>
         </HStack>
 
-        {/* 现代化的校验与拉取模型按钮 */}
-        <HStack spacing={8} alignment="center">
-          <Button
-            buttonStyle="glass"
-            disabled={fetchingModels || !profile.general.apiKey}
-            action={handleFetchRemoteModels}
-          >
-            <HStack spacing={6} alignment="center">
-              <Image
-                systemName="arrow.triangle.2.circlepath.circle.fill"
-                foregroundStyle={profile.general.apiKey ? "systemBlue" : "secondaryLabel"}
-              />
-              <Text font="body">
-                {fetchingModels ? "正在校验与拉取…" : "校验密钥并拉取模型列表"}
+        {/* 官方 Key 获取直达入口 */}
+        {currentPreset?.apiKeyUrl ? (
+          <HStack spacing={6} alignment="center">
+            <Image systemName="arrow.up.forward.app" font="caption" foregroundStyle="systemBlue" />
+            <Button buttonStyle="plain" action={handleOpenApiKeyConsole}>
+              <Text font="caption" foregroundStyle="systemBlue">
+                {`去 ${currentPreset.name} 官方控制台获取 API Key ↗`}
               </Text>
-            </HStack>
-          </Button>
-          <Spacer />
-          {fetchSuccessCount != null ? (
-            <HStack spacing={4} alignment="center">
+            </Button>
+          </HStack>
+        ) : null}
+
+        {/* 3. 一键验证与模型选择 */}
+        {remoteModels.length > 0 ? (
+          <>
+            {/* 成功连接状态横幅 */}
+            <HStack spacing={6} alignment="center">
               <Image systemName="checkmark.circle.fill" foregroundStyle="systemGreen" />
               <Text font="caption" foregroundStyle="systemGreen">
-                已拉取 {fetchSuccessCount} 个模型
+                {`已连接 · 延迟 ${fetchLatency != null ? `${fetchLatency}ms` : "正常"} · 可用模型 ${remoteModels.length} 个`}
               </Text>
-            </HStack>
-          ) : null}
-          {fetchError ? (
-            <HStack spacing={4} alignment="center">
-              <Image systemName="exclamationmark.circle.fill" foregroundStyle="systemRed" />
-              <Text font="caption" foregroundStyle="systemRed" lineLimit={1}>
-                {fetchError}
-              </Text>
-            </HStack>
-          ) : null}
-        </HStack>
-
-        {/* 模型选择：远端拉取到则使用 Picker 选择器，未拉取到则使用 TextField 输入框 */}
-        {remoteModels.length > 0 ? (
-          <Picker
-            title="选择模型"
-            value={profile.general.model}
-            onChanged={(val: string) => handleSelectRemoteModel(val)}
-          >
-            {remoteModels.map((m) => (
-              <Text key={m.id} tag={m.id}>
-                {m.isVisionRecommended ? `[👁 视觉] ${m.name || m.id}` : m.name || m.id}
-              </Text>
-            ))}
-          </Picker>
-        ) : (
-          <HStack spacing={8} alignment="center">
-            <Text font="body" frame={{ width: 80 }}>模型名称</Text>
-            <TextField
-              title="模型名称"
-              prompt="例如 gpt-4o / deepseek-chat"
-              value={profile.general.model}
-              onChanged={(val) => updateGeneral({ model: val })}
-            />
-          </HStack>
-        )}
-
-        <Toggle
-          title="模型支持视觉识别 (Vision / OCR)"
-          value={profile.general.supportsVision}
-          onChanged={(val) => updateGeneral({ supportsVision: val })}
-        />
-
-        {/* 通用模型连接测试 */}
-        <HStack spacing={8} alignment="center">
-          <Button
-            buttonStyle="glass"
-            disabled={testingGeneral}
-            action={handleTestGeneralConnection}
-          >
-            <HStack spacing={6} alignment="center">
-              <Image systemName="bolt.horizontal.fill" foregroundStyle="systemBlue" />
-              <Text font="body">{testingGeneral ? "正在测试连通性…" : "测试通用模型连通性"}</Text>
-            </HStack>
-          </Button>
-          <Spacer />
-          {generalTestResult ? (
-            <HStack spacing={4} alignment="center">
-              <Image
-                systemName={generalTestResult.success ? "checkmark.circle.fill" : "xmark.circle.fill"}
-                foregroundStyle={generalTestResult.success ? "systemGreen" : "systemRed"}
-              />
-              <Text
-                font="caption"
-                foregroundStyle={generalTestResult.success ? "systemGreen" : "systemRed"}
+              <Spacer />
+              <Button
+                buttonStyle="plain"
+                disabled={fetchingModels}
+                action={handleFetchRemoteModels}
               >
-                {generalTestResult.success
-                  ? `测试成功 (${generalTestResult.latencyMs}ms)`
-                  : generalTestResult.error || "连接失败"}
-              </Text>
-            </HStack>
-          ) : null}
-        </HStack>
-      </Section>
-
-      {/* 独立生图模型配置 */}
-      <Section
-        header={<Text>生图模型配置（漫画生图汉化 / 重绘）</Text>}
-        footer={
-          <Text>
-            若您需要使用独立模型（如 DALL-E 3、FLUX 或 Google Imagen）进行高质量汉化生图，可开启此项。
-          </Text>
-        }
-      >
-        <Toggle
-          title="启用独立生图模型"
-          value={profile.imageGen.enabled}
-          onChanged={(val) => updateImageGen({ enabled: val })}
-        />
-
-        {profile.imageGen.enabled ? (
-          <>
-            <Picker
-              title="生图协议"
-              value={profile.imageGen.protocol}
-              onChanged={(val: string) => updateImageGen({ protocol: val as ImageGenAIProtocol })}
-            >
-              <Text tag="openai-images">OpenAI Images</Text>
-              <Text tag="openai-responses">OpenAI Responses</Text>
-              <Text tag="gemini-imagen">Google Imagen</Text>
-            </Picker>
-
-            <HStack spacing={8} alignment="center">
-              <Text font="body" frame={{ width: 80 }}>端点地址</Text>
-              <TextField
-                title="端点地址"
-                prompt={defaultImageGenEndpointPlaceholder}
-                value={profile.imageGen.endpoint}
-                onChanged={(val) => updateImageGen({ endpoint: val })}
-              />
-            </HStack>
-
-            {/* 若远端拉取到了生图候选模型，展示快捷 Picker；否则展示 TextField */}
-            {imageGenCandidates.length > 0 ? (
-              <Picker
-                title="生图模型"
-                value={profile.imageGen.model}
-                onChanged={(val: string) => updateImageGen({ model: val })}
-              >
-                {imageGenCandidates.map((m) => (
-                  <Text key={m.id} tag={m.id}>
-                    {`[🎨 生图] ${m.name || m.id}`}
-                  </Text>
-                ))}
-              </Picker>
-            ) : (
-              <HStack spacing={8} alignment="center">
-                <Text font="body" frame={{ width: 80 }}>模型名称</Text>
-                <TextField
-                  title="模型名称"
-                  prompt="例如 dall-e-3 / flux-1.1-pro"
-                  value={profile.imageGen.model}
-                  onChanged={(val) => updateImageGen({ model: val })}
-                />
-              </HStack>
-            )}
-
-            <Toggle
-              title="复用通用模型 API 密钥"
-              value={profile.imageGen.reuseGeneralKey}
-              onChanged={(val) => updateImageGen({ reuseGeneralKey: val })}
-            />
-
-            {!profile.imageGen.reuseGeneralKey ? (
-              <HStack spacing={8} alignment="center">
-                <Text font="body" frame={{ width: 80 }}>生图密钥</Text>
-                {showImageKeyText ? (
-                  <TextField
-                    title="生图密钥"
-                    prompt="sk-..."
-                    value={profile.imageGen.apiKey}
-                    onChanged={(val) => updateImageGen({ apiKey: val })}
-                    textContentType="password"
-                    autocorrectionDisabled={true}
-                    textInputAutocapitalization="never"
-                    keyboardType="asciiCapable"
-                  />
-                ) : (
-                  <SecureField
-                    title="生图密钥"
-                    prompt="sk-..."
-                    value={profile.imageGen.apiKey}
-                    onChanged={(val) => updateImageGen({ apiKey: val })}
-                    textContentType="password"
-                    autocorrectionDisabled={true}
-                    textInputAutocapitalization="never"
-                    keyboardType="asciiCapable"
-                  />
-                )}
-                <Button
-                  buttonStyle="plain"
-                  action={() => setShowImageKeyText(!showImageKeyText)}
-                >
+                <HStack spacing={2} alignment="center">
                   <Image
-                    systemName={showImageKeyText ? "eye.slash" : "eye"}
+                    systemName={fetchingModels ? "arrow.triangle.2.circlepath" : "arrow.clockwise"}
+                    font="caption"
                     foregroundStyle="secondaryLabel"
                   />
-                </Button>
+                  <Text font="caption" foregroundStyle="secondaryLabel">
+                    {fetchingModels ? "刷新中…" : "重新拉取"}
+                  </Text>
+                </HStack>
+              </Button>
+            </HStack>
+
+            {/* 模型下拉选择器 */}
+            <Picker
+              title="选择模型"
+              value={profile.general.model}
+              onChanged={(val: string) => handleSelectRemoteModel(val)}
+            >
+              {remoteModels.map((m) => (
+                <Text key={m.id} tag={m.id}>
+                  {m.isVisionRecommended ? `[👁 视觉] ${m.name || m.id}` : m.name || m.id}
+                </Text>
+              ))}
+            </Picker>
+          </>
+        ) : (
+          <>
+            {/* 未拉取时的一键验证与加载按钮 */}
+            <HStack spacing={8} alignment="center">
+              <Button
+                buttonStyle="borderedProminent"
+                disabled={fetchingModels || !profile.general.apiKey}
+                action={handleFetchRemoteModels}
+              >
+                <HStack spacing={6} alignment="center">
+                  <Image
+                    systemName={fetchingModels ? "arrow.triangle.2.circlepath" : "bolt.badge.checkmark.fill"}
+                  />
+                  <Text font="body">
+                    {fetchingModels ? "正在验证并加载可用模型…" : "验证密钥并加载模型"}
+                  </Text>
+                </HStack>
+              </Button>
+            </HStack>
+
+            {/* 失败错误提示 */}
+            {fetchError ? (
+              <HStack spacing={4} alignment="center">
+                <Image systemName="exclamationmark.circle.fill" foregroundStyle="systemRed" />
+                <Text font="caption" foregroundStyle="systemRed" lineLimit={2}>
+                  {fetchError}
+                </Text>
               </HStack>
             ) : null}
 
-            {/* 生图模型连接测试 */}
+            {/* 未拉取时提供手动模型输入框作为兜底 */}
             <HStack spacing={8} alignment="center">
-              <Button
-                buttonStyle="glass"
-                disabled={testingImage}
-                action={handleTestImageConnection}
-              >
-                <HStack spacing={6} alignment="center">
-                  <Image systemName="photo.badge.checkmark" foregroundStyle="systemPurple" />
-                  <Text font="body">{testingImage ? "正在测试生图…" : "测试生图模型连接"}</Text>
-                </HStack>
-              </Button>
-              <Spacer />
-              {imageTestResult ? (
-                <HStack spacing={4} alignment="center">
-                  <Image
-                    systemName={imageTestResult.success ? "checkmark.circle.fill" : "xmark.circle.fill"}
-                    foregroundStyle={imageTestResult.success ? "systemGreen" : "systemRed"}
-                  />
-                  <Text
-                    font="caption"
-                    foregroundStyle={imageTestResult.success ? "systemGreen" : "systemRed"}
-                  >
-                    {imageTestResult.success
-                      ? `成功 (${imageTestResult.latencyMs}ms)`
-                      : imageTestResult.error || "测试失败"}
-                  </Text>
-                </HStack>
-              ) : null}
+              <Text font="body" frame={{ width: 80, alignment: "leading" }}>模型名称</Text>
+              <TextField
+                title="模型名称"
+                prompt="点击上方按钮拉取，或手动输入"
+                value={profile.general.model}
+                onChanged={(val) => updateGeneral({ model: val })}
+              />
             </HStack>
+          </>
+        )}
+      </Section>
+
+      {/* 高级设置（折叠收纳进阶参数） */}
+      <Section
+        header={<Text>高级与自定义参数</Text>}
+        footer={
+          showAdvanced ? (
+            <Text>
+              若使用第三方中转站或自建反向代理，请在上方填写自定义端点地址。修改协议类型可匹配自建服务格式。
+            </Text>
+          ) : undefined
+        }
+      >
+        <Toggle
+          title="展开高级参数设置"
+          value={showAdvanced}
+          onChanged={(val) => setShowAdvanced(val)}
+        />
+
+        {showAdvanced ? (
+          <>
+            <Picker
+              title="协议类型"
+              value={profile.general.protocol}
+              onChanged={(val: string) => {
+                const newProtocol = val as GeneralAIProtocol
+                updateGeneral({
+                  protocol: newProtocol,
+                })
+                setRemoteModels([])
+                setFetchLatency(null)
+              }}
+            >
+              <Text tag="openai-responses">OpenAI Responses</Text>
+              <Text tag="openai-chat">OpenAI Chat</Text>
+              <Text tag="gemini">Google Gemini</Text>
+              <Text tag="anthropic">Anthropic Claude</Text>
+            </Picker>
+
+            <HStack spacing={8} alignment="center">
+              <Text font="body" frame={{ width: 80, alignment: "leading" }}>端点地址</Text>
+              <TextField
+                title="端点地址"
+                prompt={defaultGeneralEndpointPlaceholder}
+                value={profile.general.endpoint}
+                onChanged={(val) => updateGeneral({ endpoint: val })}
+              />
+            </HStack>
+
+            <Toggle
+              title="模型支持视觉识别 (Vision / OCR)"
+              value={profile.general.supportsVision}
+              onChanged={(val) => updateGeneral({ supportsVision: val })}
+            />
+
+            {/* 独立生图模型配置 */}
+            <Toggle
+              title="启用独立生图模型 (漫画重绘/汉化)"
+              value={profile.imageGen.enabled}
+              onChanged={(val) => updateImageGen({ enabled: val })}
+            />
+
+            {profile.imageGen.enabled ? (
+              <>
+                <Picker
+                  title="生图协议"
+                  value={profile.imageGen.protocol}
+                  onChanged={(val: string) => updateImageGen({ protocol: val as ImageGenAIProtocol })}
+                >
+                  <Text tag="openai-images">OpenAI Images</Text>
+                  <Text tag="openai-responses">OpenAI Responses</Text>
+                  <Text tag="gemini-imagen">Google Imagen</Text>
+                </Picker>
+
+                <HStack spacing={8} alignment="center">
+                  <Text font="body" frame={{ width: 80, alignment: "leading" }}>端点地址</Text>
+                  <TextField
+                    title="端点地址"
+                    prompt={defaultImageGenEndpointPlaceholder}
+                    value={profile.imageGen.endpoint}
+                    onChanged={(val) => updateImageGen({ endpoint: val })}
+                  />
+                </HStack>
+
+                {imageGenCandidates.length > 0 ? (
+                  <Picker
+                    title="生图模型"
+                    value={profile.imageGen.model}
+                    onChanged={(val: string) => updateImageGen({ model: val })}
+                  >
+                    {imageGenCandidates.map((m) => (
+                      <Text key={m.id} tag={m.id}>
+                        {`[🎨 生图] ${m.name || m.id}`}
+                      </Text>
+                    ))}
+                  </Picker>
+                ) : (
+                  <HStack spacing={8} alignment="center">
+                    <Text font="body" frame={{ width: 80, alignment: "leading" }}>模型名称</Text>
+                    <TextField
+                      title="模型名称"
+                      prompt="例如 dall-e-3 / flux-1.1-pro"
+                      value={profile.imageGen.model}
+                      onChanged={(val) => updateImageGen({ model: val })}
+                    />
+                  </HStack>
+                )}
+
+                <Toggle
+                  title="复用通用模型 API 密钥"
+                  value={profile.imageGen.reuseGeneralKey}
+                  onChanged={(val) => updateImageGen({ reuseGeneralKey: val })}
+                />
+
+                {!profile.imageGen.reuseGeneralKey ? (
+                  <HStack spacing={8} alignment="center">
+                    <Text font="body" frame={{ width: 80, alignment: "leading" }}>生图密钥</Text>
+                    {showImageKeyText ? (
+                      <TextField
+                        title="生图密钥"
+                        prompt="sk-..."
+                        value={profile.imageGen.apiKey}
+                        onChanged={(val) => updateImageGen({ apiKey: val })}
+                        textContentType="password"
+                        autocorrectionDisabled={true}
+                        textInputAutocapitalization="never"
+                        keyboardType="asciiCapable"
+                      />
+                    ) : (
+                      <SecureField
+                        title="生图密钥"
+                        prompt="sk-..."
+                        value={profile.imageGen.apiKey}
+                        onChanged={(val) => updateImageGen({ apiKey: val })}
+                        textContentType="password"
+                        autocorrectionDisabled={true}
+                        textInputAutocapitalization="never"
+                        keyboardType="asciiCapable"
+                      />
+                    )}
+                    <Button
+                      buttonStyle="plain"
+                      action={() => setShowImageKeyText(!showImageKeyText)}
+                    >
+                      <Image
+                        systemName={showImageKeyText ? "eye.slash" : "eye"}
+                        foregroundStyle="secondaryLabel"
+                      />
+                    </Button>
+                  </HStack>
+                ) : null}
+
+                <HStack spacing={8} alignment="center">
+                  <Button
+                    buttonStyle="glass"
+                    disabled={testingImage}
+                    action={handleTestImageConnection}
+                  >
+                    <HStack spacing={6} alignment="center">
+                      <Image systemName="photo.badge.checkmark" foregroundStyle="systemPurple" />
+                      <Text font="body">{testingImage ? "正在测试生图…" : "测试生图模型连接"}</Text>
+                    </HStack>
+                  </Button>
+                  <Spacer />
+                  {imageTestResult ? (
+                    <HStack spacing={4} alignment="center">
+                      <Image
+                        systemName={imageTestResult.success ? "checkmark.circle.fill" : "xmark.circle.fill"}
+                        foregroundStyle={imageTestResult.success ? "systemGreen" : "systemRed"}
+                      />
+                      <Text
+                        font="caption"
+                        foregroundStyle={imageTestResult.success ? "systemGreen" : "systemRed"}
+                      >
+                        {imageTestResult.success
+                          ? `成功 (${imageTestResult.latencyMs}ms)`
+                          : imageTestResult.error || "连接失败"}
+                      </Text>
+                    </HStack>
+                  ) : null}
+                </HStack>
+              </>
+            ) : null}
           </>
         ) : null}
       </Section>
 
-      {/* 数据同步与存储管理 */}
-      <Section header={<Text>数据同步与安全管理</Text>}>
-        <Toggle
-          value={profile.syncToICloud}
-          onChanged={(val) => {
-            const updated = updateCustomAIProfile({ syncToICloud: val })
-            setProfile(updated)
-          }}
-        >
-          <VStack alignment="leading" spacing={2}>
-            <Text font="body">iCloud 钥匙串同步</Text>
-            <Text font="caption" foregroundStyle="secondaryLabel">
-              开启后通过 Apple 账号端到端加密同步至所有 Apple 设备
-            </Text>
-          </VStack>
-        </Toggle>
-
+      {/* 危险操作区 */}
+      <Section>
         <Button
           role="destructive"
           action={handleDeleteAll}
         >
-          <HStack spacing={8} alignment="center">
-            <Image systemName="trash" foregroundStyle="systemRed" />
-            <Text font="body" foregroundStyle="systemRed">
-              删除所有自定义 AI 配置 (同步清除 iCloud Keychain)
-            </Text>
+          <HStack spacing={6} alignment="center">
+            <Image systemName="trash.fill" foregroundStyle="systemRed" />
+            <Text foregroundStyle="systemRed">清空并删除所有自定义 AI 配置</Text>
           </HStack>
         </Button>
-      </Section>
-
-      {/* 底部安全与隐私保障提示 */}
-      <Section
-        footer={
-          <VStack alignment="leading" spacing={6}>
-            <HStack spacing={4} alignment="center">
-              <Image systemName="lock.shield.fill" font="caption" foregroundStyle="systemGreen" />
-              <Text font="caption" fontWeight="bold" foregroundStyle="secondaryLabel">
-                端到端加密与安全隐私保障
-              </Text>
-            </HStack>
-            <Text font="caption" foregroundStyle="tertiaryLabel">
-              1. 您的 API 密钥与端点地址均安全存储于 iOS 系统 Keychain 中（启用 iCloud 同步时通过 Apple 钥匙串端到端高强度加密同步）。
-            </Text>
-            <Text font="caption" foregroundStyle="tertiaryLabel">
-              2. 自定义 AI 请求直接由本设备安全发起至您填写的端点地址，绝不经过任何第三方服务器中转，亦绝不会明文记录在本地日志或普通文件中。
-            </Text>
-            <Text font="caption" foregroundStyle="tertiaryLabel">
-              3. 自定义 AI 模型优先级高于 Scripting 内置 Assistant；若禁用或未配置，则自动回退至内置 Assistant。
-            </Text>
-          </VStack>
-        }
-      >
-        <Text font="caption" foregroundStyle="secondaryLabel">
-          配置已自动实时保存
-        </Text>
       </Section>
     </List>
   )

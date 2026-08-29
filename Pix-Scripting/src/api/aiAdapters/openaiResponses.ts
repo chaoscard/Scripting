@@ -1,8 +1,7 @@
 /**
- * OpenAI / DeepSeek Responses API (/v1/responses 或 /responses) 适配器
- * 严格遵循 OpenAI 与 DeepSeek 官方最新 Responses API 规范：
- * - DeepSeek 官方端点: https://api.deepseek.com/responses 或 /v1/responses
- * - OpenAI 官方端点: https://api.openai.com/v1/responses
+ * OpenAI Responses API (/v1/responses) 适配器
+ * 严格遵循 OpenAI 官方 Responses API 规范：
+ * - 官方端点: https://api.openai.com/v1/responses
  * - 流式事件支持: response.output_text.delta, response.text.delta, response.reasoning_text.delta, response.reasoning.delta
  * - 结束信号支持: response.completed, response.incomplete, response.failed, [DONE]
  */
@@ -13,16 +12,12 @@ import { parseSSEStream } from "./sseParser"
 
 export function normalizeResponsesEndpoint(rawEndpoint: string): string {
   let ep = (rawEndpoint || "").trim().replace(/\/+$/, "")
-  if (!ep) ep = "https://api.deepseek.com"
+  if (!ep) ep = "https://api.openai.com"
 
   if (ep.endsWith("/responses")) {
     return ep
   }
   if (ep.endsWith("/v1")) {
-    return `${ep}/responses`
-  }
-  // DeepSeek 官方根端点直挂 /responses，通用 OpenAI 端点挂 /v1/responses
-  if (ep.includes("api.deepseek.com")) {
     return `${ep}/responses`
   }
   return `${ep}/v1/responses`
@@ -135,7 +130,7 @@ export async function requestOpenAIResponses(
         const json = JSON.parse(msg.data)
         const eventType = msg.event || json.type
 
-        // 1. 结束事件（DeepSeek 与 OpenAI Responses 规范：response.completed / incomplete / failed，无 [DONE] 消息）
+        // 1. 结束事件（Responses 规范：response.completed / incomplete / failed，无 [DONE] 消息）
         if (
           eventType === "response.completed" ||
           eventType === "response.done" ||
@@ -158,8 +153,7 @@ export async function requestOpenAIResponses(
           return true
         }
 
-        // 2. 文本增量：
-        // DeepSeek 规范为 response.output_text.delta；OpenAI 规范为 response.text.delta 或 response.output_item.delta
+        // 2. 文本增量（支持 response.output_text.delta / response.text.delta / response.output_item.delta）
         if (
           eventType === "response.output_text.delta" ||
           eventType === "response.text.delta" ||
@@ -171,8 +165,7 @@ export async function requestOpenAIResponses(
             request.onChunk?.(delta)
           }
         }
-        // 3. 思维链/推理增量：
-        // DeepSeek 规范为 response.reasoning_text.delta；OpenAI 规范为 response.reasoning.delta 或 response.thought.delta
+        // 3. 思维链/推理增量（支持 response.reasoning_text.delta / response.reasoning.delta / response.thought.delta）
         else if (
           eventType === "response.reasoning_text.delta" ||
           eventType === "response.reasoning.delta" ||

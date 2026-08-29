@@ -1,8 +1,7 @@
 /**
  * Anthropic Claude (/v1/messages) 适配器
- * 严格遵循 Anthropic 官方 Messages API 规范与 DeepSeek Anthropic 兼容模式：
+ * 严格遵循 Anthropic 官方 Messages API 规范：
  * - 官方端点: https://api.anthropic.com/v1/messages
- * - DeepSeek Anthropic 兼容端点: https://api.deepseek.com/anthropic/v1/messages
  */
 import { fetch, AbortController } from "scripting"
 import { getEffectiveGeneralEndpoint, type GeneralAIConfig } from "../../store/customAI"

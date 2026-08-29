@@ -1,6 +1,6 @@
 /**
- * OpenAI Chat Completions 兼容协议 (/v1/chat/completions 或 /chat/completions) 适配器
- * 严格遵循 OpenAI、DeepSeek、OpenRouter、SiliconFlow 等官方规范
+ * OpenAI Chat Completions 兼容协议 (/v1/chat/completions) 适配器
+ * 严格遵循 OpenAI 官方 Chat Completions 规范及各大通用兼容器标准
  */
 import { fetch, AbortController } from "scripting"
 import { getEffectiveGeneralEndpoint, type GeneralAIConfig } from "../../store/customAI"
@@ -9,15 +9,12 @@ import { parseSSEStream } from "./sseParser"
 
 export function normalizeChatEndpoint(rawEndpoint: string): string {
   let ep = (rawEndpoint || "").trim().replace(/\/+$/, "")
-  if (!ep) ep = "https://api.deepseek.com"
+  if (!ep) ep = "https://api.openai.com"
 
   if (ep.endsWith("/chat/completions")) {
     return ep
   }
   if (ep.endsWith("/v1")) {
-    return `${ep}/chat/completions`
-  }
-  if (ep.includes("api.deepseek.com")) {
     return `${ep}/chat/completions`
   }
   return `${ep}/v1/chat/completions`
@@ -145,7 +142,7 @@ export async function requestOpenAIChat(
               request.onChunk?.(delta.content)
             }
 
-            // 2. 深度思考增量（DeepSeek-R1 / Qwen 思考流）
+            // 2. 深度思考增量（思考流 reasoning_content / reasoning / thought）
             const reasoning = delta.reasoning_content || delta.reasoning || delta.thought
             if (typeof reasoning === "string" && reasoning) {
               fullReasoning += reasoning

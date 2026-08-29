@@ -1,7 +1,7 @@
 /**
  * 远程模型列表拉取与智能能力推断
  * 严格按照各大官方 API 模型列表接口规范：
- * - OpenAI / DeepSeek / SiliconFlow / OpenRouter: GET /v1/models (或 DeepSeek GET /models)
+ * - OpenAI / SiliconFlow / OpenRouter: GET /v1/models
  * - Anthropic: GET /v1/models
  * - Google Gemini: GET /v1beta/models?key={apiKey}
  */
@@ -77,7 +77,7 @@ function normalizeModelsEndpoint(protocol: GeneralAIProtocol, rawEndpoint: strin
     if (!ep) {
       if (protocol === "gemini") ep = "https://generativelanguage.googleapis.com"
       else if (protocol === "anthropic") ep = "https://api.anthropic.com"
-      else ep = "https://api.deepseek.com"
+      else ep = "https://api.openai.com"
     }
   }
 
@@ -101,9 +101,6 @@ function normalizeModelsEndpoint(protocol: GeneralAIProtocol, rawEndpoint: strin
   }
   if (ep.endsWith("/responses") || ep.endsWith("/chat/completions") || ep.endsWith("/messages")) {
     ep = ep.replace(/\/(responses|chat\/completions|messages)$/, "")
-  }
-  if (ep.includes("api.deepseek.com") && !ep.includes("/v1") && !ep.includes("/anthropic")) {
-    return `${ep}/models`
   }
   if (!ep.endsWith("/v1") && !ep.endsWith("/api") && !ep.endsWith("/anthropic")) {
     ep = `${ep}/v1`
@@ -138,7 +135,7 @@ export async function fetchRemoteModelList(
     if (!effectiveEndpoint) {
       if (protocol === "gemini") effectiveEndpoint = "https://generativelanguage.googleapis.com"
       else if (protocol === "anthropic") effectiveEndpoint = "https://api.anthropic.com"
-      else effectiveEndpoint = "https://api.deepseek.com"
+      else effectiveEndpoint = "https://api.openai.com"
     }
   }
 

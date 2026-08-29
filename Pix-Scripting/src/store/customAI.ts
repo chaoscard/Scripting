@@ -51,18 +51,42 @@ export interface AIPreset {
   defaultModel: string
   supportsVision: boolean
   description: string
+  apiKeyUrl?: string
 }
 
 export const AI_PRESETS: AIPreset[] = [
+  {
+    id: "openai",
+    name: "OpenAI",
+    provider: "OpenAI",
+    protocol: "openai-responses",
+    defaultEndpoint: "https://api.openai.com",
+    defaultModel: "",
+    supportsVision: true,
+    description: "官方最新标准，原生支持视觉与流式推理",
+    apiKeyUrl: "https://platform.openai.com/api-keys",
+  },
+  {
+    id: "opencode",
+    name: "OpenCode",
+    provider: "OpenCode",
+    protocol: "openai-responses",
+    defaultEndpoint: "https://opencode.ai/zen",
+    defaultModel: "",
+    supportsVision: true,
+    description: "OpenCode Zen 聚合网关，精选高可用模型",
+    apiKeyUrl: "https://opencode.ai/zen",
+  },
   {
     id: "deepseek-chat",
     name: "DeepSeek",
     provider: "DeepSeek",
     protocol: "openai-responses",
     defaultEndpoint: "https://api.deepseek.com",
-    defaultModel: "deepseek-chat",
+    defaultModel: "",
     supportsVision: false,
     description: "高性价比、二次元与轻小说翻译能力极强",
+    apiKeyUrl: "https://platform.deepseek.com/api_keys",
   },
   {
     id: "gemini",
@@ -70,9 +94,10 @@ export const AI_PRESETS: AIPreset[] = [
     provider: "Google",
     protocol: "gemini",
     defaultEndpoint: "https://generativelanguage.googleapis.com",
-    defaultModel: "gemini-2.5-flash",
+    defaultModel: "",
     supportsVision: true,
     description: "极速响应与超长上下文，支持多模态视觉",
+    apiKeyUrl: "https://aistudio.google.com/app/apikey",
   },
   {
     id: "anthropic",
@@ -80,29 +105,10 @@ export const AI_PRESETS: AIPreset[] = [
     provider: "Anthropic",
     protocol: "anthropic",
     defaultEndpoint: "https://api.anthropic.com",
-    defaultModel: "claude-3-5-sonnet-20241022",
+    defaultModel: "",
     supportsVision: true,
     description: "文学素养高，行文流畅细腻",
-  },
-  {
-    id: "openai-chat",
-    name: "OpenAI Chat",
-    provider: "OpenAI",
-    protocol: "openai-chat",
-    defaultEndpoint: "https://api.openai.com",
-    defaultModel: "gpt-4o-mini",
-    supportsVision: true,
-    description: "通用主流接口，兼容绝大多数中转与自建服务",
-  },
-  {
-    id: "openai-responses",
-    name: "OpenAI Responses",
-    provider: "OpenAI",
-    protocol: "openai-responses",
-    defaultEndpoint: "https://api.openai.com",
-    defaultModel: "gpt-4o",
-    supportsVision: true,
-    description: "OpenAI 最新标准，原生支持视觉与流式推理",
+    apiKeyUrl: "https://console.anthropic.com/settings/keys",
   },
   {
     id: "openrouter",
@@ -110,9 +116,10 @@ export const AI_PRESETS: AIPreset[] = [
     provider: "OpenRouter",
     protocol: "openai-chat",
     defaultEndpoint: "https://openrouter.ai/api",
-    defaultModel: "deepseek/deepseek-chat",
+    defaultModel: "",
     supportsVision: true,
     description: "聚合各大主流大模型，支持按需切换",
+    apiKeyUrl: "https://openrouter.ai/keys",
   },
   {
     id: "siliconflow",
@@ -120,9 +127,10 @@ export const AI_PRESETS: AIPreset[] = [
     provider: "SiliconFlow",
     protocol: "openai-chat",
     defaultEndpoint: "https://api.siliconflow.cn",
-    defaultModel: "deepseek-ai/DeepSeek-V3",
+    defaultModel: "",
     supportsVision: false,
     description: "国内稳定高速的开源模型 API 托管平台",
+    apiKeyUrl: "https://cloud.siliconflow.cn/account/ak",
   },
 ]
 
@@ -132,19 +140,19 @@ export const DEFAULT_CUSTOM_AI_PROFILE: CustomAIProfile = {
   enabled: false,
   syncToICloud: true,
   general: {
-    preset: "deepseek-chat",
+    preset: "openai",
     protocol: "openai-responses",
     endpoint: "",
-    model: "deepseek-chat",
+    model: "",
     apiKey: "",
-    supportsVision: false,
+    supportsVision: true,
     temperature: 0.7,
   },
   imageGen: {
     enabled: false,
     protocol: "openai-images",
     endpoint: "",
-    model: "dall-e-3",
+    model: "",
     apiKey: "",
     reuseGeneralKey: true,
     size: "1024x1024",
@@ -193,27 +201,16 @@ function validateAndSanitizeProfile(raw: unknown): CustomAIProfile {
     : "openai-chat"
 
   let preset = typeof generalRaw.preset === "string" ? generalRaw.preset : undefined
-  const rawEndpoint = typeof generalRaw.endpoint === "string" ? generalRaw.endpoint.trim() : ""
-
-  if (!preset) {
-    const found = AI_PRESETS.find(
-      (p) =>
-        p.protocol === generalProtocol &&
-        (p.defaultEndpoint === rawEndpoint || p.defaultModel === generalRaw.model)
-    )
-    if (found) {
-      preset = found.id
-    } else if (!rawEndpoint) {
-      const byProto = AI_PRESETS.find((p) => p.protocol === generalProtocol)
-      preset = byProto ? byProto.id : AI_PRESETS[0].id
-    }
+  if (preset === "openai-responses" || preset === "openai-chat") {
+    preset = "openai"
   }
+  const rawEndpoint = typeof generalRaw.endpoint === "string" ? generalRaw.endpoint.trim() : ""
 
   const general: GeneralAIConfig = {
     preset,
     protocol: generalProtocol,
     endpoint: rawEndpoint,
-    model: typeof generalRaw.model === "string" ? generalRaw.model.trim() : "deepseek-chat",
+    model: typeof generalRaw.model === "string" ? generalRaw.model.trim() : "",
     apiKey: typeof generalRaw.apiKey === "string" ? generalRaw.apiKey.trim() : "",
     supportsVision: Boolean(generalRaw.supportsVision),
     temperature: typeof generalRaw.temperature === "number" ? generalRaw.temperature : 0.7,
@@ -232,7 +229,7 @@ function validateAndSanitizeProfile(raw: unknown): CustomAIProfile {
     enabled: Boolean(imageRaw.enabled),
     protocol: imageProtocol,
     endpoint: typeof imageRaw.endpoint === "string" ? imageRaw.endpoint.trim() : "",
-    model: typeof imageRaw.model === "string" ? imageRaw.model.trim() : "dall-e-3",
+    model: typeof imageRaw.model === "string" ? imageRaw.model.trim() : "",
     apiKey: typeof imageRaw.apiKey === "string" ? imageRaw.apiKey.trim() : "",
     reuseGeneralKey: imageRaw.reuseGeneralKey !== false,
     size: typeof imageRaw.size === "string" ? imageRaw.size : "1024x1024",
@@ -395,7 +392,7 @@ export function getEffectiveGeneralEndpoint(general: GeneralAIConfig): string {
   if (general.protocol === "gemini") return "https://generativelanguage.googleapis.com"
   if (general.protocol === "anthropic") return "https://api.anthropic.com"
   if (general.protocol === "openai-responses") return "https://api.openai.com"
-  return "https://api.deepseek.com"
+  return "https://api.openai.com"
 }
 
 /**
@@ -444,6 +441,7 @@ export function getCustomAIProviderName(profile: CustomAIProfile): string {
   if (endpoint.includes("deepseek") || model.includes("deepseek")) return "DeepSeek"
   if (endpoint.includes("siliconflow") || endpoint.includes("silicon")) return "SiliconFlow"
   if (endpoint.includes("openrouter")) return "OpenRouter"
+  if (endpoint.includes("opencode") || model.includes("opencode")) return "OpenCode"
   if (endpoint.includes("anthropic") || protocol === "anthropic" || model.includes("claude")) return "Anthropic"
   if (
     endpoint.includes("google") ||
