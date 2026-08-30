@@ -79,9 +79,12 @@ export async function testCustomAIConnection(
       signal: { get aborted() { return controller.signal.aborted } },
     })
 
-    clearTimeout(timeoutId)
     const latencyMs = Date.now() - startTime
-    const text = (response.text || response.reasoning || "").trim()
+    const rawText = (response.text || response.reasoning || "").trim()
+    const text = rawText
+      .replace(/<(?:think|thought|thinking)>[\s\S]*?<\/(?:think|thought|thinking)>/gi, "")
+      .replace(/^<(?:think|thought|thinking)>[\s\S]*$/gi, "")
+      .trim() || rawText
 
     return {
       success: true,
@@ -89,7 +92,6 @@ export async function testCustomAIConnection(
       sampleResponse: text.length > 50 ? `${text.slice(0, 50)}...` : text,
     }
   } catch (e: any) {
-    clearTimeout(timeoutId)
     const latencyMs = Date.now() - startTime
     const isTimeout = controller.signal.aborted || e?.name === "AbortError" || String(e).includes("abort")
     return {
@@ -97,6 +99,8 @@ export async function testCustomAIConnection(
       latencyMs,
       error: isTimeout ? "连接超时 (15s)，请检查端点地址与网络状态" : (e?.message || String(e)),
     }
+  } finally {
+    clearTimeout(timeoutId)
   }
 }
 
@@ -124,16 +128,13 @@ export async function testCustomImageGenConnection(
       signal: { get aborted() { return controller.signal.aborted } },
     })
 
-    clearTimeout(timeoutId)
     const latencyMs = Date.now() - startTime
-
     return {
       success: Boolean(result.base64),
       latencyMs,
       sampleResponse: `图片生成成功 (Base64 长度: ${result.base64.length})`,
     }
   } catch (e: any) {
-    clearTimeout(timeoutId)
     const latencyMs = Date.now() - startTime
     const isTimeout = controller.signal.aborted || e?.name === "AbortError" || String(e).includes("abort")
     return {
@@ -141,5 +142,7 @@ export async function testCustomImageGenConnection(
       latencyMs,
       error: isTimeout ? "生图连接超时 (20s)" : (e?.message || String(e)),
     }
+  } finally {
+    clearTimeout(timeoutId)
   }
 }

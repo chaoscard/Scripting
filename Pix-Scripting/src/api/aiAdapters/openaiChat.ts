@@ -2,10 +2,10 @@
  * OpenAI Chat Completions 兼容协议 (/v1/chat/completions) 适配器
  * 严格遵循 OpenAI 官方 Chat Completions 规范及各大通用兼容器标准
  */
-import { fetch, AbortController } from "scripting"
+import { fetch } from "scripting"
 import { getEffectiveGeneralEndpoint, type GeneralAIConfig } from "../../store/customAI"
 import type { AdapterRequest, AdapterResponse } from "./types"
-import { parseSSEStream } from "./sseParser"
+import { createLinkedAbortController, parseSSEStream } from "./sseParser"
 
 export function normalizeChatEndpoint(rawEndpoint: string): string {
   let ep = (rawEndpoint || "").trim().replace(/\/+$/, "")
@@ -29,7 +29,6 @@ export async function requestOpenAIChat(
 
   const messages: any[] = []
 
-  // 1. 系统提示词
   if (request.systemPrompt) {
     messages.push({
       role: "system",
@@ -37,7 +36,6 @@ export async function requestOpenAIChat(
     })
   }
 
-  // 2. 转换用户/助手消息
   for (const msg of request.messages) {
     if (typeof msg.content === "string") {
       messages.push({
@@ -91,86 +89,79 @@ export async function requestOpenAIChat(
     headers["Authorization"] = `Bearer ${config.apiKey}`
   }
 
-  // OpenRouter 特殊 Headers 优化
   if (effectiveEndpoint.includes("openrouter.ai")) {
     headers["HTTP-Referer"] = "https://github.com/Pix-Scripting"
     headers["X-Title"] = "Pix-Scripting"
   }
 
-  // 使用真实 AbortController，不传自定义 SignalLike 给 fetch
-  const controller = new AbortController()
-  // 若外部已标记中止，则立即abort
-  if (request.signal?.aborted) {
-    controller.abort()
-  }
+  const { controller, cleanup } = createLinkedAbortController(request.signal)
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(payload),
-    signal: controller.signal,
-  })
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    })
 
-  if (!res.ok) {
-    let errDetail = ""
-    try {
-      const errJson = await res.json()
-      errDetail = errJson?.error?.message || JSON.stringify(errJson)
-    } catch {
-      errDetail = await res.text()
-    }
-    throw new Error(`OpenAI Chat 请求失败 (${res.status}): ${errDetail || res.statusText}`)
-  }
-
-  let fullText = ""
-  let fullReasoning = ""
-
-  await parseSSEStream(
-    res,
-    (msg) => {
-      if (!msg.data || msg.data === "[DONE]") {
-        return true
-      }
-
+    if (!res.ok) {
+      let errDetail = ""
       try {
-        const json = JSON.parse(msg.data)
-        const choice = json.choices?.[0]
-        if (choice) {
-          const delta = choice.delta || choice.message
-          if (delta) {
-            // 1. 文本内容增量
-            if (typeof delta.content === "string" && delta.content) {
-              fullText += delta.content
-              request.onChunk?.(delta.content)
-            }
+        const errJson = await res.json()
+        errDetail = errJson?.error?.message || JSON.stringify(errJson)
+      } catch {
+        errDetail = await res.text()
+      }
+      throw new Error(`OpenAI Chat 请求失败 (${res.status}): ${errDetail || res.statusText}`)
+    }
 
-            // 2. 深度思考增量（思考流 reasoning_content / reasoning / thought）
-            const reasoning = delta.reasoning_content || delta.reasoning || delta.thought
-            if (typeof reasoning === "string" && reasoning) {
-              fullReasoning += reasoning
-              request.onReasoning?.(reasoning)
-            }
-          }
+    let fullText = ""
+    let fullReasoning = ""
 
-          // 遇到结束标志提前终止
-          if (choice.finish_reason) {
-            return true
-          }
-        } else if (json.output_text) {
-          fullText = json.output_text
-          request.onChunk?.(json.output_text)
+    await parseSSEStream(
+      res,
+      (msg) => {
+        if (!msg.data || msg.data === "[DONE]") {
           return true
         }
-      } catch (e) {
-        // 非 JSON 行，忽略
-      }
-    },
-    request.signal
-  )
 
-  return {
-    text: fullText,
-    reasoning: fullReasoning,
-    images: [],
+        try {
+          const json = JSON.parse(msg.data)
+          const choice = json.choices?.[0]
+          if (choice) {
+            const delta = choice.delta || choice.message
+            if (delta) {
+              if (typeof delta.content === "string" && delta.content) {
+                fullText += delta.content
+                request.onChunk?.(delta.content)
+              }
+
+              const reasoning = delta.reasoning_content || delta.reasoning || delta.thought
+              if (typeof reasoning === "string" && reasoning) {
+                fullReasoning += reasoning
+                request.onReasoning?.(reasoning)
+              }
+            }
+
+            if (choice.finish_reason) {
+              return true
+            }
+          } else if (json.output_text) {
+            fullText = json.output_text
+            request.onChunk?.(json.output_text)
+            return true
+          }
+        } catch (e) {}
+      },
+      controller.signal
+    )
+
+    return {
+      text: fullText,
+      reasoning: fullReasoning,
+      images: [],
+    }
+  } finally {
+    cleanup()
   }
 }

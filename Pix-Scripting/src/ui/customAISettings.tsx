@@ -23,6 +23,7 @@ import {
   getEffectiveImageGenKey,
   loadCustomAIProfile,
   onCustomAIConfigChanged,
+  switchCustomAIPreset,
   updateCustomAIProfile,
   type CustomAIProfile,
   type GeneralAIProtocol,
@@ -30,6 +31,7 @@ import {
 } from "../store/customAI"
 import {
   fetchRemoteModelList,
+  testCustomAIConnection,
   testCustomImageGenConnection,
   type RemoteModelItem,
   type TestResult,
@@ -45,17 +47,19 @@ export function CustomAISettingsView() {
   const [showKeyText, setShowKeyText] = useState(false)
   const [showImageKeyText, setShowImageKeyText] = useState(false)
 
-  // 远程模型拉取与一体化连通状态
   const [fetchingModels, setFetchingModels] = useState(false)
   const [remoteModels, setRemoteModels] = useState<RemoteModelItem[]>([])
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [fetchLatency, setFetchLatency] = useState<number | null>(null)
 
-  // 生图模型拉取与测试状态
+  const [testingGeneral, setTestingGeneral] = useState(false)
+  const [generalTestResult, setGeneralTestResult] = useState<TestResult | null>(null)
+
   const [fetchingImageModels, setFetchingImageModels] = useState(false)
   const [imageRemoteModels, setImageRemoteModels] = useState<RemoteModelItem[]>([])
   const [imageFetchError, setImageFetchError] = useState<string | null>(null)
   const [imageFetchLatency, setImageFetchLatency] = useState<number | null>(null)
+  const [testingImage, setTestingImage] = useState(false)
   const [imageTestResult, setImageTestResult] = useState<TestResult | null>(null)
 
   useEffect(() => {
@@ -75,6 +79,7 @@ export function CustomAISettingsView() {
       },
     })
     setProfile(next)
+    setGeneralTestResult(null)
   }
 
   function updateImageGen(patch: Partial<CustomAIProfile["imageGen"]>) {
@@ -88,17 +93,97 @@ export function CustomAISettingsView() {
     setImageTestResult(null)
   }
 
-  function applyPreset(presetId: string) {
-    const preset = AI_PRESETS.find((p) => p.id === presetId)
-    if (!preset) return
+  /**
+   * 测试通用模型可用性
+   */
+  async function handleTestGeneralModel() {
+    if (!profile.general.noKeyRequired && !profile.general.apiKey) {
+      void Dialog.alert({
+        title: "请输入 API 密钥",
+        message: "请先填入或粘贴有效的 API Key 后再进行连接测试。",
+      })
+      return
+    }
+    if (!profile.general.model) {
+      void Dialog.alert({
+        title: "请输入模型名称",
+        message: "请先填入或选择模型后再进行可用性测试。",
+      })
+      return
+    }
+
+    setTestingGeneral(true)
+    setGeneralTestResult(null)
     void Haptics.transient(0.3, 0.3)
-    updateGeneral({
-      preset: preset.id,
-      protocol: preset.protocol,
-      endpoint: "",
-      model: "",
-      supportsVision: preset.supportsVision,
-    })
+
+    try {
+      const res = await testCustomAIConnection(profile.general)
+      setGeneralTestResult(res)
+      if (res.success) {
+        void Haptics.transient(0.6, 0.8)
+      } else {
+        void Haptics.transient(0.8, 0.3)
+      }
+    } catch (e: any) {
+      setGeneralTestResult({
+        success: false,
+        error: e?.message || "测试失败",
+      })
+      void Haptics.transient(0.8, 0.3)
+    } finally {
+      setTestingGeneral(false)
+    }
+  }
+
+  /**
+   * 测试生图模型可用性
+   */
+  async function handleTestImageModel() {
+    const effectiveKey = getEffectiveImageGenKey(profile)
+    if (!profile.general.noKeyRequired && !effectiveKey) {
+      void Dialog.alert({
+        title: "请输入生图密钥",
+        message: "请先填入生图 API 密钥或开启复用通用密钥。",
+      })
+      return
+    }
+    if (!profile.imageGen.model) {
+      void Dialog.alert({
+        title: "请输入生图模型名称",
+        message: "请先填入或选择生图模型后再进行可用性测试。",
+      })
+      return
+    }
+
+    setTestingImage(true)
+    setImageTestResult(null)
+    void Haptics.transient(0.3, 0.3)
+
+    try {
+      const res = await testCustomImageGenConnection(profile.imageGen, effectiveKey)
+      setImageTestResult(res)
+      if (res.success) {
+        void Haptics.transient(0.6, 0.8)
+      } else {
+        void Haptics.transient(0.8, 0.3)
+      }
+    } catch (e: any) {
+      setImageTestResult({
+        success: false,
+        error: e?.message || "测试失败",
+      })
+      void Haptics.transient(0.8, 0.3)
+    } finally {
+      setTestingImage(false)
+    }
+  }
+
+  function applyPreset(presetId: string) {
+    if (!presetId) return
+    void Haptics.transient(0.3, 0.3)
+    const next = switchCustomAIPreset(presetId)
+    setProfile(next)
+    setGeneralTestResult(null)
     setRemoteModels([])
     setFetchError(null)
     setFetchLatency(null)
@@ -162,7 +247,7 @@ export function CustomAISettingsView() {
     if (currentPreset?.apiKeyUrl) {
       void Haptics.transient(0.2, 0.2)
       try {
-        await Safari.present(currentPreset.apiKeyUrl)
+        await Safari.present(currentPreset.apiKeyUrl, false)
       } catch {
         void Safari.openURL(currentPreset.apiKeyUrl)
       }
@@ -211,7 +296,6 @@ export function CustomAISettingsView() {
         setRemoteModels(res.models)
         void Haptics.transient(0.4, 0.6)
 
-        // 若当前模型未设置或不在列表中，自动选中第一个可用模型
         const currentModelInList = res.models.some((m) => m.id === profile.general.model)
         if (!currentModelInList || !profile.general.model) {
           updateGeneral({
@@ -481,6 +565,40 @@ export function CustomAISettingsView() {
           value={profile.general.supportsVision}
           onChanged={(val) => updateGeneral({ supportsVision: val })}
         />
+
+        <HStack spacing={10} alignment="center">
+          <Text font="body">测试模型</Text>
+          <Spacer />
+          {generalTestResult ? (
+            <HStack spacing={4} alignment="center">
+              <Image
+                systemName={generalTestResult.success ? "checkmark.circle.fill" : "xmark.circle.fill"}
+                foregroundStyle={generalTestResult.success ? "systemGreen" : "systemRed"}
+              />
+              <Text
+                font="caption"
+                foregroundStyle={generalTestResult.success ? "systemGreen" : "systemRed"}
+                lineLimit={1}
+              >
+                {generalTestResult.success
+                  ? `可用 (${generalTestResult.latencyMs}ms)`
+                  : generalTestResult.error || "失败"}
+              </Text>
+            </HStack>
+          ) : null}
+          <Button
+            buttonStyle="plain"
+            disabled={testingGeneral || (!profile.general.apiKey && !profile.general.noKeyRequired)}
+            action={handleTestGeneralModel}
+          >
+            <Image
+              systemName={testingGeneral ? "arrow.triangle.2.circlepath" : "bolt.fill"}
+              foregroundStyle={
+                profile.general.apiKey || profile.general.noKeyRequired ? "#FF9500" : "secondaryLabel"
+              }
+            />
+          </Button>
+        </HStack>
       </Section>
 
       {/* 2. 生图模型 */}
@@ -601,6 +719,45 @@ export function CustomAISettingsView() {
               </HStack>
             )}
 
+            <HStack spacing={10} alignment="center">
+              <Text font="body">测试模型</Text>
+              <Spacer />
+              {imageTestResult ? (
+                <HStack spacing={4} alignment="center">
+                  <Image
+                    systemName={imageTestResult.success ? "checkmark.circle.fill" : "xmark.circle.fill"}
+                    foregroundStyle={imageTestResult.success ? "systemGreen" : "systemRed"}
+                  />
+                  <Text
+                    font="caption"
+                    foregroundStyle={imageTestResult.success ? "systemGreen" : "systemRed"}
+                    lineLimit={1}
+                  >
+                    {imageTestResult.success
+                      ? `可用 (${imageTestResult.latencyMs}ms)`
+                      : imageTestResult.error || "失败"}
+                  </Text>
+                </HStack>
+              ) : null}
+              <Button
+                buttonStyle="plain"
+                disabled={
+                  testingImage ||
+                  (!profile.general.noKeyRequired && !profile.general.apiKey && !profile.imageGen.apiKey)
+                }
+                action={handleTestImageModel}
+              >
+                <Image
+                  systemName={testingImage ? "arrow.triangle.2.circlepath" : "bolt.fill"}
+                  foregroundStyle={
+                    profile.general.apiKey || profile.imageGen.apiKey || profile.general.noKeyRequired
+                      ? "#FF9500"
+                      : "secondaryLabel"
+                  }
+                />
+              </Button>
+            </HStack>
+
             {imageFetchError ? (
               <HStack spacing={4} alignment="center">
                 <Image systemName="exclamationmark.circle.fill" foregroundStyle="systemRed" />
@@ -613,24 +770,6 @@ export function CustomAISettingsView() {
                 <Image systemName="checkmark.circle.fill" foregroundStyle="systemGreen" />
                 <Text font="caption" foregroundStyle="systemGreen">
                   {`已连接 · 延迟 ${imageFetchLatency}ms · 可用生图模型 ${imageRemoteModels.length} 个`}
-                </Text>
-              </HStack>
-            ) : null}
-
-            {imageTestResult ? (
-              <HStack spacing={4} alignment="center">
-                <Image
-                  systemName={imageTestResult.success ? "checkmark.circle.fill" : "xmark.circle.fill"}
-                  foregroundStyle={imageTestResult.success ? "systemGreen" : "systemRed"}
-                />
-                <Text
-                  font="caption"
-                  foregroundStyle={imageTestResult.success ? "systemGreen" : "systemRed"}
-                  lineLimit={2}
-                >
-                  {imageTestResult.success
-                    ? `生图接口连通正常 · 延迟 ${imageTestResult.latencyMs}ms`
-                    : imageTestResult.error || "连接失败"}
                 </Text>
               </HStack>
             ) : null}

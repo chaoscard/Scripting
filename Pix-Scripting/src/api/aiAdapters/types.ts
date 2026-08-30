@@ -4,7 +4,9 @@
 
 export interface SignalLike {
   aborted?: boolean
-  addEventListener?: (type: string, listener: () => void) => void
+  addEventListener?: (type: any, listener: any, options?: any) => void
+  removeEventListener?: (type: any, listener: any) => void
+  onAbort?: (callback: () => void) => () => void
 }
 
 export interface AdapterMessageContentPart {

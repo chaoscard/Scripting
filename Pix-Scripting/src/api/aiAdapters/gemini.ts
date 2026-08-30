@@ -3,10 +3,10 @@
  * 严格遵循 Google AI Studio / Gemini API 官方 REST 规范：
  * - 官方端点: https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent?alt=sse&key={apiKey}
  */
-import { fetch, AbortController } from "scripting"
+import { fetch } from "scripting"
 import { getEffectiveGeneralEndpoint, type GeneralAIConfig } from "../../store/customAI"
 import type { AdapterRequest, AdapterResponse } from "./types"
-import { parseSSEStream } from "./sseParser"
+import { createLinkedAbortController, parseSSEStream } from "./sseParser"
 
 export function normalizeGeminiEndpoint(rawEndpoint: string, model: string, apiKey: string, noKeyRequired?: boolean): string {
   let ep = (rawEndpoint || "").trim().replace(/\/+$/, "")
@@ -77,72 +77,70 @@ export async function requestGemini(
     }
   }
 
-  // 使用真实 AbortController，不传自定义 SignalLike 给 fetch
-  const controller = new AbortController()
-  if (request.signal?.aborted) {
-    controller.abort()
-  }
+  const { controller, cleanup } = createLinkedAbortController(request.signal)
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-    signal: controller.signal,
-  })
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    })
 
-  if (!res.ok) {
-    let errDetail = ""
-    try {
-      const errJson = await res.json()
-      errDetail = errJson?.error?.message || JSON.stringify(errJson)
-    } catch {
-      errDetail = await res.text()
-    }
-    throw new Error(`Gemini 请求失败 (${res.status}): ${errDetail || res.statusText}`)
-  }
-
-  let fullText = ""
-  let fullReasoning = ""
-
-  await parseSSEStream(
-    res,
-    (msg) => {
-      if (!msg.data || msg.data === "[DONE]") return true
-
+    if (!res.ok) {
+      let errDetail = ""
       try {
-        const json = JSON.parse(msg.data)
-        const candidate = json.candidates?.[0]
-        if (candidate) {
-          const parts = candidate.content?.parts
-          if (Array.isArray(parts)) {
-            for (const part of parts) {
-              if (part.text) {
-                if (part.thought) {
-                  fullReasoning += part.text
-                  request.onReasoning?.(part.text)
-                } else {
-                  fullText += part.text
-                  request.onChunk?.(part.text)
+        const errJson = await res.json()
+        errDetail = errJson?.error?.message || JSON.stringify(errJson)
+      } catch {
+        errDetail = await res.text()
+      }
+      throw new Error(`Gemini 请求失败 (${res.status}): ${errDetail || res.statusText}`)
+    }
+
+    let fullText = ""
+    let fullReasoning = ""
+
+    await parseSSEStream(
+      res,
+      (msg) => {
+        if (!msg.data || msg.data === "[DONE]") return true
+
+        try {
+          const json = JSON.parse(msg.data)
+          const candidate = json.candidates?.[0]
+          if (candidate) {
+            const parts = candidate.content?.parts
+            if (Array.isArray(parts)) {
+              for (const part of parts) {
+                if (part.text) {
+                  if (part.thought) {
+                    fullReasoning += part.text
+                    request.onReasoning?.(part.text)
+                  } else {
+                    fullText += part.text
+                    request.onChunk?.(part.text)
+                  }
                 }
               }
             }
+            if (candidate.finishReason) {
+              return true
+            }
           }
-          if (candidate.finishReason) {
-            return true
-          }
-        }
-      } catch (e) {
-        // 忽略非 JSON
-      }
-    },
-    request.signal
-  )
+        } catch (e) {}
+      },
+      controller.signal
+    )
 
-  return {
-    text: fullText,
-    reasoning: fullReasoning,
-    images: [],
+    return {
+      text: fullText,
+      reasoning: fullReasoning,
+      images: [],
+    }
+  } finally {
+    cleanup()
   }
 }

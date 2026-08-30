@@ -5,10 +5,10 @@
  * - 流式事件支持: response.output_text.delta, response.text.delta, response.reasoning_text.delta, response.reasoning.delta
  * - 结束信号支持: response.completed, response.incomplete, response.failed, [DONE]
  */
-import { fetch, AbortController } from "scripting"
+import { fetch } from "scripting"
 import { getEffectiveGeneralEndpoint, type GeneralAIConfig } from "../../store/customAI"
 import type { AdapterRequest, AdapterResponse } from "./types"
-import { parseSSEStream } from "./sseParser"
+import { createLinkedAbortController, parseSSEStream } from "./sseParser"
 
 export function normalizeResponsesEndpoint(rawEndpoint: string): string {
   let ep = (rawEndpoint || "").trim().replace(/\/+$/, "")
@@ -30,7 +30,6 @@ export async function requestOpenAIResponses(
   const effectiveEndpoint = getEffectiveGeneralEndpoint(config)
   const url = normalizeResponsesEndpoint(effectiveEndpoint)
 
-  // 构造 input items（支持纯文本与多模态图文输入）
   const inputItems: any[] = []
 
   for (const msg of request.messages) {
@@ -93,18 +92,15 @@ export async function requestOpenAIResponses(
     headers["Authorization"] = `Bearer ${config.apiKey}`
   }
 
-  // 使用真实 AbortController，不传自定义 SignalLike 给 fetch
-  const controller = new AbortController()
-  if (request.signal?.aborted) {
-    controller.abort()
-  }
+  const { controller, cleanup } = createLinkedAbortController(request.signal)
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(payload),
-    signal: controller.signal,
-  })
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    })
 
   if (!res.ok) {
     let errDetail = ""
@@ -132,7 +128,6 @@ export async function requestOpenAIResponses(
         const json = JSON.parse(msg.data)
         const eventType = msg.event || json.type
 
-        // 1. 结束事件（Responses 规范：response.completed / incomplete / failed，无 [DONE] 消息）
         if (
           eventType === "response.completed" ||
           eventType === "response.done" ||
@@ -155,7 +150,6 @@ export async function requestOpenAIResponses(
           return true
         }
 
-        // 2. 文本增量（支持 response.output_text.delta / response.text.delta / response.output_item.delta）
         if (
           eventType === "response.output_text.delta" ||
           eventType === "response.text.delta" ||
@@ -166,9 +160,7 @@ export async function requestOpenAIResponses(
             fullText += delta
             request.onChunk?.(delta)
           }
-        }
-        // 3. 思维链/推理增量（支持 response.reasoning_text.delta / response.reasoning.delta / response.thought.delta）
-        else if (
+        } else if (
           eventType === "response.reasoning_text.delta" ||
           eventType === "response.reasoning.delta" ||
           eventType === "response.thought.delta"
@@ -178,9 +170,7 @@ export async function requestOpenAIResponses(
             fullReasoning += delta
             request.onReasoning?.(delta)
           }
-        }
-        // 4. 输出完成 / 图片项
-        else if (eventType === "response.output_item.done") {
+        } else if (eventType === "response.output_item.done") {
           const item = json.item
           if (item?.type === "image" && item.image_base64) {
             const img = {
@@ -190,9 +180,7 @@ export async function requestOpenAIResponses(
             generatedImages.push(img)
             request.onImage?.(img)
           }
-        }
-        // 5. 兼容 choices 风格（部分中转服务可能包装成通用格式）
-        else if (json.choices && Array.isArray(json.choices)) {
+        } else if (json.choices && Array.isArray(json.choices)) {
           const choice = json.choices[0]
           const deltaObj = choice?.delta || choice?.message
           if (deltaObj?.content) {
@@ -207,18 +195,14 @@ export async function requestOpenAIResponses(
           if (choice?.finish_reason) {
             return true
           }
-        }
-        // 6. 兼容普通非流式 output_text
-        else if (json.output_text) {
+        } else if (json.output_text) {
           fullText = json.output_text
           request.onChunk?.(json.output_text)
           return true
         }
-      } catch {
-        // 非 JSON 行，忽略
-      }
+      } catch {}
     },
-    request.signal
+    controller.signal
   )
 
   return {
@@ -226,4 +210,7 @@ export async function requestOpenAIResponses(
     reasoning: fullReasoning,
     images: generatedImages,
   }
+} finally {
+  cleanup()
+}
 }

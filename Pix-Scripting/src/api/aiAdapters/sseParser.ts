@@ -3,7 +3,7 @@
  * 兼容标准 SSE 协议（event + data）、单行 data 模式、chunk 粘包/断包处理，
  * 并支持业务级提前终止（onMessage 返回 true）、[DONE] 信号提前释放与普通 JSON 降级解析
  */
-import { Response } from "scripting"
+import { Response, AbortController } from "scripting"
 import type { SignalLike } from "./types"
 
 export interface SSEMessage {
@@ -11,14 +11,65 @@ export interface SSEMessage {
   data: string
 }
 
+/**
+ * 创建与外部 Signal 动态联动的 AbortController（支持响应式即时中断与资源清理）
+ */
+export function createLinkedAbortController(externalSignal?: SignalLike): {
+  controller: AbortController
+  cleanup: () => void
+} {
+  const controller = new AbortController()
+
+  if (!externalSignal) {
+    return { controller, cleanup: () => {} }
+  }
+
+  if (externalSignal.aborted) {
+    controller.abort()
+    return { controller, cleanup: () => {} }
+  }
+
+  let isCleanedUp = false
+
+  const onAbort = () => {
+    if (!isCleanedUp) {
+      try {
+        controller.abort()
+      } catch {}
+    }
+  }
+
+  let unregisterCustom: (() => void) | undefined
+
+  if (typeof externalSignal.onAbort === "function") {
+    unregisterCustom = externalSignal.onAbort(onAbort)
+  } else if (typeof externalSignal.addEventListener === "function") {
+    externalSignal.addEventListener("abort", onAbort)
+  }
+
+  const cleanup = () => {
+    isCleanedUp = true
+    if (unregisterCustom) {
+      try {
+        unregisterCustom()
+      } catch {}
+    } else if (typeof externalSignal.removeEventListener === "function") {
+      try {
+        externalSignal.removeEventListener("abort", onAbort)
+      } catch {}
+    }
+  }
+
+  return { controller, cleanup }
+}
+
 export async function parseSSEStream(
   response: Response,
   onMessage: (message: SSEMessage) => boolean | void,
-  signal?: SignalLike
+  signal?: SignalLike | any
 ): Promise<void> {
   const contentType = response.headers?.get?.("content-type") || ""
 
-  // 若明确为普通 JSON 响应，直接读取全文解析
   if (contentType.includes("application/json") || !response.body) {
     const fullText = await response.text()
     if (!parseSSETxt(fullText, onMessage)) {
@@ -34,7 +85,6 @@ export async function parseSSEStream(
   try {
     reader = response.body.getReader()
   } catch {
-    // 降级为 text 读取
     const fullText = await response.text()
     if (!parseSSETxt(fullText, onMessage)) {
       const trimmed = fullText.trim()
@@ -45,6 +95,37 @@ export async function parseSSEStream(
     return
   }
 
+  let abortResolver: (() => void) | null = null
+  const abortPromise = new Promise<{ done: true; value?: undefined }>((resolve) => {
+    abortResolver = () => resolve({ done: true })
+    if ((signal as any)?.aborted) {
+      resolve({ done: true })
+    }
+  })
+
+  let isStreamFinished = false
+  const cancelReaderOnAbort = () => {
+    if (!isStreamFinished) {
+      abortResolver?.()
+      if (reader) {
+        try {
+          reader.cancel("Abort requested").catch(() => {})
+        } catch {}
+      }
+    }
+  }
+
+  let unregisterAbort: (() => void) | undefined
+  if (signal) {
+    if ((signal as any).aborted) {
+      cancelReaderOnAbort()
+    } else if (typeof (signal as any).onAbort === "function") {
+      unregisterAbort = (signal as any).onAbort(cancelReaderOnAbort)
+    } else if (typeof (signal as any).addEventListener === "function") {
+      (signal as any).addEventListener("abort", cancelReaderOnAbort)
+    }
+  }
+
   const decoder = new TextDecoder("utf-8")
   let buffer = ""
 
@@ -53,15 +134,18 @@ export async function parseSSEStream(
 
   try {
     while (true) {
-      if (signal?.aborted) {
+      if ((signal as any)?.aborted) {
         try {
           await reader.cancel()
         } catch {}
         break
       }
 
-      const { done, value } = await reader.read()
-      if (done) break
+      const { done, value } = await Promise.race([
+        reader.read(),
+        abortPromise,
+      ])
+      if (done || (signal as any)?.aborted) break
 
       buffer += decoder.decode(value, { stream: true })
       const lines = buffer.split(/\r\n|\r|\n/)
@@ -94,7 +178,6 @@ export async function parseSSEStream(
         }
 
         if (trimmed.startsWith(":")) {
-          // SSE 注释 / 心跳保活
           continue
         }
 
@@ -121,6 +204,16 @@ export async function parseSSEStream(
       }
     }
   } finally {
+    isStreamFinished = true
+    if (unregisterAbort) {
+      try {
+        unregisterAbort()
+      } catch {}
+    } else if (signal && typeof (signal as any).removeEventListener === "function") {
+      try {
+        (signal as any).removeEventListener("abort", cancelReaderOnAbort)
+      } catch {}
+    }
     try {
       reader.releaseLock()
     } catch {}

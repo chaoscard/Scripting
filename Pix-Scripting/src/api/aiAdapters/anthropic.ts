@@ -3,10 +3,10 @@
  * 严格遵循 Anthropic 官方 Messages API 规范：
  * - 官方端点: https://api.anthropic.com/v1/messages
  */
-import { fetch, AbortController } from "scripting"
+import { fetch } from "scripting"
 import { getEffectiveGeneralEndpoint, type GeneralAIConfig } from "../../store/customAI"
 import type { AdapterRequest, AdapterResponse } from "./types"
-import { parseSSEStream } from "./sseParser"
+import { createLinkedAbortController, parseSSEStream } from "./sseParser"
 
 export function normalizeAnthropicEndpoint(rawEndpoint: string): string {
   let ep = (rawEndpoint || "").trim().replace(/\/+$/, "")
@@ -88,66 +88,64 @@ export async function requestAnthropic(
     headers["x-api-key"] = config.apiKey
   }
 
-  // 使用真实 AbortController，不传自定义 SignalLike 给 fetch
-  const controller = new AbortController()
-  if (request.signal?.aborted) {
-    controller.abort()
-  }
+  const { controller, cleanup } = createLinkedAbortController(request.signal)
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(payload),
-    signal: controller.signal,
-  })
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    })
 
-  if (!res.ok) {
-    let errDetail = ""
-    try {
-      const errJson = await res.json()
-      errDetail = errJson?.error?.message || JSON.stringify(errJson)
-    } catch {
-      errDetail = await res.text()
-    }
-    throw new Error(`Anthropic 请求失败 (${res.status}): ${errDetail || res.statusText}`)
-  }
-
-  let fullText = ""
-  let fullReasoning = ""
-
-  await parseSSEStream(
-    res,
-    (msg) => {
-      if (!msg.data || msg.data === "[DONE]") return true
-
+    if (!res.ok) {
+      let errDetail = ""
       try {
-        const json = JSON.parse(msg.data)
-        const eventType = msg.event || json.type
-
-        if (eventType === "message_stop") {
-          return true
-        }
-
-        if (eventType === "content_block_delta") {
-          const delta = json.delta
-          if (delta?.type === "text_delta" && delta.text) {
-            fullText += delta.text
-            request.onChunk?.(delta.text)
-          } else if (delta?.type === "thinking_delta" && delta.thinking) {
-            fullReasoning += delta.thinking
-            request.onReasoning?.(delta.thinking)
-          }
-        }
-      } catch (e) {
-        // 忽略非 JSON
+        const errJson = await res.json()
+        errDetail = errJson?.error?.message || JSON.stringify(errJson)
+      } catch {
+        errDetail = await res.text()
       }
-    },
-    request.signal
-  )
+      throw new Error(`Anthropic 请求失败 (${res.status}): ${errDetail || res.statusText}`)
+    }
 
-  return {
-    text: fullText,
-    reasoning: fullReasoning,
-    images: [],
+    let fullText = ""
+    let fullReasoning = ""
+
+    await parseSSEStream(
+      res,
+      (msg) => {
+        if (!msg.data || msg.data === "[DONE]") return true
+
+        try {
+          const json = JSON.parse(msg.data)
+          const eventType = msg.event || json.type
+
+          if (eventType === "message_stop") {
+            return true
+          }
+
+          if (eventType === "content_block_delta") {
+            const delta = json.delta
+            if (delta?.type === "text_delta" && delta.text) {
+              fullText += delta.text
+              request.onChunk?.(delta.text)
+            } else if (delta?.type === "thinking_delta" && delta.thinking) {
+              fullReasoning += delta.thinking
+              request.onReasoning?.(delta.thinking)
+            }
+          }
+        } catch (e) {}
+      },
+      controller.signal
+    )
+
+    return {
+      text: fullText,
+      reasoning: fullReasoning,
+      images: [],
+    }
+  } finally {
+    cleanup()
   }
 }

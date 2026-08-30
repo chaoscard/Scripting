@@ -9,6 +9,7 @@ import { flushSeriesCache, prepareSeriesCacheStorage } from "./src/store/seriesC
 import { requestPixivRoute } from "./src/ui/routeNavigation"
 import { populateWidgetPool, seedIllustFromWidgetPool, seedPixivisionFromWidgetPool } from "./src/store/widgetStore"
 import { normalizeRoute } from "./src/ui/routes"
+import { abortAllAITasks } from "./src/api/aiService"
 
 function seedIfRoute(route?: string | null) {
   if (!route) return
@@ -72,11 +73,13 @@ async function main() {
       element: <RootView />,
       modalPresentationStyle: "overFullScreen",
     })
+    abortAllAITasks()
     flushHistory()
     flushNovelProgress()
     flushSeriesCache()
     Script.exit()
   } catch (e) {
+    abortAllAITasks()
     flushHistory()
     flushNovelProgress()
     flushSeriesCache()

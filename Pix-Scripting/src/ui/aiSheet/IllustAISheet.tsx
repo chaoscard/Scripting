@@ -34,7 +34,7 @@ import {
 } from "../../api/aiService"
 import { saveImageToPixivAlbum } from "../../downloader/photoAlbum"
 import { CachedImage, ErrorView } from "../components"
-import { imageUrlOf } from "../../image/imageLoader"
+import { cachedFilePath, imageUrlOf, loadImage, pageThumbUrlOf } from "../../image/imageLoader"
 import { loadSettings } from "../../store/settings"
 import { drawOCROverlay } from "./OCRCanvas"
 import { createThrottledUpdater } from "./throttle"
@@ -44,49 +44,6 @@ import type { IllustAIMode, PageTranslationCache, ScreenshotMaker } from "./type
 const GOOGLE_COLORS: Color[] = ["#4285F4", "#EA4335", "#FBBC05", "#34A853", "#4285F4"]
 
 function GoogleSparklesLoading() {
-  const [phase, setPhase] = useState(0)
-
-  useEffect(() => {
-    let timerId: number
-    let isMounted = true
-
-    const tick = () => {
-      if (!isMounted) return
-      setPhase((prev) => (prev + 1) % 4)
-      timerId = setTimeout(tick, 450)
-    }
-
-    timerId = setTimeout(tick, 450)
-
-    return () => {
-      isMounted = false
-      clearTimeout(timerId)
-    }
-  }, [])
-
-  // 随 phase 轮转的高亮明亮纯色与外圈光晕（确保在黑底上 100% 清晰耀眼）
-  const colorConfigs = [
-    {
-      color: "#4285F4" as Color, // Google 蓝
-      shadow: "rgba(66, 133, 244, 0.85)" as Color,
-    },
-    {
-      color: "#FF453A" as Color, // Google 亮红
-      shadow: "rgba(255, 69, 58, 0.85)" as Color,
-    },
-    {
-      color: "#FFD60A" as Color, // Google 亮黄
-      shadow: "rgba(255, 214, 10, 0.85)" as Color,
-    },
-    {
-      color: "#30D158" as Color, // Google 亮绿
-      shadow: "rgba(48, 209, 88, 0.85)" as Color,
-    },
-  ]
-
-  const current = colorConfigs[phase]
-  const angleValue = phase * 90
-
   return (
     <ZStack
       alignment="center"
@@ -94,15 +51,11 @@ function GoogleSparklesLoading() {
       background={{
         colors: GOOGLE_COLORS,
         center: "center",
-        startAngle: { type: "degrees", value: angleValue },
-        endAngle: { type: "degrees", value: angleValue + 360 },
+        startAngle: { type: "degrees", value: 0 },
+        endAngle: { type: "degrees", value: 360 },
       }}
       clipShape={{ type: "capsule", style: "continuous" }}
-      shadow={{ color: current.shadow, radius: 14, x: 0, y: 0 }}
-      animation={{
-        animation: Animation.smooth({ duration: 0.4 }),
-        value: phase,
-      }}
+      shadow={{ color: "rgba(66, 133, 244, 0.8)", radius: 14, x: 0, y: 0 }}
     >
       <ZStack
         alignment="center"
@@ -110,21 +63,283 @@ function GoogleSparklesLoading() {
         background="rgba(16, 16, 20, 0.94)"
         clipShape={{ type: "capsule", style: "continuous" }}
       >
-        <Image
-          systemName="sparkles"
-          font="largeTitle"
-          foregroundStyle={current.color}
-          symbolEffect={{
-            effect: "breathe",
-            value: phase,
-          }}
-          animation={{
-            animation: Animation.smooth({ duration: 0.35 }),
-            value: phase,
-          }}
+        <ProgressView
+          controlSize="regular"
+          tint="#4285F4"
         />
       </ZStack>
     </ZStack>
+  )
+}
+
+function IllustAIPageRow(props: {
+  illust: PixivIllustration
+  pageIndex: number
+  mode: IllustAIMode
+  containerWidth: number
+  defaultAspect: number
+  cache: PageTranslationCache | undefined
+  isPageTranslating: boolean
+  showAllOverlay: boolean
+  fontScale: number
+  onToggleBubbleIndex: (pageIndex: number, hitIndex: number) => void
+  onTapCanvasBubble: (pageIndex: number, touchPoint: { x: number; y: number }) => void
+  onExecutePage: (pageIndex: number, force?: boolean) => void
+  onRegisterScreenshot: (pageIndex: number, maker: ScreenshotMaker | null) => void
+  onRegisterCanvasSize: (pageIndex: number, size: { width: number; height: number }) => void
+}) {
+  const {
+    illust,
+    pageIndex,
+    mode,
+    containerWidth,
+    defaultAspect,
+    cache,
+    isPageTranslating,
+    showAllOverlay,
+    fontScale,
+    onToggleBubbleIndex,
+    onTapCanvasBubble,
+    onExecutePage,
+    onRegisterScreenshot,
+    onRegisterCanvasSize,
+  } = props
+
+  const pageUrl = imageUrlOf(illust, pageIndex, "large")
+  const thumbUrl = pageThumbUrlOf(illust, pageIndex)
+
+  const [measuredAspect, setMeasuredAspect] = useState<number | null>(() => {
+    const targetFile =
+      cache?.imageFilePath ||
+      (pageUrl ? cachedFilePath(pageUrl) : null) ||
+      (thumbUrl ? cachedFilePath(thumbUrl) : null)
+    if (targetFile) {
+      try {
+        const img = UIImage.fromFile(targetFile)
+        if (img && img.width > 0 && img.height > 0) {
+          return img.width / img.height
+        }
+      } catch {}
+    }
+    if (pageIndex === 0 && illust.width && illust.height && illust.width > 0 && illust.height > 0) {
+      return illust.width / illust.height
+    }
+    return null
+  })
+
+  useEffect(() => {
+    const targetFile =
+      cache?.imageFilePath ||
+      (pageUrl ? cachedFilePath(pageUrl) : null) ||
+      (thumbUrl ? cachedFilePath(thumbUrl) : null)
+    if (targetFile) {
+      try {
+        const img = UIImage.fromFile(targetFile)
+        if (img && img.width > 0 && img.height > 0) {
+          const ratio = img.width / img.height
+          setMeasuredAspect((prev) => (prev && Math.abs(prev - ratio) < 0.005 ? prev : ratio))
+        }
+      } catch {}
+    }
+  }, [cache?.imageFilePath, pageUrl, thumbUrl])
+
+  const hasBubbles = Boolean(cache?.bubbles && cache.bubbles.length > 0)
+  const imageFilePath = cache?.imageFilePath || null
+  const isOverlayVisible = cache?.showOverlay !== false && showAllOverlay
+  const hiddenIndices = useMemo(
+    () => new Set(cache?.hiddenBubbleIndices || []),
+    [cache?.hiddenBubbleIndices]
+  )
+  const pageError = cache?.error || null
+
+  const hasVisionResult = Boolean(cache?.generatedImageBase64)
+  const visionUIImage = useMemo(() => {
+    if (hasVisionResult && isOverlayVisible && cache?.generatedImageBase64) {
+      try {
+        return UIImage.fromBase64String(cache.generatedImageBase64)
+      } catch {
+        return null
+      }
+    }
+    return null
+  }, [hasVisionResult, isOverlayVisible, cache?.generatedImageBase64])
+
+  const pageAspect = useMemo(() => {
+    if (mode === "vision" && visionUIImage && visionUIImage.width > 0 && visionUIImage.height > 0) {
+      return visionUIImage.width / visionUIImage.height
+    }
+    if (measuredAspect && measuredAspect > 0) {
+      return measuredAspect
+    }
+    return defaultAspect
+  }, [mode, visionUIImage, measuredAspect, defaultAspect])
+
+  const pageRenderHeight = containerWidth / pageAspect
+
+  return (
+    <Group>
+      {mode === "ocr" && hasBubbles && imageFilePath ? (
+        <ZStack
+          alignment="topLeading"
+          frame={{ width: containerWidth, height: pageRenderHeight }}
+        >
+          <Canvas
+            screenshotRef={{
+              set current(val: ScreenshotMaker | null) {
+                onRegisterScreenshot(pageIndex, val)
+              },
+              get current() {
+                return null
+              },
+            }}
+            aspectRatio={{ value: pageAspect, contentMode: "fit" }}
+            onTapGesture={{
+              count: 1,
+              coordinateSpace: "local",
+              perform: (point?: any) => {
+                if (point && typeof point.x === "number" && typeof point.y === "number") {
+                  onTapCanvasBubble(pageIndex, point)
+                }
+              },
+            }}
+            draw={(ctx, size) => {
+              onRegisterCanvasSize(pageIndex, size)
+              drawOCROverlay(
+                ctx,
+                size,
+                imageFilePath,
+                cache!.bubbles!,
+                isOverlayVisible,
+                hiddenIndices,
+                fontScale
+              )
+            }}
+          />
+
+          {cache!.bubbles!.map((bubble, bIdx) => {
+            const [ymin, xmin, ymax, xmax] = bubble.box_2d || [0, 0, 0, 0]
+            const rawW =
+              ((Math.max(0, Math.min(xmax, 1000)) - Math.max(0, Math.min(xmin, 1000))) / 1000) *
+              containerWidth
+            const rawH =
+              ((Math.max(0, Math.min(ymax, 1000)) - Math.max(0, Math.min(ymin, 1000))) / 1000) *
+              pageRenderHeight
+            const rawX = (Math.max(0, Math.min(xmin, 1000)) / 1000) * containerWidth
+            const rawY = (Math.max(0, Math.min(ymin, 1000)) / 1000) * pageRenderHeight
+
+            const cX = rawX + rawW / 2
+            const cY = rawY + rawH / 2
+            const hitW = Math.max(30, rawW * fontScale)
+            const hitH = Math.max(30, rawH * fontScale)
+            const hitLeft = cX - hitW / 2
+            const hitTop = cY - hitH / 2
+
+            return (
+              <Button
+                key={String(bIdx)}
+                buttonStyle="plain"
+                offset={{ x: hitLeft, y: hitTop }}
+                action={() => onToggleBubbleIndex(pageIndex, bIdx)}
+              >
+                <VStack
+                  frame={{
+                    width: hitW,
+                    height: hitH,
+                  }}
+                  background="rgba(0, 0, 0, 0.001)"
+                  contentShape="rect"
+                />
+              </Button>
+            )
+          })}
+        </ZStack>
+      ) : mode === "vision" && hasVisionResult && visionUIImage ? (
+        <ZStack alignment="center" frame={{ width: containerWidth, height: pageRenderHeight }}>
+          <Image
+            image={visionUIImage}
+            resizable={true}
+            aspectRatio={{ value: pageAspect, contentMode: "fit" }}
+          />
+        </ZStack>
+      ) : (
+        <ZStack alignment="center" frame={{ maxWidth: "infinity" }}>
+          <CachedImage
+            url={pageUrl}
+            previewUrl={thumbUrl}
+            aspectRatioValue={pageAspect}
+            useIntrinsicAspectRatio={true}
+            cornerRadius={0}
+            contentMode="fit"
+            onLoaded={(ok) => {
+              if (ok) {
+                const p =
+                  (pageUrl ? cachedFilePath(pageUrl) : null) ||
+                  (thumbUrl ? cachedFilePath(thumbUrl) : null)
+                if (p) {
+                  try {
+                    const img = UIImage.fromFile(p)
+                    if (img && img.width > 0 && img.height > 0) {
+                      setMeasuredAspect(img.width / img.height)
+                    }
+                  } catch {}
+                }
+              }
+            }}
+          />
+
+          {/* 1. 未翻译状态：原始图片正中心悬浮金色 sparkles 图标（加大一号，纯图标） */}
+          {((mode === "ocr" && !hasBubbles) || (mode === "vision" && !hasVisionResult)) &&
+            !isPageTranslating &&
+            !pageError && (
+              <Button
+                buttonStyle="plain"
+                action={() => {
+                  if (!isPageTranslating) {
+                    void onExecutePage(pageIndex)
+                  }
+                }}
+              >
+                <ZStack
+                  alignment="center"
+                  frame={{ width: 66, height: 66 }}
+                  background="rgba(0, 0, 0, 0.52)"
+                  clipShape={{ type: "capsule", style: "continuous" }}
+                >
+                  <Image
+                    systemName="sparkles"
+                    font="largeTitle"
+                    foregroundStyle="#FFD60A"
+                  />
+                </ZStack>
+              </Button>
+            )}
+
+          {/* 2. 正在翻译/生图中：Google 四色流光边框 + 原生 SF Symbol 星光动效 */}
+          {isPageTranslating && <GoogleSparklesLoading />}
+
+          {/* 3. 翻译/生图失败：正中心悬浮重试图标（加大一号） */}
+          {Boolean(pageError) && !isPageTranslating && (
+            <Button
+              buttonStyle="plain"
+              action={() => void onExecutePage(pageIndex, true)}
+            >
+              <ZStack
+                alignment="center"
+                frame={{ width: 60, height: 60 }}
+                background="rgba(255, 69, 58, 0.85)"
+                clipShape={{ type: "capsule", style: "continuous" }}
+              >
+                <Image
+                  systemName="arrow.clockwise"
+                  font="title"
+                  foregroundStyle="white"
+                />
+              </ZStack>
+            </Button>
+          )}
+        </ZStack>
+      )}
+    </Group>
   )
 }
 
@@ -147,7 +362,14 @@ export function IllustAISheet(props: {
   const [pageCaches, setPageCaches] = useState<Record<number, PageTranslationCache>>({})
   const [translatingIndices, setTranslatingIndices] = useState<number[]>([])
 
-  const pageTokensRef = useRef<Record<number, { id: number; aborted: boolean }>>({})
+  interface TaskToken {
+    id: number
+    aborted: boolean
+    onAbort?: (cb: () => void) => () => void
+    triggerAbort?: () => void
+  }
+
+  const pageTokensRef = useRef<Record<number, TaskToken>>({})
   const taskSeqRef = useRef(0)
   const isPresentedRef = useRef(isPresented)
   const canvasScreenshotRefs = useRef<Record<number, ScreenshotMaker | null>>({})
@@ -163,6 +385,18 @@ export function IllustAISheet(props: {
   const illustWidth = illust.width || 800
   const illustHeight = illust.height || 1200
   const defaultAspect = illustWidth / illustHeight
+
+  // 当为多页作品时，在打开 AI 弹窗时高优先级预热所有页面的中等缩略图，
+  // 确保所有页面在翻译前首帧 0 延迟命中真实物理比例与模糊底图
+  useEffect(() => {
+    if (!isPresented || !illust || pageCount <= 1) return
+    for (let idx = 0; idx < pageCount; idx++) {
+      const thumb = pageThumbUrlOf(illust, idx)
+      if (thumb && !cachedFilePath(thumb)) {
+        void loadImage(thumb, -2000 + idx)
+      }
+    }
+  }, [isPresented, illust, pageCount])
 
   const isAnyTranslating = translatingIndices.length > 0
 
@@ -183,6 +417,7 @@ export function IllustAISheet(props: {
   function handleStopPage(pageIndex: number) {
     const token = pageTokensRef.current[pageIndex]
     if (token) {
+      token.triggerAbort?.()
       token.aborted = true
     }
     setTranslatingIndices((prev) => prev.filter((i) => i !== pageIndex))
@@ -193,6 +428,7 @@ export function IllustAISheet(props: {
     for (const key of Object.keys(pageTokensRef.current)) {
       const idx = Number(key)
       if (pageTokensRef.current[idx]) {
+        pageTokensRef.current[idx].triggerAbort?.()
         pageTokensRef.current[idx].aborted = true
       }
     }
@@ -261,7 +497,23 @@ export function IllustAISheet(props: {
     // 中止该页的旧任务
     handleStopPage(targetIndex)
 
-    const taskToken = { id: ++taskSeqRef.current, aborted: false }
+    const abortListeners = new Set<() => void>()
+    const taskToken: TaskToken = {
+      id: ++taskSeqRef.current,
+      aborted: false,
+      onAbort: (cb: () => void) => {
+        abortListeners.add(cb)
+        return () => abortListeners.delete(cb)
+      },
+      triggerAbort: () => {
+        taskToken.aborted = true
+        for (const listener of abortListeners) {
+          try {
+            listener()
+          } catch {}
+        }
+      },
+    }
     pageTokensRef.current[targetIndex] = taskToken
 
     setTranslatingIndices((prev) => (prev.includes(targetIndex) ? prev : [...prev, targetIndex]))
@@ -509,6 +761,12 @@ export function IllustAISheet(props: {
   }
 
   useEffect(() => {
+    return () => {
+      handleStopAll()
+    }
+  }, [])
+
+  useEffect(() => {
     setPageCaches({})
     setSelectedPageIndex(0)
     setTranslatingIndices([])
@@ -701,172 +959,29 @@ export function IllustAISheet(props: {
 
                 {/* 下方全图平铺连贯漫画流：0 间隔、0 冗余文字、精准滚动 */}
                 <VStack spacing={0} frame={{ maxWidth: "infinity" }}>
-                  {Array.from({ length: pageCount }).map((_, idx) => {
-                    const pageUrl = imageUrlOf(illust, idx, "large")
-                    const cache = pageCaches[idx]
-                    const isPageTranslating = translatingIndices.includes(idx)
-                    const hasBubbles = Boolean(cache?.bubbles && cache.bubbles.length > 0)
-                    const imageFilePath = cache?.imageFilePath || null
-                    const isOverlayVisible = cache?.showOverlay !== false && showAllOverlay
-                    const hiddenIndices = new Set(cache?.hiddenBubbleIndices || [])
-                    const pageError = cache?.error || null
-
-                    const hasVisionResult = Boolean(cache?.generatedImageBase64)
-                    const visionUIImage =
-                      hasVisionResult && isOverlayVisible && cache?.generatedImageBase64
-                        ? UIImage.fromBase64String(cache.generatedImageBase64)
-                        : null
-
-                    return (
-                      <Group key={String(idx)}>
-                        {/* 状态 A1: OCR 翻译完成 -> Canvas 图层 + 精准气泡透明按钮热区 */}
-                        {mode === "ocr" && hasBubbles && imageFilePath ? (
-                          <ZStack
-                            alignment="topLeading"
-                            frame={{ width: containerWidth, height: pageRenderHeight }}
-                          >
-                            <Canvas
-                              screenshotRef={{
-                                set current(val: ScreenshotMaker | null) {
-                                  canvasScreenshotRefs.current[idx] = val
-                                },
-                                get current() {
-                                  return canvasScreenshotRefs.current[idx] || null
-                                },
-                              }}
-                              aspectRatio={{ value: defaultAspect, contentMode: "fit" }}
-                              onTapGesture={{
-                                count: 1,
-                                coordinateSpace: "local",
-                                perform: (point?: any) => {
-                                  if (point && typeof point.x === "number" && typeof point.y === "number") {
-                                    handleTapCanvasBubble(idx, point)
-                                  }
-                                },
-                              }}
-                              draw={(ctx, size) => {
-                                canvasSizesRef.current[idx] = size
-                                drawOCROverlay(
-                                  ctx,
-                                  size,
-                                  imageFilePath,
-                                  cache!.bubbles!,
-                                  isOverlayVisible,
-                                  hiddenIndices,
-                                  fontScale
-                                )
-                              }}
-                            />
-
-                            {/* 叠加各气泡透明热区 Button（Native Button 完美兼顾 ScrollView 滚动让位与轻点响应，尺寸与缩放联动） */}
-                            {cache!.bubbles!.map((bubble, bIdx) => {
-                              const [ymin, xmin, ymax, xmax] = bubble.box_2d || [0, 0, 0, 0]
-                              const rawW = ((Math.max(0, Math.min(xmax, 1000)) - Math.max(0, Math.min(xmin, 1000))) / 1000) * containerWidth
-                              const rawH = ((Math.max(0, Math.min(ymax, 1000)) - Math.max(0, Math.min(ymin, 1000))) / 1000) * pageRenderHeight
-                              const rawX = (Math.max(0, Math.min(xmin, 1000)) / 1000) * containerWidth
-                              const rawY = (Math.max(0, Math.min(ymin, 1000)) / 1000) * pageRenderHeight
-
-                              // 联动中心锚点与缩放比例
-                              const cX = rawX + rawW / 2
-                              const cY = rawY + rawH / 2
-                              const hitW = Math.max(30, rawW * fontScale)
-                              const hitH = Math.max(30, rawH * fontScale)
-                              const hitLeft = cX - hitW / 2
-                              const hitTop = cY - hitH / 2
-
-                              return (
-                                <Button
-                                  key={String(bIdx)}
-                                  buttonStyle="plain"
-                                  offset={{ x: hitLeft, y: hitTop }}
-                                  action={() => handleToggleBubbleIndex(idx, bIdx)}
-                                >
-                                  <VStack
-                                    frame={{
-                                      width: hitW,
-                                      height: hitH,
-                                    }}
-                                    background="rgba(0, 0, 0, 0.001)"
-                                    contentShape="rect"
-                                  />
-                                </Button>
-                              )
-                            })}
-                          </ZStack>
-                        ) : mode === "vision" && hasVisionResult && visionUIImage ? (
-                          /* 状态 A2: 生图汉化完成 -> 呈现生成的重绘图像 */
-                          <ZStack alignment="center" frame={{ width: containerWidth, height: pageRenderHeight }}>
-                            <Image
-                              image={visionUIImage}
-                              resizable={true}
-                              aspectRatio={{ value: defaultAspect, contentMode: "fit" }}
-                            />
-                          </ZStack>
-                        ) : (
-                          /* 状态 B: 未翻译 / 翻译中 / 失败 -> 底图 + 正中心悬浮 Sparkles / Loading */
-                          <ZStack alignment="center" frame={{ maxWidth: "infinity" }}>
-                            <CachedImage
-                              url={pageUrl}
-                              aspectRatioValue={defaultAspect}
-                              cornerRadius={0}
-                              contentMode="fit"
-                            />
-
-                            {/* 1. 未翻译状态：原始图片正中心悬浮金色 sparkles 图标（加大一号，纯图标） */}
-                            {((mode === "ocr" && !hasBubbles) || (mode === "vision" && !hasVisionResult)) &&
-                              !isPageTranslating &&
-                              !pageError && (
-                                <Button
-                                  buttonStyle="plain"
-                                  action={() => {
-                                    if (!isPageTranslating) {
-                                      void executePage(idx)
-                                    }
-                                  }}
-                                >
-                                  <ZStack
-                                    alignment="center"
-                                    frame={{ width: 66, height: 66 }}
-                                    background="rgba(0, 0, 0, 0.52)"
-                                    clipShape={{ type: "capsule", style: "continuous" }}
-                                  >
-                                    <Image
-                                      systemName="sparkles"
-                                      font="largeTitle"
-                                      foregroundStyle="#FFD60A"
-                                    />
-                                  </ZStack>
-                                </Button>
-                              )}
-
-                            {/* 2. 正在翻译/生图中：Google 四色流光边框 + 原生 SF Symbol 星光动效 */}
-                            {isPageTranslating && <GoogleSparklesLoading />}
-
-                            {/* 3. 翻译/生图失败：正中心悬浮重试图标（加大一号） */}
-                            {Boolean(pageError) && !isPageTranslating && (
-                              <Button
-                                buttonStyle="plain"
-                                action={() => void executePage(idx, true)}
-                              >
-                                <ZStack
-                                  alignment="center"
-                                  frame={{ width: 60, height: 60 }}
-                                  background="rgba(255, 69, 58, 0.85)"
-                                  clipShape={{ type: "capsule", style: "continuous" }}
-                                >
-                                  <Image
-                                    systemName="arrow.clockwise"
-                                    font="title"
-                                    foregroundStyle="white"
-                                  />
-                                </ZStack>
-                              </Button>
-                            )}
-                          </ZStack>
-                        )}
-                      </Group>
-                    )
-                  })}
+                  {Array.from({ length: pageCount }).map((_, idx) => (
+                    <IllustAIPageRow
+                      key={String(idx)}
+                      illust={illust}
+                      pageIndex={idx}
+                      mode={mode}
+                      containerWidth={containerWidth}
+                      defaultAspect={defaultAspect}
+                      cache={pageCaches[idx]}
+                      isPageTranslating={translatingIndices.includes(idx)}
+                      showAllOverlay={showAllOverlay}
+                      fontScale={fontScale}
+                      onToggleBubbleIndex={handleToggleBubbleIndex}
+                      onTapCanvasBubble={handleTapCanvasBubble}
+                      onExecutePage={executePage}
+                      onRegisterScreenshot={(pIdx, maker) => {
+                        canvasScreenshotRefs.current[pIdx] = maker
+                      }}
+                      onRegisterCanvasSize={(pIdx, size) => {
+                        canvasSizesRef.current[pIdx] = size
+                      }}
+                    />
+                  ))}
                 </VStack>
               </VStack>
             )}

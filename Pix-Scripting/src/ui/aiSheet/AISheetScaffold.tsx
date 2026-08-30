@@ -24,26 +24,6 @@ import { ErrorView } from "../components"
  * 极简微光骨架呼吸条
  */
 export function AISkeletonParagraph() {
-  const [pulse, setPulse] = useState(false)
-
-  useEffect(() => {
-    let timerId: number
-    let isMounted = true
-
-    const tick = () => {
-      if (!isMounted) return
-      setPulse((prev) => !prev)
-      timerId = setTimeout(tick, 750)
-    }
-
-    timerId = setTimeout(tick, 750)
-
-    return () => {
-      isMounted = false
-      clearTimeout(timerId)
-    }
-  }, [])
-
   return (
     <GeometryReader>
       {(proxy) => {
@@ -53,7 +33,6 @@ export function AISkeletonParagraph() {
 
         return (
           <VStack spacing={20} alignment="leading" padding={{ vertical: 8 }}>
-            {/* 段落 1 骨架 */}
             <VStack spacing={10} alignment="leading">
               {p1.map((w, idx) => (
                 <HStack
@@ -61,11 +40,9 @@ export function AISkeletonParagraph() {
                   frame={{ width: w, height: 14 }}
                   background="tertiarySystemFill"
                   clipShape={{ type: "rect", cornerRadius: 7 }}
-                  opacity={pulse ? 0.35 : 0.85}
                 />
               ))}
             </VStack>
-            {/* 段落 2 骨架 */}
             <VStack spacing={10} alignment="leading">
               {p2.map((w, idx) => (
                 <HStack
@@ -73,7 +50,6 @@ export function AISkeletonParagraph() {
                   frame={{ width: w, height: 14 }}
                   background="tertiarySystemFill"
                   clipShape={{ type: "rect", cornerRadius: 7 }}
-                  opacity={pulse ? 0.4 : 0.9}
                 />
               ))}
             </VStack>

@@ -36,11 +36,22 @@ export interface ImageGenAIConfig {
   size?: string
 }
 
+export interface PresetSavedConfig {
+  apiKey?: string
+  model?: string
+  endpoint?: string
+  protocol?: GeneralAIProtocol
+  supportsVision?: boolean
+  noKeyRequired?: boolean
+  temperature?: number
+}
+
 export interface CustomAIProfile {
   enabled: boolean
   syncToICloud: boolean
   general: GeneralAIConfig
   imageGen: ImageGenAIConfig
+  presetConfigs?: Record<string, PresetSavedConfig>
 }
 
 export interface AIPreset {
@@ -87,7 +98,7 @@ export const AI_PRESETS: AIPreset[] = [
     defaultModel: "",
     supportsVision: true,
     description: "OpenCode Go 套餐，高性价比直连网关",
-    apiKeyUrl: "https://opencode.ai/zen/go",
+    apiKeyUrl: "https://opencode.ai/go",
   },
   {
     id: "deepseek-chat",
@@ -180,6 +191,7 @@ export const DEFAULT_CUSTOM_AI_PROFILE: CustomAIProfile = {
     reuseGeneralKey: true,
     size: "1024x1024",
   },
+  presetConfigs: {},
 }
 
 let cachedProfile: CustomAIProfile | null = null
@@ -242,6 +254,46 @@ function validateAndSanitizeProfile(raw: unknown): CustomAIProfile {
     temperature: typeof generalRaw.temperature === "number" ? generalRaw.temperature : 0.7,
   }
 
+  const presetConfigsRaw = obj.presetConfigs || {}
+  const presetConfigs: Record<string, PresetSavedConfig> = {}
+
+  if (typeof presetConfigsRaw === "object" && presetConfigsRaw !== null) {
+    for (const [k, v] of Object.entries(presetConfigsRaw)) {
+      if (v && typeof v === "object") {
+        const item = v as Record<string, any>
+        presetConfigs[k] = {
+          apiKey: typeof item.apiKey === "string" ? item.apiKey.trim() : "",
+          model: typeof item.model === "string" ? item.model.trim() : "",
+          endpoint: typeof item.endpoint === "string" ? item.endpoint.trim() : "",
+          protocol: item.protocol,
+          supportsVision: typeof item.supportsVision === "boolean" ? item.supportsVision : undefined,
+          noKeyRequired: typeof item.noKeyRequired === "boolean" ? item.noKeyRequired : undefined,
+          temperature: typeof item.temperature === "number" ? item.temperature : undefined,
+        }
+      }
+    }
+  }
+
+  const activePresetKey = preset || "custom"
+  if (!presetConfigs[activePresetKey]) {
+    presetConfigs[activePresetKey] = {
+      apiKey: general.apiKey,
+      model: general.model,
+      endpoint: general.endpoint,
+      protocol: general.protocol,
+      supportsVision: general.supportsVision,
+      noKeyRequired: general.noKeyRequired,
+      temperature: general.temperature,
+    }
+  } else {
+    if (general.apiKey && !presetConfigs[activePresetKey].apiKey) {
+      presetConfigs[activePresetKey].apiKey = general.apiKey
+    }
+    if (general.model && !presetConfigs[activePresetKey].model) {
+      presetConfigs[activePresetKey].model = general.model
+    }
+  }
+
   const imageRaw = obj.imageGen || {}
   const imageProtocol: ImageGenAIProtocol = [
     "openai-responses",
@@ -266,6 +318,7 @@ function validateAndSanitizeProfile(raw: unknown): CustomAIProfile {
     syncToICloud,
     general,
     imageGen,
+    presetConfigs,
   }
 }
 
@@ -351,18 +404,99 @@ export function updateCustomAIProfile(
   patch: Partial<CustomAIProfile>
 ): CustomAIProfile {
   const current = loadCustomAIProfile()
+  const newGeneral = {
+    ...current.general,
+    ...(patch.general || {}),
+  }
+
+  const activePresetKey = newGeneral.preset || "custom"
+  const currentPresetConfigs: Record<string, PresetSavedConfig> = {
+    ...(current.presetConfigs || {}),
+    ...(patch.presetConfigs || {}),
+  }
+
+  currentPresetConfigs[activePresetKey] = {
+    apiKey: newGeneral.apiKey,
+    model: newGeneral.model,
+    endpoint: newGeneral.endpoint,
+    protocol: newGeneral.protocol,
+    supportsVision: newGeneral.supportsVision,
+    noKeyRequired: newGeneral.noKeyRequired,
+    temperature: newGeneral.temperature,
+  }
+
   const updated: CustomAIProfile = {
     ...current,
     ...patch,
-    general: {
-      ...current.general,
-      ...(patch.general || {}),
-    },
+    general: newGeneral,
     imageGen: {
       ...current.imageGen,
       ...(patch.imageGen || {}),
     },
+    presetConfigs: currentPresetConfigs,
   }
+  saveCustomAIProfile(updated)
+  return updated
+}
+
+/**
+ * 切换预设服务商：安全保存旧预设配置，并恢复目标预设已保存的密钥与模型
+ */
+export function switchCustomAIPreset(newPresetId: string): CustomAIProfile {
+  const current = loadCustomAIProfile()
+  const oldPresetKey = current.general.preset || "custom"
+
+  const presetConfigs: Record<string, PresetSavedConfig> = {
+    ...(current.presetConfigs || {}),
+    [oldPresetKey]: {
+      apiKey: current.general.apiKey,
+      model: current.general.model,
+      endpoint: current.general.endpoint,
+      protocol: current.general.protocol,
+      supportsVision: current.general.supportsVision,
+      noKeyRequired: current.general.noKeyRequired,
+      temperature: current.general.temperature,
+    },
+  }
+
+  const targetPresetMeta = AI_PRESETS.find((p) => p.id === newPresetId)
+  const savedTarget = presetConfigs[newPresetId] || {}
+
+  const targetProtocol: GeneralAIProtocol =
+    savedTarget.protocol || targetPresetMeta?.protocol || "openai-chat"
+
+  const targetSupportsVision =
+    typeof savedTarget.supportsVision === "boolean"
+      ? savedTarget.supportsVision
+      : (targetPresetMeta?.supportsVision ?? true)
+
+  const newGeneral: GeneralAIConfig = {
+    preset: newPresetId,
+    protocol: targetProtocol,
+    endpoint: savedTarget.endpoint ?? "",
+    model: savedTarget.model ?? targetPresetMeta?.defaultModel ?? "",
+    apiKey: savedTarget.apiKey ?? "",
+    noKeyRequired: Boolean(savedTarget.noKeyRequired),
+    supportsVision: targetSupportsVision,
+    temperature: typeof savedTarget.temperature === "number" ? savedTarget.temperature : 0.7,
+  }
+
+  presetConfigs[newPresetId] = {
+    apiKey: newGeneral.apiKey,
+    model: newGeneral.model,
+    endpoint: newGeneral.endpoint,
+    protocol: newGeneral.protocol,
+    supportsVision: newGeneral.supportsVision,
+    noKeyRequired: newGeneral.noKeyRequired,
+    temperature: newGeneral.temperature,
+  }
+
+  const updated: CustomAIProfile = {
+    ...current,
+    general: newGeneral,
+    presetConfigs,
+  }
+
   saveCustomAIProfile(updated)
   return updated
 }

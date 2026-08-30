@@ -30,7 +30,6 @@ export function isVisionCapableModel(itemMeta?: any): boolean {
     return false
   }
 
-  // 1. capabilities / capability / features 属性
   const cap = itemMeta.capabilities || itemMeta.capability || itemMeta.features
   if (typeof cap === "object" && cap !== null) {
     if (
@@ -48,7 +47,6 @@ export function isVisionCapableModel(itemMeta?: any): boolean {
     }
   }
 
-  // 2. modalities / input_modalities / architecture (OpenRouter, OneAPI, OpenAI 扩展规范等)
   const modalities = [
     ...(Array.isArray(itemMeta.modalities) ? itemMeta.modalities : [itemMeta.modalities]),
     ...(Array.isArray(itemMeta.input_modalities) ? itemMeta.input_modalities : [itemMeta.input_modalities]),
@@ -64,7 +62,6 @@ export function isVisionCapableModel(itemMeta?: any): boolean {
     }
   }
 
-  // 3. type / model_type / tags / categories 标签
   const tags = [
     itemMeta.type,
     itemMeta.model_type,
@@ -79,7 +76,6 @@ export function isVisionCapableModel(itemMeta?: any): boolean {
     }
   }
 
-  // 4. description / summary / info 描述文本分析
   const desc = [itemMeta.description, itemMeta.summary, itemMeta.info]
     .filter((s): s is string => typeof s === "string")
     .join(" ")
@@ -144,7 +140,6 @@ function normalizeModelsEndpoint(protocol: GeneralAIProtocol, rawEndpoint: strin
     }
   }
 
-  // Google Gemini 模型列表规范
   if (protocol === "gemini") {
     if (ep.includes("/v1beta/models") || ep.includes("/v1/models")) {
       if (!apiKey || noKeyRequired) return ep

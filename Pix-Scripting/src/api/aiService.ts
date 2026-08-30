@@ -3,6 +3,7 @@
  * 支持优先调度自定义 AI 协议 (OpenAI Responses / Chat, Gemini, Claude, DALL-E, FLUX 等)，
  * 并向下兼容回退原生 Assistant.requestStreaming
  */
+import { AbortController } from "scripting"
 import { loadImage, imageUrlOf } from "../image/imageLoader"
 import type { PixivIllustration } from "../types"
 import {
@@ -14,9 +15,25 @@ import {
 import {
   streamCustomChat,
   requestCustomImageGen,
+  createLinkedAbortController,
   type AdapterMessage,
   type AdapterMessageContentPart,
+  type SignalLike,
 } from "./aiAdapters"
+
+const globalAITaskControllers = new Set<AbortController>()
+
+/**
+ * 瞬间中止所有全局正在进行的 AI 任务与网络长连接
+ */
+export function abortAllAITasks(): void {
+  for (const controller of globalAITaskControllers) {
+    try {
+      controller.abort()
+    } catch {}
+  }
+  globalAITaskControllers.clear()
+}
 
 /**
  * 检查 AI 服务是否可用：
@@ -74,16 +91,13 @@ export function cleanHtmlCaption(caption: string | null | undefined): string {
 export function cleanNovelTextForAI(rawText: string | null | undefined): string {
   if (!rawText) return ""
   return rawText
-    // 移除插图标记
     .replace(/\[\[jumpimage:\s*\d+\s*\]\]/gi, "")
     .replace(/\[pixivimage:\s*\d+(?:-\d+)?\s*\]/gi, "")
     .replace(/\[uploadedimage:\s*\d+\s*\]/gi, "")
-    // 转换注音为标准汉字（保留汉字）
     .replace(
       /\[\[rb:\s*([^\r\n>]+?)\s*(?:>|&gt;)\s*([^\r\n\]]+?)\s*\]\]/g,
       (_, kanji: string) => kanji.trim()
     )
-    // 规范化多余空行
     .replace(/\r\n/g, "\n")
     .replace(/\n{4,}/g, "\n\n\n")
     .trim()
@@ -115,7 +129,6 @@ export function splitNovelChunks(text: string, targetSize = 1800): string[] {
         currentChunk = ""
       }
 
-      // 如果单段本身超长（例如长达数千字没有分段），按句末标点强制切分
       if (trimmed.length > targetSize) {
         const sentences = trimmed.split(/(?<=[。！？\n])/)
         let temp = ""
@@ -150,6 +163,57 @@ export interface StreamTranslateOptions {
 }
 
 /**
+ * 剥离文本中的思维链标签（支持 <think>, <thought>, <thinking>）
+ */
+export function stripThinkingTags(text: string): string {
+  if (!text) return ""
+  return text
+    .replace(/<(?:think|thought|thinking)>[\s\S]*?<\/(?:think|thought|thinking)>/gi, "")
+    .replace(/^<(?:think|thought|thinking)>[\s\S]*$/gi, "")
+    .trim()
+}
+
+/**
+ * 流式文本提取器：实时过滤嵌入在正文流中的 <think>...</think> 思考内容
+ */
+export class StreamingContentFilter {
+  private rawBuffer = ""
+
+  push(chunk: string): { cleanText: string } {
+    this.rawBuffer += chunk
+
+    const thinkStartMatch = this.rawBuffer.match(/<(?:think|thought|thinking)>/i)
+    if (thinkStartMatch && thinkStartMatch.index !== undefined) {
+      const matchTag = thinkStartMatch[0].replace(/[<>]/g, "").toLowerCase()
+      const endTag = `</${matchTag}>`
+      const endTagIndex = this.rawBuffer.toLowerCase().indexOf(endTag)
+
+      if (endTagIndex !== -1) {
+        const afterEnd = this.rawBuffer.slice(endTagIndex + endTag.length)
+        const beforeStart = this.rawBuffer.slice(0, thinkStartMatch.index)
+        const clean = (beforeStart + afterEnd).trimStart()
+        return {
+          cleanText: clean,
+        }
+      } else {
+        const beforeStart = this.rawBuffer.slice(0, thinkStartMatch.index)
+        return {
+          cleanText: beforeStart.trimStart(),
+        }
+      }
+    }
+
+    return {
+      cleanText: this.rawBuffer,
+    }
+  }
+
+  getFinalCleanText(): string {
+    return stripThinkingTags(this.rawBuffer)
+  }
+}
+
+/**
  * 内部统一流式调度执行器（优先自定义 AI，回退原生 Assistant）
  */
 async function executeUniversalAI(params: {
@@ -160,7 +224,7 @@ async function executeUniversalAI(params: {
     onChunk: (chunkText: string) => void
     onReasoning?: (reasoningText: string) => void
     onImage?: (image: { base64: string; mediaType: string }) => void
-    signal?: { aborted?: boolean }
+    signal?: SignalLike
   }
 }): Promise<string> {
   const { systemPrompt, messages, temperature, options } = params
@@ -169,96 +233,95 @@ async function executeUniversalAI(params: {
     return ""
   }
 
-  // 1. 优先检查自定义 AI 模型
-  if (isCustomAIConfigured()) {
-    const profile = loadCustomAIProfile()
-    let fullOutput = ""
-    let reasoningOutput = ""
+  const { controller, cleanup } = createLinkedAbortController(options.signal)
+  globalAITaskControllers.add(controller)
 
-    const res = await streamCustomChat(profile.general, {
-      systemPrompt,
-      messages,
-      temperature,
-      signal: options.signal,
-      onChunk: (delta) => {
-        if (options.signal?.aborted) return
-        fullOutput += delta
-        options.onChunk(fullOutput)
-      },
-      onReasoning: (reasoning) => {
-        if (options.signal?.aborted) return
-        reasoningOutput += reasoning
-        options.onReasoning?.(reasoning)
-        if (!fullOutput) {
-          options.onChunk(reasoningOutput)
-        }
-      },
-      onImage: (img) => {
-        options.onImage?.(img)
-      },
-    })
+  try {
+    const contentFilter = new StreamingContentFilter()
 
-    const finalResult = fullOutput || res.text || reasoningOutput || res.reasoning
-    return finalResult
-  }
+    if (isCustomAIConfigured()) {
+      const profile = loadCustomAIProfile()
+      let reasoningOutput = ""
 
-  // 2. 回退原生 Assistant.requestStreaming（需具备 Scripting PRO 权限）
-  if (isScriptingPro() && typeof Assistant !== "undefined" && Boolean(Assistant.isAvailable)) {
-    let fullOutput = ""
-    let reasoningOutput = ""
-
-    // 转换消息为 Assistant 兼容结构
-    const assistantMessages = messages.map((m) => {
-      if (typeof m.content === "string") {
-        return { role: m.role, content: m.content }
-      }
-      const parts = m.content.map((part) => {
-        if (part.type === "text") {
-          return { type: "text", content: part.text || "" }
-        }
-        const mime = part.mimeType || "image/jpeg"
-        const dataUri = part.imageBase64?.startsWith("data:")
-          ? part.imageBase64
-          : `data:${mime};base64,${part.imageBase64 || ""}`
-        return { type: "image", content: dataUri }
+      const res = await streamCustomChat(profile.general, {
+        systemPrompt,
+        messages,
+        temperature,
+        signal: controller.signal,
+        onChunk: (delta) => {
+          if (controller.signal.aborted) return
+          const { cleanText } = contentFilter.push(delta)
+          if (cleanText) {
+            options.onChunk(cleanText)
+          }
+        },
+        onReasoning: (reasoning) => {
+          if (controller.signal.aborted) return
+          reasoningOutput += reasoning
+          options.onReasoning?.(reasoning)
+        },
+        onImage: (img) => {
+          options.onImage?.(img)
+        },
       })
-      return { role: m.role, content: parts }
-    })
 
-    const stream = await Assistant.requestStreaming({
-      systemPrompt,
-      messages: assistantMessages as any,
-    })
+      const finalClean = contentFilter.getFinalCleanText() || stripThinkingTags(res.text)
+      return finalClean
+    }
 
-    for await (const chunk of stream) {
-      if (options.signal?.aborted) break
+    if (isScriptingPro() && typeof Assistant !== "undefined" && Boolean(Assistant.isAvailable)) {
+      let reasoningOutput = ""
 
-      if (chunk.type === "text" && chunk.content) {
-        fullOutput += chunk.content
-        options.onChunk(fullOutput)
-      } else if (chunk.type === "reasoning" && chunk.content) {
-        reasoningOutput += chunk.content
-        options.onReasoning?.(chunk.content)
-        if (!fullOutput) {
-          options.onChunk(reasoningOutput)
+      const assistantMessages = messages.map((m) => {
+        if (typeof m.content === "string") {
+          return { role: m.role, content: m.content }
         }
-      } else if (chunk.type === "image" && chunk.content) {
-        options.onImage?.({
-          base64: chunk.content.data,
-          mediaType: chunk.content.mediaType || "image/png",
+        const parts = m.content.map((part) => {
+          if (part.type === "text") {
+            return { type: "text", content: part.text || "" }
+          }
+          const mime = part.mimeType || "image/jpeg"
+          const dataUri = part.imageBase64?.startsWith("data:")
+            ? part.imageBase64
+            : `data:${mime};base64,${part.imageBase64 || ""}`
+          return { type: "image", content: dataUri }
         })
+        return { role: m.role, content: parts }
+      })
+
+      const stream = await Assistant.requestStreaming({
+        systemPrompt,
+        messages: assistantMessages as any,
+      })
+
+      for await (const chunk of stream) {
+        if (controller.signal.aborted) break
+
+        if (chunk.type === "text" && chunk.content) {
+          const { cleanText } = contentFilter.push(chunk.content)
+          if (cleanText) {
+            options.onChunk(cleanText)
+          }
+        } else if (chunk.type === "reasoning" && chunk.content) {
+          reasoningOutput += chunk.content
+          options.onReasoning?.(chunk.content)
+        } else if (chunk.type === "image" && chunk.content) {
+          options.onImage?.({
+            base64: chunk.content.data,
+            mediaType: chunk.content.mediaType || "image/png",
+          })
+        }
       }
+
+      const finalClean = contentFilter.getFinalCleanText()
+      return finalClean
     }
 
-    if (!fullOutput && reasoningOutput) {
-      fullOutput = reasoningOutput
-      options.onChunk(fullOutput)
-    }
-
-    return fullOutput
+    throw new Error(getAIUnavailableErrorMessage())
+  } finally {
+    globalAITaskControllers.delete(controller)
+    cleanup()
   }
-
-  throw new Error(getAIUnavailableErrorMessage())
 }
 
 /**
@@ -503,7 +566,8 @@ export interface OCRBubble {
 export function extractOCRBubbles(text: string): OCRBubble[] {
   if (!text) return []
   try {
-    const match = text.match(/```(?:json)?\s*(\[\s*\{[\s\S]*?\}\s*\])\s*```/)
+    const cleanText = stripThinkingTags(text)
+    const match = (cleanText || text).match(/```(?:json)?\s*(\[\s*\{[\s\S]*?\}\s*\])\s*```/)
     if (match && match[1]) {
       const parsed = JSON.parse(match[1])
       if (Array.isArray(parsed)) {
@@ -522,7 +586,8 @@ export function extractOCRBubbles(text: string): OCRBubble[] {
 
 export function cleanOCRDisplayMarkdown(text: string): string {
   if (!text) return ""
-  return text.replace(/```(?:json)?\s*\[\s*\{[\s\S]*?\}\s*\]\s*```/g, "").trim()
+  const cleanText = stripThinkingTags(text)
+  return cleanText.replace(/```(?:json)?\s*\[\s*\{[\s\S]*?\}\s*\]\s*```/g, "").trim()
 }
 
 export interface StreamVisionTranslateOptions extends StreamTranslateOptions {
@@ -705,7 +770,6 @@ export async function streamGenerateTranslatedImage(
     throw new Error(getAIUnavailableErrorMessage())
   }
 
-  // 1. 如果用户启用了独立的自定义生图模型配置
   if (isCustomAIConfigured()) {
     const profile = loadCustomAIProfile()
     if (profile.imageGen.enabled) {
@@ -714,26 +778,33 @@ export async function streamGenerateTranslatedImage(
       const prompt =
         "Fully translate and typeset all comic speech bubbles and text into Simplified Chinese, keeping original art, screentones, and style intact."
       
-      const genResult = await requestCustomImageGen(profile.imageGen, effectiveKey, {
-        prompt,
-        referenceImageBase64: base64,
-        signal: options.signal,
-      })
+      const { controller, cleanup } = createLinkedAbortController(options.signal)
+      globalAITaskControllers.add(controller)
 
-      if (genResult.base64 && options.onImageGenerated) {
-        options.onImageGenerated({
-          base64: genResult.base64,
-          mediaType: genResult.mediaType || "image/png",
+      try {
+        const genResult = await requestCustomImageGen(profile.imageGen, effectiveKey, {
+          prompt,
+          referenceImageBase64: base64,
+          signal: controller.signal,
         })
-      }
 
-      const finishMsg = "汉化生图已完成！"
-      options.onChunk(finishMsg)
-      return finishMsg
+        if (genResult.base64 && options.onImageGenerated) {
+          options.onImageGenerated({
+            base64: genResult.base64,
+            mediaType: genResult.mediaType || "image/png",
+          })
+        }
+
+        const finishMsg = "汉化生图已完成！"
+        options.onChunk(finishMsg)
+        return finishMsg
+      } finally {
+        globalAITaskControllers.delete(controller)
+        cleanup()
+      }
     }
   }
 
-  // 2. 默认通用生图 Prompt
   const systemPrompt =
     "You are an expert AI manga localization and inpainting artist. Your task is to directly generate and output the fully translated manga page image where speech bubbles and text (in Japanese, English, Korean, or other languages) are seamlessly translated and typeset into Simplified Chinese, keeping the original artwork, screentones, characters, and panels intact."
 

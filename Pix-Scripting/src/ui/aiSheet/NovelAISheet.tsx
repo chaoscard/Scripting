@@ -67,29 +67,32 @@ export function NovelAISheet(props: {
   const [progressInfo, setProgressInfo] = useState<string | null>(null)
   const [showOriginalCaption, setShowOriginalCaption] = useState(false)
 
-  // 记录小说各页独立翻译/总结/续写缓存
   const [pageCaches, setPageCaches] = useState<Record<number, NovelPageCache>>({})
   const [captionCache, setCaptionCache] = useState<{ resultText: string; error: string | null }>({
     resultText: "",
     error: null,
   })
 
-  // 续写模式自定义 prompt
   const [continueInstruction, setContinueInstruction] = useState("")
 
-  const activeTaskTokenRef = useRef<{ id: number; aborted: boolean }>({ id: 0, aborted: false })
+  interface NovelTaskToken {
+    id: number
+    aborted: boolean
+    onAbort?: (cb: () => void) => () => void
+    triggerAbort?: () => void
+  }
+
+  const activeTaskTokenRef = useRef<NovelTaskToken>({ id: 0, aborted: false })
   const activeThrottlerRef = useRef<{ cancel: () => void } | null>(null)
   const taskSeqRef = useRef(0)
   const rawCaption = cleanHtmlCaption(novel.caption)
 
-  // 当 sheet 未展开或外部 currentPage 变动时，实时同步当前页
   useEffect(() => {
     if (!isPresented) {
       setSelectedPage(currentPage)
     }
   }, [isPresented, currentPage])
 
-  // 当前页的缓存数据
   const currentPageCache = pageCaches[selectedPage] || {}
 
   function getCurrentResultText(): string {
@@ -115,7 +118,6 @@ export function NovelAISheet(props: {
   const currentResultText = getCurrentResultText()
   const currentError = getCurrentError()
 
-  // 对于多页小说的翻译、总结与续写，取当前选中页的文本；单页小说取全文
   const targetRawText =
     isMultiPage && (mode === "translate" || mode === "summary" || mode === "continue")
       ? getNovelPageText(fullText, selectedPage)
@@ -124,6 +126,7 @@ export function NovelAISheet(props: {
   const cleanedText = cleanNovelTextForAI(targetRawText)
 
   function handleStop() {
+    activeTaskTokenRef.current.triggerAbort?.()
     activeTaskTokenRef.current.aborted = true
     activeThrottlerRef.current?.cancel()
     activeThrottlerRef.current = null
@@ -135,7 +138,6 @@ export function NovelAISheet(props: {
   async function execute(forceRetry = false) {
     if (!isPresented) return
 
-    // 如果已有缓存且非强制重试，直接展现已有结果
     if (!forceRetry) {
       if (mode === "caption" && captionCache.resultText) {
         return
@@ -152,7 +154,24 @@ export function NovelAISheet(props: {
     }
 
     handleStop()
-    const taskToken = { id: ++taskSeqRef.current, aborted: false }
+
+    const abortListeners = new Set<() => void>()
+    const taskToken: NovelTaskToken = {
+      id: ++taskSeqRef.current,
+      aborted: false,
+      onAbort: (cb: () => void) => {
+        abortListeners.add(cb)
+        return () => abortListeners.delete(cb)
+      },
+      triggerAbort: () => {
+        taskToken.aborted = true
+        for (const listener of abortListeners) {
+          try {
+            listener()
+          } catch {}
+        }
+      },
+    }
     activeTaskTokenRef.current = taskToken
     setLoading(true)
     setProgressInfo(null)
@@ -323,6 +342,12 @@ export function NovelAISheet(props: {
       }
     }
   }
+
+  useEffect(() => {
+    return () => {
+      handleStop()
+    }
+  }, [])
 
   useEffect(() => {
     // 切换小说作品时重置全部缓存

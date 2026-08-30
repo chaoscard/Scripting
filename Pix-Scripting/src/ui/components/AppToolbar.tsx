@@ -1,5 +1,6 @@
 import { Button, Script, Text } from "scripting"
 import { loadSettings } from "../../store/settings"
+import { abortAllAITasks } from "../../api/aiService"
 
 export function appToolbar(dismiss: () => void, title?: string, trailing?: any) {
   return {
@@ -8,7 +9,11 @@ export function appToolbar(dismiss: () => void, title?: string, trailing?: any) 
         title="关闭"
         systemImage="xmark"
         action={() => {
+          abortAllAITasks()
           if (loadSettings().closeButtonAction === "exit") {
+            try {
+              dismiss()
+            } catch {}
             Script.exit()
           } else {
             Script.minimize()
