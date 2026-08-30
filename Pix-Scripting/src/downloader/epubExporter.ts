@@ -20,6 +20,7 @@ export interface NovelEpubOptions {
   author: string
   authorId?: number
   seriesTitle?: string
+  seriesDescription?: string
   description?: string
   tags?: string[]
   coverUrl?: string
@@ -112,6 +113,36 @@ p {
   margin: 0.3em 0;
   line-height: 1.6;
 }
+.caption-header {
+  font-weight: bold;
+  font-size: 0.95em;
+  color: #007aff;
+  margin-bottom: 6px;
+}
+.page-header {
+  font-size: 1.05em;
+  color: #888888;
+  text-align: center;
+  margin: 1.2em 0 0.8em 0;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+.jump-box {
+  text-align: center;
+  text-indent: 0;
+  margin: 1.5em 0;
+}
+.jump-link {
+  display: inline-block;
+  padding: 6px 16px;
+  background-color: #f0f4f8;
+  color: #007aff;
+  text-decoration: none;
+  border-radius: 16px;
+  font-size: 0.88em;
+  font-weight: 500;
+  border: 1px solid #d0e0f0;
+}
 .ill-box {
   text-align: center;
   text-indent: 0;
@@ -169,9 +200,9 @@ body {
 `
 
 /**
- * 将章节简介清洗并转换为规范的 XHTML 段落结构
+ * 将章节或系列简介清洗并转换为规范的 XHTML 段落结构
  */
-function formatCaptionToXHtml(rawCaption?: string): string {
+function formatCaptionToXHtml(rawCaption?: string, headerTitle?: string): string {
   if (!rawCaption) return ""
   const plain = htmlToPlainText(rawCaption)
   if (!plain) return ""
@@ -182,7 +213,8 @@ function formatCaptionToXHtml(rawCaption?: string): string {
     .map((line) => `<p>${escapeXml(line)}</p>`)
     .join("\n  ")
   if (!pTags) return ""
-  return `<div class="caption-box">\n  ${pTags}\n</div>`
+  const titleHtml = headerTitle ? `<div class="caption-header">${escapeXml(headerTitle)}</div>\n  ` : ""
+  return `<div class="caption-box">\n  ${titleHtml}${pTags}\n</div>`
 }
 
 /**
@@ -233,15 +265,16 @@ function formatInlineToXHtml(text: string): string {
  */
 function formatNovelTextToXHtml(
   rawText: string,
-  imageKeyToFileMap: Map<string, string>
+  imageKeyToFileMap: Map<string, string>,
+  resolveJumpLink?: (targetPage: number) => string | null
 ): string {
   if (!rawText) return ""
   const lines = rawText.split(/\r?\n/)
   const resultBlocks: string[] = []
 
-  // 块级/独立指令正则：[uploadedimage:...], [pixivimage:...], [chapter:...], [newpage], [jump:...]
+  // 块级/独立指令正则：[uploadedimage:...], [pixivimage:...], [chapter:...], [jump:...]
   const BLOCK_SPLIT_REGEX =
-    /(\[(?:uploadedimage|pixivimage)\s*[:：]\s*[^\]]+\]|\[chapter\s*[:：]\s*[^\]]+\]|\[newpage\]|\[jump\s*[:：]\s*\d+\])/gi
+    /(\[(?:uploadedimage|pixivimage)\s*[:：]\s*[^\]]+\]|\[chapter\s*[:：]\s*[^\]]+\]|\[jump\s*[:：]\s*\d+\])/gi
 
   for (const rawLine of lines) {
     // 检查是否全为空白行
@@ -261,18 +294,20 @@ function formatNovelTextToXHtml(
         continue
       }
 
-      // 2. [newpage]
-      if (/^\[newpage\]$/i.test(seg.trim())) {
-        resultBlocks.push(`<hr class="page-divider"/>`)
+      // 2. [jump: 页码]
+      const jumpMatch = seg.match(/^\[jump\s*[:：]\s*(\d+)\]$/i)
+      if (jumpMatch) {
+        const targetPage = parseInt(jumpMatch[1], 10)
+        const targetLink = resolveJumpLink ? resolveJumpLink(targetPage) : null
+        if (targetLink) {
+          resultBlocks.push(
+            `<div class="jump-box"><a href="${escapeXml(targetLink)}" class="jump-link">📄 跳转至第 ${targetPage} 页 →</a></div>`
+          )
+        }
         continue
       }
 
-      // 3. [jump: 页码]
-      if (/^\[jump\s*[:：]\s*\d+\]$/i.test(seg.trim())) {
-        continue
-      }
-
-      // 4. [uploadedimage: ID] 或 [pixivimage: ID]
+      // 3. [uploadedimage: ID] 或 [pixivimage: ID]
       const imgMatch = seg.match(/^\[(uploadedimage|pixivimage)\s*[:：]\s*([^\]]+)\]$/i)
       if (imgMatch) {
         const rawKey = imgMatch[2].trim()
@@ -286,7 +321,7 @@ function formatNovelTextToXHtml(
         continue
       }
 
-      // 5. 普通正文文本：去除行首段落缩进与空白（由 CSS text-indent: 2em 统一保证精准空两格），转义并解析行内语法
+      // 4. 普通正文文本：去除行首段落缩进与空白（由 CSS text-indent: 2em 统一保证精准空两格），转义并解析行内语法
       const cleanText = seg.replace(/^[\s\u3000]+/, "").replace(/[\s\u3000]+$/, "")
       if (cleanText.length > 0) {
         const innerHtml = formatInlineToXHtml(cleanText)
@@ -504,6 +539,7 @@ export async function exportNovelToEpub(options: NovelEpubOptions): Promise<stri
     author,
     authorId,
     seriesTitle,
+    seriesDescription,
     description,
     tags = [],
     coverUrl,
@@ -635,7 +671,91 @@ export async function exportNovelToEpub(options: NovelEpubOptions): Promise<stri
       })
     }
 
-    // 5. 生成各章节 XHTML 文件
+    // 5. 规划章节与多页切分结构
+    interface NovelPageSection {
+      pageIndex: number
+      text: string
+      chapterHeading?: string
+      fileName: string
+      xhtmlId: string
+      pageTitle: string
+    }
+
+    interface NovelChapterPlan {
+      chapterIndex: number
+      chapterTitle: string
+      caption?: string
+      pages: NovelPageSection[]
+    }
+
+    const isSingleNovel = chapters.length === 1
+
+    const chapterPlans: NovelChapterPlan[] = chapters.map((chap, cIdx) => {
+      const chapterIndex = cIdx + 1
+      const chapterTitle = chap.title || (isSingleNovel ? title : `第 ${chapterIndex} 章`)
+
+      // 按 [newpage] 进行分页切分
+      const rawParts = (chap.text || "").split(/\[newpage\]/gi)
+
+      // 过滤掉末尾纯空白的多余部分
+      while (rawParts.length > 1) {
+        const last = rawParts[rawParts.length - 1]
+        if (last.replace(/[\s\r\n\u3000]/g, "").length === 0) {
+          rawParts.pop()
+        } else {
+          break
+        }
+      }
+
+      if (rawParts.length === 0) {
+        rawParts.push("")
+      }
+
+      const isChapMultiPage = rawParts.length > 1
+      const pages: NovelPageSection[] = rawParts.map((part, pIdx) => {
+        const pageIndex = pIdx + 1
+        const chapMatch = part.match(/\[chapter\s*[:：]\s*(.+?)\]/i)
+        const chapterHeading = chapMatch ? chapMatch[1].trim() : undefined
+
+        const xhtmlId = isSingleNovel
+          ? `page_${pageIndex}`
+          : `chap_${chapterIndex}_p${pageIndex}`
+        const fileName = `${xhtmlId}.xhtml`
+
+        let pageTitle = ""
+        if (isSingleNovel && !isChapMultiPage) {
+          // 单篇单页：目录标题为书名/章节名
+          pageTitle = chapterTitle
+        } else {
+          // 多页情况：若本页包含 chapter 标签，则显示 "第 X 页 · 章节名"；否则显示 "第 X 页"
+          if (chapterHeading) {
+            pageTitle = `第 ${pageIndex} 页 · ${chapterHeading}`
+          } else {
+            pageTitle = `第 ${pageIndex} 页`
+          }
+        }
+
+        return {
+          pageIndex,
+          text: part,
+          chapterHeading,
+          fileName,
+          xhtmlId,
+          pageTitle,
+        }
+      })
+
+      return {
+        chapterIndex,
+        chapterTitle,
+        caption: chap.caption,
+        pages,
+      }
+    })
+
+    const totalPages = chapterPlans.reduce((sum, cp) => sum + cp.pages.length, 0)
+
+    // 6. 生成各章节与页面 XHTML 文件
     const manifestItems: string[] = [
       `<item id="toc" href="toc.xhtml" media-type="application/xhtml+xml" properties="nav"/>`,
       `<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>`,
@@ -644,6 +764,8 @@ export async function exportNovelToEpub(options: NovelEpubOptions): Promise<stri
     const spineItems: string[] = []
     const navPoints: string[] = []
     const tocList: string[] = []
+
+    let globalPlayOrder = 1
 
     if (hasCover) {
       manifestItems.push(`<item id="cover-img" href="images/cover.jpg" media-type="image/jpeg" properties="cover-image"/>`)
@@ -659,7 +781,7 @@ export async function exportNovelToEpub(options: NovelEpubOptions): Promise<stri
       manifestItems.push(`<item id="cover-page" href="cover.xhtml" media-type="application/xhtml+xml"/>`)
       spineItems.push(`<itemref idref="cover-page"/>`)
       navPoints.push(`
-  <navPoint id="nav-cover" playOrder="1">
+  <navPoint id="nav-cover" playOrder="${globalPlayOrder++}">
     <navLabel><text>封面</text></navLabel>
     <content src="cover.xhtml"/>
   </navPoint>`)
@@ -667,62 +789,164 @@ export async function exportNovelToEpub(options: NovelEpubOptions): Promise<stri
     }
 
     const isSeries = Boolean(seriesTitle && chapters.length > 1)
+    const resolvedSeriesDesc = seriesDescription || (isSeries ? description : undefined)
     const workUrl = isSeries
       ? `https://www.pixiv.net/novel/series/${id}`
       : `https://www.pixiv.net/novel/show.php?id=${id}`
     const authorUrl = authorId ? `https://www.pixiv.net/users/${authorId}` : ""
 
-    chapters.forEach((chap, idx) => {
-      const chapId = `chapter_${idx + 1}`
-      const chapFileName = `${chapId}.xhtml`
-      const formattedBody = formatNovelTextToXHtml(chap.text, imageKeyToFileMap)
-      const chapTitle = chap.title || `第 ${idx + 1} 章`
-      const captionHtml = formatCaptionToXHtml(chap.caption)
+    let pageCounter = 0
+    for (const chapPlan of chapterPlans) {
+      const chapCaptionHtml = formatCaptionToXHtml(chapPlan.caption)
 
-      let metaInfoHtml = ""
-      if (idx === 0) {
-        const metaItems: string[] = []
-        metaItems.push(`<div class="meta-item">作者：${authorUrl ? `<a href="${authorUrl}">${escapeXml(author)}</a>` : escapeXml(author)}</div>`)
-        metaItems.push(`<div class="meta-item">作品主页：<a href="${workUrl}">${escapeXml(workUrl)}</a></div>`)
-        if (authorUrl) {
-          metaItems.push(`<div class="meta-item">作者主页：<a href="${authorUrl}">${escapeXml(authorUrl)}</a></div>`)
-        }
-        if (seriesTitle) {
-          metaItems.push(`<div class="meta-item">所属系列：${escapeXml(seriesTitle)}</div>`)
-        }
-        if (tags.length > 0) {
-          metaItems.push(`<div class="meta-item">标签：${escapeXml(tags.join(", "))}</div>`)
-        }
-        metaInfoHtml = `<div class="meta-info">\n    ${metaItems.join("\n    ")}\n  </div>`
-      }
+      for (const page of chapPlan.pages) {
+        pageCounter++
+        const isFirstPageOfBook = chapPlan.chapterIndex === 1 && page.pageIndex === 1
+        const isFirstPageOfChap = page.pageIndex === 1
 
-      const chapterXhtml = `<?xml version="1.0" encoding="UTF-8"?>
+        let metaInfoHtml = ""
+        let seriesCaptionHtml = ""
+        if (isFirstPageOfBook) {
+          const metaItems: string[] = []
+          metaItems.push(`<div class="meta-item">作者：${authorUrl ? `<a href="${authorUrl}">${escapeXml(author)}</a>` : escapeXml(author)}</div>`)
+          metaItems.push(`<div class="meta-item">作品主页：<a href="${workUrl}">${escapeXml(workUrl)}</a></div>`)
+          if (authorUrl) {
+            metaItems.push(`<div class="meta-item">作者主页：<a href="${authorUrl}">${escapeXml(authorUrl)}</a></div>`)
+          }
+          if (seriesTitle) {
+            metaItems.push(`<div class="meta-item">所属系列：${escapeXml(seriesTitle)}</div>`)
+          }
+          if (tags.length > 0) {
+            metaItems.push(`<div class="meta-item">标签：${escapeXml(tags.join(", "))}</div>`)
+          }
+          metaInfoHtml = `<div class="meta-info">\n    ${metaItems.join("\n    ")}\n  </div>`
+
+          if (resolvedSeriesDesc) {
+            seriesCaptionHtml = formatCaptionToXHtml(resolvedSeriesDesc, "系列简介")
+          }
+        }
+
+        let pageHeaderHtml = ""
+        if (isSingleNovel) {
+          if (isFirstPageOfChap) {
+            pageHeaderHtml = `<h1>${escapeXml(title)}</h1>`
+          } else if (!page.chapterHeading) {
+            pageHeaderHtml = `<div class="page-header">第 ${page.pageIndex} 页</div>`
+          }
+        } else {
+          if (isFirstPageOfChap) {
+            pageHeaderHtml = `<h1>${escapeXml(chapPlan.chapterTitle)}</h1>`
+          } else if (!page.chapterHeading) {
+            pageHeaderHtml = `<div class="page-header">${escapeXml(chapPlan.chapterTitle)} · 第 ${page.pageIndex} 页</div>`
+          }
+        }
+
+        const resolveJump = (targetPage: number): string | null => {
+          if (targetPage < 1) return null
+          if (isSingleNovel) {
+            const target = chapPlan.pages.find((p) => p.pageIndex === targetPage)
+            return target ? target.fileName : `page_${targetPage}.xhtml`
+          } else {
+            const target = chapPlan.pages.find((p) => p.pageIndex === targetPage)
+            return target ? target.fileName : `chap_${chapPlan.chapterIndex}_p${targetPage}.xhtml`
+          }
+        }
+
+        const formattedBody = formatNovelTextToXHtml(page.text, imageKeyToFileMap, resolveJump)
+        const captionHtml = isFirstPageOfChap ? chapCaptionHtml : ""
+
+        const pageDocumentTitle = isSingleNovel
+          ? (page.chapterHeading ? `${title} - ${page.pageTitle}` : (chapPlan.pages.length > 1 ? `${title} (${page.pageTitle})` : title))
+          : (page.chapterHeading ? `${chapPlan.chapterTitle} - ${page.pageTitle}` : (chapPlan.pages.length > 1 ? `${chapPlan.chapterTitle} (${page.pageTitle})` : chapPlan.chapterTitle))
+
+        const pageXhtml = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
-  <title>${escapeXml(chapTitle)}</title>
+  <title>${escapeXml(pageDocumentTitle)}</title>
   <link rel="stylesheet" type="text/css" href="style.css"/>
 </head>
 <body>
-  <h1>${escapeXml(chapTitle)}</h1>
+  ${pageHeaderHtml}
   ${metaInfoHtml}
+  ${seriesCaptionHtml}
   ${captionHtml}
   ${formattedBody}
 </body>
 </html>`
 
-      FileManager.writeAsStringSync(`${oebpsDir}/${chapFileName}`, chapterXhtml, "utf-8")
-      manifestItems.push(`<item id="${chapId}" href="${chapFileName}" media-type="application/xhtml+xml"/>`)
-      spineItems.push(`<itemref idref="${chapId}"/>`)
+        FileManager.writeAsStringSync(`${oebpsDir}/${page.fileName}`, pageXhtml, "utf-8")
+        manifestItems.push(`<item id="${page.xhtmlId}" href="${page.fileName}" media-type="application/xhtml+xml"/>`)
+        spineItems.push(`<itemref idref="${page.xhtmlId}"/>`)
 
-      const playOrder = (hasCover ? 2 : 1) + idx
-      navPoints.push(`
-  <navPoint id="nav-${chapId}" playOrder="${playOrder}">
-    <navLabel><text>${escapeXml(chapTitle)}</text></navLabel>
-    <content src="${chapFileName}"/>
+        onProgress?.(`生成正文页面 (${pageCounter}/${totalPages})...`, pageCounter, totalPages)
+      }
+    }
+
+    // 7. 构建目录导航 (TOC - 支持单篇多页与系列多页层级目录)
+    if (isSingleNovel) {
+      const plan = chapterPlans[0]
+      if (plan.pages.length === 1) {
+        const p1 = plan.pages[0]
+        navPoints.push(`
+  <navPoint id="nav-${p1.xhtmlId}" playOrder="${globalPlayOrder++}">
+    <navLabel><text>${escapeXml(title)}</text></navLabel>
+    <content src="${p1.fileName}"/>
   </navPoint>`)
-      tocList.push(`<li><a href="${chapFileName}">${escapeXml(chapTitle)}</a></li>`)
-    })
+        tocList.push(`<li><a href="${p1.fileName}">${escapeXml(title)}</a></li>`)
+      } else {
+        // 单篇多页小说：目录直接列出到每一页
+        for (const page of plan.pages) {
+          navPoints.push(`
+  <navPoint id="nav-${page.xhtmlId}" playOrder="${globalPlayOrder++}">
+    <navLabel><text>${escapeXml(page.pageTitle)}</text></navLabel>
+    <content src="${page.fileName}"/>
+  </navPoint>`)
+          tocList.push(`<li><a href="${page.fileName}">${escapeXml(page.pageTitle)}</a></li>`)
+        }
+      }
+    } else {
+      // 系列小说
+      for (const chapPlan of chapterPlans) {
+        if (chapPlan.pages.length === 1) {
+          const p1 = chapPlan.pages[0]
+          navPoints.push(`
+  <navPoint id="nav-chap-${chapPlan.chapterIndex}" playOrder="${globalPlayOrder++}">
+    <navLabel><text>${escapeXml(chapPlan.chapterTitle)}</text></navLabel>
+    <content src="${p1.fileName}"/>
+  </navPoint>`)
+          tocList.push(`<li><a href="${p1.fileName}">${escapeXml(chapPlan.chapterTitle)}</a></li>`)
+        } else {
+          // 系列章节包含多页：两级嵌套目录
+          const chapOrder = globalPlayOrder++
+          const subNavPoints: string[] = []
+          const subTocItems: string[] = []
+
+          for (const page of chapPlan.pages) {
+            const pageOrder = globalPlayOrder++
+            subNavPoints.push(`
+    <navPoint id="nav-${page.xhtmlId}" playOrder="${pageOrder}">
+      <navLabel><text>${escapeXml(page.pageTitle)}</text></navLabel>
+      <content src="${page.fileName}"/>
+    </navPoint>`)
+            subTocItems.push(`<li><a href="${page.fileName}">${escapeXml(page.pageTitle)}</a></li>`)
+          }
+
+          navPoints.push(`
+  <navPoint id="nav-chap-${chapPlan.chapterIndex}" playOrder="${chapOrder}">
+    <navLabel><text>${escapeXml(chapPlan.chapterTitle)}</text></navLabel>
+    <content src="${chapPlan.pages[0].fileName}"/>${subNavPoints.join("")}
+  </navPoint>`)
+
+          tocList.push(`<li>
+        <a href="${chapPlan.pages[0].fileName}">${escapeXml(chapPlan.chapterTitle)}</a>
+        <ol>
+          ${subTocItems.join("\n          ")}
+        </ol>
+      </li>`)
+        }
+      }
+    }
 
     // 加入插图 manifest (去重确保每个文件唯一注册)
     const registeredFiles = new Set<string>()
@@ -738,9 +962,10 @@ export async function exportNovelToEpub(options: NovelEpubOptions): Promise<stri
       manifestItems.push(`<item id="${itemId}" href="images/${item.filename}" media-type="${mime}"/>`)
     }
 
-    // 6. content.opf
+    // 8. content.opf
     const dateStr = new Date().toISOString()
-    const cleanDescription = description ? htmlToPlainText(description) : ""
+    const metaDescription = resolvedSeriesDesc || description || ""
+    const cleanDescription = metaDescription ? htmlToPlainText(metaDescription) : ""
     const contentOpf = `<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" unique-identifier="BookId" version="3.0">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
@@ -763,12 +988,12 @@ export async function exportNovelToEpub(options: NovelEpubOptions): Promise<stri
 </package>`
     FileManager.writeAsStringSync(`${oebpsDir}/content.opf`, contentOpf, "utf-8")
 
-    // 7. toc.ncx
+    // 9. toc.ncx
     const tocNcx = `<?xml version="1.0" encoding="UTF-8"?>
 <ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
   <head>
     <meta name="dtb:uid" content="urn:pixiv:novel:${id}"/>
-    <meta name="dtb:depth" content="1"/>
+    <meta name="dtb:depth" content="2"/>
     <meta name="dtb:totalPageCount" content="0"/>
     <meta name="dtb:maxPageNumber" content="0"/>
   </head>
@@ -780,7 +1005,7 @@ export async function exportNovelToEpub(options: NovelEpubOptions): Promise<stri
 </ncx>`
     FileManager.writeAsStringSync(`${oebpsDir}/toc.ncx`, tocNcx, "utf-8")
 
-    // 8. toc.xhtml
+    // 10. toc.xhtml
     const tocXhtml = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">

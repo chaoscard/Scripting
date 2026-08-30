@@ -2,6 +2,7 @@ import { buildUgoira, prepareUgoira } from "../ugoira/ugoira"
 import { saveImageToPixivAlbum, saveVideoToPixivAlbum } from "./photoAlbum"
 import { getCategoryDirectory, sanitizeFileName } from "./directoryResolver"
 import { loadSettings, type UgoiraExportFormat } from "../store/settings"
+import { publishPreparedFile } from "../store/safeFile"
 import type { PixivIllustration } from "../types"
 
 export interface UgoiraExportResult {
@@ -61,34 +62,90 @@ export async function exportUgoiraToAlbum(
 }
 
 /**
- * 将动图原始 ZIP 压缩帧包导出保存至文件存储目录
+ * 将动图原始 ZIP 压缩帧包（包含所有帧与完整元数据 info.json）导出保存至文件存储目录
  */
 export async function exportUgoiraZip(
   illust: PixivIllustration,
   onProgress?: (msg: string) => void
 ): Promise<UgoiraExportResult> {
+  const tempDir = `${getCategoryDirectory("temp")}/zip_ugoira_${illust.id}_${Date.now()}`
+  const tempZipPath = `${tempDir}.zip`
+
   try {
-    onProgress?.("正在准备动图原始 ZIP 帧包...")
+    onProgress?.("正在准备动图序列帧资源...")
     const prep = await prepareUgoira(illust.id)
-    if (!prep) {
+    if (!prep || !prep.frames || prep.frames.length === 0) {
       return { success: false, mp4Path: null, format: "zip", error: "动图资源准备失败" }
     }
 
     const author = illust.user?.name || "Unknown"
     const safeTitle = sanitizeFileName(`${illust.title}_${author}_${illust.id}`)
     const targetDir = getCategoryDirectory("illustrations")
+    if (!FileManager.existsSync(targetDir)) {
+      try { FileManager.createDirectorySync(targetDir, true) } catch {}
+    }
     const destZipPath = `${targetDir}/${safeTitle}.zip`
 
-    if (prep.zipPath && FileManager.existsSync(prep.zipPath)) {
-      if (FileManager.existsSync(destZipPath)) {
-        try { FileManager.removeSync(destZipPath) } catch {}
+    FileManager.createDirectorySync(tempDir, true)
+
+    // 1. 复制所有帧图像文件至临时打包目录
+    onProgress?.("正在整理动图序列帧...")
+    for (const frame of prep.frames) {
+      const srcFramePath = `${prep.framesDir}/${frame.file}`
+      const destFramePath = `${tempDir}/${frame.file}`
+      if (FileManager.existsSync(srcFramePath)) {
+        FileManager.copyFileSync(srcFramePath, destFramePath)
       }
-      FileManager.copyFileSync(prep.zipPath, destZipPath)
-    } else if (FileManager.existsSync(prep.framesDir)) {
-      await FileManager.zip(prep.framesDir, destZipPath, false)
-    } else {
-      return { success: false, mp4Path: null, format: "zip", error: "动图帧数据未就绪" }
     }
+
+    // 2. 写入 info.json 元数据（包含作品基础信息与动图帧率延迟结构）
+    onProgress?.("正在写入动图元数据 info.json...")
+    const metaJson = {
+      id: illust.id,
+      title: illust.title,
+      type: "ugoira",
+      caption: illust.caption,
+      user: {
+        id: illust.user?.id,
+        name: illust.user?.name,
+        account: illust.user?.account,
+      },
+      tags: illust.tags?.map((t: any) => t.name) ?? [],
+      create_date: illust.create_date,
+      page_count: illust.page_count || prep.frames.length,
+      width: illust.width || prep.width,
+      height: illust.height || prep.height,
+      total_bookmarks: illust.total_bookmarks,
+      total_view: illust.total_view,
+      web_url: `https://www.pixiv.net/artworks/${illust.id}`,
+      author_url: illust.user?.id ? `https://www.pixiv.net/users/${illust.user.id}` : undefined,
+      ugoira_metadata: {
+        total_duration_ms: prep.totalDurationMs,
+        frame_count: prep.frames.length,
+        frames: prep.frames,
+      },
+      exported_at: new Date().toISOString(),
+    }
+
+    FileManager.writeAsStringSync(
+      `${tempDir}/info.json`,
+      JSON.stringify(metaJson, null, 2),
+      "utf-8"
+    )
+
+    // 3. 打包生成 ZIP 文件
+    onProgress?.("正在压缩打包 ZIP 动图帧包...")
+    if (FileManager.existsSync(tempZipPath)) {
+      try { FileManager.removeSync(tempZipPath) } catch {}
+    }
+
+    await FileManager.zip(tempDir, tempZipPath)
+    if (!FileManager.existsSync(tempZipPath)) {
+      return { success: false, mp4Path: null, format: "zip", error: "动图 ZIP 打包失败" }
+    }
+
+    // 4. 原子发布至目标存储路径
+    publishPreparedFile(tempZipPath, destZipPath)
 
     return {
       success: true,
@@ -99,5 +156,16 @@ export async function exportUgoiraZip(
   } catch (err: any) {
     console.log("exportUgoiraZip error:", err?.message ?? err)
     return { success: false, mp4Path: null, format: "zip", error: err?.message ?? String(err) }
+  } finally {
+    try {
+      if (FileManager.existsSync(tempZipPath)) {
+        FileManager.removeSync(tempZipPath)
+      }
+    } catch {}
+    try {
+      if (FileManager.existsSync(tempDir)) {
+        FileManager.removeSync(tempDir)
+      }
+    } catch {}
   }
 }

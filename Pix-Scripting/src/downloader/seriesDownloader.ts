@@ -37,12 +37,14 @@ export async function downloadEntireNovelSeries(
 
         const allNovels: any[] = []
         let seriesTitle = fallbackTitle || ""
+        let seriesCaption: string | undefined
         let seriesCoverUrl: string | undefined
 
         // 1. 分页获取系列全部小说条目
         let page = await session.call((token) => novelSeries(seriesID, token))
         if (page?.novel_series_detail) {
           seriesTitle = page.novel_series_detail.title || seriesTitle
+          seriesCaption = page.novel_series_detail.caption
           seriesCoverUrl =
             page.novel_series_detail.cover_image_urls?.large ||
             page.novel_series_detail.cover_image_urls?.medium
@@ -139,6 +141,7 @@ export async function downloadEntireNovelSeries(
           author: authorName,
           authorId,
           seriesTitle,
+          seriesDescription: seriesCaption,
           coverUrl: seriesCoverUrl,
           chapters,
           onProgress: (msg, cur, tot) => onProgress?.(msg, cur, tot),

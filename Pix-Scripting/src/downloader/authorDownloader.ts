@@ -1,6 +1,7 @@
 import {
   nextIllustrations,
   nextNovels,
+  novelSeries,
   novelViewerData,
   userNovels,
   userWorks,
@@ -627,6 +628,24 @@ export async function exportAuthorNovels(
 
     const chapters: NovelChapter[] = []
     let seriesCoverUrl: string | undefined
+    let seriesCaption: string | undefined
+
+    try {
+      const seriesDetail = await session.call((token) => novelSeries(series.seriesId, token))
+      if (seriesDetail?.novel_series_detail) {
+        if (seriesDetail.novel_series_detail.caption) {
+          seriesCaption = seriesDetail.novel_series_detail.caption
+        }
+        if (
+          seriesDetail.novel_series_detail.cover_image_urls?.large ||
+          seriesDetail.novel_series_detail.cover_image_urls?.medium
+        ) {
+          seriesCoverUrl =
+            seriesDetail.novel_series_detail.cover_image_urls.large ||
+            seriesDetail.novel_series_detail.cover_image_urls.medium
+        }
+      }
+    } catch {}
 
     for (let i = 0; i < series.works.length; i++) {
       const novelItem = series.works[i]
@@ -677,6 +696,8 @@ export async function exportAuthorNovels(
         author: authorName,
         authorId,
         seriesTitle,
+        seriesDescription: seriesCaption,
+        description: seriesCaption,
         coverUrl: seriesCoverUrl,
         chapters,
         targetDir,
