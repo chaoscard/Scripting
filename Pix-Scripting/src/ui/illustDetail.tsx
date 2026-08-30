@@ -775,7 +775,7 @@ export function IllustDetailView(props: { illustID: number }) {
                   action={handleDownloadUgoira}
                 />
                 <Button
-                  title="下载原生 ZIP 帧包"
+                  title="下载原始 ZIP 帧包"
                   systemImage="doc.zipper"
                   disabled={downloading}
                   action={handleDownloadUgoiraZip}

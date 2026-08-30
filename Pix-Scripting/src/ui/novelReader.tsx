@@ -1773,7 +1773,12 @@ export function NovelReaderView(props: {
     pageBlocks.find((b) => b.page === currentPage) ?? pageBlocks[0]
 
   return (
-    <Group textSelection={true}>
+    <VStack
+      scrollTargetLayout={true}
+      alignment="leading"
+      spacing={0}
+      frame={{ maxWidth: "infinity" }}
+    >
       {/* 顶部锚点 */}
       <VStack key="novel-top-anchor" frame={{ height: 0 }} />
 
@@ -1819,7 +1824,7 @@ export function NovelReaderView(props: {
           />
         </VStack>
       ))}
-    </Group>
+    </VStack>
   )
 }
 

@@ -61,14 +61,14 @@ export async function exportUgoiraToAlbum(
 }
 
 /**
- * 将动图原生 ZIP 压缩帧包导出保存至文件存储目录
+ * 将动图原始 ZIP 压缩帧包导出保存至文件存储目录
  */
 export async function exportUgoiraZip(
   illust: PixivIllustration,
   onProgress?: (msg: string) => void
 ): Promise<UgoiraExportResult> {
   try {
-    onProgress?.("正在准备动图原生 ZIP 帧包...")
+    onProgress?.("正在准备动图原始 ZIP 帧包...")
     const prep = await prepareUgoira(illust.id)
     if (!prep) {
       return { success: false, mp4Path: null, format: "zip", error: "动图资源准备失败" }

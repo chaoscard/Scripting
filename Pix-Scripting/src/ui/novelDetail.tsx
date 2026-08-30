@@ -181,7 +181,7 @@ export function NovelDetailView(props: { novelID: number }) {
     Boolean(
       initialProgress?.chunkId &&
         initialProgress.chunkId !== "novel-top-anchor" &&
-        initialProgress.chunkId !== "chunk-0"
+        initialProgress.chunkId !== "novel-header-content"
     )
   )
   const hasRestoredScrollRef = useRef(false)
@@ -201,8 +201,7 @@ export function NovelDetailView(props: { novelID: number }) {
     if (
       !target ||
       target === "novel-top-anchor" ||
-      target === "novel-header-content" ||
-      target === "chunk-0"
+      target === "novel-header-content"
     ) {
       isRestoringScrollRef.current = false
       hasRestoredScrollRef.current = true
@@ -296,7 +295,7 @@ export function NovelDetailView(props: { novelID: number }) {
         if (
           savedProgress.chunkId &&
           savedProgress.chunkId !== "novel-top-anchor" &&
-          savedProgress.chunkId !== "chunk-0"
+          savedProgress.chunkId !== "novel-header-content"
         ) {
           initialScrollChunkIdRef.current = savedProgress.chunkId
           lastRecordedChunkRef.current = savedProgress.chunkId
@@ -341,10 +340,10 @@ export function NovelDetailView(props: { novelID: number }) {
     isRestoringScrollRef.current = Boolean(
       saved?.chunkId &&
         saved.chunkId !== "novel-top-anchor" &&
-        saved.chunkId !== "chunk-0"
+        saved.chunkId !== "novel-header-content"
     )
     hasRestoredScrollRef.current = false
-    if (saved?.chunkId && saved.chunkId !== "chunk-0") {
+    if (saved?.chunkId && saved.chunkId !== "novel-top-anchor") {
       scrollPos.setValue(saved.chunkId)
     }
     setPagerVisible(true)
@@ -497,6 +496,7 @@ export function NovelDetailView(props: { novelID: number }) {
     initialScrollChunkIdRef.current = null
     lastRecordedChunkRef.current = null
     isRestoringScrollRef.current = false
+    hasRestoredScrollRef.current = true
     scrollPos.setValue("novel-top-anchor")
     recordNovelProgress(novelID, newPage, undefined, true)
     try {
@@ -515,7 +515,7 @@ export function NovelDetailView(props: { novelID: number }) {
     })
     const saved = getNovelProgress(novelID)
     const target = saved?.chunkId
-    if (target && target !== "novel-top-anchor" && target !== "chunk-0") {
+    if (target && target !== "novel-top-anchor" && target !== "novel-header-content") {
       performScrollRestoration(target)
     }
   }, [novelID, performScrollRestoration])
@@ -526,7 +526,7 @@ export function NovelDetailView(props: { novelID: number }) {
       if (
         target &&
         target !== "novel-top-anchor" &&
-        target !== "chunk-0" &&
+        target !== "novel-header-content" &&
         !hasRestoredScrollRef.current
       ) {
         hasRestoredScrollRef.current = true
@@ -534,6 +534,7 @@ export function NovelDetailView(props: { novelID: number }) {
       } else {
         const t = setTimeout(() => {
           isRestoringScrollRef.current = false
+          hasRestoredScrollRef.current = true
         }, 200)
         return () => clearTimeout(t)
       }
@@ -764,7 +765,7 @@ export function NovelDetailView(props: { novelID: number }) {
                 setCurrentPage(saved.page)
               }
               const target = saved?.chunkId
-              if (target && target !== "novel-top-anchor" && target !== "chunk-0") {
+              if (target && target !== "novel-top-anchor" && target !== "novel-header-content") {
                 performScrollRestoration(target)
               }
             }}
@@ -789,25 +790,17 @@ export function NovelDetailView(props: { novelID: number }) {
                 const ids = (rawIds as string[]).filter(Boolean)
                 if (!ids || ids.length === 0) return
 
-                // 1. 如果顶部头部内容在视野中，说明用户处于小说开头/简介/标签区
+                // 优先查找正文分块
+                const visibleChunkId = ids.find((id) => isNovelChunkId(id))
                 const isHeaderVisible =
                   ids.includes("novel-header-content") || ids.includes("novel-top-anchor")
-                if (isHeaderVisible) {
-                  const lastChunk = lastRecordedChunkRef.current
-                  const isNearTop =
-                    !lastChunk ||
-                    lastChunk === "chunk-0" ||
-                    lastChunk === "chunk-1" ||
-                    lastChunk === "chunk-2"
-                  if (isNearTop) {
-                    lastRecordedChunkRef.current = null
-                    recordNovelProgress(novelID, currentPageRef.current, undefined)
-                  }
+
+                if (isHeaderVisible && !visibleChunkId) {
+                  lastRecordedChunkRef.current = null
+                  recordNovelProgress(novelID, currentPageRef.current, undefined)
                   return
                 }
 
-                // 2. 头部已完全滚出视野，用户已进入正文段落阅读：记录当前视野最上方的正文块
-                const visibleChunkId = ids.find((id) => isNovelChunkId(id))
                 if (visibleChunkId) {
                   lastRecordedChunkRef.current = visibleChunkId
                   recordNovelProgress(novelID, currentPageRef.current, visibleChunkId)
