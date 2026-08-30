@@ -116,6 +116,7 @@ const BLOCKED_BY_RESTRICTION_MESSAGE = "该小说被内容显示设置过滤，�
 function isNovelChunkId(id: string): boolean {
   return (
     id.startsWith("chunk-") ||
+    id.startsWith("chapter-") ||
     id.startsWith("ch-") ||
     id.startsWith("page-") ||
     id.startsWith("jump-") ||
@@ -195,7 +196,8 @@ export function NovelDetailView(props: { novelID: number }) {
   const resolvedEpisodeNumber = novel?.episode_number ?? associatedRef?.episodeNumber ?? null
 
   const performScrollRestoration = useCallback((targetChunk?: string) => {
-    const target = targetChunk ?? getNovelProgress(novelID)?.chunkId
+    const saved = getNovelProgress(novelID)
+    const target = targetChunk ?? saved?.chunkId
     if (
       !target ||
       target === "novel-top-anchor" ||
@@ -203,6 +205,7 @@ export function NovelDetailView(props: { novelID: number }) {
       target === "chunk-0"
     ) {
       isRestoringScrollRef.current = false
+      hasRestoredScrollRef.current = true
       return
     }
 
@@ -211,7 +214,7 @@ export function NovelDetailView(props: { novelID: number }) {
     isRestoringScrollRef.current = true
     scrollPos.setValue(target)
 
-    const attempts = [30, 80, 180, 350, 600, 1000]
+    const attempts = [30, 80, 160, 300, 550, 900, 1400]
     attempts.forEach((delay) => {
       setTimeout(() => {
         if (isDisappearedRef.current || isUnmountingRef.current) return
@@ -224,7 +227,8 @@ export function NovelDetailView(props: { novelID: number }) {
 
     setTimeout(() => {
       isRestoringScrollRef.current = false
-    }, 1800)
+      hasRestoredScrollRef.current = true
+    }, 1600)
   }, [novelID, scrollPos])
 
   async function load() {
@@ -772,19 +776,18 @@ export function NovelDetailView(props: { novelID: number }) {
               idType: "string",
               threshold: 0.15,
               onChanged: (rawIds) => {
-                if (isUnmountingRef.current || isDisappearedRef.current) return
-                const ids = (rawIds as string[]).filter(Boolean)
-                if (!ids || ids.length === 0) return
-
-                // 正在恢复滚动位置阶段：若目标 chunk 已经可见，说明跳转成功，解除锁定
-                if (isRestoringScrollRef.current) {
-                  const target = initialScrollChunkIdRef.current
-                  if (target && ids.includes(target)) {
-                    isRestoringScrollRef.current = false
-                    lastRecordedChunkRef.current = target
-                  }
+                if (
+                  isUnmountingRef.current ||
+                  isDisappearedRef.current ||
+                  loading ||
+                  !readerReady ||
+                  isRestoringScrollRef.current ||
+                  !hasRestoredScrollRef.current
+                ) {
                   return
                 }
+                const ids = (rawIds as string[]).filter(Boolean)
+                if (!ids || ids.length === 0) return
 
                 // 1. 如果顶部头部内容在视野中，说明用户处于小说开头/简介/标签区
                 const isHeaderVisible =
@@ -1242,7 +1245,6 @@ export function NovelDetailView(props: { novelID: number }) {
             textEmbeddedImages={textEmbeddedImages}
             onJumpToPage={handlePageChange}
             onReady={handleReaderReady}
-            onScrollToTarget={performScrollRestoration}
           />
         ) : (
           <VStack key="novel-text-empty" padding={{ horizontal: 14 }}>
