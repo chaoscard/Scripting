@@ -1,6 +1,7 @@
 import { fetchImageBinaryWithRetry, runConcurrentTasks, type ExportResult } from "./downloadHelper"
 import { getCategoryDirectory, sanitizeFileName } from "./directoryResolver"
 import { publishPreparedFile } from "../store/safeFile"
+import { htmlToPlainText } from "../ui/components/formatUtils"
 
 export interface MangaCbzOptions {
   id: number
@@ -100,6 +101,7 @@ export async function exportMangaToCbz(options: MangaCbzOptions): Promise<Export
     const targetFilePath = `${targetDir}/${outputFileName}`
 
     // 写入 ComicInfo.xml 元数据
+    const cleanDescription = description ? htmlToPlainText(description) : ""
     const missingNote = isPartial ? `\n[缺页说明] 本文件为容错导出，缺失第 ${failedPages.join(", ")} 页` : ""
     const comicInfoXml = `<?xml version="1.0" encoding="utf-8"?>
 <ComicInfo xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
@@ -107,7 +109,7 @@ export async function exportMangaToCbz(options: MangaCbzOptions): Promise<Export
   ${seriesTitle ? `<Series>${escapeXml(seriesTitle)}</Series>` : ""}
   ${seriesNumber != null ? `<Number>${escapeXml(String(seriesNumber))}</Number>` : ""}
   <Writer>${escapeXml(author)}</Writer>
-  ${description || isPartial ? `<Summary>${escapeXml((description || "") + missingNote)}</Summary>` : ""}
+  ${cleanDescription || isPartial ? `<Summary>${escapeXml((cleanDescription || "") + missingNote)}</Summary>` : ""}
   <PageCount>${downloadedCount}</PageCount>
   <Manga>YesAndRightToLeft</Manga>
   ${tags.length > 0 ? `<Genre>${escapeXml(tags.join(", "))}</Genre>` : ""}

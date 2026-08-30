@@ -456,7 +456,8 @@ function NovelUploadedImageItemView(props: {
         <CachedImage
           url={url}
           priority={-1000}
-          frame={{ maxWidth: 360, maxHeight: 360 }}
+          useIntrinsicAspectRatio={true}
+          contentMode="fit"
           cornerRadius={14}
         />
       </VStack>
@@ -546,6 +547,8 @@ function NovelPixivImageItemView(props: {
   const pageIdx = Math.max(0, (page || 1) - 1)
   const highResUrl = imageUrlOf(illust, pageIdx, "large")
   const previewUrl = pageThumbUrlOf(illust, pageIdx)
+  const pageAspect =
+    illust.width && illust.height ? illust.width / illust.height : undefined
 
   return (
     <VStack
@@ -602,7 +605,9 @@ function NovelPixivImageItemView(props: {
               url={highResUrl || previewUrl}
               previewUrl={previewUrl ?? undefined}
               priority={-1000}
-              frame={{ maxWidth: 320, maxHeight: 320 }}
+              aspectRatioValue={pageAspect}
+              useIntrinsicAspectRatio={true}
+              contentMode="fit"
               cornerRadius={10}
             />
           ) : null}

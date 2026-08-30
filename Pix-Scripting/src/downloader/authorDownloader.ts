@@ -636,8 +636,19 @@ export async function exportAuthorNovels(
           const imageMap: Record<string, string> = {}
           if (viewer.textEmbeddedImages) {
             Object.entries(viewer.textEmbeddedImages).forEach(([key, imgObj]) => {
-              const url = imgObj.urls.original || imgObj.urls["1200x1200"] || imgObj.urls["480mw"]
-              if (url) imageMap[key] = url
+              const url =
+                imgObj?.urls?.original ||
+                imgObj?.urls?.["1200x1200"] ||
+                imgObj?.urls?.["480mw"] ||
+                (imgObj as any)?.urls?.large ||
+                (imgObj as any)?.urls?.medium ||
+                (imgObj as any)?.url
+              if (url) {
+                imageMap[key] = url
+                if (imgObj.novelImageId && imgObj.novelImageId !== key) {
+                  imageMap[imgObj.novelImageId] = url
+                }
+              }
             })
           }
 
@@ -687,8 +698,19 @@ export async function exportAuthorNovels(
         const imageMap: Record<string, string> = {}
         if (viewer.textEmbeddedImages) {
           Object.entries(viewer.textEmbeddedImages).forEach(([key, imgObj]) => {
-            const url = imgObj.urls.original || imgObj.urls["1200x1200"] || imgObj.urls["480mw"]
-            if (url) imageMap[key] = url
+            const url =
+              imgObj?.urls?.original ||
+              imgObj?.urls?.["1200x1200"] ||
+              imgObj?.urls?.["480mw"] ||
+              (imgObj as any)?.urls?.large ||
+              (imgObj as any)?.urls?.medium ||
+              (imgObj as any)?.url
+            if (url) {
+              imageMap[key] = url
+              if (imgObj.novelImageId && imgObj.novelImageId !== key) {
+                imageMap[imgObj.novelImageId] = url
+              }
+            }
           })
         }
 

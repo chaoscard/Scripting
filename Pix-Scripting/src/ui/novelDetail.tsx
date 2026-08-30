@@ -643,8 +643,19 @@ export function NovelDetailView(props: { novelID: number }) {
       const imagesMap: Record<string, string> = {}
       if (textEmbeddedImages) {
         Object.entries(textEmbeddedImages).forEach(([key, imgObj]) => {
-          const url = imgObj?.urls?.original || imgObj?.urls?.["1200x1200"] || imgObj?.urls?.["480mw"]
-          if (url) imagesMap[key] = url
+          const url =
+            imgObj?.urls?.original ||
+            imgObj?.urls?.["1200x1200"] ||
+            imgObj?.urls?.["480mw"] ||
+            (imgObj as any)?.urls?.large ||
+            (imgObj as any)?.urls?.medium ||
+            (imgObj as any)?.url
+          if (url) {
+            imagesMap[key] = url
+            if (imgObj.novelImageId && imgObj.novelImageId !== key) {
+              imagesMap[imgObj.novelImageId] = url
+            }
+          }
         })
       }
 
@@ -657,8 +668,19 @@ export function NovelDetailView(props: { novelID: number }) {
           if (viewer.coverUrl) cover = viewer.coverUrl
           if (viewer.textEmbeddedImages) {
             Object.entries(viewer.textEmbeddedImages).forEach(([key, imgObj]) => {
-              const url = imgObj?.urls?.original || imgObj?.urls?.["1200x1200"] || imgObj?.urls?.["480mw"]
-              if (url) imagesMap[key] = url
+              const url =
+                imgObj?.urls?.original ||
+                imgObj?.urls?.["1200x1200"] ||
+                imgObj?.urls?.["480mw"] ||
+                (imgObj as any)?.urls?.large ||
+                (imgObj as any)?.urls?.medium ||
+                (imgObj as any)?.url
+              if (url) {
+                imagesMap[key] = url
+                if (imgObj.novelImageId && imgObj.novelImageId !== key) {
+                  imagesMap[imgObj.novelImageId] = url
+                }
+              }
             })
           }
         }
