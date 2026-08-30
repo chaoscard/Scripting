@@ -10,12 +10,14 @@ import {
   loadCustomAIProfile,
   isCustomAIConfigured,
   getEffectiveImageGenKey,
+  getEffectiveImageGenEndpoint,
   isScriptingPro,
 } from "../store/customAI"
 import {
   streamCustomChat,
   requestCustomImageGen,
   createLinkedAbortController,
+  resolveGeneralAIConfigRoute,
   type AdapterMessage,
   type AdapterMessageContentPart,
   type SignalLike,
@@ -133,7 +135,17 @@ export function splitNovelChunks(text: string, targetSize = 1800): string[] {
         const sentences = trimmed.split(/(?<=[。！？\n])/)
         let temp = ""
         for (const sent of sentences) {
-          if (temp.length + sent.length <= targetSize) {
+          if (sent.length > targetSize) {
+            if (temp) {
+              chunks.push(temp)
+              temp = ""
+            }
+            for (let offset = 0; offset < sent.length; offset += targetSize) {
+              const piece = sent.slice(offset, offset + targetSize)
+              if (piece.length === targetSize) chunks.push(piece)
+              else temp = piece
+            }
+          } else if (temp.length + sent.length <= targetSize) {
             temp += sent
           } else {
             if (temp) chunks.push(temp)
@@ -263,13 +275,18 @@ async function executeUniversalAI(params: {
         onImage: (img) => {
           options.onImage?.(img)
         },
+        requestImageOutput: Boolean(options.onImage),
       })
 
       const finalClean = contentFilter.getFinalCleanText() || stripThinkingTags(res.text)
+      if (!finalClean && res.images.length === 0) {
+        throw new Error("AI 模型未返回可用正文或图片")
+      }
       return finalClean
     }
 
     if (isScriptingPro() && typeof Assistant !== "undefined" && Boolean(Assistant.isAvailable)) {
+      let receivedNativeImage = false
       let reasoningOutput = ""
 
       const assistantMessages = messages.map((m) => {
@@ -306,6 +323,7 @@ async function executeUniversalAI(params: {
           reasoningOutput += chunk.content
           options.onReasoning?.(chunk.content)
         } else if (chunk.type === "image" && chunk.content) {
+          receivedNativeImage = true
           options.onImage?.({
             base64: chunk.content.data,
             mediaType: chunk.content.mediaType || "image/png",
@@ -314,6 +332,9 @@ async function executeUniversalAI(params: {
       }
 
       const finalClean = contentFilter.getFinalCleanText()
+      if (!finalClean && !receivedNativeImage) {
+        throw new Error("Scripting 原生 AI 未返回可用正文或图片")
+      }
       return finalClean
     }
 
@@ -563,31 +584,81 @@ export interface OCRBubble {
   translation: string
 }
 
+function isOCRBubbleArray(value: unknown[]): boolean {
+  return value.some((item: any) => item && typeof item === "object" && Array.isArray(item.box_2d))
+}
+
+function parseJSONArrayFromText(text: string): unknown[] | null {
+  const cleanText = stripThinkingTags(text).trim()
+  const fenced = cleanText.match(/```(?:json)?\s*([\s\S]*?)\s*```/i)
+  const candidates = fenced?.[1] ? [fenced[1].trim(), cleanText] : [cleanText]
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate)
+      if (Array.isArray(parsed) && isOCRBubbleArray(parsed)) return parsed
+    } catch {}
+
+    let searchFrom = 0
+    while (searchFrom < candidate.length) {
+      const start = candidate.indexOf("[", searchFrom)
+      if (start < 0) break
+      let depth = 0
+      let inString = false
+      let escaped = false
+      for (let i = start; i < candidate.length; i++) {
+        const char = candidate[i]
+        if (inString) {
+          if (escaped) escaped = false
+          else if (char === "\\") escaped = true
+          else if (char === '"') inString = false
+          continue
+        }
+        if (char === '"') inString = true
+        else if (char === "[") depth++
+        else if (char === "]") {
+          depth--
+          if (depth === 0) {
+            try {
+              const parsed = JSON.parse(candidate.slice(start, i + 1))
+              if (Array.isArray(parsed) && isOCRBubbleArray(parsed)) return parsed
+            } catch {}
+            break
+          }
+        }
+      }
+      searchFrom = start + 1
+    }
+  }
+  return null
+}
+
 export function extractOCRBubbles(text: string): OCRBubble[] {
   if (!text) return []
-  try {
-    const cleanText = stripThinkingTags(text)
-    const match = (cleanText || text).match(/```(?:json)?\s*(\[\s*\{[\s\S]*?\}\s*\])\s*```/)
-    if (match && match[1]) {
-      const parsed = JSON.parse(match[1])
-      if (Array.isArray(parsed)) {
-        return parsed.filter(
-          (b) =>
-            Array.isArray(b?.box_2d) &&
-            b.box_2d.length === 4 &&
-            typeof b?.translation === "string" &&
-            b.translation.trim().length > 0
-        )
-      }
+  const parsed = parseJSONArrayFromText(text)
+  if (!parsed) return []
+
+  return parsed.filter((b: any): b is OCRBubble => {
+    if (
+      !Array.isArray(b?.box_2d) ||
+      b.box_2d.length !== 4 ||
+      !b.box_2d.every((value: any) => typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1000) ||
+      typeof b?.translation !== "string" ||
+      !b.translation.trim()
+    ) {
+      return false
     }
-  } catch {}
-  return []
+    const [ymin, xmin, ymax, xmax] = b.box_2d
+    return ymin < ymax && xmin < xmax
+  })
 }
 
 export function cleanOCRDisplayMarkdown(text: string): string {
   if (!text) return ""
   const cleanText = stripThinkingTags(text)
-  return cleanText.replace(/```(?:json)?\s*\[\s*\{[\s\S]*?\}\s*\]\s*```/g, "").trim()
+  return cleanText.replace(/```(?:json)?\s*[\s\S]*?\s*```/gi, (block) => {
+    return parseJSONArrayFromText(block) ? "" : block
+  }).trim()
 }
 
 export interface StreamVisionTranslateOptions extends StreamTranslateOptions {
@@ -647,6 +718,14 @@ export async function streamVisionTranslateImage(
     throw new Error(getAIUnavailableErrorMessage())
   }
 
+  if (isCustomAIConfigured()) {
+    const profile = loadCustomAIProfile()
+    const routedGeneral = resolveGeneralAIConfigRoute(profile.general)
+    if (!routedGeneral.supportsVision) {
+      throw new Error("当前通用模型未启用视觉识别，请选择支持图片输入的模型并打开“支持视觉识别”")
+    }
+  }
+
   const systemPrompt =
     "你是一位卓越的二次元漫画汉化组翻译与视觉定位专家。请仔细观察用户提供的插画/漫画页面（支持日文、英文、韩文等多种语言）：\n" +
     "1. 识别画面中所有的对话气泡（竖排与横排）、分镜旁白框、手写小字和拟声词。\n" +
@@ -668,6 +747,7 @@ export async function streamVisionTranslateImage(
     "- **原文**：原文台词\n" +
     "- **译文**：中文翻译"
 
+  let streamedOCRText = ""
   let lastParsedJsonBlock = ""
   let hasParsedClosedJson = false
 
@@ -693,14 +773,15 @@ export async function streamVisionTranslateImage(
     ],
     options: {
       onChunk: (text) => {
+        streamedOCRText = text
         options.onChunk(text)
 
         if (options.onBubblesParsed && !hasParsedClosedJson) {
-          const jsonMatch = text.match(/```(?:json)?\s*(\[\s*\{[\s\S]*?\}\s*\])\s*```/)
-          if (jsonMatch && jsonMatch[1] && jsonMatch[1] !== lastParsedJsonBlock) {
-            lastParsedJsonBlock = jsonMatch[1]
-            const bubbles = extractOCRBubbles(text)
-            if (bubbles.length > 0) {
+          const bubbles = extractOCRBubbles(streamedOCRText)
+          if (bubbles.length > 0) {
+            const parsedBlock = JSON.stringify(bubbles)
+            if (parsedBlock !== lastParsedJsonBlock) {
+              lastParsedJsonBlock = parsedBlock
               hasParsedClosedJson = true
               options.onBubblesParsed(bubbles)
             }
@@ -711,8 +792,16 @@ export async function streamVisionTranslateImage(
     },
   })
 
-  if (options.onBubblesParsed && !hasParsedClosedJson) {
-    options.onBubblesParsed(extractOCRBubbles(fullOutput))
+  if (!fullOutput.trim()) {
+    throw new Error("视觉模型未返回 OCR 文本，请确认所选模型支持图片输入")
+  }
+
+  const bubbles = extractOCRBubbles(fullOutput)
+  if (!hasParsedClosedJson && options.onBubblesParsed) {
+    options.onBubblesParsed(bubbles)
+  }
+  if (bubbles.length === 0) {
+    throw new Error("视觉模型未返回可用的气泡坐标 JSON，请检查模型是否支持视觉识别或结构化输出")
   }
 
   return fullOutput
@@ -766,42 +855,56 @@ export async function streamGenerateTranslatedImage(
     throw new Error("AI 任务已取消")
   }
 
-  if (!isAIAvailable()) {
+  const profile = loadCustomAIProfile()
+  const imageGenKey = getEffectiveImageGenKey(profile)
+  const hasCustomImageGen = Boolean(
+    profile.enabled &&
+    profile.imageGen.enabled &&
+    getEffectiveImageGenEndpoint(profile.imageGen) &&
+    profile.imageGen.model &&
+    (profile.general.noKeyRequired || imageGenKey)
+  )
+  if (profile.enabled && profile.imageGen.enabled && !hasCustomImageGen) {
+    throw new Error("独立生图模型配置不完整，请检查模型名称、端点和 API 密钥")
+  }
+  if (!isAIAvailable() && !hasCustomImageGen) {
     throw new Error(getAIUnavailableErrorMessage())
   }
 
-  if (isCustomAIConfigured()) {
-    const profile = loadCustomAIProfile()
-    if (profile.imageGen.enabled) {
-      options.onChunk("正在使用自定义生图模型生成汉化图片...\n")
-      const effectiveKey = getEffectiveImageGenKey(profile)
-      const prompt =
-        "Fully translate and typeset all comic speech bubbles and text into Simplified Chinese, keeping original art, screentones, and style intact."
-      
-      const { controller, cleanup } = createLinkedAbortController(options.signal)
-      globalAITaskControllers.add(controller)
+  if (hasCustomImageGen) {
+    options.onChunk("正在使用自定义生图模型生成汉化图片...\n")
+    const effectiveKey = imageGenKey
+    const prompt =
+      "Fully translate and typeset all comic speech bubbles and text into Simplified Chinese, keeping original art, screentones, and style intact."
 
-      try {
-        const genResult = await requestCustomImageGen(profile.imageGen, effectiveKey, {
-          prompt,
-          referenceImageBase64: base64,
-          signal: controller.signal,
-        })
+    const { controller, cleanup } = createLinkedAbortController(options.signal)
+    globalAITaskControllers.add(controller)
 
-        if (genResult.base64 && options.onImageGenerated) {
-          options.onImageGenerated({
-            base64: genResult.base64,
-            mediaType: genResult.mediaType || "image/png",
-          })
-        }
+    try {
+      const genResult = await requestCustomImageGen(profile.imageGen, effectiveKey, {
+        prompt,
+        referenceImageBase64: base64,
+        referenceImageMimeType: "image/jpeg",
+        signal: controller.signal,
+      })
 
-        const finishMsg = "汉化生图已完成！"
-        options.onChunk(finishMsg)
-        return finishMsg
-      } finally {
-        globalAITaskControllers.delete(controller)
-        cleanup()
+      if (!genResult.base64) {
+        throw new Error("自定义生图模型未返回有效图片")
       }
+
+      if (options.onImageGenerated) {
+        options.onImageGenerated({
+          base64: genResult.base64,
+          mediaType: genResult.mediaType || "image/png",
+        })
+      }
+
+      const finishMsg = "汉化生图已完成！"
+      options.onChunk(finishMsg)
+      return finishMsg
+    } finally {
+      globalAITaskControllers.delete(controller)
+      cleanup()
     }
   }
 
@@ -822,7 +925,7 @@ export async function streamGenerateTranslatedImage(
 
   const emittedImageHashes = new Set<string>()
 
-  return executeUniversalAI({
+  const generatedResult = await executeUniversalAI({
     systemPrompt,
     messages: [
       {
@@ -862,4 +965,9 @@ export async function streamGenerateTranslatedImage(
       signal: options.signal,
     },
   })
+
+  if (emittedImageHashes.size === 0) {
+    throw new Error("当前模型未返回图片，请配置支持图片输出的独立生图模型")
+  }
+  return generatedResult
 }

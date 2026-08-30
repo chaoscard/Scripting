@@ -6,12 +6,19 @@
  * - Google Gemini: GET /v1beta/models?key={apiKey}
  */
 import { fetch } from "scripting"
-import { AI_PRESETS, type GeneralAIProtocol } from "../../store/customAI"
+import { AI_PRESETS, cleanAIEndpoint, type GeneralAIProtocol } from "../../store/customAI"
+
+function usesGoogleAPIKeyQuery(endpoint: string): boolean {
+  return /generativelanguage\.googleapis\.com/i.test(endpoint)
+}
 
 export interface RemoteModelItem {
   id: string
   name?: string
   description?: string
+  protocol?: GeneralAIProtocol
+  endpoint?: string
+  supportsVision?: boolean
 }
 
 export interface FetchModelsResult {
@@ -126,12 +133,82 @@ export function isImageGenModel(itemMeta?: any): boolean {
   return false
 }
 
-function normalizeModelsEndpoint(protocol: GeneralAIProtocol, rawEndpoint: string, apiKey: string, presetId?: string, noKeyRequired?: boolean): string {
-  let ep = (rawEndpoint || "").trim().replace(/\/+$/, "")
+function stripProviderEndpointSuffix(rawEndpoint: string, presetId?: string): string {
+  return cleanAIEndpoint(rawEndpoint, presetId)
+}
+
+function inferPresetModelRoute(presetId: string | undefined, modelId: string): {
+  protocol?: GeneralAIProtocol
+  endpointSuffix?: string
+  supportsVision?: boolean
+} {
+  const model = modelId.toLowerCase().replace(/^models\//, "")
+  if (presetId !== "opencode-zen" && presetId !== "opencode-go") return {}
+
+  if (model.startsWith("claude-")) {
+    return { protocol: "anthropic", endpointSuffix: "/messages", supportsVision: true }
+  }
+  if (model.startsWith("gemini-")) {
+    return { protocol: "gemini", endpointSuffix: `/models/${encodeURIComponent(model)}`, supportsVision: true }
+  }
+  if (
+    model.startsWith("deepseek-") ||
+    model.startsWith("qwen") ||
+    model.startsWith("minimax-") ||
+    model.startsWith("glm-") ||
+    model.startsWith("kimi-") ||
+    model.startsWith("mimo-") ||
+    model.startsWith("ling-") ||
+    model.startsWith("nemotron-") ||
+    model.startsWith("hy3") ||
+    model.startsWith("hy4") ||
+    model.startsWith("hunyuan") ||
+    model.startsWith("doubao") ||
+    model.startsWith("step") ||
+    model.startsWith("yi-") ||
+    model.startsWith("longcat-") ||
+    model.startsWith("big-pickle")
+  ) {
+    return { protocol: "openai-chat", endpointSuffix: "/chat/completions", supportsVision: /vision|multimodal|(?:^|[-_])vl(?:[-_]|$)|omni/i.test(model) }
+  }
+  if (
+    model.startsWith("gpt-") ||
+    model.startsWith("o1") ||
+    model.startsWith("o3") ||
+    model.startsWith("o4") ||
+    model.startsWith("chatgpt-")
+  ) {
+    return { protocol: "openai-responses", endpointSuffix: "/responses", supportsVision: true }
+  }
+  return { protocol: "openai-chat", endpointSuffix: "/chat/completions", supportsVision: /vision|multimodal|(?:^|[-_])vl(?:[-_]|$)|omni/i.test(model) }
+}
+
+export function inferPresetModelProtocol(presetId: string | undefined, modelId: string): GeneralAIProtocol | undefined {
+  return inferPresetModelRoute(presetId, modelId).protocol
+}
+
+export function inferPresetModelSupportsVision(presetId: string | undefined, modelId: string): boolean | undefined {
+  return inferPresetModelRoute(presetId, modelId).supportsVision
+}
+
+export function inferPresetModelEndpoint(presetId: string | undefined, baseEndpoint: string, modelId: string): string | undefined {
+  const base = cleanAIEndpoint(baseEndpoint, presetId)
+  if (!base) return undefined
+  return base
+}
+
+export function normalizeModelsEndpoint(
+  protocol: GeneralAIProtocol,
+  rawEndpoint: string,
+  apiKey: string,
+  presetId?: string,
+  noKeyRequired?: boolean
+): string {
+  let ep = cleanAIEndpoint(rawEndpoint, presetId)
   if (!ep) {
     if (presetId) {
       const p = AI_PRESETS.find((item) => item.id === presetId)
-      if (p) ep = p.defaultEndpoint
+      if (p) ep = cleanAIEndpoint(p.defaultEndpoint, presetId)
     }
     if (!ep) {
       if (protocol === "gemini") ep = "https://generativelanguage.googleapis.com"
@@ -140,27 +217,26 @@ function normalizeModelsEndpoint(protocol: GeneralAIProtocol, rawEndpoint: strin
     }
   }
 
-  if (protocol === "gemini") {
-    if (ep.includes("/v1beta/models") || ep.includes("/v1/models")) {
-      if (!apiKey || noKeyRequired) return ep
-      const sep = ep.includes("?") ? "&" : "?"
-      return ep.includes("key=") ? ep : `${ep}${sep}key=${encodeURIComponent(apiKey)}`
-    }
-    if (!ep.includes("/v1beta") && !ep.includes("/v1")) {
-      ep = `${ep}/v1beta`
-    }
-    if (!apiKey || noKeyRequired) return `${ep}/models`
-    return `${ep}/models?key=${encodeURIComponent(apiKey)}`
-  }
-
-  if (ep.endsWith("/models")) {
-    return ep
-  }
-  if (ep.endsWith("/v1")) {
+  if (presetId === "opencode-zen" || presetId === "opencode-go" || /opencode\.ai\/zen/i.test(ep)) {
+    if (!ep.endsWith("/v1")) ep += "/v1"
     return `${ep}/models`
   }
-  if (ep.endsWith("/responses") || ep.endsWith("/chat/completions") || ep.endsWith("/messages")) {
-    ep = ep.replace(/\/(responses|chat\/completions|messages)$/, "")
+
+  if (protocol === "gemini") {
+    if (!ep.includes("/v1beta") && !ep.includes("/v1")) {
+      if (rawEndpoint && rawEndpoint.includes("/v1") && !rawEndpoint.includes("/v1beta")) {
+        ep += "/v1"
+      } else {
+        ep += "/v1beta"
+      }
+    }
+    if (!ep.endsWith("/models")) ep += "/models"
+    if (!apiKey || noKeyRequired || !usesGoogleAPIKeyQuery(rawEndpoint || ep)) return ep
+    return `${ep}?key=${encodeURIComponent(apiKey)}`
+  }
+
+  if (ep.endsWith("/api") && ep.includes("openrouter.ai")) {
+    return `${ep}/v1/models`
   }
   if (!ep.endsWith("/v1") && !ep.endsWith("/api") && !ep.endsWith("/anthropic")) {
     ep = `${ep}/v1`
@@ -211,7 +287,10 @@ export async function fetchRemoteModelList(
       if (protocol === "anthropic") {
         headers["x-api-key"] = apiKey
         headers["anthropic-version"] = "2023-06-01"
-      } else if (protocol !== "gemini") {
+        if (presetId === "opencode-zen" || presetId === "opencode-go") {
+          headers["Authorization"] = `Bearer ${apiKey}`
+        }
+      } else if (protocol !== "gemini" || !usesGoogleAPIKeyQuery(effectiveEndpoint)) {
         headers["Authorization"] = `Bearer ${apiKey}`
         if (effectiveEndpoint.includes("openrouter.ai")) {
           headers["HTTP-Referer"] = "https://github.com/Pix-Scripting"
@@ -269,11 +348,22 @@ export async function fetchRemoteModelList(
       const cleanId = id.replace(/^models\//, "")
       const displayName = item?.displayName || item?.name || cleanId
       const description = item?.description || ""
+      const inferredRoute = inferPresetModelRoute(presetId, cleanId)
+      const metadataVision = isVisionCapableModel(item)
 
       parsedModels.push({
         id: cleanId,
         name: displayName,
         description,
+        protocol: inferredRoute.protocol,
+        endpoint: cleanAIEndpoint(effectiveEndpoint, presetId),
+        // `false` from a model list usually means "metadata absent", not
+        // "this model cannot see images". Preserve the user's current toggle
+        // unless the provider gives a positive capability signal.
+        supportsVision:
+          metadataVision || inferredRoute.supportsVision === true
+            ? true
+            : undefined,
       })
     }
 

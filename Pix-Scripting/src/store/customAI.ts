@@ -66,6 +66,52 @@ export interface AIPreset {
   apiKeyUrl?: string
 }
 
+/**
+ * 规范化与清理 AI API 端点地址，剥离多余的操作后缀与请求路径，
+ * 确保存储与展示的始终是干净的 Base URL（如 https://opencode.ai/zen/go）
+ */
+export function cleanAIEndpoint(rawEndpoint?: string, presetId?: string): string {
+  let ep = (rawEndpoint || "").trim()
+  if (!ep) return ""
+
+  // 1. 剥离 query 参数与 hash
+  ep = ep.replace(/[?#].*$/, "")
+
+  // 2. 剥离 Gemini/Google RPC 方法后缀 (:streamGenerateContent, :generateContent, :predict)
+  ep = ep.replace(/:(?:streamGenerateContent|generateContent|predict)$/, "")
+
+  // 3. 循环剥离协议与模型路由后缀
+  let prev = ""
+  while (prev !== ep) {
+    prev = ep
+    ep = ep
+      .replace(/\/(?:chat\/completions|responses|messages|models\/[^/:]+|models|images\/(?:generations|edits)|images)$/, "")
+      .replace(/\/+$/, "")
+  }
+
+  // 4. 对 OpenCode 系列预设及 opencode.ai 域名，剥离末尾残留的 /v1 或 /v1beta
+  if (
+    presetId === "opencode-zen" ||
+    presetId === "opencode-go" ||
+    /opencode\.ai\/zen(?:\/go)?\/(?:v1|v1beta)$/i.test(ep)
+  ) {
+    ep = ep.replace(/\/(?:v1|v1beta)$/, "")
+  }
+
+  // 5. 若端点匹配对应预设的 defaultEndpoint（含 /v1 等），自动标准化为纯净的预设默认端点
+  if (presetId) {
+    const presetMeta = AI_PRESETS.find((p) => p.id === presetId)
+    if (presetMeta?.defaultEndpoint) {
+      const cleanDefault = presetMeta.defaultEndpoint.replace(/\/+$/, "")
+      if (ep === cleanDefault || ep === `${cleanDefault}/v1` || ep === `${cleanDefault}/v1beta`) {
+        ep = cleanDefault
+      }
+    }
+  }
+
+  return ep.replace(/\/+$/, "")
+}
+
 export const AI_PRESETS: AIPreset[] = [
   {
     id: "openai",
@@ -241,7 +287,11 @@ function validateAndSanitizeProfile(raw: unknown): CustomAIProfile {
   } else if (preset === "opencode") {
     preset = "opencode-zen"
   }
-  const rawEndpoint = typeof generalRaw.endpoint === "string" ? generalRaw.endpoint.trim() : ""
+  let rawEndpoint = typeof generalRaw.endpoint === "string" ? cleanAIEndpoint(generalRaw.endpoint, preset) : ""
+  const presetMeta = preset ? AI_PRESETS.find((p) => p.id === preset) : undefined
+  if (presetMeta && presetMeta.defaultEndpoint && rawEndpoint === presetMeta.defaultEndpoint) {
+    rawEndpoint = ""
+  }
 
   const general: GeneralAIConfig = {
     preset,
@@ -261,10 +311,15 @@ function validateAndSanitizeProfile(raw: unknown): CustomAIProfile {
     for (const [k, v] of Object.entries(presetConfigsRaw)) {
       if (v && typeof v === "object") {
         const item = v as Record<string, any>
+        let itemEndpoint = typeof item.endpoint === "string" ? cleanAIEndpoint(item.endpoint, k) : ""
+        const itemPresetMeta = AI_PRESETS.find((p) => p.id === k)
+        if (itemPresetMeta && itemPresetMeta.defaultEndpoint && itemEndpoint === itemPresetMeta.defaultEndpoint) {
+          itemEndpoint = ""
+        }
         presetConfigs[k] = {
           apiKey: typeof item.apiKey === "string" ? item.apiKey.trim() : "",
           model: typeof item.model === "string" ? item.model.trim() : "",
-          endpoint: typeof item.endpoint === "string" ? item.endpoint.trim() : "",
+          endpoint: itemEndpoint,
           protocol: item.protocol,
           supportsVision: typeof item.supportsVision === "boolean" ? item.supportsVision : undefined,
           noKeyRequired: typeof item.noKeyRequired === "boolean" ? item.noKeyRequired : undefined,
@@ -306,7 +361,7 @@ function validateAndSanitizeProfile(raw: unknown): CustomAIProfile {
   const imageGen: ImageGenAIConfig = {
     enabled: Boolean(imageRaw.enabled),
     protocol: imageProtocol,
-    endpoint: typeof imageRaw.endpoint === "string" ? imageRaw.endpoint.trim() : "",
+    endpoint: typeof imageRaw.endpoint === "string" ? cleanAIEndpoint(imageRaw.endpoint) : "",
     model: typeof imageRaw.model === "string" ? imageRaw.model.trim() : "",
     apiKey: typeof imageRaw.apiKey === "string" ? imageRaw.apiKey.trim() : "",
     reuseGeneralKey: imageRaw.reuseGeneralKey !== false,
@@ -463,7 +518,7 @@ export function switchCustomAIPreset(newPresetId: string): CustomAIProfile {
   const savedTarget = presetConfigs[newPresetId] || {}
 
   const targetProtocol: GeneralAIProtocol =
-    savedTarget.protocol || targetPresetMeta?.protocol || "openai-chat"
+    savedTarget.protocol || targetPresetMeta?.protocol || "openai-responses"
 
   const targetSupportsVision =
     typeof savedTarget.supportsVision === "boolean"
@@ -543,7 +598,7 @@ export function isScriptingPro(): boolean {
  * 获取通用模型的有效端点（若未填写自定义端点，则自动回退到预设或协议默认端点）
  */
 export function getEffectiveGeneralEndpoint(general: GeneralAIConfig): string {
-  const raw = (general.endpoint || "").trim()
+  const raw = cleanAIEndpoint(general.endpoint, general.preset)
   if (raw) return raw
   if (general.preset === "custom") return ""
   if (general.preset) {
@@ -561,7 +616,7 @@ export function getEffectiveGeneralEndpoint(general: GeneralAIConfig): string {
  * 获取生图模型的有效端点（若未填写，则自动回退到默认端点）
  */
 export function getEffectiveImageGenEndpoint(imageGen: ImageGenAIConfig): string {
-  const raw = (imageGen.endpoint || "").trim()
+  const raw = cleanAIEndpoint(imageGen.endpoint)
   if (raw) return raw
   if (imageGen.protocol === "gemini-imagen") return "https://generativelanguage.googleapis.com"
   return "https://api.openai.com"
@@ -572,6 +627,7 @@ export function getEffectiveImageGenEndpoint(imageGen: ImageGenAIConfig): string
  */
 export function isCustomAIConfigured(): boolean {
   const profile = loadCustomAIProfile()
+  if (!profile.enabled) return false
   const gen = profile.general
   const effectiveEndpoint = getEffectiveGeneralEndpoint(gen)
   const hasKey = gen.noKeyRequired || Boolean(gen.apiKey)

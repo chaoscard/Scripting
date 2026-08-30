@@ -4,21 +4,27 @@
  * - 官方端点: https://api.anthropic.com/v1/messages
  */
 import { fetch } from "scripting"
-import { getEffectiveGeneralEndpoint, type GeneralAIConfig } from "../../store/customAI"
+import { cleanAIEndpoint, getEffectiveGeneralEndpoint, type GeneralAIConfig } from "../../store/customAI"
 import type { AdapterRequest, AdapterResponse } from "./types"
 import { createLinkedAbortController, parseSSEStream } from "./sseParser"
+import { parseAnthropicPayload } from "./responseParsers"
 
 export function normalizeAnthropicEndpoint(rawEndpoint: string): string {
-  let ep = (rawEndpoint || "").trim().replace(/\/+$/, "")
+  let ep = cleanAIEndpoint(rawEndpoint)
   if (!ep) ep = "https://api.anthropic.com"
 
-  if (ep.endsWith("/messages")) {
-    return ep
-  }
   if (ep.endsWith("/v1")) {
     return `${ep}/messages`
   }
   return `${ep}/v1/messages`
+}
+
+function claudeRejectsTemperature(model: string): boolean {
+  const match = model.toLowerCase().match(/claude[^0-9]*(\d+)(?:[-.](\d+))?/)
+  if (!match) return false
+  const major = Number(match[1])
+  const minor = Number(match[2] || 0)
+  return major > 4 || (major === 4 && minor >= 6)
 }
 
 export async function requestAnthropic(
@@ -63,6 +69,10 @@ export async function requestAnthropic(
     }
   }
 
+  if (request.requestImageOutput) {
+    throw new Error("Anthropic Messages API 不支持图片输出，请配置独立生图模型")
+  }
+
   const payload: Record<string, any> = {
     model: config.model,
     messages,
@@ -74,10 +84,12 @@ export async function requestAnthropic(
     payload.system = request.systemPrompt
   }
 
-  if (typeof request.temperature === "number") {
-    payload.temperature = request.temperature
-  } else if (typeof config.temperature === "number") {
-    payload.temperature = config.temperature
+  if (!claudeRejectsTemperature(config.model)) {
+    if (typeof request.temperature === "number") {
+      payload.temperature = request.temperature
+    } else if (typeof config.temperature === "number") {
+      payload.temperature = config.temperature
+    }
   }
 
   const headers: Record<string, string> = {
@@ -86,9 +98,12 @@ export async function requestAnthropic(
   }
   if (config.apiKey && !config.noKeyRequired) {
     headers["x-api-key"] = config.apiKey
+    if (effectiveEndpoint.includes("opencode.ai")) {
+      headers["Authorization"] = `Bearer ${config.apiKey}`
+    }
   }
 
-  const { controller, cleanup } = createLinkedAbortController(request.signal)
+  const { controller, cleanup } = createLinkedAbortController(request.signal, 600_000)
 
   try {
     const res = await fetch(url, {
@@ -111,34 +126,41 @@ export async function requestAnthropic(
 
     let fullText = ""
     let fullReasoning = ""
+    let protocolError = ""
 
     await parseSSEStream(
       res,
       (msg) => {
         if (!msg.data || msg.data === "[DONE]") return true
-
         try {
-          const json = JSON.parse(msg.data)
-          const eventType = msg.event || json.type
-
-          if (eventType === "message_stop") {
+          const parsed = parseAnthropicPayload(JSON.parse(msg.data), msg.event)
+          if (parsed.error) {
+            protocolError = parsed.error
             return true
           }
-
-          if (eventType === "content_block_delta") {
-            const delta = json.delta
-            if (delta?.type === "text_delta" && delta.text) {
-              fullText += delta.text
-              request.onChunk?.(delta.text)
-            } else if (delta?.type === "thinking_delta" && delta.thinking) {
-              fullReasoning += delta.thinking
-              request.onReasoning?.(delta.thinking)
-            }
+          if (parsed.text) {
+            fullText += parsed.text
+            request.onChunk?.(parsed.text)
           }
-        } catch (e) {}
+          if (parsed.reasoning) {
+            fullReasoning += parsed.reasoning
+            request.onReasoning?.(parsed.reasoning)
+          }
+          return parsed.done || undefined
+        } catch {
+          protocolError = "Anthropic 返回了无法解析的响应数据"
+          return true
+        }
       },
       controller.signal
     )
+
+    if (protocolError) {
+      throw new Error(`Anthropic 请求失败: ${protocolError}`)
+    }
+    if (!fullText.trim() && !fullReasoning.trim()) {
+      throw new Error("Anthropic 未返回任何可用内容，请检查模型与端点协议是否匹配")
+    }
 
     return {
       text: fullText,

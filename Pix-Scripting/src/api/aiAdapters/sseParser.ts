@@ -14,18 +14,32 @@ export interface SSEMessage {
 /**
  * 创建与外部 Signal 动态联动的 AbortController（支持响应式即时中断与资源清理）
  */
-export function createLinkedAbortController(externalSignal?: SignalLike): {
+export function createLinkedAbortController(externalSignal?: SignalLike, timeoutMs?: number): {
   controller: AbortController
   cleanup: () => void
 } {
   const controller = new AbortController()
+  let timeoutId: ReturnType<typeof setTimeout> | undefined
+  if (typeof timeoutMs === "number" && timeoutMs > 0) {
+    timeoutId = setTimeout(() => {
+      try {
+        controller.abort()
+      } catch {}
+    }, timeoutMs)
+  }
 
   if (!externalSignal) {
-    return { controller, cleanup: () => {} }
+    return {
+      controller,
+      cleanup: () => {
+        if (timeoutId !== undefined) clearTimeout(timeoutId)
+      },
+    }
   }
 
   if (externalSignal.aborted) {
     controller.abort()
+    if (timeoutId !== undefined) clearTimeout(timeoutId)
     return { controller, cleanup: () => {} }
   }
 
@@ -49,6 +63,7 @@ export function createLinkedAbortController(externalSignal?: SignalLike): {
 
   const cleanup = () => {
     isCleanedUp = true
+    if (timeoutId !== undefined) clearTimeout(timeoutId)
     if (unregisterCustom) {
       try {
         unregisterCustom()
@@ -128,6 +143,8 @@ export async function parseSSEStream(
 
   const decoder = new TextDecoder("utf-8")
   let buffer = ""
+  let rawText = ""
+  let sawSSEField = false
 
   let currentEvent: string | undefined = undefined
   let currentDataLines: string[] = []
@@ -147,7 +164,9 @@ export async function parseSSEStream(
       ])
       if (done || (signal as any)?.aborted) break
 
-      buffer += decoder.decode(value, { stream: true })
+      const decoded = decoder.decode(value, { stream: true })
+      rawText += decoded
+      buffer += decoded
       const lines = buffer.split(/\r\n|\r|\n/)
       buffer = lines.pop() ?? ""
 
@@ -182,12 +201,29 @@ export async function parseSSEStream(
         }
 
         if (line.startsWith("event:")) {
+          sawSSEField = true
           currentEvent = line.slice(6).trim()
         } else if (line.startsWith("data:")) {
+          sawSSEField = true
           const dataContent = line.slice(5).replace(/^ /, "")
           currentDataLines.push(dataContent)
         }
       }
+      if (sawSSEField) rawText = ""
+    }
+
+    const decoderTail = decoder.decode()
+    if (decoderTail) {
+      rawText += decoderTail
+      buffer += decoderTail
+    }
+
+    if (!sawSSEField && !(signal as any)?.aborted) {
+      const trimmed = rawText.trim()
+      if (trimmed && !parseSSETxt(trimmed, onMessage)) {
+        onMessage({ data: trimmed })
+      }
+      return
     }
 
     if (buffer.trim()) {

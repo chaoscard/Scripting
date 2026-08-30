@@ -31,6 +31,9 @@ import {
 } from "../store/customAI"
 import {
   fetchRemoteModelList,
+  inferPresetModelEndpoint,
+  inferPresetModelProtocol,
+  inferPresetModelSupportsVision,
   testCustomAIConnection,
   testCustomImageGenConnection,
   type RemoteModelItem,
@@ -149,13 +152,6 @@ export function CustomAISettingsView() {
    */
   async function handleTestImageModel() {
     const effectiveKey = getEffectiveImageGenKey(profile)
-    if (!profile.general.noKeyRequired && !effectiveKey) {
-      void Dialog.alert({
-        title: "请输入生图密钥",
-        message: "请先填入生图 API 密钥或开启复用通用密钥。",
-      })
-      return
-    }
     if (!profile.imageGen.model) {
       void Dialog.alert({
         title: "请输入生图模型名称",
@@ -316,8 +312,12 @@ export function CustomAISettingsView() {
 
         const currentModelInList = res.models.some((m) => m.id === profile.general.model)
         if (!currentModelInList || !profile.general.model) {
+          const firstModel = res.models[0]
+          const inferredProtocol = firstModel.protocol || inferPresetModelProtocol(profile.general.preset, firstModel.id)
           updateGeneral({
-            model: res.models[0].id,
+            model: firstModel.id,
+            ...(inferredProtocol ? { protocol: inferredProtocol } : {}),
+            ...(typeof firstModel.supportsVision === "boolean" ? { supportsVision: firstModel.supportsVision } : {}),
           })
         }
       } else {
@@ -333,8 +333,26 @@ export function CustomAISettingsView() {
 
   function handleSelectRemoteModel(modelId: string) {
     if (!modelId) return
+    const selected = remoteModels.find((m) => m.id === modelId)
+    const inferredProtocol = selected?.protocol || inferPresetModelProtocol(profile.general.preset, modelId)
+    const inferredVision =
+      typeof selected?.supportsVision === "boolean"
+        ? selected.supportsVision
+        : inferPresetModelSupportsVision(profile.general.preset, modelId)
     updateGeneral({
       model: modelId,
+      ...(inferredProtocol ? { protocol: inferredProtocol } : {}),
+      ...(typeof inferredVision === "boolean" ? { supportsVision: inferredVision } : {}),
+    })
+  }
+
+  function handleManualModelChange(modelId: string) {
+    const inferredProtocol = inferPresetModelProtocol(profile.general.preset, modelId)
+    const inferredVision = inferPresetModelSupportsVision(profile.general.preset, modelId)
+    updateGeneral({
+      model: modelId,
+      ...(inferredProtocol ? { protocol: inferredProtocol } : {}),
+      ...(typeof inferredVision === "boolean" ? { supportsVision: inferredVision } : {}),
     })
   }
 
@@ -563,7 +581,7 @@ export function CustomAISettingsView() {
               title="通用模型"
               prompt=""
               value={profile.general.model}
-              onChanged={(val) => updateGeneral({ model: val })}
+              onChanged={handleManualModelChange}
             />
             <Button
               buttonStyle="plain"
@@ -701,7 +719,7 @@ export function CustomAISettingsView() {
             >
               <Text tag="openai-images">OpenAI Images</Text>
               <Text tag="openai-responses">OpenAI Responses</Text>
-              <Text tag="gemini-imagen">Google Imagen</Text>
+              <Text tag="gemini-imagen">Google Gemini 图片</Text>
             </Picker>
 
             <TextField

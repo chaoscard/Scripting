@@ -3,21 +3,24 @@
  * 严格遵循 OpenAI 官方 Chat Completions 规范及各大通用兼容器标准
  */
 import { fetch } from "scripting"
-import { getEffectiveGeneralEndpoint, type GeneralAIConfig } from "../../store/customAI"
+import { cleanAIEndpoint, getEffectiveGeneralEndpoint, type GeneralAIConfig } from "../../store/customAI"
 import type { AdapterRequest, AdapterResponse } from "./types"
 import { createLinkedAbortController, parseSSEStream } from "./sseParser"
+import { parseOpenAIChatPayload } from "./responseParsers"
 
 export function normalizeChatEndpoint(rawEndpoint: string): string {
-  let ep = (rawEndpoint || "").trim().replace(/\/+$/, "")
+  let ep = cleanAIEndpoint(rawEndpoint)
   if (!ep) ep = "https://api.openai.com"
 
-  if (ep.endsWith("/chat/completions")) {
-    return ep
-  }
   if (ep.endsWith("/v1")) {
     return `${ep}/chat/completions`
   }
   return `${ep}/v1/chat/completions`
+}
+
+function modelRejectsTemperature(model: string): boolean {
+  const id = model.toLowerCase().split("/").pop() || ""
+  return /^(o1|o3|o4)(?:[-.]|$)/.test(id) || /^gpt-5(?:[-.]|$)/.test(id)
 }
 
 export async function requestOpenAIChat(
@@ -70,16 +73,22 @@ export async function requestOpenAIChat(
     }
   }
 
+  if (request.requestImageOutput) {
+    throw new Error("OpenAI Chat Completions 不提供标准图片生成协议，请配置独立生图模型")
+  }
+
   const payload: Record<string, any> = {
     model: config.model,
     messages,
     stream: true,
   }
 
-  if (typeof request.temperature === "number") {
-    payload.temperature = request.temperature
-  } else if (typeof config.temperature === "number") {
-    payload.temperature = config.temperature
+  if (!modelRejectsTemperature(config.model)) {
+    if (typeof request.temperature === "number") {
+      payload.temperature = request.temperature
+    } else if (typeof config.temperature === "number") {
+      payload.temperature = config.temperature
+    }
   }
 
   const headers: Record<string, string> = {
@@ -94,7 +103,7 @@ export async function requestOpenAIChat(
     headers["X-Title"] = "Pix-Scripting"
   }
 
-  const { controller, cleanup } = createLinkedAbortController(request.signal)
+  const { controller, cleanup } = createLinkedAbortController(request.signal, 600_000)
 
   try {
     const res = await fetch(url, {
@@ -117,6 +126,8 @@ export async function requestOpenAIChat(
 
     let fullText = ""
     let fullReasoning = ""
+    const generatedImages: AdapterResponse["images"] = []
+    let protocolError = ""
 
     await parseSSEStream(
       res,
@@ -126,40 +137,43 @@ export async function requestOpenAIChat(
         }
 
         try {
-          const json = JSON.parse(msg.data)
-          const choice = json.choices?.[0]
-          if (choice) {
-            const delta = choice.delta || choice.message
-            if (delta) {
-              if (typeof delta.content === "string" && delta.content) {
-                fullText += delta.content
-                request.onChunk?.(delta.content)
-              }
-
-              const reasoning = delta.reasoning_content || delta.reasoning || delta.thought
-              if (typeof reasoning === "string" && reasoning) {
-                fullReasoning += reasoning
-                request.onReasoning?.(reasoning)
-              }
-            }
-
-            if (choice.finish_reason) {
-              return true
-            }
-          } else if (json.output_text) {
-            fullText = json.output_text
-            request.onChunk?.(json.output_text)
+          const parsed = parseOpenAIChatPayload(JSON.parse(msg.data))
+          if (parsed.error) {
+            protocolError = parsed.error
             return true
           }
-        } catch (e) {}
+          if (parsed.text) {
+            fullText += parsed.text
+            request.onChunk?.(parsed.text)
+          }
+          if (parsed.reasoning) {
+            fullReasoning += parsed.reasoning
+            request.onReasoning?.(parsed.reasoning)
+          }
+          for (const image of parsed.images) {
+            generatedImages.push(image)
+            request.onImage?.(image)
+          }
+          return parsed.done || undefined
+        } catch {
+          protocolError = "OpenAI Chat 返回了无法解析的响应数据"
+          return true
+        }
       },
       controller.signal
     )
 
+    if (protocolError) {
+      throw new Error(`OpenAI Chat 请求失败: ${protocolError}`)
+    }
+    if (!fullText.trim() && !fullReasoning.trim() && generatedImages.length === 0) {
+      throw new Error("OpenAI Chat 未返回任何可用内容，请检查模型是否支持当前请求")
+    }
+
     return {
       text: fullText,
       reasoning: fullReasoning,
-      images: [],
+      images: generatedImages,
     }
   } finally {
     cleanup()

@@ -29,6 +29,7 @@ export interface AdapterRequest {
   onChunk?: (deltaText: string) => void
   onReasoning?: (deltaReasoning: string) => void
   onImage?: (image: { base64: string; mediaType: string }) => void
+  requestImageOutput?: boolean
 }
 
 export interface AdapterResponse {

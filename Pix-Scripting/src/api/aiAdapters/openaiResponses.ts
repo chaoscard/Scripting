@@ -6,21 +6,24 @@
  * - 结束信号支持: response.completed, response.incomplete, response.failed, [DONE]
  */
 import { fetch } from "scripting"
-import { getEffectiveGeneralEndpoint, type GeneralAIConfig } from "../../store/customAI"
+import { cleanAIEndpoint, getEffectiveGeneralEndpoint, type GeneralAIConfig } from "../../store/customAI"
 import type { AdapterRequest, AdapterResponse } from "./types"
 import { createLinkedAbortController, parseSSEStream } from "./sseParser"
+import { parseOpenAIResponsesPayload } from "./responseParsers"
 
 export function normalizeResponsesEndpoint(rawEndpoint: string): string {
-  let ep = (rawEndpoint || "").trim().replace(/\/+$/, "")
+  let ep = cleanAIEndpoint(rawEndpoint)
   if (!ep) ep = "https://api.openai.com"
 
-  if (ep.endsWith("/responses")) {
-    return ep
-  }
   if (ep.endsWith("/v1")) {
     return `${ep}/responses`
   }
   return `${ep}/v1/responses`
+}
+
+function modelRejectsTemperature(model: string): boolean {
+  const id = model.toLowerCase().split("/").pop() || ""
+  return /^(o1|o3|o4)(?:[-.]|$)/.test(id) || /^gpt-5(?:[-.]|$)/.test(id)
 }
 
 export async function requestOpenAIResponses(
@@ -75,14 +78,21 @@ export async function requestOpenAIResponses(
     stream: true,
   }
 
+  if (request.requestImageOutput) {
+    payload.tools = [{ type: "image_generation" }]
+    payload.tool_choice = "auto"
+  }
+
   if (request.systemPrompt) {
     payload.instructions = request.systemPrompt
   }
 
-  if (typeof request.temperature === "number") {
-    payload.temperature = request.temperature
-  } else if (typeof config.temperature === "number") {
-    payload.temperature = config.temperature
+  if (!modelRejectsTemperature(config.model)) {
+    if (typeof request.temperature === "number") {
+      payload.temperature = request.temperature
+    } else if (typeof config.temperature === "number") {
+      payload.temperature = config.temperature
+    }
   }
 
   const headers: Record<string, string> = {
@@ -92,7 +102,7 @@ export async function requestOpenAIResponses(
     headers["Authorization"] = `Bearer ${config.apiKey}`
   }
 
-  const { controller, cleanup } = createLinkedAbortController(request.signal)
+  const { controller, cleanup } = createLinkedAbortController(request.signal, 600_000)
 
   try {
     const res = await fetch(url, {
@@ -102,114 +112,76 @@ export async function requestOpenAIResponses(
       signal: controller.signal,
     })
 
-  if (!res.ok) {
-    let errDetail = ""
-    try {
-      const errJson = await res.json()
-      errDetail = errJson?.error?.message || JSON.stringify(errJson)
-    } catch {
-      errDetail = await res.text()
-    }
-    throw new Error(`Responses 请求失败 (${res.status}): ${errDetail || res.statusText}`)
-  }
-
-  let fullText = ""
-  let fullReasoning = ""
-  const generatedImages: Array<{ base64: string; mediaType: string }> = []
-
-  await parseSSEStream(
-    res,
-    (msg) => {
-      if (!msg.data || msg.data === "[DONE]") {
-        return true
-      }
-
+    if (!res.ok) {
+      let errDetail = ""
       try {
-        const json = JSON.parse(msg.data)
-        const eventType = msg.event || json.type
+        const errJson = await res.json()
+        errDetail = errJson?.error?.message || JSON.stringify(errJson)
+      } catch {
+        errDetail = await res.text()
+      }
+      throw new Error(`Responses 请求失败 (${res.status}): ${errDetail || res.statusText}`)
+    }
 
-        if (
-          eventType === "response.completed" ||
-          eventType === "response.done" ||
-          eventType === "response.incomplete" ||
-          eventType === "response.failed" ||
-          json.status === "completed"
-        ) {
-          if (Array.isArray(json.response?.output)) {
-            for (const item of json.response.output) {
-              if (item.type === "message" && Array.isArray(item.content)) {
-                for (const c of item.content) {
-                  if (c.type === "output_text" && c.text && !fullText) {
-                    fullText = c.text
-                    request.onChunk?.(c.text)
-                  }
-                }
-              }
-            }
-          }
-          return true
-        }
+    let fullText = ""
+    let fullReasoning = ""
+    const generatedImages: AdapterResponse["images"] = []
+    let protocolError = ""
 
-        if (
-          eventType === "response.output_text.delta" ||
-          eventType === "response.text.delta" ||
-          eventType === "response.output_item.delta"
-        ) {
-          const delta = typeof json.delta === "string" ? json.delta : json.delta?.text || json.text || ""
-          if (typeof delta === "string" && delta) {
-            fullText += delta
-            request.onChunk?.(delta)
-          }
-        } else if (
-          eventType === "response.reasoning_text.delta" ||
-          eventType === "response.reasoning.delta" ||
-          eventType === "response.thought.delta"
-        ) {
-          const delta = typeof json.delta === "string" ? json.delta : json.delta?.text || json.text || ""
-          if (typeof delta === "string" && delta) {
-            fullReasoning += delta
-            request.onReasoning?.(delta)
-          }
-        } else if (eventType === "response.output_item.done") {
-          const item = json.item
-          if (item?.type === "image" && item.image_base64) {
-            const img = {
-              base64: item.image_base64,
-              mediaType: "image/png",
-            }
-            generatedImages.push(img)
-            request.onImage?.(img)
-          }
-        } else if (json.choices && Array.isArray(json.choices)) {
-          const choice = json.choices[0]
-          const deltaObj = choice?.delta || choice?.message
-          if (deltaObj?.content) {
-            fullText += deltaObj.content
-            request.onChunk?.(deltaObj.content)
-          }
-          if (deltaObj?.reasoning_content || deltaObj?.reasoning) {
-            const r = deltaObj.reasoning_content || deltaObj.reasoning
-            fullReasoning += r
-            request.onReasoning?.(r)
-          }
-          if (choice?.finish_reason) {
+    await parseSSEStream(
+      res,
+      (msg) => {
+        if (!msg.data || msg.data === "[DONE]") return true
+        try {
+          const parsed = parseOpenAIResponsesPayload(JSON.parse(msg.data), {
+            includeTerminalText: !fullText.trim(),
+          })
+          if (parsed.error) {
+            protocolError = parsed.error
             return true
           }
-        } else if (json.output_text) {
-          fullText = json.output_text
-          request.onChunk?.(json.output_text)
+          const textDelta = parsed.text
+          const reasoningDelta = parsed.reasoning
+          if (textDelta) {
+            fullText += textDelta
+            request.onChunk?.(textDelta)
+          }
+          if (reasoningDelta) {
+            fullReasoning += reasoningDelta
+            request.onReasoning?.(reasoningDelta)
+          }
+          for (const image of parsed.images) {
+            const duplicate = generatedImages.some(
+              (existing) =>
+                existing.base64.length === image.base64.length &&
+                existing.base64.slice(0, 64) === image.base64.slice(0, 64)
+            )
+            if (!duplicate) {
+              generatedImages.push(image)
+              request.onImage?.(image)
+            }
+          }
+          return parsed.done || undefined
+        } catch {
+          protocolError = "Responses API 返回了无法解析的响应数据"
           return true
         }
-      } catch {}
-    },
-    controller.signal
-  )
+      },
+      controller.signal
+    )
 
-  return {
-    text: fullText,
-    reasoning: fullReasoning,
-    images: generatedImages,
-  }
+    if (protocolError) {
+      throw new Error(`Responses 请求失败: ${protocolError}`)
+    }
+    if (!fullText.trim() && !fullReasoning.trim() && generatedImages.length === 0) {
+      throw new Error("Responses API 未返回任何可用内容，请检查模型与端点协议是否匹配")
+    }
+
+    return {
+      text: fullText,
+      reasoning: fullReasoning,
+      images: generatedImages,
+    }
 } finally {
   cleanup()
 }
