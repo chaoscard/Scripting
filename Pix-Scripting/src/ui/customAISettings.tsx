@@ -123,13 +123,22 @@ export function CustomAISettingsView() {
         void Haptics.transient(0.6, 0.8)
       } else {
         void Haptics.transient(0.8, 0.3)
+        void Dialog.alert({
+          title: "模型测试失败",
+          message: res.error || "连接测试未通过，请检查模型名称、API 密钥与网络配置。",
+        })
       }
     } catch (e: any) {
+      const errorMsg = e?.message || "测试失败"
       setGeneralTestResult({
         success: false,
-        error: e?.message || "测试失败",
+        error: errorMsg,
       })
       void Haptics.transient(0.8, 0.3)
+      void Dialog.alert({
+        title: "模型测试失败",
+        message: errorMsg,
+      })
     } finally {
       setTestingGeneral(false)
     }
@@ -166,13 +175,22 @@ export function CustomAISettingsView() {
         void Haptics.transient(0.6, 0.8)
       } else {
         void Haptics.transient(0.8, 0.3)
+        void Dialog.alert({
+          title: "生图模型测试失败",
+          message: res.error || "生图测试未通过，请检查模型名称、API 密钥与网络配置。",
+        })
       }
     } catch (e: any) {
+      const errorMsg = e?.message || "测试失败"
       setImageTestResult({
         success: false,
-        error: e?.message || "测试失败",
+        error: errorMsg,
       })
       void Haptics.transient(0.8, 0.3)
+      void Dialog.alert({
+        title: "生图模型测试失败",
+        message: errorMsg,
+      })
     } finally {
       setTestingImage(false)
     }
@@ -570,21 +588,47 @@ export function CustomAISettingsView() {
           <Text font="body">测试模型</Text>
           <Spacer />
           {generalTestResult ? (
-            <HStack spacing={4} alignment="center">
-              <Image
-                systemName={generalTestResult.success ? "checkmark.circle.fill" : "xmark.circle.fill"}
-                foregroundStyle={generalTestResult.success ? "systemGreen" : "systemRed"}
-              />
-              <Text
-                font="caption"
-                foregroundStyle={generalTestResult.success ? "systemGreen" : "systemRed"}
-                lineLimit={1}
+            generalTestResult.success ? (
+              <HStack spacing={4} alignment="center">
+                <Image
+                  systemName="checkmark.circle.fill"
+                  foregroundStyle="systemGreen"
+                />
+                <Text
+                  font="caption"
+                  foregroundStyle="systemGreen"
+                  lineLimit={1}
+                >
+                  {`可用 (${generalTestResult.latencyMs}ms)`}
+                </Text>
+              </HStack>
+            ) : (
+              <Button
+                buttonStyle="plain"
+                action={() => {
+                  if (generalTestResult.error) {
+                    void Dialog.alert({
+                      title: "模型测试失败报错信息",
+                      message: generalTestResult.error,
+                    })
+                  }
+                }}
               >
-                {generalTestResult.success
-                  ? `可用 (${generalTestResult.latencyMs}ms)`
-                  : generalTestResult.error || "失败"}
-              </Text>
-            </HStack>
+                <HStack spacing={4} alignment="center">
+                  <Image
+                    systemName="xmark.circle.fill"
+                    foregroundStyle="systemRed"
+                  />
+                  <Text
+                    font="caption"
+                    foregroundStyle="systemRed"
+                    lineLimit={1}
+                  >
+                    {generalTestResult.error || "失败"}
+                  </Text>
+                </HStack>
+              </Button>
+            )
           ) : null}
           <Button
             buttonStyle="plain"
@@ -723,21 +767,47 @@ export function CustomAISettingsView() {
               <Text font="body">测试模型</Text>
               <Spacer />
               {imageTestResult ? (
-                <HStack spacing={4} alignment="center">
-                  <Image
-                    systemName={imageTestResult.success ? "checkmark.circle.fill" : "xmark.circle.fill"}
-                    foregroundStyle={imageTestResult.success ? "systemGreen" : "systemRed"}
-                  />
-                  <Text
-                    font="caption"
-                    foregroundStyle={imageTestResult.success ? "systemGreen" : "systemRed"}
-                    lineLimit={1}
+                imageTestResult.success ? (
+                  <HStack spacing={4} alignment="center">
+                    <Image
+                      systemName="checkmark.circle.fill"
+                      foregroundStyle="systemGreen"
+                    />
+                    <Text
+                      font="caption"
+                      foregroundStyle="systemGreen"
+                      lineLimit={1}
+                    >
+                      {`可用 (${imageTestResult.latencyMs}ms)`}
+                    </Text>
+                  </HStack>
+                ) : (
+                  <Button
+                    buttonStyle="plain"
+                    action={() => {
+                      if (imageTestResult.error) {
+                        void Dialog.alert({
+                          title: "生图模型测试失败报错信息",
+                          message: imageTestResult.error,
+                        })
+                      }
+                    }}
                   >
-                    {imageTestResult.success
-                      ? `可用 (${imageTestResult.latencyMs}ms)`
-                      : imageTestResult.error || "失败"}
-                  </Text>
-                </HStack>
+                    <HStack spacing={4} alignment="center">
+                      <Image
+                        systemName="xmark.circle.fill"
+                        foregroundStyle="systemRed"
+                      />
+                      <Text
+                        font="caption"
+                        foregroundStyle="systemRed"
+                        lineLimit={1}
+                      >
+                        {imageTestResult.error || "失败"}
+                      </Text>
+                    </HStack>
+                  </Button>
+                )
               ) : null}
               <Button
                 buttonStyle="plain"

@@ -44,6 +44,49 @@ import type { IllustAIMode, PageTranslationCache, ScreenshotMaker } from "./type
 const GOOGLE_COLORS: Color[] = ["#4285F4", "#EA4335", "#FBBC05", "#34A853", "#4285F4"]
 
 function GoogleSparklesLoading() {
+  const [phase, setPhase] = useState(0)
+
+  useEffect(() => {
+    let timerId: number
+    let isMounted = true
+
+    const tick = () => {
+      if (!isMounted) return
+      setPhase((prev) => (prev + 1) % 4)
+      timerId = setTimeout(tick, 450)
+    }
+
+    timerId = setTimeout(tick, 450)
+
+    return () => {
+      isMounted = false
+      clearTimeout(timerId)
+    }
+  }, [])
+
+  // 随 phase 轮转的高亮明亮纯色与外圈光晕（确保在黑底上 100% 清晰耀眼）
+  const colorConfigs = [
+    {
+      color: "#4285F4" as Color, // Google 蓝
+      shadow: "rgba(66, 133, 244, 0.85)" as Color,
+    },
+    {
+      color: "#FF453A" as Color, // Google 亮红
+      shadow: "rgba(255, 69, 58, 0.85)" as Color,
+    },
+    {
+      color: "#FFD60A" as Color, // Google 亮黄
+      shadow: "rgba(255, 214, 10, 0.85)" as Color,
+    },
+    {
+      color: "#30D158" as Color, // Google 亮绿
+      shadow: "rgba(48, 209, 88, 0.85)" as Color,
+    },
+  ]
+
+  const current = colorConfigs[phase]
+  const angleValue = phase * 90
+
   return (
     <ZStack
       alignment="center"
@@ -51,11 +94,15 @@ function GoogleSparklesLoading() {
       background={{
         colors: GOOGLE_COLORS,
         center: "center",
-        startAngle: { type: "degrees", value: 0 },
-        endAngle: { type: "degrees", value: 360 },
+        startAngle: { type: "degrees", value: angleValue },
+        endAngle: { type: "degrees", value: angleValue + 360 },
       }}
       clipShape={{ type: "capsule", style: "continuous" }}
-      shadow={{ color: "rgba(66, 133, 244, 0.8)", radius: 14, x: 0, y: 0 }}
+      shadow={{ color: current.shadow, radius: 14, x: 0, y: 0 }}
+      animation={{
+        animation: Animation.smooth({ duration: 0.4 }),
+        value: phase,
+      }}
     >
       <ZStack
         alignment="center"
@@ -63,9 +110,18 @@ function GoogleSparklesLoading() {
         background="rgba(16, 16, 20, 0.94)"
         clipShape={{ type: "capsule", style: "continuous" }}
       >
-        <ProgressView
-          controlSize="regular"
-          tint="#4285F4"
+        <Image
+          systemName="sparkles"
+          font="largeTitle"
+          foregroundStyle={current.color}
+          symbolEffect={{
+            effect: "breathe",
+            value: phase,
+          }}
+          animation={{
+            animation: Animation.smooth({ duration: 0.35 }),
+            value: phase,
+          }}
         />
       </ZStack>
     </ZStack>
