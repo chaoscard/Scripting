@@ -82,8 +82,10 @@ export async function requestAnthropic(
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    "x-api-key": config.apiKey,
     "anthropic-version": "2023-06-01",
+  }
+  if (config.apiKey && !config.noKeyRequired) {
+    headers["x-api-key"] = config.apiKey
   }
 
   // 使用真实 AbortController，不传自定义 SignalLike 给 fetch

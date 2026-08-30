@@ -8,12 +8,12 @@ import { getEffectiveGeneralEndpoint, type GeneralAIConfig } from "../../store/c
 import type { AdapterRequest, AdapterResponse } from "./types"
 import { parseSSEStream } from "./sseParser"
 
-export function normalizeGeminiEndpoint(rawEndpoint: string, model: string, apiKey: string): string {
+export function normalizeGeminiEndpoint(rawEndpoint: string, model: string, apiKey: string, noKeyRequired?: boolean): string {
   let ep = (rawEndpoint || "").trim().replace(/\/+$/, "")
   if (!ep) ep = "https://generativelanguage.googleapis.com"
 
   if (ep.includes(":streamGenerateContent") || ep.includes(":generateContent")) {
-    if (!ep.includes("key=") && apiKey) {
+    if (!ep.includes("key=") && apiKey && !noKeyRequired) {
       const sep = ep.includes("?") ? "&" : "?"
       return `${ep}${sep}key=${encodeURIComponent(apiKey)}`
     }
@@ -24,6 +24,9 @@ export function normalizeGeminiEndpoint(rawEndpoint: string, model: string, apiK
     ep = `${ep}/v1beta`
   }
 
+  if (!apiKey || noKeyRequired) {
+    return `${ep}/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`
+  }
   return `${ep}/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse&key=${encodeURIComponent(apiKey)}`
 }
 
@@ -32,7 +35,7 @@ export async function requestGemini(
   request: AdapterRequest
 ): Promise<AdapterResponse> {
   const effectiveEndpoint = getEffectiveGeneralEndpoint(config)
-  const url = normalizeGeminiEndpoint(effectiveEndpoint, config.model, config.apiKey)
+  const url = normalizeGeminiEndpoint(effectiveEndpoint, config.model, config.apiKey, config.noKeyRequired)
 
   const contents: any[] = []
 

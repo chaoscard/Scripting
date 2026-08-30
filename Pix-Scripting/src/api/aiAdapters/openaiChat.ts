@@ -86,7 +86,9 @@ export async function requestOpenAIChat(
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    Authorization: `Bearer ${config.apiKey}`,
+  }
+  if (config.apiKey && !config.noKeyRequired) {
+    headers["Authorization"] = `Bearer ${config.apiKey}`
   }
 
   // OpenRouter 特殊 Headers 优化

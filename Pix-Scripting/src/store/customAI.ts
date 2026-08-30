@@ -21,6 +21,7 @@ export interface GeneralAIConfig {
   endpoint: string
   model: string
   apiKey: string
+  noKeyRequired?: boolean
   supportsVision: boolean
   temperature?: number
 }
@@ -67,15 +68,26 @@ export const AI_PRESETS: AIPreset[] = [
     apiKeyUrl: "https://platform.openai.com/api-keys",
   },
   {
-    id: "opencode",
-    name: "OpenCode",
+    id: "opencode-zen",
+    name: "OpenCode Zen",
     provider: "OpenCode",
     protocol: "openai-responses",
     defaultEndpoint: "https://opencode.ai/zen",
     defaultModel: "",
     supportsVision: true,
-    description: "OpenCode Zen 聚合网关，精选高可用模型",
+    description: "OpenCode Zen 套餐，聚合高可用大模型",
     apiKeyUrl: "https://opencode.ai/zen",
+  },
+  {
+    id: "opencode-go",
+    name: "OpenCode Go",
+    provider: "OpenCode",
+    protocol: "openai-responses",
+    defaultEndpoint: "https://opencode.ai/zen/go",
+    defaultModel: "",
+    supportsVision: true,
+    description: "OpenCode Go 套餐，高性价比直连网关",
+    apiKeyUrl: "https://opencode.ai/zen/go",
   },
   {
     id: "deepseek-chat",
@@ -132,6 +144,16 @@ export const AI_PRESETS: AIPreset[] = [
     description: "国内稳定高速的开源模型 API 托管平台",
     apiKeyUrl: "https://cloud.siliconflow.cn/account/ak",
   },
+  {
+    id: "custom",
+    name: "自定义",
+    provider: "Custom",
+    protocol: "openai-responses",
+    defaultEndpoint: "",
+    defaultModel: "",
+    supportsVision: true,
+    description: "自建反向代理、第三方中转站或专用私有端点",
+  },
 ]
 
 const KEYCHAIN_KEY = "pixiv_custom_ai_profile_v1"
@@ -145,6 +167,7 @@ export const DEFAULT_CUSTOM_AI_PROFILE: CustomAIProfile = {
     endpoint: "",
     model: "",
     apiKey: "",
+    noKeyRequired: false,
     supportsVision: true,
     temperature: 0.7,
   },
@@ -203,6 +226,8 @@ function validateAndSanitizeProfile(raw: unknown): CustomAIProfile {
   let preset = typeof generalRaw.preset === "string" ? generalRaw.preset : undefined
   if (preset === "openai-responses" || preset === "openai-chat") {
     preset = "openai"
+  } else if (preset === "opencode") {
+    preset = "opencode-zen"
   }
   const rawEndpoint = typeof generalRaw.endpoint === "string" ? generalRaw.endpoint.trim() : ""
 
@@ -212,6 +237,7 @@ function validateAndSanitizeProfile(raw: unknown): CustomAIProfile {
     endpoint: rawEndpoint,
     model: typeof generalRaw.model === "string" ? generalRaw.model.trim() : "",
     apiKey: typeof generalRaw.apiKey === "string" ? generalRaw.apiKey.trim() : "",
+    noKeyRequired: Boolean(generalRaw.noKeyRequired),
     supportsVision: Boolean(generalRaw.supportsVision),
     temperature: typeof generalRaw.temperature === "number" ? generalRaw.temperature : 0.7,
   }
@@ -385,10 +411,12 @@ export function isScriptingPro(): boolean {
 export function getEffectiveGeneralEndpoint(general: GeneralAIConfig): string {
   const raw = (general.endpoint || "").trim()
   if (raw) return raw
+  if (general.preset === "custom") return ""
   if (general.preset) {
     const preset = AI_PRESETS.find((p) => p.id === general.preset)
-    if (preset) return preset.defaultEndpoint
+    if (preset && preset.defaultEndpoint) return preset.defaultEndpoint
   }
+  if (!general.preset) return ""
   if (general.protocol === "gemini") return "https://generativelanguage.googleapis.com"
   if (general.protocol === "anthropic") return "https://api.anthropic.com"
   if (general.protocol === "openai-responses") return "https://api.openai.com"
@@ -412,7 +440,8 @@ export function isCustomAIConfigured(): boolean {
   const profile = loadCustomAIProfile()
   const gen = profile.general
   const effectiveEndpoint = getEffectiveGeneralEndpoint(gen)
-  return Boolean(effectiveEndpoint && gen.model && gen.apiKey)
+  const hasKey = gen.noKeyRequired || Boolean(gen.apiKey)
+  return Boolean(effectiveEndpoint && gen.model && hasKey)
 }
 
 /**

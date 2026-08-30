@@ -67,7 +67,7 @@ export function isImageGenModel(modelId: string): boolean {
   return false
 }
 
-function normalizeModelsEndpoint(protocol: GeneralAIProtocol, rawEndpoint: string, apiKey: string, presetId?: string): string {
+function normalizeModelsEndpoint(protocol: GeneralAIProtocol, rawEndpoint: string, apiKey: string, presetId?: string, noKeyRequired?: boolean): string {
   let ep = (rawEndpoint || "").trim().replace(/\/+$/, "")
   if (!ep) {
     if (presetId) {
@@ -84,12 +84,14 @@ function normalizeModelsEndpoint(protocol: GeneralAIProtocol, rawEndpoint: strin
   // Google Gemini 模型列表规范
   if (protocol === "gemini") {
     if (ep.includes("/v1beta/models") || ep.includes("/v1/models")) {
+      if (!apiKey || noKeyRequired) return ep
       const sep = ep.includes("?") ? "&" : "?"
       return ep.includes("key=") ? ep : `${ep}${sep}key=${encodeURIComponent(apiKey)}`
     }
     if (!ep.includes("/v1beta") && !ep.includes("/v1")) {
       ep = `${ep}/v1beta`
     }
+    if (!apiKey || noKeyRequired) return `${ep}/models`
     return `${ep}/models?key=${encodeURIComponent(apiKey)}`
   }
 
@@ -115,10 +117,11 @@ export async function fetchRemoteModelList(
   protocol: GeneralAIProtocol,
   rawEndpoint: string,
   apiKey: string,
-  presetId?: string
+  presetId?: string,
+  noKeyRequired?: boolean
 ): Promise<FetchModelsResult> {
   const startTime = Date.now()
-  if (!apiKey || !apiKey.trim()) {
+  if (!noKeyRequired && (!apiKey || !apiKey.trim())) {
     return {
       success: false,
       models: [],
@@ -139,21 +142,23 @@ export async function fetchRemoteModelList(
     }
   }
 
-  const url = normalizeModelsEndpoint(protocol, rawEndpoint, apiKey, presetId)
+  const url = normalizeModelsEndpoint(protocol, rawEndpoint, apiKey, presetId, noKeyRequired)
 
   try {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
     }
 
-    if (protocol === "anthropic") {
-      headers["x-api-key"] = apiKey
-      headers["anthropic-version"] = "2023-06-01"
-    } else if (protocol !== "gemini") {
-      headers["Authorization"] = `Bearer ${apiKey}`
-      if (effectiveEndpoint.includes("openrouter.ai")) {
-        headers["HTTP-Referer"] = "https://github.com/Pix-Scripting"
-        headers["X-Title"] = "Pix-Scripting"
+    if (apiKey && !noKeyRequired) {
+      if (protocol === "anthropic") {
+        headers["x-api-key"] = apiKey
+        headers["anthropic-version"] = "2023-06-01"
+      } else if (protocol !== "gemini") {
+        headers["Authorization"] = `Bearer ${apiKey}`
+        if (effectiveEndpoint.includes("openrouter.ai")) {
+          headers["HTTP-Referer"] = "https://github.com/Pix-Scripting"
+          headers["X-Title"] = "Pix-Scripting"
+        }
       }
     }
 

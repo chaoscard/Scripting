@@ -88,7 +88,9 @@ export async function requestOpenAIResponses(
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    Authorization: `Bearer ${config.apiKey}`,
+  }
+  if (config.apiKey && !config.noKeyRequired) {
+    headers["Authorization"] = `Bearer ${config.apiKey}`
   }
 
   // 使用真实 AbortController，不传自定义 SignalLike 给 fetch

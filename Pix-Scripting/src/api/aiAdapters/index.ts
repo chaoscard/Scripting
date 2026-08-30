@@ -52,7 +52,7 @@ export async function testCustomAIConnection(
   config: GeneralAIConfig
 ): Promise<TestResult> {
   const effectiveEndpoint = getEffectiveGeneralEndpoint(config)
-  if (!effectiveEndpoint || !config.model || !config.apiKey) {
+  if (!effectiveEndpoint || !config.model || (!config.noKeyRequired && !config.apiKey)) {
     return {
       success: false,
       latencyMs: 0,
