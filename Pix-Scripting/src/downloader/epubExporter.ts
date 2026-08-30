@@ -23,6 +23,8 @@ export interface NovelEpubOptions {
   seriesDescription?: string
   description?: string
   tags?: string[]
+  createdDate?: string
+  isR18?: boolean
   coverUrl?: string
   chapters: NovelChapter[]
   targetDir?: string
@@ -33,6 +35,14 @@ export interface NovelEpubOptions {
 export interface MangaPageItem {
   pageIndex: number
   url: string
+  chapterTitle?: string
+  chapterId?: number
+}
+
+export interface MangaChapterItem {
+  id?: number
+  title: string
+  pages: { pageIndex?: number; url: string }[]
 }
 
 export interface MangaEpubOptions {
@@ -43,7 +53,10 @@ export interface MangaEpubOptions {
   seriesTitle?: string
   description?: string
   tags?: string[]
-  pages: MangaPageItem[]
+  createdDate?: string
+  isR18?: boolean
+  chapters?: MangaChapterItem[]
+  pages?: MangaPageItem[]
   targetDir?: string
   customFileName?: string
   onProgress?: (msg: string, current: number, total: number) => void
@@ -179,23 +192,158 @@ rt {
 
 const MANGA_CSS = `
 @charset "utf-8";
-body {
+html, body {
   margin: 0;
   padding: 0;
-  background-color: #000000;
-  text-align: center;
+  width: 100%;
+  height: 100%;
+  background-color: #ffffff;
+  -webkit-text-size-adjust: 100%;
 }
-.manga-page {
-  width: 100vw;
-  height: 100vh;
+.manga-page-body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: #ffffff;
+}
+.manga-svg-container {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
   display: flex;
   justify-content: center;
   align-items: center;
 }
-.manga-page img {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
+svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.info-body {
+  margin: 0;
+  padding: 36px 28px;
+  background-color: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  line-height: 1.7;
+  color: #333333;
+  box-sizing: border-box;
+}
+.info-container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+.info-title {
+  font-size: 1.6em;
+  margin: 0 0 8px 0;
+  color: #111111;
+  text-align: left;
+  font-weight: 700;
+}
+.info-series {
+  font-size: 1.05em;
+  color: #007aff;
+  margin-bottom: 18px;
+  font-weight: 600;
+}
+.meta-info {
+  border-bottom: 1px solid #e5e5ea;
+  padding-bottom: 14px;
+  margin-bottom: 20px;
+  font-size: 0.92em;
+  color: #666666;
+}
+.meta-info a {
+  color: #007aff;
+  text-decoration: none;
+}
+.meta-item {
+  margin: 6px 0;
+  word-break: break-all;
+}
+.meta-item strong {
+  color: #333333;
+}
+.caption-box {
+  background: #f8f9fa;
+  border-left: 4px solid #007aff;
+  padding: 12px 16px;
+  margin: 16px 0;
+  font-size: 0.92em;
+  color: #444444;
+  border-radius: 4px;
+}
+.caption-box p {
+  text-indent: 0;
+  margin: 0.4em 0;
+  line-height: 1.6;
+}
+.caption-header {
+  font-weight: 600;
+  font-size: 0.95em;
+  color: #007aff;
+  margin-bottom: 6px;
+}
+.chapters-box {
+  background: #f8f9fa;
+  border-left: 4px solid #34c759;
+  padding: 12px 16px;
+  margin: 16px 0;
+  font-size: 0.92em;
+  color: #444444;
+  border-radius: 4px;
+}
+.chapter-list {
+  margin: 8px 0 0 0;
+  padding-left: 0;
+  list-style: none;
+}
+.chapter-list li {
+  padding: 5px 0;
+  border-bottom: 1px dashed #e5e5ea;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.chapter-list li:last-child {
+  border-bottom: none;
+}
+.chap-idx {
+  color: #007aff;
+  font-weight: 600;
+  margin-right: 8px;
+}
+.chap-title {
+  flex: 1;
+  word-break: break-all;
+}
+.chap-count {
+  color: #8e8e93;
+  font-size: 0.88em;
+  margin-left: 8px;
+}
+nav {
+  padding: 28px 24px;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  line-height: 1.8;
+  color: #333333;
+}
+nav h1 {
+  font-size: 1.4em;
+  margin-bottom: 16px;
+  color: #111111;
+}
+nav ol {
+  padding-left: 20px;
+}
+nav li {
+  margin: 8px 0;
+}
+nav a {
+  color: #007aff;
+  text-decoration: none;
 }
 `
 
@@ -542,6 +690,8 @@ export async function exportNovelToEpub(options: NovelEpubOptions): Promise<stri
     seriesDescription,
     description,
     tags = [],
+    createdDate,
+    isR18,
     coverUrl,
     chapters,
     targetDir: customTargetDir,
@@ -807,6 +957,18 @@ export async function exportNovelToEpub(options: NovelEpubOptions): Promise<stri
         let metaInfoHtml = ""
         let seriesCaptionHtml = ""
         if (isFirstPageOfBook) {
+          const hasR18 = isR18 || tags.some((t) => /r-?18/i.test(t))
+          let createdDateFormatted = ""
+          if (createdDate) {
+            try {
+              const d = new Date(createdDate)
+              if (!isNaN(d.getTime())) {
+                createdDateFormatted = d.toLocaleString()
+              }
+            } catch {}
+          }
+          const exportTimeStr = new Date().toLocaleString()
+
           const metaItems: string[] = []
           metaItems.push(`<div class="meta-item">作者：${authorUrl ? `<a href="${authorUrl}">${escapeXml(author)}</a>` : escapeXml(author)}</div>`)
           metaItems.push(`<div class="meta-item">作品主页：<a href="${workUrl}">${escapeXml(workUrl)}</a></div>`)
@@ -817,8 +979,13 @@ export async function exportNovelToEpub(options: NovelEpubOptions): Promise<stri
             metaItems.push(`<div class="meta-item">所属系列：${escapeXml(seriesTitle)}</div>`)
           }
           if (tags.length > 0) {
-            metaItems.push(`<div class="meta-item">标签：${escapeXml(tags.join(", "))}</div>`)
+            metaItems.push(`<div class="meta-item">标签：${escapeXml(tags.map(t => `#${t}`).join(" "))}</div>`)
           }
+          metaItems.push(`<div class="meta-item">年龄分级：${hasR18 ? '<span style="color:#ff3b30;font-weight:600;">🔞 R-18 (成人向)</span>' : '全年龄 (General)'}</div>`)
+          if (createdDateFormatted) {
+            metaItems.push(`<div class="meta-item">投稿时间：${createdDateFormatted}</div>`)
+          }
+          metaItems.push(`<div class="meta-item">导出时间：${exportTimeStr}</div>`)
           metaInfoHtml = `<div class="meta-info">\n    ${metaItems.join("\n    ")}\n  </div>`
 
           if (resolvedSeriesDesc) {
@@ -966,6 +1133,28 @@ export async function exportNovelToEpub(options: NovelEpubOptions): Promise<stri
     const dateStr = new Date().toISOString()
     const metaDescription = resolvedSeriesDesc || description || ""
     const cleanDescription = metaDescription ? htmlToPlainText(metaDescription) : ""
+    const hasR18 = isR18 || tags.some((t) => /r-?18/i.test(t))
+    let createdDateIso = ""
+    if (createdDate) {
+      try {
+        const d = new Date(createdDate)
+        if (!isNaN(d.getTime())) {
+          createdDateIso = d.toISOString()
+        }
+      } catch {}
+    }
+
+    const tagSubjects = tags.map((t) => `<dc:subject>${escapeXml(t)}</dc:subject>`).join("\n    ")
+    const seriesCollectionMeta = seriesTitle
+      ? `<meta property="belongs-to-collection" id="c01">${escapeXml(seriesTitle)}</meta>\n    <meta refines="#c01" property="collection-type">series</meta>`
+      : ""
+    const createdDateMeta = createdDateIso
+      ? `<dc:date>${createdDateIso}</dc:date>\n    <meta property="dcterms:created">${createdDateIso}</meta>`
+      : ""
+    const ageRatingMeta = hasR18
+      ? `<meta property="schema:contentRating">R-18</meta>\n    <meta property="schema:typicalAgeRange">18-</meta>`
+      : `<meta property="schema:contentRating">General</meta>`
+
     const contentOpf = `<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" unique-identifier="BookId" version="3.0">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
@@ -973,9 +1162,14 @@ export async function exportNovelToEpub(options: NovelEpubOptions): Promise<stri
     <dc:title>${escapeXml(title)}</dc:title>
     <dc:creator>${escapeXml(author)}</dc:creator>
     <dc:language>zh</dc:language>
+    <dc:publisher>Pixiv</dc:publisher>
     <dc:source>${workUrl}</dc:source>
     ${authorUrl ? `<dc:relation>${authorUrl}</dc:relation>` : ""}
     ${cleanDescription ? `<dc:description>${escapeXml(cleanDescription)}</dc:description>` : ""}
+    ${tagSubjects}
+    ${createdDateMeta}
+    ${ageRatingMeta}
+    ${seriesCollectionMeta}
     <meta property="dcterms:modified">${dateStr}</meta>
     ${hasCover ? `<meta name="cover" content="cover-img"/>` : ""}
   </metadata>
@@ -1038,7 +1232,7 @@ export async function exportNovelToEpub(options: NovelEpubOptions): Promise<stri
 }
 
 /**
- * 导出漫画为固定版面 EPUB 文件（支持容错导出与确切结果报告）
+ * 导出漫画为固定版面 EPUB 文件（支持容错导出、系列章节层级与确切结果报告）
  */
 export async function exportMangaToEpub(options: MangaEpubOptions): Promise<ExportResult> {
   const {
@@ -1048,6 +1242,10 @@ export async function exportMangaToEpub(options: MangaEpubOptions): Promise<Expo
     authorId,
     seriesTitle,
     description,
+    tags,
+    createdDate,
+    isR18,
+    chapters,
     pages,
     targetDir: customTargetDir,
     customFileName,
@@ -1074,43 +1272,139 @@ export async function exportMangaToEpub(options: MangaEpubOptions): Promise<Expo
     FileManager.writeAsStringSync(`${metaInfDir}/container.xml`, containerXml, "utf-8")
     FileManager.writeAsStringSync(`${oebpsDir}/style.css`, MANGA_CSS, "utf-8")
 
-    // 并发下载所有漫画页面
-    onProgress?.(`下载漫画图片 (共 ${pages.length} 页)...`, 0, pages.length)
-    const downloadedPages: { index: number; fileName: string }[] = []
-    const failedPages: number[] = []
+    // 1. 归一化章节与页面结构
+    interface NormalizedMangaPage {
+      globalIndex: number
+      pageInChap: number
+      url: string
+      chapIndex: number
+      chapTitle: string
+    }
 
-    await runConcurrentTasks(pages, 4, async (p, idx) => {
-      const pageNum = idx + 1
-      const data = await fetchImageBinaryWithRetry(p.url)
-      if (data) {
-        const paddedNum = String(pageNum).padStart(3, "0")
-        const ext = p.url.includes(".png") ? "png" : "jpg"
-        const fileName = `page_${paddedNum}.${ext}`
-        FileManager.writeAsDataSync(`${imagesDir}/${fileName}`, data)
-        downloadedPages.push({ index: pageNum, fileName })
-      } else {
-        failedPages.push(pageNum)
+    interface NormalizedMangaChapter {
+      id?: number
+      title: string
+      pages: NormalizedMangaPage[]
+    }
+
+    const normalizedChapters: NormalizedMangaChapter[] = []
+    let globalCounter = 0
+
+    if (chapters && chapters.length > 0) {
+      chapters.forEach((c, cIdx) => {
+        const chapTitle = c.title || `第 ${cIdx + 1} 话`
+        const pageList: NormalizedMangaPage[] = (c.pages || []).map((p, pIdx) => {
+          globalCounter++
+          return {
+            globalIndex: p.pageIndex ?? globalCounter,
+            pageInChap: pIdx + 1,
+            url: p.url,
+            chapIndex: cIdx,
+            chapTitle,
+          }
+        })
+        if (pageList.length > 0) {
+          normalizedChapters.push({
+            id: c.id,
+            title: chapTitle,
+            pages: pageList,
+          })
+        }
+      })
+    } else if (pages && pages.length > 0) {
+      let currentChapTitle = pages[0].chapterTitle || title || "单篇"
+      let currentChapPages: NormalizedMangaPage[] = []
+      let currentChapIdx = 0
+
+      pages.forEach((p, idx) => {
+        const pChapTitle = p.chapterTitle || title || "单篇"
+        if (pChapTitle !== currentChapTitle && currentChapPages.length > 0) {
+          normalizedChapters.push({
+            title: currentChapTitle,
+            pages: currentChapPages,
+          })
+          currentChapTitle = pChapTitle
+          currentChapPages = []
+          currentChapIdx++
+        }
+        currentChapPages.push({
+          globalIndex: p.pageIndex ?? idx + 1,
+          pageInChap: currentChapPages.length + 1,
+          url: p.url,
+          chapIndex: currentChapIdx,
+          chapTitle: currentChapTitle,
+        })
+      })
+      if (currentChapPages.length > 0) {
+        normalizedChapters.push({
+          title: currentChapTitle,
+          pages: currentChapPages,
+        })
       }
-      onProgress?.(`下载漫画图片 (${idx + 1}/${pages.length})`, idx + 1, pages.length)
-    })
+    }
 
-    downloadedPages.sort((a, b) => a.index - b.index)
-    failedPages.sort((a, b) => a - b)
-
-    if (downloadedPages.length === 0) {
+    const allPagesToDownload: NormalizedMangaPage[] = normalizedChapters.flatMap((c) => c.pages)
+    if (allPagesToDownload.length === 0) {
       return {
         success: false,
         path: null,
         isPartial: false,
         downloadedPages: 0,
-        totalPages: pages.length,
+        totalPages: 0,
+        error: "未提供任何漫画页面",
+      }
+    }
+
+    // 2. 并发下载所有漫画页面原图并提取宽高
+    onProgress?.(`下载漫画图片 (共 ${allPagesToDownload.length} 页)...`, 0, allPagesToDownload.length)
+    const downloadedPagesMap = new Map<number, { index: number; fileName: string; width: number; height: number }>()
+    const failedPages: number[] = []
+
+    await runConcurrentTasks(allPagesToDownload, 4, async (p, idx) => {
+      const pageNum = p.globalIndex
+      const data = await fetchImageBinaryWithRetry(p.url)
+      if (data) {
+        const paddedNum = String(pageNum).padStart(allPagesToDownload.length >= 1000 ? 4 : 3, "0")
+        const ext = p.url.includes(".png") ? "png" : "jpg"
+        const fileName = `page_${paddedNum}.${ext}`
+        const filePath = `${imagesDir}/${fileName}`
+        FileManager.writeAsDataSync(filePath, data)
+
+        let width = 1200
+        let height = 1800
+        try {
+          const uiImg = UIImage.fromFile(filePath)
+          if (uiImg && uiImg.width > 0 && uiImg.height > 0) {
+            const scale = uiImg.scale || 1
+            width = Math.round(uiImg.width * scale)
+            height = Math.round(uiImg.height * scale)
+          }
+        } catch {}
+
+        downloadedPagesMap.set(pageNum, { index: pageNum, fileName, width, height })
+      } else {
+        failedPages.push(pageNum)
+      }
+      onProgress?.(`下载漫画图片 (${idx + 1}/${allPagesToDownload.length})`, idx + 1, allPagesToDownload.length)
+    })
+
+    const downloadedCount = downloadedPagesMap.size
+    failedPages.sort((a, b) => a - b)
+
+    if (downloadedCount === 0) {
+      return {
+        success: false,
+        path: null,
+        isPartial: false,
+        downloadedPages: 0,
+        totalPages: allPagesToDownload.length,
         failedPages,
         error: "全部漫画页面下载失败",
       }
     }
 
-    const isPartial = downloadedPages.length < pages.length
-    const partialSuffix = isPartial ? `_[缺${pages.length - downloadedPages.length}页]` : ""
+    const isPartial = downloadedCount < allPagesToDownload.length
+    const partialSuffix = isPartial ? `_[缺${allPagesToDownload.length - downloadedCount}页]` : ""
 
     const safeTitle = customFileName
       ? sanitizeFileName(customFileName)
@@ -1122,16 +1416,102 @@ export async function exportMangaToEpub(options: MangaEpubOptions): Promise<Expo
     }
     const targetFilePath = `${targetDir}/${outputFileName}`
 
+    const dateStr = new Date().toISOString()
+    const cleanDescription = description ? htmlToPlainText(description) : ""
+    const missingDesc = isPartial ? ` (容错导出，缺失第 ${failedPages.join(", ")} 页)` : ""
+    const workUrl = `https://www.pixiv.net/artworks/${id}`
+    const authorUrl = authorId ? `https://www.pixiv.net/users/${authorId}` : ""
+
     const manifestItems: string[] = [
       `<item id="toc" href="toc.xhtml" media-type="application/xhtml+xml" properties="nav"/>`,
       `<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>`,
       `<item id="style" href="style.css" media-type="text/css"/>`,
+      `<item id="info" href="info.xhtml" media-type="application/xhtml+xml"/>`,
     ]
-    const spineItems: string[] = []
-    const navPoints: string[] = []
-    const tocList: string[] = []
+    const spineItems: string[] = [
+      `<itemref idref="info"/>`,
+    ]
+    const navPoints: string[] = [
+      `
+  <navPoint id="nav-info" playOrder="1">
+    <navLabel><text>作品信息</text></navLabel>
+    <content src="info.xhtml"/>
+  </navPoint>`,
+    ]
+    const tocList: string[] = [
+      `<li><a href="info.xhtml">作品信息</a></li>`,
+    ]
 
-    downloadedPages.forEach((p, idx) => {
+    const hasR18 = isR18 || tags?.some((t) => /r-?18/i.test(t))
+    let createdDateIso = ""
+    let createdDateFormatted = ""
+    if (createdDate) {
+      try {
+        const d = new Date(createdDate)
+        if (!isNaN(d.getTime())) {
+          createdDateIso = d.toISOString()
+          createdDateFormatted = d.toLocaleString()
+        }
+      } catch {}
+    }
+
+    // 3. 生成作品元数据与章节收录卡片 info.xhtml
+    let chaptersCardHtml = ""
+    if (normalizedChapters.length > 1) {
+      const chapterListItems = normalizedChapters.map((c, i) => {
+        const chapDownloaded = c.pages.filter((p) => downloadedPagesMap.has(p.globalIndex)).length
+        const countStr = isPartial ? `${chapDownloaded}/${c.pages.length}P` : `${c.pages.length}P`
+        return `<li><span class="chap-idx">#${i + 1}</span><span class="chap-title">${escapeXml(c.title)}</span><span class="chap-count">(${countStr})</span></li>`
+      }).join("\n        ")
+
+      chaptersCardHtml = `
+    <div class="chapters-box">
+      <div class="caption-header">收录章节 (全 ${normalizedChapters.length} 话)</div>
+      <ul class="chapter-list">
+        ${chapterListItems}
+      </ul>
+    </div>`
+    }
+
+    const captionHtml = formatCaptionToXHtml(description, "作品简介")
+    const exportTimeStr = new Date().toLocaleString()
+    const infoXhtml = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=1080, height=1520"/>
+  <title>作品信息 - ${escapeXml(title)}</title>
+  <link rel="stylesheet" type="text/css" href="style.css"/>
+</head>
+<body class="info-body">
+  <div class="info-container">
+    <h1 class="info-title">${escapeXml(title)}</h1>
+    ${seriesTitle ? `<div class="info-series">系列 · ${escapeXml(seriesTitle)}</div>` : ""}
+
+    <div class="meta-info">
+      <div class="meta-item"><strong>作者：</strong>${authorUrl ? `<a href="${authorUrl}">${escapeXml(author)}</a>` : escapeXml(author)}</div>
+      <div class="meta-item"><strong>Pixiv ID：</strong><a href="${workUrl}">${id}</a></div>
+      <div class="meta-item"><strong>作品链接：</strong><a href="${workUrl}">${workUrl}</a></div>
+      ${authorUrl ? `<div class="meta-item"><strong>作者主页：</strong><a href="${authorUrl}">${authorUrl}</a></div>` : ""}
+      ${tags && tags.length > 0 ? `<div class="meta-item"><strong>标签：</strong>${escapeXml(tags.map(t => `#${t}`).join(" "))}</div>` : ""}
+      <div class="meta-item"><strong>年龄分级：</strong>${hasR18 ? '<span style="color:#ff3b30;font-weight:600;">🔞 R-18 (成人向)</span>' : '全年龄 (General)'}</div>
+      ${createdDateFormatted ? `<div class="meta-item"><strong>投稿时间：</strong>${createdDateFormatted}</div>` : ""}
+      <div class="meta-item"><strong>收录规模：</strong>${normalizedChapters.length > 1 ? `全 ${normalizedChapters.length} 话，` : ""}共 ${allPagesToDownload.length} 页${isPartial ? ` (已下载 ${downloadedCount} 页)` : ""}</div>
+      <div class="meta-item"><strong>导出时间：</strong>${exportTimeStr}</div>
+    </div>
+
+    ${captionHtml}
+    ${chaptersCardHtml}
+  </div>
+</body>
+</html>`
+    FileManager.writeAsStringSync(`${oebpsDir}/info.xhtml`, infoXhtml, "utf-8")
+
+    // 4. 生成各个漫画页面的 XHTML 与 Spine
+    const downloadedPagesSorted = Array.from(downloadedPagesMap.values()).sort((a, b) => a.index - b.index)
+
+    downloadedPagesSorted.forEach((p, idx) => {
       const pageId = `page_${p.index}`
       const pageXhtmlName = `${pageId}.xhtml`
       const mime = p.fileName.endsWith(".png") ? "image/png" : "image/jpeg"
@@ -1139,10 +1519,22 @@ export async function exportMangaToEpub(options: MangaEpubOptions): Promise<Expo
 
       const pageXhtml = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head><title>P${p.index}</title><link rel="stylesheet" type="text/css" href="style.css"/></head>
-<body>
-  <div class="manga-page"><img src="images/${p.fileName}" alt="Page ${p.index}"/></div>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=${p.width}, height=${p.height}"/>
+  <title>P${p.index}</title>
+  <link rel="stylesheet" type="text/css" href="style.css"/>
+</head>
+<body class="manga-page-body">
+  <div class="manga-svg-container">
+    <svg xmlns="http://www.w3.org/2000/svg" version="1.1"
+         xmlns:xlink="http://www.w3.org/1999/xlink"
+         viewBox="0 0 ${p.width} ${p.height}"
+         width="100%" height="100%">
+      <image width="${p.width}" height="${p.height}" xlink:href="images/${p.fileName}"/>
+    </svg>
+  </div>
 </body>
 </html>`
 
@@ -1150,20 +1542,72 @@ export async function exportMangaToEpub(options: MangaEpubOptions): Promise<Expo
       manifestItems.push(`<item id="img_${pageId}" href="images/${p.fileName}" media-type="${mime}"${isCover ? ` properties="cover-image"` : ""}/>`)
       manifestItems.push(`<item id="${pageId}" href="${pageXhtmlName}" media-type="application/xhtml+xml"/>`)
       spineItems.push(`<itemref idref="${pageId}"/>`)
+    })
 
-      navPoints.push(`
-  <navPoint id="nav-${pageId}" playOrder="${idx + 1}">
+    // 5. 构建 TOC 目录树 (支持系列漫画章节层级与单篇平铺)
+    let currentPlayOrder = 2
+    const hasMultipleChapters = normalizedChapters.length > 1
+
+    if (hasMultipleChapters) {
+      normalizedChapters.forEach((c, cIdx) => {
+        const chapDownloadedPages = c.pages
+          .map((p) => downloadedPagesMap.get(p.globalIndex))
+          .filter((p): p is { index: number; fileName: string; width: number; height: number } => p != null)
+
+        if (chapDownloadedPages.length === 0) return
+
+        const firstPage = chapDownloadedPages[0]
+        const firstPageXhtml = `page_${firstPage.index}.xhtml`
+
+        const chapPlayOrder = currentPlayOrder++
+        const subNavPoints: string[] = chapDownloadedPages.map((p) => {
+          const pagePlayOrder = currentPlayOrder++
+          return `
+      <navPoint id="nav-page-${p.index}" playOrder="${pagePlayOrder}">
+        <navLabel><text>第 ${p.index} 页</text></navLabel>
+        <content src="page_${p.index}.xhtml"/>
+      </navPoint>`
+        })
+
+        navPoints.push(`
+  <navPoint id="nav-chap-${cIdx + 1}" playOrder="${chapPlayOrder}">
+    <navLabel><text>${escapeXml(c.title)}</text></navLabel>
+    <content src="${firstPageXhtml}"/>${subNavPoints.join("")}
+  </navPoint>`)
+
+        const subTocItems = chapDownloadedPages.map((p) => `<li><a href="page_${p.index}.xhtml">第 ${p.index} 页</a></li>`).join("\n          ")
+        tocList.push(`<li>
+        <a href="${firstPageXhtml}">${escapeXml(c.title)}</a>
+        <ol>
+          ${subTocItems}
+        </ol>
+      </li>`)
+      })
+    } else {
+      downloadedPagesSorted.forEach((p) => {
+        const pageId = `page_${p.index}`
+        const pageXhtmlName = `${pageId}.xhtml`
+        navPoints.push(`
+  <navPoint id="nav-${pageId}" playOrder="${currentPlayOrder++}">
     <navLabel><text>第 ${p.index} 页</text></navLabel>
     <content src="${pageXhtmlName}"/>
   </navPoint>`)
-      tocList.push(`<li><a href="${pageXhtmlName}">第 ${p.index} 页</a></li>`)
-    })
+        tocList.push(`<li><a href="${pageXhtmlName}">第 ${p.index} 页</a></li>`)
+      })
+    }
 
-    const dateStr = new Date().toISOString()
-    const cleanDescription = description ? htmlToPlainText(description) : ""
-    const missingDesc = isPartial ? ` (容错导出，缺失第 ${failedPages.join(", ")} 页)` : ""
-    const workUrl = `https://www.pixiv.net/artworks/${id}`
-    const authorUrl = authorId ? `https://www.pixiv.net/users/${authorId}` : ""
+    const firstPageId = downloadedPagesSorted.length > 0 ? `img_page_${downloadedPagesSorted[0].index}` : ""
+    const tagSubjects = (tags || []).map((t) => `<dc:subject>${escapeXml(t)}</dc:subject>`).join("\n    ")
+    const seriesCollectionMeta = seriesTitle
+      ? `<meta property="belongs-to-collection" id="c01">${escapeXml(seriesTitle)}</meta>\n    <meta refines="#c01" property="collection-type">series</meta>`
+      : ""
+    const createdDateMeta = createdDateIso
+      ? `<dc:date>${createdDateIso}</dc:date>\n    <meta property="dcterms:created">${createdDateIso}</meta>`
+      : ""
+    const ageRatingMeta = hasR18
+      ? `<meta property="schema:contentRating">R-18</meta>\n    <meta property="schema:typicalAgeRange">18-</meta>`
+      : `<meta property="schema:contentRating">General</meta>`
+
     const contentOpf = `<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" unique-identifier="BookId" version="3.0">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
@@ -1171,13 +1615,19 @@ export async function exportMangaToEpub(options: MangaEpubOptions): Promise<Expo
     <dc:title>${escapeXml(title)}</dc:title>
     <dc:creator>${escapeXml(author)}</dc:creator>
     <dc:language>ja</dc:language>
+    <dc:publisher>Pixiv</dc:publisher>
     <dc:source>${workUrl}</dc:source>
     ${authorUrl ? `<dc:relation>${authorUrl}</dc:relation>` : ""}
     <dc:description>${escapeXml((cleanDescription || "") + missingDesc)}</dc:description>
+    ${tagSubjects}
+    ${createdDateMeta}
+    ${ageRatingMeta}
+    ${seriesCollectionMeta}
     <meta property="dcterms:modified">${dateStr}</meta>
     <meta property="rendition:layout">pre-paginated</meta>
     <meta property="rendition:orientation">auto</meta>
-    <meta name="cover" content="img_page_1"/>
+    <meta property="rendition:spread">auto</meta>
+    ${firstPageId ? `<meta name="cover" content="${firstPageId}"/>` : ""}
   </metadata>
   <manifest>
     ${manifestItems.join("\n    ")}
@@ -1190,7 +1640,10 @@ export async function exportMangaToEpub(options: MangaEpubOptions): Promise<Expo
 
     const tocNcx = `<?xml version="1.0" encoding="UTF-8"?>
 <ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
-  <head><meta name="dtb:uid" content="urn:pixiv:manga:${id}"/></head>
+  <head>
+    <meta name="dtb:uid" content="urn:pixiv:manga:${id}"/>
+    <meta name="dtb:depth" content="${hasMultipleChapters ? "2" : "1"}"/>
+  </head>
   <docTitle><text>${escapeXml(title)}</text></docTitle>
   <navMap>${navPoints.join("")}</navMap>
 </ncx>`
@@ -1204,14 +1657,14 @@ export async function exportMangaToEpub(options: MangaEpubOptions): Promise<Expo
 </html>`
     FileManager.writeAsStringSync(`${oebpsDir}/toc.xhtml`, tocXhtml, "utf-8")
 
-    onProgress?.("正在组装漫画 EPUB...", pages.length, pages.length)
+    onProgress?.("正在组装漫画 EPUB...", allPagesToDownload.length, allPagesToDownload.length)
     const success = await packageEpubDirectory(tempDir, targetFilePath)
     return {
       success,
       path: success ? targetFilePath : null,
       isPartial,
-      downloadedPages: downloadedPages.length,
-      totalPages: pages.length,
+      downloadedPages: downloadedCount,
+      totalPages: allPagesToDownload.length,
       failedPages,
     }
   } catch (err: any) {
@@ -1221,7 +1674,7 @@ export async function exportMangaToEpub(options: MangaEpubOptions): Promise<Expo
       path: null,
       isPartial: false,
       downloadedPages: 0,
-      totalPages: pages.length,
+      totalPages: (chapters?.reduce((acc, c) => acc + (c.pages?.length || 0), 0) ?? pages?.length) || 0,
       error: err?.message ?? String(err),
     }
   } finally {

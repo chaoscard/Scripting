@@ -473,22 +473,35 @@ export async function exportAuthorManga(
         onProgress?.(statusMsg, currentProgress, totalTasks)
         task.updateProgress({ current: currentProgress, total: totalTasks, statusText: statusMsg })
 
-        // 收集该系列所有话的所有漫画页面
-        const allPages: { pageIndex: number; url: string }[] = []
+        // 收集该系列所有话的所有漫画页面与章节结构
+        const chapters: { id: number; title: string; pages: { pageIndex: number; url: string }[] }[] = []
         let pageCounter = 1
 
-        for (const ep of series.works) {
+        for (let epIdx = 0; epIdx < series.works.length; epIdx++) {
+          const ep = series.works[epIdx]
+          const chapTitle = ep.title || `第 ${epIdx + 1} 话`
           const pageCount = Math.max(1, ep.page_count || ep.meta_pages?.length || 1)
+          const chapPages: { pageIndex: number; url: string }[] = []
           for (let p = 0; p < pageCount; p++) {
             const url = imageUrlOf(ep, p, quality)
             if (url) {
-              allPages.push({ pageIndex: pageCounter++, url })
+              chapPages.push({ pageIndex: pageCounter++, url })
             }
+          }
+          if (chapPages.length > 0) {
+            chapters.push({
+              id: ep.id,
+              title: chapTitle,
+              pages: chapPages,
+            })
           }
         }
 
+        const allPages = chapters.flatMap((c) => c.pages)
         const customFileName = `[${safeAuthorName}] - [系列] ${seriesTitle} (全${episodeCount}话)`
 
+        const isSeriesR18 = series.works.some((w) => (w.x_restrict ?? 0) > 0 || w.tags?.some((t: any) => /r-?18/i.test(t.name)))
+        const seriesTags = series.works[0]?.tags?.map((t: any) => t.name) ?? []
         const res = format === "cbz"
           ? await exportMangaToCbz({
               id: series.seriesId,
@@ -497,7 +510,10 @@ export async function exportAuthorManga(
               authorId,
               seriesTitle,
               description: `包含全部 ${episodeCount} 话连载。`,
-              pages: allPages,
+              tags: seriesTags,
+              createdDate: series.works[0]?.create_date,
+              isR18: isSeriesR18,
+              chapters,
               targetDir,
               customFileName,
             })
@@ -508,7 +524,10 @@ export async function exportAuthorManga(
               authorId,
               seriesTitle,
               description: `包含全部 ${episodeCount} 话连载。`,
-              pages: allPages,
+              tags: seriesTags,
+              createdDate: series.works[0]?.create_date,
+              isR18: isSeriesR18,
+              chapters,
               targetDir,
               customFileName,
             })
@@ -543,6 +562,9 @@ export async function exportAuthorManga(
 
         const customFileName = `[${safeAuthorName}] - [短篇] ${title}`
 
+        const isSingleR18 = (single.x_restrict ?? 0) > 0 || single.tags?.some((t: any) => /r-?18/i.test(t.name))
+        const singleTags = single.tags?.map((t: any) => t.name) ?? []
+
         const res = format === "cbz"
           ? await exportMangaToCbz({
               id: single.id,
@@ -550,6 +572,9 @@ export async function exportAuthorManga(
               author: authorName,
               authorId,
               description: single.caption,
+              tags: singleTags,
+              createdDate: single.create_date,
+              isR18: isSingleR18,
               pages,
               targetDir,
               customFileName,
@@ -560,6 +585,9 @@ export async function exportAuthorManga(
               author: authorName,
               authorId,
               description: single.caption,
+              tags: singleTags,
+              createdDate: single.create_date,
+              isR18: isSingleR18,
               pages,
               targetDir,
               customFileName,
@@ -689,6 +717,8 @@ export async function exportAuthorNovels(
     }
 
     if (chapters.length > 0) {
+      const isNovelSeriesR18 = series.works.some((w) => (w.x_restrict ?? 0) > 0 || w.tags?.some((t: any) => /r-?18/i.test(t.name)))
+      const novelSeriesTags = series.works[0]?.tags?.map((t: any) => t.name) ?? []
       const customFileName = `[${safeAuthorName}] - [系列] ${seriesTitle} (全${chapterCount}章)`
       await exportNovelToEpub({
         id: series.seriesId,
@@ -698,6 +728,9 @@ export async function exportAuthorNovels(
         seriesTitle,
         seriesDescription: seriesCaption,
         description: seriesCaption,
+        tags: novelSeriesTags,
+        createdDate: series.works[0]?.create_date,
+        isR18: isNovelSeriesR18,
         coverUrl: seriesCoverUrl,
         chapters,
         targetDir,
@@ -735,12 +768,18 @@ export async function exportAuthorNovels(
           })
         }
 
+        const isSingleNovelR18 = (single.x_restrict ?? 0) > 0 || single.tags?.some((t: any) => /r-?18/i.test(t.name))
+        const singleNovelTags = single.tags?.map((t: any) => t.name) ?? []
         const customFileName = `[${safeAuthorName}] - [短篇] ${title}`
         await exportNovelToEpub({
           id: single.id,
           title,
           author: authorName,
           authorId,
+          description: single.caption,
+          tags: singleNovelTags,
+          createdDate: single.create_date,
+          isR18: isSingleNovelR18,
           coverUrl: viewer.coverUrl,
           chapters: [
             {

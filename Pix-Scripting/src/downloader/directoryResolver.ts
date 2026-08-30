@@ -84,7 +84,7 @@ export function getCategoryDirectory(category: DownloadCategory): string {
 }
 
 /**
- * 获取并确保特定创作者的存储子目录（例如：/Pix-Scripting/画师名 (UID)/插画）
+ * 获取并确保特定创作者的存储子目录（例如：/Pix-Scripting/Creators/画师名 (UID)/Illustrations）
  */
 export function getAuthorDownloadDirectory(
   authorName: string,
@@ -93,12 +93,12 @@ export function getAuthorDownloadDirectory(
 ): string {
   const root = getDownloadRootDirectory()
   const authorFolder = sanitizeFileName(`${authorName || "Artist"} (${authorId})`)
-  let dirPath = `${root}/${authorFolder}`
+  let dirPath = `${root}/Creators/${authorFolder}`
 
   if (subCategory) {
-    let subName = "插画"
-    if (subCategory === "manga") subName = "漫画"
-    else if (subCategory === "novels") subName = "小说"
+    let subName = "Illustrations"
+    if (subCategory === "manga") subName = "Manga"
+    else if (subCategory === "novels") subName = "Novels"
     dirPath = `${dirPath}/${subName}`
   }
 

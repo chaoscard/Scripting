@@ -135,6 +135,8 @@ export async function downloadEntireNovelSeries(
         onProgress?.(packMsg, chapters.length, chapters.length)
         task.updateProgress({ current: chapters.length, total: chapters.length, statusText: packMsg })
 
+        const isNovelSeriesR18 = allNovels.some((n) => (n.x_restrict ?? 0) > 0 || n.tags?.some((t: any) => /r-?18/i.test(t.name)))
+        const novelSeriesTags = allNovels[0]?.tags?.map((t: any) => t.name) ?? []
         const filePath = await exportNovelToEpub({
           id: seriesID,
           title: seriesTitle || `系列_${seriesID}`,
@@ -142,6 +144,9 @@ export async function downloadEntireNovelSeries(
           authorId,
           seriesTitle,
           seriesDescription: seriesCaption,
+          tags: novelSeriesTags,
+          createdDate: allNovels[0]?.create_date,
+          isR18: isNovelSeriesR18,
           coverUrl: seriesCoverUrl,
           chapters,
           onProgress: (msg, cur, tot) => onProgress?.(msg, cur, tot),
@@ -198,11 +203,13 @@ export async function downloadEntireMangaSeries(
 
         const allIllusts: any[] = []
         let seriesTitle = fallbackTitle || ""
+        let seriesCaption = ""
 
         // 1. 分页获取系列全部漫画话数
         let page = await session.call((token) => illustrationSeries(seriesID, token))
         if (page?.illust_series_detail) {
           seriesTitle = page.illust_series_detail.title || seriesTitle
+          seriesCaption = page.illust_series_detail.caption || ""
         }
         if (Array.isArray(page?.illusts)) {
           allIllusts.push(...page.illusts)
@@ -228,14 +235,15 @@ export async function downloadEntireMangaSeries(
         allIllusts.sort((a, b) => (a.series_order ?? a.id) - (b.series_order ?? b.id))
 
         const quality = getDownloadImageQuality()
-        const allPages: { pageIndex: number; url: string }[] = []
+        const chapters: { id: number; title: string; pages: { pageIndex: number; url: string }[] }[] = []
         let globalPageCounter = 0
         const totalIllusts = allIllusts.length
 
         // 2. 依次拉取每话所有页的原图/大图 URL
         for (let i = 0; i < totalIllusts; i++) {
           const item = allIllusts[i]
-          const statusMsg = `正在解析话数信息 (${i + 1}/${totalIllusts}): ${item.title || ""}`
+          const chapTitle = item.title || `第 ${i + 1} 话`
+          const statusMsg = `正在解析话数信息 (${i + 1}/${totalIllusts}): ${chapTitle}`
           onProgress?.(statusMsg, i + 1, totalIllusts)
           task.updateProgress({ current: i + 1, total: totalIllusts, statusText: statusMsg })
 
@@ -243,12 +251,20 @@ export async function downloadEntireMangaSeries(
             const detail = await session.call((token) => illustrationDetail(item.id, token))
             if (detail) {
               const pageCount = detail.page_count ?? 1
+              const chapPages: { pageIndex: number; url: string }[] = []
               for (let p = 0; p < pageCount; p++) {
                 const url = imageUrlOf(detail, p, quality)
                 if (url) {
                   globalPageCounter++
-                  allPages.push({ pageIndex: globalPageCounter, url })
+                  chapPages.push({ pageIndex: globalPageCounter, url })
                 }
+              }
+              if (chapPages.length > 0) {
+                chapters.push({
+                  id: item.id,
+                  title: chapTitle,
+                  pages: chapPages,
+                })
               }
             }
           } catch (err: any) {
@@ -256,6 +272,7 @@ export async function downloadEntireMangaSeries(
           }
         }
 
+        const allPages = chapters.flatMap((c) => c.pages)
         if (allPages.length === 0) {
           await task.finish({
             success: false,
@@ -277,6 +294,7 @@ export async function downloadEntireMangaSeries(
         let downloadedCount = 0
         let totalCount = allPages.length
 
+        const isR18 = allIllusts.some((a) => (a.x_restrict ?? 0) > 0 || a.tags?.some((t: any) => /r-?18/i.test(t.name)))
         if (format === "cbz") {
           const res = await exportMangaToCbz({
             id: seriesID,
@@ -284,7 +302,11 @@ export async function downloadEntireMangaSeries(
             author: authorName,
             authorId,
             seriesTitle,
-            pages: allPages,
+            description: seriesCaption || undefined,
+            tags: allIllusts[0]?.tags?.map((t: any) => t.name) ?? [],
+            createdDate: allIllusts[0]?.create_date,
+            isR18,
+            chapters,
             onProgress: (msg, cur, tot) => onProgress?.(msg, cur, tot),
           })
           filePath = res.success ? (res.path ?? null) : null
@@ -298,7 +320,11 @@ export async function downloadEntireMangaSeries(
             author: authorName,
             authorId,
             seriesTitle,
-            pages: allPages,
+            description: seriesCaption || undefined,
+            tags: allIllusts[0]?.tags?.map((t: any) => t.name) ?? [],
+            createdDate: allIllusts[0]?.create_date,
+            isR18,
+            chapters,
             onProgress: (msg, cur, tot) => onProgress?.(msg, cur, tot),
           })
           filePath = res.success ? (res.path ?? null) : null

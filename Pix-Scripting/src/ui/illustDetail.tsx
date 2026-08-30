@@ -564,6 +564,7 @@ export function IllustDetailView(props: { illustID: number }) {
       }
 
       let filePath: string | null = null
+      const isR18 = (current.x_restrict ?? 0) > 0 || current.tags?.some((t) => /r-?18/i.test(t.name))
       if (format === "cbz") {
         const res = await exportMangaToCbz({
           id: current.id,
@@ -573,6 +574,8 @@ export function IllustDetailView(props: { illustID: number }) {
           seriesTitle: resolvedSeriesTitle ?? undefined,
           description: current.caption,
           tags: current.tags?.map((t) => t.name),
+          createdDate: current.create_date,
+          isR18,
           pages,
         })
         filePath = res.success ? (res.path ?? null) : null
@@ -585,6 +588,8 @@ export function IllustDetailView(props: { illustID: number }) {
           seriesTitle: resolvedSeriesTitle ?? undefined,
           description: current.caption,
           tags: current.tags?.map((t) => t.name),
+          createdDate: current.create_date,
+          isR18,
           pages,
         })
         filePath = res.success ? (res.path ?? null) : null

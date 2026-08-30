@@ -690,6 +690,7 @@ export function NovelDetailView(props: { novelID: number }) {
         return
       }
 
+      const isR18 = (current.x_restrict ?? 0) > 0 || current.tags?.some((t) => /r-?18/i.test(t.name))
       const filePath = await exportNovelToEpub({
         id: current.id,
         title: current.title,
@@ -698,6 +699,8 @@ export function NovelDetailView(props: { novelID: number }) {
         seriesTitle: resolvedSeriesTitle ?? undefined,
         description: current.caption,
         tags: current.tags?.map((t) => t.name),
+        createdDate: current.create_date,
+        isR18,
         coverUrl: cover,
         chapters: [
           {
