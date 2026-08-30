@@ -75,7 +75,13 @@ import {
 } from "../store/illustCache"
 import { getCachedIllustBookmark } from "../store/bookmarkSync"
 import { getSeriesByWorkID, recordWorkSeriesAssociation } from "../store/seriesCache"
-import { useAsyncGuard, useIllustBookmark, useLatest, usePagedList, currentBatchSize } from "./hooks"
+import {
+  useAsyncGuard,
+  useIllustBookmark,
+  useLatest,
+  usePagedList,
+  currentBatchSize,
+} from "./hooks"
 import type { PixivIllustration } from "../types"
 import {
   AvatarImage,
