@@ -1242,6 +1242,7 @@ export function NovelDetailView(props: { novelID: number }) {
             textEmbeddedImages={textEmbeddedImages}
             onJumpToPage={handlePageChange}
             onReady={handleReaderReady}
+            onScrollToTarget={performScrollRestoration}
           />
         ) : (
           <VStack key="novel-text-empty" padding={{ horizontal: 14 }}>
