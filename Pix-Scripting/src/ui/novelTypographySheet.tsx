@@ -1,7 +1,6 @@
 import {
   Button,
   Divider,
-  Group,
   HStack,
   Image,
   Menu,
@@ -19,14 +18,10 @@ import { isScriptingPro } from "../store/customAI"
 import {
   DEFAULT_NOVEL_READER_SETTINGS,
   loadNovelReaderSettings,
-  NOVEL_THEME_PALETTES,
   onNovelReaderSettingsChanged,
-  removeCustomBackground,
-  saveCustomBackground,
   saveNovelReaderSettings,
   type BuiltinFontId,
   type NovelReaderSettings,
-  type NovelThemeId,
 } from "../store/novelReaderSettings"
 
 const PRESET_FONTS: { id: BuiltinFontId; name: string; desc: string }[] = [
@@ -36,15 +31,11 @@ const PRESET_FONTS: { id: BuiltinFontId; name: string; desc: string }[] = [
   { id: "yuanti", name: "柔和圆体", desc: "圆体 / 亲和" },
 ]
 
-const THEME_ORDER: NovelThemeId[] = ["default", "parchment", "green", "tea", "dark", "oled"]
-
 export function NovelTypographySheet(props: { onClose?: () => void }) {
   const { onClose } = props
   const [settings, setSettings] = useState<NovelReaderSettings>(() => loadNovelReaderSettings())
   const [isPickingFont, setIsPickingFont] = useState(false)
   const [fontError, setFontError] = useState<string | null>(null)
-  const [isPickingPhoto, setIsPickingPhoto] = useState(false)
-  const [photoError, setPhotoError] = useState<string | null>(null)
 
   useEffect(() => {
     return onNovelReaderSettingsChanged((updated) => {
@@ -99,29 +90,6 @@ export function NovelTypographySheet(props: { onClose?: () => void }) {
     }
   }, [isPickingFont, updateSetting])
 
-  const handlePickPhoto = useCallback(async () => {
-    if (isPickingPhoto) return
-    setIsPickingPhoto(true)
-    setPhotoError(null)
-    try {
-      if (typeof Photos !== "undefined" && typeof Photos.pickPhotos === "function") {
-        const images = await Photos.pickPhotos(1)
-        if (images && images.length > 0) {
-          const success = await saveCustomBackground(images[0])
-          if (success) {
-            updateSetting({ themeId: "custom", customBgExists: true })
-          } else {
-            setPhotoError("保存背景图片失败，请重试")
-          }
-        }
-      }
-    } catch {
-      setPhotoError("选取图片失败，请检查相册访问权限")
-    } finally {
-      setIsPickingPhoto(false)
-    }
-  }, [isPickingPhoto, updateSetting])
-
   const handleReset = useCallback(() => {
     try {
       if (typeof HapticFeedback !== "undefined") {
@@ -130,15 +98,15 @@ export function NovelTypographySheet(props: { onClose?: () => void }) {
     } catch {
       // 忽略震动异常
     }
-    const updated = saveNovelReaderSettings({
-      ...DEFAULT_NOVEL_READER_SETTINGS,
-      customBgExists: settings.customBgExists,
-    })
+    const updated = saveNovelReaderSettings(DEFAULT_NOVEL_READER_SETTINGS)
     setSettings(updated)
-  }, [settings.customBgExists])
+  }, [])
 
   return (
-    <NavigationStack>
+    <NavigationStack
+      presentationDetents={["medium", "large"]}
+      presentationDragIndicator="visible"
+    >
       <ScrollView
         navigationTitle="版式"
         navigationBarTitleDisplayMode="inline"
@@ -185,134 +153,7 @@ export function NovelTypographySheet(props: { onClose?: () => void }) {
         }}
       >
         <VStack spacing={20} padding={{ horizontal: 16, top: 12, bottom: 32 }} frame={{ maxWidth: "infinity" }}>
-          {/* 1. 主题 */}
-          <VStack alignment="leading" spacing={8} frame={{ maxWidth: "infinity" }}>
-            <HStack spacing={6} alignment="center">
-              <Image systemName="paintpalette.fill" font="headline" foregroundStyle="#007AFF" />
-              <Text font="headline" fontWeight="bold">
-                主题
-              </Text>
-            </HStack>
-
-            <VStack
-              spacing={0}
-              glassEffect={{ type: "rect", cornerRadius: 14 }}
-              contentShape={{ type: "rect", cornerRadius: 14 }}
-              frame={{ maxWidth: "infinity" }}
-            >
-              {/* 第一行：预设主题 */}
-              <HStack alignment="center" padding={{ horizontal: 16, vertical: 13 }} frame={{ maxWidth: "infinity" }}>
-                <Text font="body">预设主题</Text>
-                <Spacer />
-                <Menu
-                  label={
-                    <HStack spacing={4} alignment="center">
-                      <Text font="body" foregroundStyle="secondaryLabel">
-                        {settings.themeId !== "custom"
-                          ? NOVEL_THEME_PALETTES[settings.themeId]?.name ?? "系统主题"
-                          : "选择主题"}
-                      </Text>
-                      <Image systemName="chevron.up.chevron.down" font="caption2" foregroundStyle="tertiaryLabel" />
-                    </HStack>
-                  }
-                >
-                  {THEME_ORDER.map((themeId) => {
-                    const theme = NOVEL_THEME_PALETTES[themeId]
-                    const isSelected = settings.themeId === themeId
-                    return (
-                      <Button
-                        key={themeId}
-                        title={theme.name}
-                        systemImage={isSelected ? "checkmark" : undefined}
-                        action={() => updateSetting({ themeId })}
-                      />
-                    )
-                  })}
-                </Menu>
-              </HStack>
-
-              <Divider padding={{ leading: 16 }} />
-
-              {/* 第二行：自定义主题 */}
-              <HStack alignment="center" padding={{ horizontal: 16, vertical: 13 }} frame={{ maxWidth: "infinity" }}>
-                <Text font="body">自定义主题</Text>
-                <Spacer />
-                <Button
-                  buttonStyle="plain"
-                  action={() => void handlePickPhoto()}
-                >
-                  <HStack spacing={6} alignment="center">
-                    <Text font="body" foregroundStyle="secondaryLabel" lineLimit={1}>
-                      {settings.customBgExists && settings.themeId === "custom"
-                        ? "已启用相册壁纸"
-                        : "从相册选取"}
-                    </Text>
-                    <Image
-                      systemName="photo.on.rectangle.angled"
-                      font="body"
-                      foregroundStyle="secondaryLabel"
-                    />
-                  </HStack>
-                </Button>
-              </HStack>
-
-              {/* 当自定义壁纸存在且已选用自定义主题时，提供高级遮罩调节 */}
-              {settings.themeId === "custom" && settings.customBgExists ? (
-                <VStack spacing={10} padding={{ horizontal: 16, top: 8, bottom: 12 }} frame={{ maxWidth: "infinity" }}>
-                  <Divider />
-                  <HStack alignment="center" frame={{ maxWidth: "infinity" }}>
-                    <Text font="footnote" foregroundStyle="secondaryLabel">
-                      背景暗度遮罩 ({Math.round(settings.customBgMaskOpacity * 100)}%)
-                    </Text>
-                    <Spacer />
-                    <HStack spacing={6}>
-                      <Button
-                        title="暗色遮罩"
-                        buttonStyle={settings.customBgMaskColor === "black" ? "borderedProminent" : "bordered"}
-                        controlSize="mini"
-                        action={() => updateSetting({ customBgMaskColor: "black" })}
-                      />
-                      <Button
-                        title="浅色遮罩"
-                        buttonStyle={settings.customBgMaskColor === "white" ? "borderedProminent" : "bordered"}
-                        controlSize="mini"
-                        action={() => updateSetting({ customBgMaskColor: "white" })}
-                      />
-                    </HStack>
-                  </HStack>
-
-                  <Slider
-                    min={0.0}
-                    max={0.8}
-                    step={0.05}
-                    value={settings.customBgMaskOpacity}
-                    onChanged={(val) => updateSetting({ customBgMaskOpacity: val })}
-                  />
-
-                  <HStack alignment="center" frame={{ maxWidth: "infinity" }}>
-                    <Spacer />
-                    <Button
-                      buttonStyle="borderless"
-                      controlSize="small"
-                      action={() => removeCustomBackground()}
-                    >
-                      <Text font="footnote" foregroundStyle="#FF3B30">
-                        清除相册壁纸
-                      </Text>
-                    </Button>
-                  </HStack>
-                </VStack>
-              ) : null}
-
-              {photoError ? (
-                <Text font="caption2" foregroundStyle="#FF3B30" padding={{ horizontal: 16, bottom: 8 }}>
-                  {photoError}
-                </Text>
-              ) : null}
-            </VStack>
-          </VStack>
-
-          {/* 2. 排版 */}
+          {/* 1. 排版 */}
           <VStack alignment="leading" spacing={8} frame={{ maxWidth: "infinity" }}>
             <HStack spacing={6} alignment="center">
               <Image systemName="rectangle.and.text.magnifyingglass" font="headline" foregroundStyle="#007AFF" />
@@ -394,7 +235,7 @@ export function NovelTypographySheet(props: { onClose?: () => void }) {
             </VStack>
           </VStack>
 
-          {/* 3. 字体 */}
+          {/* 2. 字体 */}
           <VStack alignment="leading" spacing={8} frame={{ maxWidth: "infinity" }}>
             <HStack spacing={6} alignment="center">
               <Text font="headline" fontWeight="bold" foregroundStyle="#007AFF">
@@ -529,7 +370,7 @@ export function NovelTypographySheet(props: { onClose?: () => void }) {
 
               <Divider padding={{ leading: 16 }} />
 
-              {/* 第四行：字号（保留当前滑块） */}
+              {/* 第四行：字号 */}
               <VStack spacing={8} padding={{ horizontal: 16, vertical: 13 }} frame={{ maxWidth: "infinity" }}>
                 <HStack alignment="center" frame={{ maxWidth: "infinity" }}>
                   <Text font="body">字号</Text>

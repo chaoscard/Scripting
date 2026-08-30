@@ -15,7 +15,6 @@ import {
   VStack,
   WebView,
   type Color,
-  type StyledText,
 } from "scripting"
 import { requestPixivRoute } from "./routeNavigation"
 import { CachedImage, presentExternalURL, routeForDescriptionLink } from "./components"
@@ -27,11 +26,9 @@ import type { PixivIllustration, TextEmbeddedImage } from "../types"
 import {
   calculateLineSpacing,
   loadNovelReaderSettings,
-  NOVEL_THEME_PALETTES,
   onNovelReaderSettingsChanged,
   resolveFontName,
   type NovelReaderSettings,
-  type NovelThemePalette,
 } from "../store/novelReaderSettings"
 import { getNovelProgress, recordNovelProgress } from "../store/novelProgress"
 
@@ -57,13 +54,26 @@ export function formatPixivRubyText(rawText: string): string {
 }
 
 /**
- * 将 Pixiv 小说注音 [[rb: 汉字 > 假名]] 转换为 HTML <ruby> 标签
+ * 将 Pixiv 小说注音与 jumpuri 链接转换为 HTML 标签
  */
 export function formatPixivRubyToHtml(rawText: string): string {
   if (!rawText) return ""
-  if (!rawText.includes("[[rb:")) return escapeHtml(rawText)
-  const parts = rawText.split(/(\[\[rb:\s*[^>\r\n]+?\s*(?:>|&gt;)\s*[^\]\r\n]+?\s*\]\])/g)
-  return parts
+  // 1. 处理 [[jumpuri: 标题 > url]]
+  let textWithLinks = rawText
+  if (textWithLinks.includes("[[jumpuri:")) {
+    textWithLinks = textWithLinks.replace(
+      /\[\[jumpuri:\s*([^\r\n>]+?)\s*(?:>|&gt;)\s*([^\r\n\]]+?)\s*\]\]/gi,
+      (_, title: string, url: string) => {
+        const safeUrl = url.trim()
+        const safeTitle = title.trim()
+        return `___JUMPURI___${encodeURIComponent(safeUrl)}___${encodeURIComponent(safeTitle)}___`
+      }
+    )
+  }
+
+  // 2. 处理 [[rb: 汉字 > 假名]]
+  const parts = textWithLinks.split(/(\[\[rb:\s*[^>\r\n]+?\s*(?:>|&gt;)\s*[^\]\r\n]+?\s*\]\])/g)
+  let html = parts
     .map((part) => {
       const match = part.match(/^\[\[rb:\s*([^>\r\n]+?)\s*(?:>|&gt;)\s*([^\]\r\n]+?)\s*\]\]$/)
       if (match) {
@@ -72,135 +82,39 @@ export function formatPixivRubyToHtml(rawText: string): string {
       return escapeHtml(part)
     })
     .join("")
-}
 
-const URL_CHAR = "[a-zA-Z0-9\\-._~:/?#\\[\\]@!$&'()*+,;%=]"
-const INLINE_LINK_PATTERN = new RegExp(
-  "(?:https?:\\/\\/|www\\.)" + URL_CHAR + "+|" +
-  "(?:https?:\\/\\/)?(?:www\\.)?pixiv\\.net\\/(?:[a-zA-Z]{2}(?:-[a-zA-Z0-9]+)?\\/)?(?:users?|user|artworks|novels?|novel|manga|illusts?|illust|tags)" + URL_CHAR + "*|" +
-  "\\/?(?:users?|user|artworks|novels?|novel|manga|illusts?|illust)\\/" + URL_CHAR + "+|" +
-  "(?:pixiv\\.net\\/|\\/)?(?:[a-zA-Z]{2}(?:-[a-zA-Z0-9]+)?\\/)?novel\\/show\\.php\\?[^#\\s<>\"]+|" +
-  "(?:pixiv\\.net\\/|\\/)?(?:[a-zA-Z]{2}(?:-[a-zA-Z0-9]+)?\\/)?member\\.php\\?[^#\\s<>\"]+|" +
-  "(?:pixiv\\.net\\/|\\/)?(?:[a-zA-Z]{2}(?:-[a-zA-Z0-9]+)?\\/)?member_illust\\.php\\?[^#\\s<>\"]+|" +
-  "\\b(?:uid|pid|nid)\\s*[:：#=]?\\s*\\d+\\b|" +
-  "pixiv:\\/\\/" + URL_CHAR + "+",
-  "gi"
-)
-
-function containsPotentialLink(text: string): boolean {
-  if (!text) return false
-  return (
-    text.includes("http://") ||
-    text.includes("https://") ||
-    text.includes("www.") ||
-    text.includes("pixiv.net") ||
-    text.includes("pixiv://") ||
-    text.includes("/user/") ||
-    text.includes("/users/") ||
-    text.includes("/artworks/") ||
-    text.includes("/novel/") ||
-    text.includes("/novels/") ||
-    text.includes("/illust/") ||
-    text.includes("/illusts/") ||
-    text.includes("/tags/") ||
-    text.includes(".php?") ||
-    /\b(?:uid|pid|nid)\b/i.test(text)
+  // 3. 还原 jumpuri 链接
+  html = html.replace(
+    /___JUMPURI___([^_]+)___([^_]+)___/g,
+    (_, encodedUrl: string, encodedTitle: string) => {
+      const url = decodeURIComponent(encodedUrl)
+      const title = decodeURIComponent(encodedTitle)
+      return `<a href="javascript:handleLinkClick(${JSON.stringify(url)})">${escapeHtml(title)}</a>`
+    }
   )
+
+  return html
 }
 
-export function parseNovelParagraphSegments(
-  rawText: string,
-  onNavigate: (url: string) => void
-): (string | any)[] {
-  const text = formatPixivRubyText(rawText)
+export type NovelChunkType =
+  | "text"
+  | "newpage"
+  | "chapter"
+  | "uploadedimage"
+  | "pixivimage"
+  | "jump"
 
-  const hasJumpuri = text.includes("[[jumpuri:")
-  const hasLink = containsPotentialLink(text)
-
-  if (!hasJumpuri && !hasLink) {
-    return [text]
-  }
-
-  const jumpuris: { label: string; url: string }[] = []
-  const textWithPlaceholders = hasJumpuri
-    ? text.replace(
-        /\[\[jumpuri:\s*([^\r\n>]+?)\s*(?:>|&gt;)\s*([^\r\n\]]+?)\s*\]\]/g,
-        (_, label: string, url: string) => {
-          const idx = jumpuris.length
-          jumpuris.push({ label: label.trim(), url: url.trim() })
-          return `\uE000JUMPURI_${idx}\uE001`
-        }
-      )
-    : text
-
-  const items: (string | any)[] = []
-  const jumpParts = hasJumpuri
-    ? textWithPlaceholders.split(/(\uE000JUMPURI_\d+\uE001)/g)
-    : [textWithPlaceholders]
-
-  for (const part of jumpParts) {
-    if (!part) continue
-    if (hasJumpuri) {
-      const jMatch = part.match(/^\uE000JUMPURI_(\d+)\uE001$/)
-      if (jMatch) {
-        const jItem = jumpuris[Number(jMatch[1])]
-        if (jItem) {
-          items.push({
-            content: jItem.label,
-            foregroundColor: "#007AFF",
-            underlineStyle: "single",
-            onTapGesture: () => onNavigate(jItem.url),
-          })
-        }
-        continue
-      }
-    }
-
-    if (!containsPotentialLink(part)) {
-      items.push(part)
-      continue
-    }
-
-    let cursor = 0
-    let match: RegExpExecArray | null
-    INLINE_LINK_PATTERN.lastIndex = 0
-
-    while ((match = INLINE_LINK_PATTERN.exec(part)) != null) {
-      if (match.index > cursor) {
-        items.push(part.slice(cursor, match.index))
-      }
-      const raw = match[0]
-      const link = raw.replace(/[),.，。！!？?;；）】》」』、]+$/, "")
-      const trailingPunct = raw.slice(link.length)
-      if (link) {
-        items.push({
-          content: link,
-          foregroundColor: "#007AFF",
-          underlineStyle: "single",
-          onTapGesture: () => onNavigate(link),
-        })
-      }
-      if (trailingPunct) {
-        items.push(trailingPunct)
-      }
-      cursor = match.index + raw.length
-    }
-
-    if (cursor < part.length) {
-      items.push(part.slice(cursor))
-    }
-  }
-
-  return items
+export interface NovelChunkItem {
+  type: NovelChunkType
+  id: string
+  text?: string
+  page?: number
+  chapter?: number
+  title?: string
+  imageId?: string
+  info?: TextEmbeddedImage
+  illustId?: number
 }
-
-export type NovelChunkItem =
-  | { type: "text"; id: string; text: string }
-  | { type: "chapter"; id: string; title: string; chapterIndex: number }
-  | { type: "newpage"; id: string; page: number }
-  | { type: "jump"; id: string; page: number }
-  | { type: "uploadedimage"; id: string; imageId: string; info?: TextEmbeddedImage }
-  | { type: "pixivimage"; id: string; illustId: number; page?: number }
 
 interface NovelParserState {
   pageIndex: number
@@ -257,26 +171,25 @@ function processLineIntoNovelItems(
       type: "chapter",
       id: `chapter-${state.chapterIndex}`,
       title: chapterMatch[1].trim(),
-      chapterIndex: state.chapterIndex,
     })
     return
   }
 
-  // 3. [jump: xxx]
+  // 3. [jump: page]
   const jumpMatch = trimmedLine.match(/^\[jump\s*[:：]\s*(\d+)\]$/i)
   if (jumpMatch) {
     flushTextBuffer(state)
     const targetPage = parseInt(jumpMatch[1], 10)
     state.items.push({
       type: "jump",
-      id: `jump-${state.items.length}`,
+      id: `jump-${targetPage}-${state.items.length}`,
       page: targetPage,
     })
     return
   }
 
   // 4. [uploadedimage: xxx]
-  const UP_IMG_INLINE = /\[(?:uploadedimage|uploadimage)\s*[:：]\s*([a-zA-Z0-9_\-]+)\s*\]/gi
+  const UP_IMG_INLINE = /\[uploadedimage\s*[:：]\s*([^\s\]]+)\s*\]/gi
   if (UP_IMG_INLINE.test(rawLine)) {
     UP_IMG_INLINE.lastIndex = 0
     let cursor = 0
@@ -357,6 +270,7 @@ function processLineIntoNovelItems(
   state.currentBuffer.push(rawLine)
   state.currentBufferChars += rawLine.length + 1
 
+  // 长段落自动分块，保持 0ms 滚动与精确定位
   if (state.currentBufferChars > 1500) {
     flushTextBuffer(state)
   }
@@ -400,7 +314,7 @@ export function groupChunksByPage(chunks: NovelChunkItem[]): NovelPageBlock[] {
 
   for (const chunk of chunks) {
     if (chunk.type === "newpage") {
-      currentBlock = { page: chunk.page, items: [chunk] }
+      currentBlock = { page: chunk.page ?? 1, items: [chunk] }
       pages.push(currentBlock)
     } else {
       currentBlock.items.push(chunk)
@@ -410,15 +324,44 @@ export function groupChunksByPage(chunks: NovelChunkItem[]): NovelPageBlock[] {
   return pages
 }
 
+function getLocalImageDataUrl(filePath: string): string | null {
+  try {
+    if (!FileManager.existsSync(filePath)) return null
+    const data = FileManager.readAsDataSync(filePath)
+    if (!data) return null
+    const lower = filePath.toLowerCase()
+    const mime = lower.endsWith(".png")
+      ? "image/png"
+      : lower.endsWith(".webp")
+      ? "image/webp"
+      : "image/jpeg"
+    return `data:${mime};base64,${data.toBase64String()}`
+  } catch {
+    return null
+  }
+}
+
+function getUploadedImageUrl(info?: TextEmbeddedImage): string | null {
+  if (!info) return null
+  return (
+    info.urls?.["1200x1200"] ||
+    info.urls?.original ||
+    info.urls?.["480mw"] ||
+    (info as any)?.urls?.large ||
+    (info as any)?.urls?.medium ||
+    (info as any)?.url ||
+    null
+  )
+}
+
 /**
- * 文本段落渲染（纯原生 Text 渲染，整页流畅划词选区）
+ * 文本段落渲染（纯原生 Text 渲染，整页一体化滚动，支持精确划词与复制）
  */
 function NovelChunkTextView(props: {
   text: string
   settings: NovelReaderSettings
-  palette: NovelThemePalette
 }) {
-  const { text, settings, palette } = props
+  const { text, settings } = props
 
   const fontName = resolveFontName(settings.fontId, settings.customFontPostscriptName)
   const lineSpacing = calculateLineSpacing(settings.fontSize, settings.lineSpacingLevel)
@@ -430,95 +373,48 @@ function NovelChunkTextView(props: {
     return settings.fontSize
   }, [fontName, settings.fontSize])
 
-  // 格式化注音为标准文本 汉字(假名)
   const plainFormattedText = useMemo(() => formatPixivRubyText(text), [text])
-
-  const hasLink = useMemo(() => {
-    return text.includes("[[jumpuri:") || containsPotentialLink(text)
-  }, [text])
-
-  if (!hasLink) {
-    return (
-      <Text
-        font={resolvedFont}
-        fontWeight={settings.fontWeight}
-        lineSpacing={lineSpacing}
-        foregroundStyle={palette.textColor ?? undefined}
-        multilineTextAlignment="leading"
-        textSelection={true}
-        padding={{ horizontal: 16, vertical: 3 }}
-        frame={{ maxWidth: "infinity", alignment: "leading" }}
-      >
-        {plainFormattedText}
-      </Text>
-    )
-  }
-
-  const styledText = useMemo<StyledText>(() => {
-    const items = parseNovelParagraphSegments(text, (rawUrl) => {
-      const target = routeForDescriptionLink(rawUrl) ?? rawUrl
-      if (target.startsWith("http://") || target.startsWith("https://")) {
-        void presentExternalURL(target)
-      } else {
-        requestPixivRoute(target)
-      }
-    })
-
-    return {
-      font: resolvedFont,
-      fontWeight: settings.fontWeight,
-      foregroundColor: palette.textColor ?? undefined,
-      paragraphStyle: {
-        alignment: "left",
-        lineBreakMode: "byCharWrapping",
-        lineSpacing,
-      },
-      content: items,
-    }
-  }, [text, resolvedFont, settings.fontWeight, palette.textColor, lineSpacing])
 
   return (
     <Text
-      styledText={styledText}
+      font={resolvedFont}
+      fontWeight={settings.fontWeight}
+      lineSpacing={lineSpacing}
       multilineTextAlignment="leading"
       textSelection={true}
       padding={{ horizontal: 16, vertical: 3 }}
       frame={{ maxWidth: "infinity", alignment: "leading" }}
-    />
+    >
+      {plainFormattedText}
+    </Text>
   )
 }
 
 /**
- * 作者上传的正文插图（带系统级长按菜单与圆角卡片）
+ * 正文插图卡片（带长按保存与清晰图预览）
  */
 function NovelUploadedImageItemView(props: {
   imageId: string
   imageInfo?: TextEmbeddedImage
 }) {
   const { imageId, imageInfo } = props
+  const url = getUploadedImageUrl(imageInfo)
 
-  const highResUrl =
-    imageInfo?.urls?.["1200x1200"] ||
-    imageInfo?.urls?.original ||
-    imageInfo?.urls?.["480mw"] ||
-    (imageInfo as any)?.urls?.large ||
-    (imageInfo as any)?.urls?.medium ||
-    (imageInfo as any)?.url ||
-    null
+  const handleSaveToAlbum = useCallback(async () => {
+    if (!url) return
+    const path = await loadImage(url, -1000)
+    if (!path) return
+    const success = await saveImageToPixivAlbum(path)
+    if (success) {
+      void Dialog.alert({ title: "已保存", message: "插图已成功保存至系统相簿" })
+    }
+  }, [url])
 
-  const previewUrl =
-    imageInfo?.urls?.["240mw"] ||
-    imageInfo?.urls?.["128x128"] ||
-    (imageInfo as any)?.urls?.small ||
-    (imageInfo as any)?.urls?.thumb ||
-    (imageInfo as any)?.previewUrl ||
-    null
-
-  if (!highResUrl && !previewUrl) {
+  if (!url) {
     return (
       <HStack
         spacing={8}
-        padding={{ horizontal: 16, vertical: 8 }}
+        padding={{ horizontal: 16, vertical: 10 }}
         alignment="center"
         frame={{ maxWidth: "infinity" }}
       >
@@ -539,43 +435,31 @@ function NovelUploadedImageItemView(props: {
 
   return (
     <VStack
-      spacing={6}
+      spacing={8}
       alignment="center"
       padding={{ horizontal: 16, vertical: 10 }}
       frame={{ maxWidth: "infinity" }}
-      contextMenu={
-        highResUrl
-          ? {
-              menuItems: (
-                <Group>
-                  <Button
-                    title="保存至相册"
-                    systemImage="square.and.arrow.down"
-                    action={() => {
-                      void saveImageToPixivAlbum(highResUrl, `novel_img_${imageId}.jpg`)
-                    }}
-                  />
-                  <Button
-                    title="复制图片链接"
-                    systemImage="link"
-                    action={() => {
-                      void Pasteboard.setString(highResUrl)
-                    }}
-                  />
-                </Group>
-              ),
-            }
-          : undefined
-      }
     >
-      <CachedImage
-        url={highResUrl}
-        previewUrl={previewUrl}
-        useIntrinsicAspectRatio={true}
-        cornerRadius={10}
-        contentMode="fit"
-        frame={{ maxWidth: "infinity" }}
-      />
+      <VStack
+        glassEffect={{ type: "rect", cornerRadius: 14 }}
+        clipped={true}
+        contextMenu={{
+          menuItems: (
+            <Button
+              title="保存插图至相簿"
+              systemImage="square.and.arrow.down"
+              action={handleSaveToAlbum}
+            />
+          ),
+        }}
+      >
+        <CachedImage
+          url={url}
+          priority={-1000}
+          frame={{ maxWidth: 360, maxHeight: 360 }}
+          cornerRadius={14}
+        />
+      </VStack>
     </VStack>
   )
 }
@@ -662,7 +546,6 @@ function NovelPixivImageItemView(props: {
   const pageIdx = Math.max(0, (page || 1) - 1)
   const highResUrl = imageUrlOf(illust, pageIdx, "large")
   const previewUrl = pageThumbUrlOf(illust, pageIdx)
-  const aspect = illust.width && illust.height ? illust.width / illust.height : undefined
 
   return (
     <VStack
@@ -682,21 +565,23 @@ function NovelPixivImageItemView(props: {
                   <Group>
                     <Button
                       title="查看插画详情"
-                      systemImage="photo"
+                      systemImage="arrow.up.right.square"
                       action={() => requestPixivRoute(`illust:${illustId}`)}
                     />
                     <Button
-                      title="保存至相册"
+                      title="保存插画至相簿"
                       systemImage="square.and.arrow.down"
-                      action={() => {
-                        void saveImageToPixivAlbum(highResUrl, `illust_${illustId}_p${pageIdx}.jpg`)
-                      }}
-                    />
-                    <Button
-                      title="复制图片链接"
-                      systemImage="link"
-                      action={() => {
-                        void Pasteboard.setString(highResUrl)
+                      action={async () => {
+                        const path = await loadImage(highResUrl, -1000)
+                        if (path) {
+                          const success = await saveImageToPixivAlbum(path)
+                          if (success) {
+                            void Dialog.alert({
+                              title: "已保存",
+                              message: "插画原图已成功保存至系统相簿",
+                            })
+                          }
+                        }
                       }}
                     />
                   </Group>
@@ -705,18 +590,25 @@ function NovelPixivImageItemView(props: {
             : undefined
         }
       >
-        <VStack spacing={8} alignment="center" frame={{ maxWidth: "infinity" }}>
-          <CachedImage
-            url={highResUrl}
-            previewUrl={previewUrl}
-            aspectRatioValue={aspect}
-            useIntrinsicAspectRatio={true}
-            cornerRadius={10}
-            contentMode="fit"
-            frame={{ maxWidth: "infinity" }}
-          />
-          <HStack spacing={4} alignment="center">
-            <Text font="subheadline" fontWeight="medium" foregroundStyle="#007AFF" lineLimit={1}>
+        <VStack
+          alignment="center"
+          spacing={8}
+          padding={{ horizontal: 12, vertical: 12 }}
+          glassEffect={{ type: "rect", cornerRadius: 14 }}
+          frame={{ maxWidth: "infinity" }}
+        >
+          {previewUrl || highResUrl ? (
+            <CachedImage
+              url={highResUrl || previewUrl}
+              previewUrl={previewUrl ?? undefined}
+              priority={-1000}
+              frame={{ maxWidth: 320, maxHeight: 320 }}
+              cornerRadius={10}
+            />
+          ) : null}
+
+          <HStack spacing={6} alignment="center">
+            <Text font="caption" fontWeight="semibold" foregroundStyle="#007AFF" lineLimit={1}>
               {illust.title}
             </Text>
             {illust.user?.name ? (
@@ -736,13 +628,12 @@ function NovelChunkRenderer(props: {
   item: NovelChunkItem
   markerPage?: number | null
   settings: NovelReaderSettings
-  palette: NovelThemePalette
   onJumpToPage?: (page: number) => void
 }) {
-  const { item, markerPage, settings, palette, onJumpToPage } = props
+  const { item, markerPage, settings, onJumpToPage } = props
 
-  if (item.type === "text") {
-    return <NovelChunkTextView text={item.text} settings={settings} palette={palette} />
+  if (item.type === "text" && item.text) {
+    return <NovelChunkTextView text={item.text} settings={settings} />
   }
 
   if (item.type === "chapter") {
@@ -761,10 +652,9 @@ function NovelChunkRenderer(props: {
         <Text
           font="title3"
           fontWeight="bold"
-          foregroundStyle={palette.textColor ?? undefined}
           frame={{ maxWidth: "infinity", alignment: "leading" }}
         >
-          {item.title}
+          {item.title ?? ""}
         </Text>
         <Divider />
       </VStack>
@@ -785,7 +675,7 @@ function NovelChunkRenderer(props: {
         </VStack>
         <HStack spacing={4} alignment="center">
           <Image
-            systemName={isBookmark ? "book.pages.fill" : "book.pages"}
+            systemName={isBookmark ? "book.pages.fill" : "doc.text"}
             font="footnote"
             foregroundStyle={isBookmark ? "#007AFF" : "secondaryLabel"}
           />
@@ -804,7 +694,7 @@ function NovelChunkRenderer(props: {
     )
   }
 
-  if (item.type === "jump") {
+  if (item.type === "jump" && item.page) {
     return (
       <HStack
         spacing={8}
@@ -812,7 +702,7 @@ function NovelChunkRenderer(props: {
         frame={{ maxWidth: "infinity" }}
       >
         <Button
-          action={() => onJumpToPage?.(item.page)}
+          action={() => onJumpToPage?.(item.page ?? 1)}
           buttonStyle="plain"
           frame={{ maxWidth: "infinity" }}
         >
@@ -831,83 +721,58 @@ function NovelChunkRenderer(props: {
     )
   }
 
-  if (item.type === "uploadedimage") {
+  if (item.type === "uploadedimage" && item.imageId) {
     return <NovelUploadedImageItemView imageId={item.imageId} imageInfo={item.info} />
   }
 
-  if (item.type === "pixivimage") {
+  if (item.type === "pixivimage" && item.illustId) {
     return <NovelPixivImageItemView illustId={item.illustId} page={item.page} />
   }
 
   return null
 }
 
-function getLocalImageDataUrl(filePath: string): string | null {
-  try {
-    if (!FileManager.existsSync(filePath)) return null
-    const data = FileManager.readAsDataSync(filePath)
-    if (!data) return null
-    const lower = filePath.toLowerCase()
-    const mime = lower.endsWith(".png")
-      ? "image/png"
-      : lower.endsWith(".webp")
-      ? "image/webp"
-      : "image/jpeg"
-    return `data:${mime};base64,${data.toBase64String()}`
-  } catch {
-    return null
-  }
-}
-
-function getUploadedImageUrl(info?: TextEmbeddedImage): string | null {
-  if (!info) return null
-  return (
-    info.urls?.["1200x1200"] ||
-    info.urls?.original ||
-    info.urls?.["480mw"] ||
-    (info as any)?.urls?.large ||
-    (info as any)?.urls?.medium ||
-    (info as any)?.url ||
-    null
-  )
-}
-
 /**
- * 计算竖排文库本排版样式与主题 CSS 变量配置
+ * 竖向文库本文本排版 HTML 生成器
  */
-function computeVerticalTypographyConfig(
+export function buildVerticalHtml(
+  chunks: NovelChunkItem[],
   settings: NovelReaderSettings,
-  palette: NovelThemePalette
-) {
+  targetChunkId?: string | null,
+  targetPage?: number | null,
+  imageCache?: Record<
+    string,
+    { dataUrl: string; title?: string; author?: string; illustId?: number }
+  >
+): string {
   const fontName = resolveFontName(settings.fontId, settings.customFontPostscriptName)
-  const fontFamily = fontName
-    ? `"${fontName}", "Songti SC", "Hiragino Mincho ProN", "PingFang SC", serif`
-    : `"-apple-system", "PingFang SC", "Songti SC", "Hiragino Mincho ProN", serif`
+  let fontFamily = "-apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif"
+  if (fontName) {
+    fontFamily = `"${fontName}", -apple-system, BlinkMacSystemFont, sans-serif`
+  } else if (settings.fontId === "songti") {
+    fontFamily = "ui-serif, 'Songti SC', 'Source Han Serif SC', 'Hiragino Mincho ProN', serif"
+  } else if (settings.fontId === "kaiti") {
+    fontFamily = "'Kaiti SC', 'STKaiti', serif"
+  } else if (settings.fontId === "yuanti") {
+    fontFamily = "'Yuanti SC', 'STYuan', sans-serif"
+  }
 
-  const fontWeight =
-    settings.fontWeight === "bold"
-      ? "bold"
-      : settings.fontWeight === "medium"
-      ? "500"
-      : "normal"
+  const weightMap: Record<string, string> = {
+    ultraLight: "100",
+    thin: "200",
+    light: "300",
+    regular: "400",
+    medium: "500",
+    semibold: "600",
+    bold: "700",
+    heavy: "800",
+    black: "900",
+  }
+  const fontWeight = weightMap[settings.fontWeight] || "400"
   const lineSpacing = calculateLineSpacing(settings.fontSize, settings.lineSpacingLevel)
   const lineHeight = ((settings.fontSize + lineSpacing) / settings.fontSize).toFixed(2)
 
-  let themeConfig: {
-    colorScheme?: string
-    bgColor?: string
-    textColor?: string
-    secondaryTextColor?: string
-    dividerColor?: string
-    accentColor?: string
-  } = {}
-
-  let themeCssVars = ""
-  let colorSchemeMeta = '<meta name="color-scheme" content="light dark">'
-
-  if (settings.themeId === "default") {
-    colorSchemeMeta = '<meta name="color-scheme" content="light dark">'
-    themeCssVars = `
+  const themeCssVars = `
   :root {
     color-scheme: light dark;
     --bg-color: transparent;
@@ -925,107 +790,19 @@ function computeVerticalTypographyConfig(
       --accent-color: #0A84FF;
     }
   }`
-    themeConfig = {
-      colorScheme: "light dark",
-      bgColor: "transparent",
-      textColor: "",
-      secondaryTextColor: "",
-      dividerColor: "",
-      accentColor: "",
-    }
-  } else if (settings.themeId === "custom") {
-    const isDarkMask = settings.customBgMaskColor === "black"
-    colorSchemeMeta = `<meta name="color-scheme" content="${isDarkMask ? "dark" : "light"}">`
-    themeCssVars = `
-  :root {
-    color-scheme: ${isDarkMask ? "dark" : "light"};
-    --bg-color: transparent;
-    --text-color: ${isDarkMask ? "#F2F2F7" : "#1C1C1E"};
-    --secondary-text-color: ${isDarkMask ? "#A0A0A5" : "#8E8E93"};
-    --divider-color: ${isDarkMask ? "rgba(255, 255, 255, 0.2)" : "rgba(128, 128, 128, 0.2)"};
-    --accent-color: ${isDarkMask ? "#0A84FF" : "#007AFF"};
-  }`
-    themeConfig = {
-      colorScheme: isDarkMask ? "dark" : "light",
-      bgColor: "transparent",
-      textColor: isDarkMask ? "#F2F2F7" : "#1C1C1E",
-      secondaryTextColor: isDarkMask ? "#A0A0A5" : "#8E8E93",
-      dividerColor: isDarkMask ? "rgba(255, 255, 255, 0.2)" : "rgba(128, 128, 128, 0.2)",
-      accentColor: isDarkMask ? "#0A84FF" : "#007AFF",
-    }
-  } else {
-    const isDark = palette.isDark
-    colorSchemeMeta = `<meta name="color-scheme" content="${isDark ? "dark" : "light"}">`
-    const bg = palette.backgroundColor ?? (isDark ? "#000000" : "#FFFFFF")
-    const text = palette.textColor ?? (isDark ? "#F2F2F7" : "#1C1C1E")
-    const secondaryText = palette.secondaryTextColor ?? (isDark ? "#68686C" : "#8E8E93")
-    const divider =
-      palette.dividerColor ?? (isDark ? "rgba(255, 255, 255, 0.12)" : "rgba(128, 128, 128, 0.2)")
-    const accent = isDark ? "#0A84FF" : "#007AFF"
-
-    themeCssVars = `
-  :root {
-    color-scheme: ${isDark ? "dark" : "light"};
-    --bg-color: ${bg};
-    --text-color: ${text};
-    --secondary-text-color: ${secondaryText};
-    --divider-color: ${divider};
-    --accent-color: ${accent};
-  }`
-    themeConfig = {
-      colorScheme: isDark ? "dark" : "light",
-      bgColor: bg,
-      textColor: text,
-      secondaryTextColor: secondaryText,
-      dividerColor: divider,
-      accentColor: accent,
-    }
-  }
-
-  return {
-    fontFamily,
-    fontSize: settings.fontSize,
-    fontWeight,
-    lineHeight,
-    colorSchemeMeta,
-    themeCssVars,
-    themeConfig,
-  }
-}
-
-/**
- * 竖向文库本文本排版 HTML 生成器
- */
-function buildVerticalHtml(
-  chunks: NovelChunkItem[],
-  settings: NovelReaderSettings,
-  palette: NovelThemePalette,
-  targetChunkId?: string | null,
-  targetPage?: number | null,
-  imageCache?: Record<
-    string,
-    { dataUrl: string; title?: string; author?: string; illustId?: number }
-  >
-): string {
-  const typo = computeVerticalTypographyConfig(settings, palette)
-  const fontFamilyCss = typo.fontFamily
-  const weightCss = typo.fontWeight
-  const lineHeight = typo.lineHeight
-  const colorSchemeMeta = typo.colorSchemeMeta
-  const themeCssVars = typo.themeCssVars
 
   const bodyHtmlParts: string[] = []
   let currentPage = 1
 
   for (const chunk of chunks) {
     if (chunk.type === "newpage") {
-      currentPage = chunk.page
+      currentPage = chunk.page ?? 1
       bodyHtmlParts.push(
-        `<div id="${chunk.id}" class="page-divider" data-page="${chunk.page}" data-chunk-id="${chunk.id}"><span class="page-badge">第 ${chunk.page} 页</span></div>`
+        `<div id="${chunk.id}" class="page-divider" data-page="${chunk.page ?? 1}" data-chunk-id="${chunk.id}"><span class="page-badge">第 ${chunk.page ?? 1} 页</span></div>`
       )
     } else if (chunk.type === "chapter") {
       bodyHtmlParts.push(
-        `<div id="${chunk.id}" class="chapter-block" data-page="${currentPage}" data-chunk-id="${chunk.id}"><div class="chapter-tag">CHAPTER</div><h2 class="chapter-title">${escapeHtml(chunk.title)}</h2></div>`
+        `<div id="${chunk.id}" class="chapter-block" data-page="${currentPage}" data-chunk-id="${chunk.id}"><div class="chapter-tag">CHAPTER</div><h2 class="chapter-title">${escapeHtml(chunk.title ?? "")}</h2></div>`
       )
     } else if (chunk.type === "uploadedimage") {
       const cached = imageCache?.[chunk.id]
@@ -1035,7 +812,7 @@ function buildVerticalHtml(
         )
       } else {
         bodyHtmlParts.push(
-          `<div id="${chunk.id}" class="illust-block" data-page="${currentPage}" data-chunk-id="${chunk.id}"><div class="illust-placeholder" data-chunk-id="${chunk.id}"><div class="illust-spinner"></div><span class="illust-hint">正文插图 #${escapeHtml(chunk.imageId)}</span></div></div>`
+          `<div id="${chunk.id}" class="illust-block" data-page="${currentPage}" data-chunk-id="${chunk.id}"><div class="illust-placeholder" data-chunk-id="${chunk.id}"><div class="illust-spinner"></div><span class="illust-hint">正文插图 #${escapeHtml(chunk.imageId ?? "")}</span></div></div>`
         )
       }
     } else if (chunk.type === "pixivimage") {
@@ -1051,10 +828,10 @@ function buildVerticalHtml(
       }
     } else if (chunk.type === "jump") {
       bodyHtmlParts.push(
-        `<div id="${chunk.id}" class="page-divider" data-page="${currentPage}" data-chunk-id="${chunk.id}"><button class="jump-btn" onclick="handleJumpToPage(${chunk.page})">📄 跳转至第 ${chunk.page} 页 →</button></div>`
+        `<div id="${chunk.id}" class="page-divider" data-page="${currentPage}" data-chunk-id="${chunk.id}"><button class="jump-btn" onclick="handleJumpToPage(${chunk.page ?? 1})">📄 跳转至第 ${chunk.page ?? 1} 页 →</button></div>`
       )
     } else if (chunk.type === "text") {
-      const paragraphs = chunk.text.split("\n")
+      const paragraphs = (chunk.text || "").split("\n")
       const pParts: string[] = []
       for (const p of paragraphs) {
         if (p.replace(/[\s\u3000]/g, "").length === 0) {
@@ -1077,19 +854,12 @@ function buildVerticalHtml(
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-${colorSchemeMeta}
+<meta name="color-scheme" content="light dark">
 <style>
 ${themeCssVars}
   * {
     box-sizing: border-box;
     -webkit-touch-callout: default;
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
-  ::-webkit-scrollbar {
-    display: none !important;
-    width: 0 !important;
-    height: 0 !important;
   }
   html, body {
     margin: 0;
@@ -1112,9 +882,9 @@ ${themeCssVars}
     -webkit-writing-mode: vertical-rl;
     text-orientation: upright;
     -webkit-text-orientation: upright;
-    font-family: ${fontFamilyCss};
+    font-family: ${fontFamily};
     font-size: ${settings.fontSize}px;
-    font-weight: ${weightCss};
+    font-weight: ${fontWeight};
     line-height: ${lineHeight};
     letter-spacing: 0.06em;
     display: inline-block;
@@ -1195,27 +965,20 @@ ${themeCssVars}
     color: var(--secondary-text-color);
   }
   .illust-placeholder {
-    width: 180px;
-    height: 240px;
+    width: 200px;
+    height: 160px;
+    background: rgba(128, 128, 128, 0.1);
     border-radius: 8px;
-    border: 1px dashed var(--divider-color);
-    background: rgba(128, 128, 128, 0.08);
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 8px;
-    writing-mode: horizontal-tb;
-    -webkit-writing-mode: horizontal-tb;
-    cursor: pointer;
-  }
-  .illust-hint {
-    font-size: 0.75em;
-    color: var(--secondary-text-color);
+    border: 1px dashed var(--divider-color);
   }
   .illust-spinner {
-    width: 22px;
-    height: 22px;
+    width: 20px;
+    height: 20px;
     border: 2px solid var(--divider-color);
     border-top-color: var(--accent-color);
     border-radius: 50%;
@@ -1223,6 +986,12 @@ ${themeCssVars}
   }
   @keyframes spin {
     to { transform: rotate(360deg); }
+  }
+  .illust-hint {
+    font-size: 0.7em;
+    color: var(--secondary-text-color);
+    writing-mode: horizontal-tb;
+    -webkit-writing-mode: horizontal-tb;
   }
   .jump-btn {
     background: rgba(0, 122, 255, 0.1);
@@ -1257,7 +1026,6 @@ ${themeCssVars}
 
     window.applyTypography = function(config) {
       if (!config) return;
-      var root = document.documentElement;
       var container = document.querySelector(".vertical-container");
       if (config.fontFamily && container) {
         container.style.fontFamily = config.fontFamily;
@@ -1271,34 +1039,6 @@ ${themeCssVars}
       if (config.lineHeight && container) {
         container.style.lineHeight = config.lineHeight;
       }
-      if (config.theme) {
-        if (config.theme.colorScheme) {
-          root.style.colorScheme = config.theme.colorScheme;
-        }
-        if (config.theme.bgColor !== undefined) {
-          root.style.setProperty("--bg-color", config.theme.bgColor);
-        }
-        if (config.theme.textColor) {
-          root.style.setProperty("--text-color", config.theme.textColor);
-        } else {
-          root.style.removeProperty("--text-color");
-        }
-        if (config.theme.secondaryTextColor) {
-          root.style.setProperty("--secondary-text-color", config.theme.secondaryTextColor);
-        } else {
-          root.style.removeProperty("--secondary-text-color");
-        }
-        if (config.theme.dividerColor) {
-          root.style.setProperty("--divider-color", config.theme.dividerColor);
-        } else {
-          root.style.removeProperty("--divider-color");
-        }
-        if (config.theme.accentColor) {
-          root.style.setProperty("--accent-color", config.theme.accentColor);
-        } else {
-          root.style.removeProperty("--accent-color");
-        }
-      }
     };
 
     function handleOpenIllust(illustId) {
@@ -1310,6 +1050,12 @@ ${themeCssVars}
     function handleJumpToPage(page) {
       if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.jumpToPage) {
         window.webkit.messageHandlers.jumpToPage.postMessage({ page: page });
+      }
+    }
+
+    function handleLinkClick(url) {
+      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.openLink) {
+        window.webkit.messageHandlers.openLink.postMessage({ url: url });
       }
     }
 
@@ -1396,15 +1142,47 @@ ${themeCssVars}
 
     var scrollTimer = null;
     function reportProgress() {
-      var checkX = Math.max(0, window.innerWidth - 60);
-      var checkY = Math.min(window.innerHeight / 2, 200);
-      var el = document.elementFromPoint(checkX, checkY);
-      while (el && !el.getAttribute("data-chunk-id") && el !== document.body) {
-        el = el.parentElement;
+      // 1. 尝试通过多点采样定位
+      var samplePoints = [
+        [Math.max(10, window.innerWidth - 40), 100],
+        [Math.max(10, window.innerWidth - 80), 150],
+        [Math.max(10, window.innerWidth - 120), 200],
+        [Math.max(10, window.innerWidth - 160), 250],
+        [window.innerWidth / 2, 150]
+      ];
+      var foundEl = null;
+      for (var i = 0; i < samplePoints.length; i++) {
+        var el = document.elementFromPoint(samplePoints[i][0], samplePoints[i][1]);
+        while (el && !el.getAttribute("data-chunk-id") && el !== document.body && el !== document.documentElement) {
+          el = el.parentElement;
+        }
+        if (el && el.getAttribute("data-chunk-id")) {
+          foundEl = el;
+          break;
+        }
       }
-      if (el && el.getAttribute("data-chunk-id")) {
-        var chunkId = el.getAttribute("data-chunk-id");
-        var pageNum = parseInt(el.getAttribute("data-page") || "1", 10);
+
+      // 2. 若采样未命中（如落在空白或间距），通过几何位置计算视口右侧最贴近的分块
+      if (!foundEl) {
+        var allChunks = document.querySelectorAll("[data-chunk-id]");
+        var bestEl = null;
+        var bestDist = 999999;
+        for (var j = 0; j < allChunks.length; j++) {
+          var rect = allChunks[j].getBoundingClientRect();
+          if (rect.right > 0 && rect.left < window.innerWidth) {
+            var dist = Math.abs(rect.right - window.innerWidth);
+            if (dist < bestDist) {
+              bestDist = dist;
+              bestEl = allChunks[j];
+            }
+          }
+        }
+        foundEl = bestEl;
+      }
+
+      if (foundEl && foundEl.getAttribute("data-chunk-id")) {
+        var chunkId = foundEl.getAttribute("data-chunk-id");
+        var pageNum = parseInt(foundEl.getAttribute("data-page") || "1", 10);
         if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.onProgressChange) {
           window.webkit.messageHandlers.onProgressChange.postMessage({
             chunkId: chunkId,
@@ -1418,26 +1196,37 @@ ${themeCssVars}
     if (vContainer) {
       vContainer.addEventListener("scroll", function() {
         if (scrollTimer) clearTimeout(scrollTimer);
-        scrollTimer = setTimeout(reportProgress, 250);
+        scrollTimer = setTimeout(reportProgress, 80);
+      }, { passive: true });
+      vContainer.addEventListener("touchend", function() {
+        setTimeout(reportProgress, 20);
       }, { passive: true });
     }
     window.addEventListener("scroll", function() {
       if (scrollTimer) clearTimeout(scrollTimer);
-      scrollTimer = setTimeout(reportProgress, 250);
+      scrollTimer = setTimeout(reportProgress, 80);
     }, { passive: true });
+    window.addEventListener("touchend", function() {
+      setTimeout(reportProgress, 20);
+    }, { passive: true });
+    document.addEventListener("visibilitychange", function() {
+      reportProgress();
+    });
+    window.addEventListener("pagehide", function() {
+      reportProgress();
+    });
   </script>
 </body>
 </html>`
 }
 
 /**
- * 竖排 Web 渲染引擎组件（文库本直书）
+ * 竖排 Web 渲染引擎组件（文库本直书，横向翻阅）
  */
 function NovelVerticalReaderView(props: {
   novelId?: number
   chunks: NovelChunkItem[]
   settings: NovelReaderSettings
-  palette: NovelThemePalette
   targetChunkId?: string | null
   targetPage?: number
   onProgressChange?: (page: number, chunkId?: string) => void
@@ -1447,7 +1236,6 @@ function NovelVerticalReaderView(props: {
     novelId,
     chunks,
     settings,
-    palette,
     targetChunkId,
     targetPage,
     onProgressChange,
@@ -1501,7 +1289,7 @@ function NovelVerticalReaderView(props: {
   // 初始化设置 message handler 并加载 HTML
   useEffect(() => {
     const ctrl = controllerRef.current
-    if (!ctrl) return
+    if (!ctrl || chunks.length === 0) return
 
     void ctrl.addScriptMessageHandler("onProgressChange", (data: any) => {
       if (!data) return
@@ -1529,10 +1317,20 @@ function NovelVerticalReaderView(props: {
       }
     }).catch(() => {})
 
+    void ctrl.addScriptMessageHandler("openLink", (data: any) => {
+      const url = typeof data?.url === "string" ? data.url : ""
+      if (!url) return
+      if (url.startsWith("http://") || url.startsWith("https://")) {
+        void presentExternalURL(url)
+      } else {
+        const target = routeForDescriptionLink(url) ?? url
+        requestPixivRoute(target)
+      }
+    }).catch(() => {})
+
     const html = buildVerticalHtml(
       chunks,
       settings,
-      palette,
       targetChunkId,
       targetPage,
       imageCacheRef.current
@@ -1549,22 +1347,47 @@ function NovelVerticalReaderView(props: {
     }
   }, [novelId, chunks])
 
-  // 实时响应字体、字号、字重、行距与主题变更（0ms 毫秒级即时生效）
+  // 实时响应字体、字号、字重、行距变更（0ms 毫秒级即时生效）
   useEffect(() => {
     const ctrl = controllerRef.current
     if (!ctrl) return
 
-    const typo = computeVerticalTypographyConfig(settings, palette)
+    const fontName = resolveFontName(settings.fontId, settings.customFontPostscriptName)
+    let fontFamily = "-apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif"
+    if (fontName) {
+      fontFamily = `"${fontName}", -apple-system, BlinkMacSystemFont, sans-serif`
+    } else if (settings.fontId === "songti") {
+      fontFamily = "ui-serif, 'Songti SC', 'Source Han Serif SC', 'Hiragino Mincho ProN', serif"
+    } else if (settings.fontId === "kaiti") {
+      fontFamily = "'Kaiti SC', 'STKaiti', serif"
+    } else if (settings.fontId === "yuanti") {
+      fontFamily = "'Yuanti SC', 'STYuan', sans-serif"
+    }
+
+    const weightMap: Record<string, string> = {
+      ultraLight: "100",
+      thin: "200",
+      light: "300",
+      regular: "400",
+      medium: "500",
+      semibold: "600",
+      bold: "700",
+      heavy: "800",
+      black: "900",
+    }
+    const fontWeight = weightMap[settings.fontWeight] || "400"
+    const lineSpacing = calculateLineSpacing(settings.fontSize, settings.lineSpacingLevel)
+    const lineHeight = ((settings.fontSize + lineSpacing) / settings.fontSize).toFixed(2)
+
     const script = `if (window.applyTypography) { window.applyTypography(${JSON.stringify({
-      fontFamily: typo.fontFamily,
-      fontSize: typo.fontSize,
-      fontWeight: typo.fontWeight,
-      lineHeight: typo.lineHeight,
-      theme: typo.themeConfig,
+      fontFamily,
+      fontSize: settings.fontSize,
+      fontWeight,
+      lineHeight,
     })}); }`
 
     void ctrl.evaluateJavaScript(script).catch(() => {})
-  }, [settings, palette])
+  }, [settings])
 
   // 异步拉取正文插图与引用的 Pixiv 插画
   useEffect(() => {
@@ -1593,7 +1416,7 @@ function NovelVerticalReaderView(props: {
               .catch(() => {})
           })
           .catch(() => {})
-      } else if (chunk.type === "pixivimage") {
+      } else if (chunk.type === "pixivimage" && chunk.illustId) {
         if (imageCacheRef.current[chunk.id]?.dataUrl) continue
         const illustId = chunk.illustId
         const pageIdx = Math.max(0, (chunk.page || 1) - 1)
@@ -1645,9 +1468,8 @@ function NovelVerticalReaderView(props: {
 
 /**
  * 小说正文统一渲染引擎组件：
- * 1. 自动响应全局小说版式与主题设置（字体/字号/字重/行距/横竖排/夜间模式）；
- * 2. 横排模式采用原生虚拟节点树，整页一体化滚动，完全杜绝嵌套滚动，支持 0ms 滚动恢复与精准划词；
- * 3. 竖排模式采用文库本排版引擎，支持日文/中文标点悬挂旋转、右对齐注音假名与横向翻阅。
+ * 1. 横排模式：原生 SwiftUI 节点树，直接融入外层全局 ScrollView，整页一体化滚动，完全杜绝嵌套滚动；
+ * 2. 竖排模式：WebKit 文库本直书引擎，横向翻阅，支持标点悬挂旋转与右对齐注音假名。
  */
 export function NovelReaderView(props: {
   novelId?: number
@@ -1658,6 +1480,7 @@ export function NovelReaderView(props: {
   textEmbeddedImages?: Record<string, TextEmbeddedImage>
   onJumpToPage?: (page: number) => void
   onReady?: (totalPages: number) => void
+  onProgressChange?: (page: number, chunkId?: string) => void
   onChunkVisible?: (chunkId: string) => void
 }) {
   const {
@@ -1668,6 +1491,7 @@ export function NovelReaderView(props: {
     currentPage = 1,
     onJumpToPage,
     onReady,
+    onProgressChange,
     onChunkVisible,
   } = props
 
@@ -1680,11 +1504,6 @@ export function NovelReaderView(props: {
       setSettings(updated)
     })
   }, [])
-
-  const palette = useMemo(() => {
-    const themeId = settings.themeId
-    return (NOVEL_THEME_PALETTES as any)[themeId] || NOVEL_THEME_PALETTES.default
-  }, [settings.themeId])
 
   // 同步初始化分块
   const syncChunks = useMemo(() => {
@@ -1746,10 +1565,10 @@ export function NovelReaderView(props: {
         novelId={novelId}
         chunks={chunks}
         settings={settings}
-        palette={palette}
         targetChunkId={targetChunkId}
         targetPage={targetPage}
         onProgressChange={(page, chunkId) => {
+          onProgressChange?.(page, chunkId)
           if (chunkId) onChunkVisible?.(chunkId)
         }}
         onJumpToPage={onJumpToPage}
@@ -1819,7 +1638,6 @@ export function NovelReaderView(props: {
             item={item}
             markerPage={markerPage}
             settings={settings}
-            palette={palette}
             onJumpToPage={onJumpToPage}
           />
         </VStack>

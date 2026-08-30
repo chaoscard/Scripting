@@ -100,9 +100,7 @@ import { CommentsSheet } from "./comments"
 import { NovelAISheet, type NovelAIMode } from "./aiSheet"
 import { NovelTypographySheet } from "./novelTypographySheet"
 import {
-  getCustomBgPath,
   loadNovelReaderSettings,
-  NOVEL_THEME_PALETTES,
   onNovelReaderSettingsChanged,
   type NovelReaderSettings,
 } from "../store/novelReaderSettings"
@@ -159,19 +157,10 @@ export function NovelDetailView(props: { novelID: number }) {
   const [pagerVisible, setPagerVisible] = useState(true)
   const [markerBusy, setMarkerBusy] = useState(false)
 
-  useEffect(() => {
-    return onNovelReaderSettingsChanged((updated) => {
-      setReaderSettings(updated)
-    })
-  }, [])
-
-  const currentThemePalette = useMemo(() => {
-    return NOVEL_THEME_PALETTES[readerSettings.themeId] || NOVEL_THEME_PALETTES.default
-  }, [readerSettings.themeId])
-
   const guard = useAsyncGuard()
   const novelRef = useLatest(novel)
   const errorRef = useLatest(error)
+  const readerSettingsRef = useLatest(readerSettings)
   const currentPageRef = useLatest(currentPage)
   const recordedIDRef = useRef<number | null>(null)
   const proxyRef = useRef<ScrollViewProxy | null>(null)
@@ -195,40 +184,106 @@ export function NovelDetailView(props: { novelID: number }) {
   const resolvedSeriesTitle = rawSeriesObj?.title ?? associatedRef?.seriesTitle ?? null
   const resolvedEpisodeNumber = novel?.episode_number ?? associatedRef?.episodeNumber ?? null
 
-  const performScrollRestoration = useCallback((targetChunk?: string) => {
-    const saved = getNovelProgress(novelID)
-    const target = targetChunk ?? saved?.chunkId
-    if (
-      !target ||
-      target === "novel-top-anchor" ||
-      target === "novel-header-content"
-    ) {
-      isRestoringScrollRef.current = false
-      hasRestoredScrollRef.current = true
-      return
-    }
-
-    initialScrollChunkIdRef.current = target
-    lastRecordedChunkRef.current = target
-    isRestoringScrollRef.current = true
-    scrollPos.setValue(target)
-
-    const attempts = [30, 80, 160, 300, 550, 900, 1400]
-    attempts.forEach((delay) => {
-      setTimeout(() => {
-        if (isDisappearedRef.current || isUnmountingRef.current) return
+  const performScrollRestoration = useCallback(
+    (targetChunk?: string, forceDirect = false) => {
+      if (!forceDirect && readerSettingsRef.current.layoutDirection === "vertical") {
+        isRestoringScrollRef.current = false
+        hasRestoredScrollRef.current = true
+        scrollPos.setValue("novel-top-anchor")
         try {
-          scrollPos.setValue(target)
-          proxyRef.current?.scrollTo(target, "top")
+          proxyRef.current?.scrollTo("novel-top-anchor", "top")
         } catch {}
-      }, delay)
-    })
+        return
+      }
 
-    setTimeout(() => {
-      isRestoringScrollRef.current = false
-      hasRestoredScrollRef.current = true
-    }, 1600)
-  }, [novelID, scrollPos])
+      const saved = getNovelProgress(novelID)
+      const target =
+        targetChunk ??
+        saved?.chunkId ??
+        (saved?.page && saved.page > 1 ? `page-${saved.page}` : undefined)
+
+      if (
+        !target ||
+        target === "novel-top-anchor" ||
+        target === "novel-header-content"
+      ) {
+        isRestoringScrollRef.current = false
+        hasRestoredScrollRef.current = true
+        return
+      }
+
+      initialScrollChunkIdRef.current = target
+      lastRecordedChunkRef.current = target
+      isRestoringScrollRef.current = true
+      scrollPos.setValue(target)
+
+      const attempts = [30, 80, 160, 300, 550, 900, 1400]
+      attempts.forEach((delay) => {
+        setTimeout(() => {
+          if (isDisappearedRef.current || isUnmountingRef.current) return
+          try {
+            scrollPos.setValue(target)
+            proxyRef.current?.scrollTo(target, "top")
+          } catch {}
+        }, delay)
+      })
+
+      setTimeout(() => {
+        isRestoringScrollRef.current = false
+        hasRestoredScrollRef.current = true
+      }, 1600)
+    },
+    [novelID, scrollPos]
+  )
+
+  useEffect(() => {
+    return onNovelReaderSettingsChanged((updated) => {
+      const prevDirection = readerSettingsRef.current.layoutDirection
+      const newDirection = updated.layoutDirection
+      readerSettingsRef.current = updated
+      setReaderSettings(updated)
+
+      if (prevDirection !== newDirection) {
+        flushNovelProgress()
+        const saved = getNovelProgress(novelID)
+        const targetPage = saved?.page ?? 1
+        const targetChunk = saved?.chunkId ?? (targetPage > 1 ? `page-${targetPage}` : undefined)
+
+        if (targetPage !== currentPageRef.current) {
+          setCurrentPage(targetPage)
+        }
+
+        if (newDirection === "horizontal") {
+          // 切换回横排模式：必须立即重置恢复锁，并精确执行目标分块定位
+          if (
+            targetChunk &&
+            targetChunk !== "novel-top-anchor" &&
+            targetChunk !== "novel-header-content"
+          ) {
+            performScrollRestoration(targetChunk, true)
+          }
+        } else if (newDirection === "vertical") {
+          // 切换到竖排模式：重置外层整体 ScrollView 至顶部小说区域，绝不跌落到相关推荐区
+          isRestoringScrollRef.current = false
+          hasRestoredScrollRef.current = true
+          scrollPos.setValue("novel-top-anchor")
+          try {
+            proxyRef.current?.scrollTo("novel-top-anchor", "top")
+          } catch {}
+          const delays = [20, 60, 120, 250, 450]
+          delays.forEach((d) => {
+            setTimeout(() => {
+              if (isDisappearedRef.current || isUnmountingRef.current) return
+              try {
+                scrollPos.setValue("novel-top-anchor")
+                proxyRef.current?.scrollTo("novel-top-anchor", "top")
+              } catch {}
+            }, d)
+          })
+        }
+      }
+    })
+  }, [novelID, performScrollRestoration])
 
   async function load() {
     const g = guard()
@@ -513,15 +568,27 @@ export function NovelDetailView(props: { novelID: number }) {
       if (prev > parsedTotalPages) return parsedTotalPages
       return prev
     })
-    const saved = getNovelProgress(novelID)
-    const target = saved?.chunkId
-    if (target && target !== "novel-top-anchor" && target !== "novel-header-content") {
-      performScrollRestoration(target)
+    if (readerSettingsRef.current.layoutDirection === "horizontal") {
+      const saved = getNovelProgress(novelID)
+      const target = saved?.chunkId
+      if (target && target !== "novel-top-anchor" && target !== "novel-header-content") {
+        performScrollRestoration(target)
+      }
     }
-  }, [novelID, performScrollRestoration])
+  }, [novelID, performScrollRestoration, readerSettingsRef])
 
   useEffect(() => {
     if (readerReady && !loading) {
+      if (readerSettingsRef.current.layoutDirection === "vertical") {
+        isRestoringScrollRef.current = false
+        hasRestoredScrollRef.current = true
+        scrollPos.setValue("novel-top-anchor")
+        try {
+          proxyRef.current?.scrollTo("novel-top-anchor", "top")
+        } catch {}
+        return
+      }
+
       const target = initialScrollChunkIdRef.current
       if (
         target &&
@@ -539,7 +606,7 @@ export function NovelDetailView(props: { novelID: number }) {
         return () => clearTimeout(t)
       }
     }
-  }, [readerReady, loading, performScrollRestoration])
+  }, [readerReady, loading, performScrollRestoration, readerSettingsRef])
 
   async function handleToggleSpecificPageMarker(targetPage: number) {
     if (!novel || markerBusy) return
@@ -666,107 +733,29 @@ export function NovelDetailView(props: { novelID: number }) {
   }
 
   return (
-    <ZStack
-      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-      preferredColorScheme={currentThemePalette.isDark ? "dark" : undefined}
-    >
-      {/* 全屏底层背景（覆盖顶部状态栏/灵动岛与底部安全区） */}
-      <ZStack
-        frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-        ignoresSafeArea={true}
-      >
-        {readerSettings.themeId === "custom" && readerSettings.customBgExists ? (
-          <ZStack frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
-            <Image
-              filePath={getCustomBgPath()}
-              resizable={true}
-              aspectRatio={{ contentMode: "fill" }}
-              frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-              clipped={true}
-            />
-            <VStack
-              background={
-                (readerSettings.customBgMaskColor === "black"
-                  ? `rgba(0, 0, 0, ${readerSettings.customBgMaskOpacity})`
-                  : `rgba(255, 255, 255, ${readerSettings.customBgMaskOpacity})`) as Color
-              }
-              frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-            />
-          </ZStack>
-        ) : currentThemePalette.backgroundColor ? (
-          <VStack
-            background={currentThemePalette.backgroundColor}
-            frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-          />
-        ) : null}
-      </ZStack>
-
-      {/* 滚动容器（ScrollViewReader 的子函数直接返回 ScrollView） */}
-      <ScrollViewReader>
-        {(proxy) => {
-          proxyRef.current = proxy
-          return (
-            <ScrollView
-              scrollPosition={{
-                value: scrollPos,
-                anchor: "top",
-              }}
-              ignoresSafeArea={{ edges: "bottom" }}
-              background={
-                readerSettings.themeId === "custom" && readerSettings.customBgExists
-                  ? {
-                      content: (
-                        <ZStack frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
-                          <Image
-                            filePath={getCustomBgPath()}
-                            resizable={true}
-                            aspectRatio={{ contentMode: "fill" }}
-                            frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-                            clipped={true}
-                          />
-                          <VStack
-                            background={
-                              (readerSettings.customBgMaskColor === "black"
-                                ? `rgba(0, 0, 0, ${readerSettings.customBgMaskOpacity})`
-                                : `rgba(255, 255, 255, ${readerSettings.customBgMaskOpacity})`) as Color
-                            }
-                            frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-                          />
-                        </ZStack>
-                      ),
-                      alignment: "center",
-                    }
-                  : currentThemePalette.backgroundColor
-                  ? currentThemePalette.backgroundColor
-                  : undefined
-              }
-              toolbarBackground={
-                currentThemePalette.backgroundColor
-                  ? {
-                      style: currentThemePalette.backgroundColor,
-                      bars: ["navigationBar", "tabBar", "bottomBar"],
-                    }
-                  : undefined
-              }
-              toolbarBackgroundVisibility={
-                currentThemePalette.backgroundColor || readerSettings.customBgExists
-                  ? {
-                      visibility: "visible",
-                      bars: ["navigationBar", "tabBar", "bottomBar"],
-                    }
-                  : undefined
-              }
-              navigationTitle={current.title}
-              navigationBarTitleDisplayMode="inline"
+    <ScrollViewReader>
+      {(proxy) => {
+        proxyRef.current = proxy
+        return (
+          <ScrollView
+            scrollPosition={{
+              value: scrollPos,
+              anchor: "top",
+            }}
+            ignoresSafeArea={{ edges: "bottom" }}
+            navigationTitle={current.title}
+            navigationBarTitleDisplayMode="inline"
             onAppear={() => {
               isDisappearedRef.current = false
               const saved = getNovelProgress(novelID)
               if (saved?.page && saved.page !== currentPageRef.current) {
                 setCurrentPage(saved.page)
               }
-              const target = saved?.chunkId
-              if (target && target !== "novel-top-anchor" && target !== "novel-header-content") {
-                performScrollRestoration(target)
+              if (readerSettingsRef.current.layoutDirection === "horizontal") {
+                const target = saved?.chunkId
+                if (target && target !== "novel-top-anchor" && target !== "novel-header-content") {
+                  performScrollRestoration(target)
+                }
               }
             }}
             onDisappear={() => {
@@ -785,6 +774,10 @@ export function NovelDetailView(props: { novelID: number }) {
                   isRestoringScrollRef.current ||
                   !hasRestoredScrollRef.current
                 ) {
+                  return
+                }
+                // 竖排模式下，正文阅读进度由 WebView 内部直书引擎独立上报
+                if (readerSettingsRef.current.layoutDirection === "vertical") {
                   return
                 }
                 const ids = (rawIds as string[]).filter(Boolean)
@@ -1238,6 +1231,14 @@ export function NovelDetailView(props: { novelID: number }) {
             textEmbeddedImages={textEmbeddedImages}
             onJumpToPage={handlePageChange}
             onReady={handleReaderReady}
+            onProgressChange={(page, chunkId) => {
+              if (page && page !== currentPageRef.current) {
+                setCurrentPage(page)
+              }
+              if (chunkId) {
+                lastRecordedChunkRef.current = chunkId
+              }
+            }}
           />
         ) : (
           <VStack key="novel-text-empty" padding={{ horizontal: 14 }}>
@@ -1336,7 +1337,6 @@ export function NovelDetailView(props: { novelID: number }) {
         )
       }}
     </ScrollViewReader>
-  </ZStack>
   )
 }
 
