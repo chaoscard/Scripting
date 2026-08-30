@@ -507,7 +507,7 @@ export function SettingsView() {
           expanded.ai ? (
             <Text>
               {aiProfile.enabled
-                ? "已启用自定义 AI 服务（优先级高于 Scripting 原生助手）。配置与密钥已通过 Keychain 加密安全存储，支持 iCloud 跨设备同步。"
+                ? "已启用自定义 AI 服务（优先级高于 Scripting 原生助手）。配置与密钥已通过钥匙串加密安全存储，支持 iCloud 跨设备同步。"
                 : isScriptingPro()
                 ? "当前已激活 Scripting PRO 会员（默认使用原生 Assistant 助手）。开启自定义服务后可接入各大主流 AI 模型。"
                 : "当前未开通 Scripting PRO 会员。开启自定义 AI 服务并填入您的 API 密钥（支持 DeepSeek、OpenAI、Google、Anthropic 等主流厂商），即可免费使用完整AI助手功能"}

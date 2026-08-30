@@ -211,13 +211,11 @@ export function CustomAISettingsView() {
         setRemoteModels(res.models)
         void Haptics.transient(0.4, 0.6)
 
-        // 若当前模型未设置或不在列表中，自动选中第一个推荐模型
+        // 若当前模型未设置或不在列表中，自动选中第一个可用模型
         const currentModelInList = res.models.some((m) => m.id === profile.general.model)
         if (!currentModelInList || !profile.general.model) {
-          const recommended = res.models.find((m) => m.isVisionRecommended) || res.models[0]
           updateGeneral({
-            model: recommended.id,
-            supportsVision: Boolean(recommended.isVisionRecommended),
+            model: res.models[0].id,
           })
         }
       } else {
@@ -233,11 +231,8 @@ export function CustomAISettingsView() {
 
   function handleSelectRemoteModel(modelId: string) {
     if (!modelId) return
-    const targetModel = remoteModels.find((m) => m.id === modelId)
-    const isVision = targetModel ? Boolean(targetModel.isVisionRecommended) : profile.general.supportsVision
     updateGeneral({
       model: modelId,
-      supportsVision: isVision,
     })
   }
 
@@ -280,15 +275,13 @@ export function CustomAISettingsView() {
       setImageFetchLatency(latency)
 
       if (res.success && res.models.length > 0) {
-        const imageOnly = res.models.filter((m) => m.isImageGenRecommended)
-        const candidates = imageOnly.length > 0 ? imageOnly : res.models
-        setImageRemoteModels(candidates)
+        setImageRemoteModels(res.models)
         void Haptics.transient(0.4, 0.6)
 
-        const currentInList = candidates.some((m) => m.id === profile.imageGen.model)
+        const currentInList = res.models.some((m) => m.id === profile.imageGen.model)
         if (!currentInList || !profile.imageGen.model) {
           updateImageGen({
-            model: candidates[0].id,
+            model: res.models[0].id,
           })
         }
       } else {
@@ -306,7 +299,7 @@ export function CustomAISettingsView() {
     const confirmed = await Dialog.confirm({
       title: "清空所有自定义 AI 配置",
       message:
-        "此操作将永久清空本地 Keychain 与 iCloud 钥匙串中保存的端点、模型与 API 密钥。确定继续吗？",
+        "此操作将永久清空本地钥匙串与 iCloud 钥匙串中保存的端点、模型与 API 密钥。确定继续吗？",
       confirmLabel: "彻底删除",
       cancelLabel: "取消",
     })
@@ -445,20 +438,11 @@ export function CustomAISettingsView() {
               value={profile.general.model}
               onChanged={(val: string) => handleSelectRemoteModel(val)}
             >
-              {remoteModels.map((m) =>
-                m.isVisionRecommended ? (
-                  <Label
-                    key={m.id}
-                    tag={m.id}
-                    title={m.name || m.id}
-                    systemImage="eye"
-                  />
-                ) : (
-                  <Text key={m.id} tag={m.id}>
-                    {m.name || m.id}
-                  </Text>
-                )
-              )}
+              {remoteModels.map((m) => (
+                <Text key={m.id} tag={m.id}>
+                  {m.name || m.id}
+                </Text>
+              ))}
             </Picker>
             <Button
               buttonStyle="plain"

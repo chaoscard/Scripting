@@ -12,8 +12,6 @@ export interface RemoteModelItem {
   id: string
   name?: string
   description?: string
-  isVisionRecommended?: boolean
-  isImageGenRecommended?: boolean
 }
 
 export interface FetchModelsResult {
@@ -24,46 +22,111 @@ export interface FetchModelsResult {
 }
 
 /**
- * 智能推断模型是否具备视觉 (Vision) 多模态能力
+ * 仅根据接口返回的结构化元数据判断模型是否具备视觉 (Vision / Image Input) 能力
+ * 不通过模型名称做任何猜测，严格从接口返回的字段中解析
  */
-export function isVisionCapableModel(modelId: string): boolean {
-  const lower = modelId.toLowerCase()
+export function isVisionCapableModel(itemMeta?: any): boolean {
+  if (!itemMeta || typeof itemMeta !== "object") {
+    return false
+  }
+
+  // 1. capabilities / capability / features 属性
+  const cap = itemMeta.capabilities || itemMeta.capability || itemMeta.features
+  if (typeof cap === "object" && cap !== null) {
+    if (
+      cap.vision === true ||
+      cap.image === true ||
+      cap.image_input === true ||
+      cap.multimodal === true ||
+      cap.visual === true ||
+      cap.input_image === true
+    ) {
+      return true
+    }
+    if (Array.isArray(cap) && cap.some((c: any) => typeof c === "string" && /vision|image|multimodal|visual/i.test(c))) {
+      return true
+    }
+  }
+
+  // 2. modalities / input_modalities / architecture (OpenRouter, OneAPI, OpenAI 扩展规范等)
+  const modalities = [
+    ...(Array.isArray(itemMeta.modalities) ? itemMeta.modalities : [itemMeta.modalities]),
+    ...(Array.isArray(itemMeta.input_modalities) ? itemMeta.input_modalities : [itemMeta.input_modalities]),
+    ...(Array.isArray(itemMeta.architecture?.modalities) ? itemMeta.architecture.modalities : [itemMeta.architecture?.modalities]),
+    ...(Array.isArray(itemMeta.architecture?.input_modalities) ? itemMeta.architecture.input_modalities : [itemMeta.architecture?.input_modalities]),
+    itemMeta.architecture?.modality,
+  ].filter(Boolean)
+
+  for (const m of modalities) {
+    const mStr = String(m).toLowerCase()
+    if (mStr.includes("image") || mStr.includes("vision") || mStr.includes("multimodal") || mStr.includes("visual")) {
+      return true
+    }
+  }
+
+  // 3. type / model_type / tags / categories 标签
+  const tags = [
+    itemMeta.type,
+    itemMeta.model_type,
+    ...(Array.isArray(itemMeta.tags) ? itemMeta.tags : [itemMeta.tags]),
+    ...(Array.isArray(itemMeta.categories) ? itemMeta.categories : [itemMeta.categories]),
+  ].filter(Boolean)
+
+  for (const t of tags) {
+    const tStr = String(t).toLowerCase()
+    if (tStr.includes("vision") || tStr.includes("multimodal") || tStr.includes("vlm") || tStr.includes("image-to-text")) {
+      return true
+    }
+  }
+
+  // 4. description / summary / info 描述文本分析
+  const desc = [itemMeta.description, itemMeta.summary, itemMeta.info]
+    .filter((s): s is string => typeof s === "string")
+    .join(" ")
+    .toLowerCase()
+
   if (
-    lower.includes("4o") ||
-    lower.includes("vision") ||
-    lower.includes("-vl") ||
-    lower.includes("_vl") ||
-    lower.includes("gemini") ||
-    lower.includes("claude-3") ||
-    lower.includes("minicpm-v") ||
-    lower.includes("internvl") ||
-    lower.includes("qwen-vl") ||
-    lower.includes("pixtral") ||
-    lower.includes("glm-4v") ||
-    lower.includes("omni")
+    desc.includes("vision") ||
+    desc.includes("多模态") ||
+    desc.includes("视觉") ||
+    desc.includes("multimodal") ||
+    desc.includes("图像识别") ||
+    desc.includes("image input") ||
+    desc.includes("image-to-text")
   ) {
     return true
   }
+
   return false
 }
 
 /**
- * 智能推断模型是否属于独立生图/图像生成模型
+ * 仅根据接口返回的结构化元数据判断模型是否属于独立生图/图像生成模型
  */
-export function isImageGenModel(modelId: string): boolean {
-  const lower = modelId.toLowerCase()
+export function isImageGenModel(itemMeta?: any): boolean {
+  if (!itemMeta || typeof itemMeta !== "object") {
+    return false
+  }
+
+  const typeStr = String(itemMeta.type || itemMeta.model_type || itemMeta.category || "").toLowerCase()
+  if (typeStr.includes("image") || typeStr.includes("text-to-image") || typeStr.includes("image_generation")) {
+    return true
+  }
+
+  const desc = [itemMeta.description, itemMeta.summary, itemMeta.info]
+    .filter((s): s is string => typeof s === "string")
+    .join(" ")
+    .toLowerCase()
+
   if (
-    lower.includes("dall-e") ||
-    lower.includes("flux") ||
-    lower.includes("imagen") ||
-    lower.includes("stable-diffusion") ||
-    lower.includes("sdxl") ||
-    lower.includes("midjourney") ||
-    lower.includes("kolors") ||
-    lower.includes("cogview")
+    desc.includes("生图") ||
+    desc.includes("图像生成") ||
+    desc.includes("text-to-image") ||
+    desc.includes("image generation")
   ) {
     return true
   }
+
   return false
 }
 
@@ -216,8 +279,6 @@ export async function fetchRemoteModelList(
         id: cleanId,
         name: displayName,
         description,
-        isVisionRecommended: isVisionCapableModel(cleanId),
-        isImageGenRecommended: isImageGenModel(cleanId),
       })
     }
 
