@@ -1,6 +1,6 @@
 import { loadSettings } from "../store/settings"
 
-export type DownloadCategory = "novels" | "manga" | "illustrations" | "temp"
+export type DownloadCategory = "novels" | "manga" | "illustrations" | "ugoira" | "temp"
 
 /**
  * 过滤文件名中的非法字符，防止文件系统路径错误
@@ -73,6 +73,7 @@ export function getCategoryDirectory(category: DownloadCategory): string {
   if (category === "novels") subName = "Novels"
   else if (category === "manga") subName = "Manga"
   else if (category === "illustrations") subName = "Illustrations"
+  else if (category === "ugoira") subName = "Ugoira"
 
   const targetPath = `${root}/${subName}`
   if (!FileManager.existsSync(targetPath)) {
@@ -89,7 +90,7 @@ export function getCategoryDirectory(category: DownloadCategory): string {
 export function getAuthorDownloadDirectory(
   authorName: string,
   authorId: number,
-  subCategory?: "illustrations" | "manga" | "novels"
+  subCategory?: "illustrations" | "ugoira" | "manga" | "novels"
 ): string {
   const root = getDownloadRootDirectory()
   const authorFolder = sanitizeFileName(`${authorName || "Artist"} (${authorId})`)
@@ -97,7 +98,8 @@ export function getAuthorDownloadDirectory(
 
   if (subCategory) {
     let subName = "Illustrations"
-    if (subCategory === "manga") subName = "Manga"
+    if (subCategory === "ugoira") subName = "Ugoira"
+    else if (subCategory === "manga") subName = "Manga"
     else if (subCategory === "novels") subName = "Novels"
     dirPath = `${dirPath}/${subName}`
   }

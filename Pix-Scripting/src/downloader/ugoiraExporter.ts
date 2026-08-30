@@ -1,6 +1,7 @@
 import { buildUgoira, prepareUgoira } from "../ugoira/ugoira"
 import { saveImageToPixivAlbum, saveVideoToPixivAlbum } from "./photoAlbum"
 import { getCategoryDirectory, sanitizeFileName } from "./directoryResolver"
+import { notifyDownloadFilesChanged } from "./downloadFileManager"
 import { loadSettings, type UgoiraExportFormat } from "../store/settings"
 import { publishPreparedFile } from "../store/safeFile"
 import { yieldToMainThread, yieldIfExceeded } from "./downloadHelper"
@@ -81,7 +82,7 @@ export async function exportUgoiraZip(
 
     const author = illust.user?.name || "Unknown"
     const safeTitle = sanitizeFileName(`${illust.title}_${author}_${illust.id}`)
-    const targetDir = getCategoryDirectory("illustrations")
+    const targetDir = getCategoryDirectory("ugoira")
     if (!FileManager.existsSync(targetDir)) {
       try { FileManager.createDirectorySync(targetDir, true) } catch {}
     }
@@ -150,6 +151,7 @@ export async function exportUgoiraZip(
 
     // 4. 原子发布至目标存储路径
     publishPreparedFile(tempZipPath, destZipPath)
+    notifyDownloadFilesChanged()
 
     return {
       success: true,

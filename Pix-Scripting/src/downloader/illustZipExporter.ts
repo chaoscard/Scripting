@@ -6,6 +6,7 @@ import {
   type ExportResult,
 } from "./downloadHelper"
 import { getCategoryDirectory, sanitizeFileName } from "./directoryResolver"
+import { notifyDownloadFilesChanged } from "./downloadFileManager"
 import { publishPreparedFile } from "../store/safeFile"
 import type { PixivIllustration } from "../types"
 
@@ -136,6 +137,7 @@ export async function exportIllustToZip(options: IllustZipOptions): Promise<Expo
 
     // 使用 .bak 回滚与临时文件校验进行原子发布，防止损坏已有文件
     publishPreparedFile(tempZipPath, targetFilePath)
+    notifyDownloadFilesChanged()
 
     return {
       success: true,

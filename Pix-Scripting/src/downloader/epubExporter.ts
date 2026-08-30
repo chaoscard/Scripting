@@ -7,6 +7,7 @@ import {
   type ExportResult,
 } from "./downloadHelper"
 import { getCategoryDirectory, sanitizeFileName } from "./directoryResolver"
+import { notifyDownloadFilesChanged } from "./downloadFileManager"
 import { publishPreparedFile } from "../store/safeFile"
 import { session } from "../api/session"
 import { illustrationDetail } from "../api/pixiv"
@@ -671,6 +672,7 @@ async function packageEpubDirectory(
 
     // 原子发布并带 .bak 备份保护，避免覆盖损坏有效文件
     publishPreparedFile(tempZipPath, targetOutputPath)
+    notifyDownloadFilesChanged()
     return true
   } catch (err: any) {
     console.log("packageEpubDirectory error:", err?.message ?? err)

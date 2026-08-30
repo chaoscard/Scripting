@@ -176,6 +176,11 @@ export function cachedUgoiraFrames(illustID: number): UgoiraFramesResult | null 
   const framesDir = joinPath(workDir, "frames")
   const zipPath = joinPath(workDir, "frames.zip")
 
+  // 清理历史遗留的冗余 zip 文件（瘦身优化）
+  if (FileManager.existsSync(zipPath)) {
+    try { FileManager.removeSync(zipPath) } catch {}
+  }
+
   if (entry && Array.isArray(entry.frames) && entry.frames.length > 0 && FileManager.existsSync(framesDir)) {
     // 校验首帧和尾帧存在
     const firstPath = joinPath(framesDir, entry.frames[0].file)
@@ -189,7 +194,6 @@ export function cachedUgoiraFrames(illustID: number): UgoiraFramesResult | null 
         totalDurationMs: entry.totalDurationMs || entry.frames.reduce((sum, f) => sum + (f.delay || 0), 0),
         width: entry.width,
         height: entry.height,
-        zipPath: FileManager.existsSync(zipPath) ? zipPath : undefined,
       }
       memoryFramesCache.set(illustID, res)
       return res
@@ -249,6 +253,11 @@ async function performPrepare(illustID: number): Promise<UgoiraFramesResult> {
     await extractZipEntries(tempZipPath, tempFramesDir)
     validateFrames(tempFramesDir, frames)
 
+    // 解压验证完成后，立刻移除临时 zip，释放空间
+    if (FileManager.existsSync(tempZipPath)) {
+      try { FileManager.removeSync(tempZipPath) } catch {}
+    }
+
     const totalDurationMs = frames.reduce((acc, f) => acc + (f.delay || 0), 0)
     let width = 0
     let height = 0
@@ -262,17 +271,15 @@ async function performPrepare(illustID: number): Promise<UgoiraFramesResult> {
 
     if (generation !== cacheGeneration) throw new Error("动图缓存已清空，请重试")
 
-    // 发布到稳定存储目录
+    // 发布到稳定存储目录（仅保留 frames/ 目录，不保留原始 zip，节省 50% 磁盘占用）
     const workDir = ugoiraWorkDir(illustID)
     if (FileManager.existsSync(workDir)) {
       try { FileManager.removeSync(workDir) } catch {}
     }
     FileManager.createDirectorySync(workDir, true)
     const finalFramesDir = joinPath(workDir, "frames")
-    const finalZipPath = joinPath(workDir, "frames.zip")
 
-    // 移动/发布临时帧文件与 zip
-    publishPreparedFile(tempZipPath, finalZipPath)
+    // 移动/发布临时帧图片目录
     publishPreparedFile(tempFramesDir, finalFramesDir)
 
     const dirSize = calculateDirSize(workDir)
@@ -295,7 +302,6 @@ async function performPrepare(illustID: number): Promise<UgoiraFramesResult> {
       totalDurationMs,
       width,
       height,
-      zipPath: finalZipPath,
     }
     memoryFramesCache.set(illustID, result)
     return result
@@ -443,7 +449,12 @@ export function enforceUgoiraCacheLimit(): void {
 
   for (const [id, v] of entries) {
     const workDir = ugoiraWorkDir(Number(id))
-    if (v.size == null && FileManager.existsSync(workDir)) {
+    if (FileManager.existsSync(workDir)) {
+      // 顺便清理历史残留的 frames.zip
+      const oldZip = joinPath(workDir, "frames.zip")
+      if (FileManager.existsSync(oldZip)) {
+        try { FileManager.removeSync(oldZip) } catch {}
+      }
       try {
         v.size = calculateDirSize(workDir)
       } catch {}

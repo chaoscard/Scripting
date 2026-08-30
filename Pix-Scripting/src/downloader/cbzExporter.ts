@@ -7,6 +7,7 @@ import {
   type ExportResult,
 } from "./downloadHelper"
 import { getCategoryDirectory, sanitizeFileName } from "./directoryResolver"
+import { notifyDownloadFilesChanged } from "./downloadFileManager"
 import { publishPreparedFile } from "../store/safeFile"
 import { htmlToPlainText } from "../ui/components/formatUtils"
 import type { MangaChapterItem, MangaPageItem } from "./epubExporter"
@@ -354,6 +355,7 @@ ${pagesXmlItems.join("\n")}
     }
 
     publishPreparedFile(tempZipPath, targetFilePath)
+    notifyDownloadFilesChanged()
 
     return {
       success: true,

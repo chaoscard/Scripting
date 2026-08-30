@@ -18,6 +18,7 @@ import {
   getCategoryDirectory,
   sanitizeFileName,
 } from "./directoryResolver"
+import { notifyDownloadFilesChanged } from "./downloadFileManager"
 import { fetchImageBinaryWithRetry, runConcurrentTasks, yieldToMainThread, yieldIfExceeded } from "./downloadHelper"
 import { exportMangaToEpub, exportNovelToEpub, type NovelChapter } from "./epubExporter"
 import { downloadIllustToAlbum, saveVideoToPixivAlbum } from "./photoAlbum"
@@ -202,39 +203,35 @@ export function clusterNovelsBySeries(
 }
 
 /**
- * 批量下载画师全量插画至专属相簿
+ * 批量下载画师全量静态插画至专属相簿
  */
 export async function downloadAuthorIllustrationsToAlbum(
   authorName: string,
   illusts: PixivIllustration[],
   onProgress?: (msg: string, current: number, total: number) => void
 ): Promise<{ successCount: number; totalCount: number }> {
+  const pureIllusts = illusts.filter((it) => it.type !== "ugoira")
   return runWithBackgroundTask(
     {
       title: "下载用户插画",
       subtitle: `用户: ${authorName}`,
-      total: illusts.length,
+      total: pureIllusts.length,
       categoryIcon: "photo.stack.fill",
-      initialStatus: `准备下载 ${illusts.length} 项作品至相簿…`,
+      initialStatus: `准备下载 ${pureIllusts.length} 项作品至相簿…`,
     },
     async (task) => {
       let successCount = 0
-      const totalCount = illusts.length
+      const totalCount = pureIllusts.length
 
-      for (let i = 0; i < illusts.length; i++) {
-        const item = illusts[i]
+      for (let i = 0; i < pureIllusts.length; i++) {
+        const item = pureIllusts[i]
         const statusMsg = `正在保存插画 (${i + 1}/${totalCount}): ${item.title}`
         onProgress?.(statusMsg, i + 1, totalCount)
         task.updateProgress({ current: i + 1, total: totalCount, statusText: statusMsg })
 
         try {
-          if (item.type === "ugoira") {
-            const res = await exportUgoiraToAlbum(item)
-            if (res.success) successCount++
-          } else {
-            const ok = await downloadIllustToAlbum(item)
-            if (ok) successCount++
-          }
+          const ok = await downloadIllustToAlbum(item)
+          if (ok) successCount++
         } catch (e: any) {
           console.log(`downloadAuthorIllustrationsToAlbum failed for ${item.id}:`, e?.message ?? e)
         }
@@ -253,7 +250,111 @@ export async function downloadAuthorIllustrationsToAlbum(
 }
 
 /**
- * 批量将画师全量插画打包导出为单一分层 ZIP 归档文件
+ * 批量下载画师全量动图至专属相簿（MP4 或 GIF）
+ */
+export async function downloadAuthorUgoiraToAlbum(
+  authorName: string,
+  ugoiras: PixivIllustration[],
+  onProgress?: (msg: string, current: number, total: number) => void
+): Promise<{ successCount: number; totalCount: number }> {
+  const ugoiraList = ugoiras.filter((it) => it.type === "ugoira")
+  return runWithBackgroundTask(
+    {
+      title: "下载用户动图",
+      subtitle: `用户: ${authorName}`,
+      total: ugoiraList.length,
+      categoryIcon: "film.stack",
+      initialStatus: `准备下载 ${ugoiraList.length} 部动图至相簿…`,
+    },
+    async (task) => {
+      let successCount = 0
+      const totalCount = ugoiraList.length
+
+      for (let i = 0; i < ugoiraList.length; i++) {
+        const item = ugoiraList[i]
+        const statusMsg = `正在合成动图 (${i + 1}/${totalCount}): ${item.title}`
+        onProgress?.(statusMsg, i + 1, totalCount)
+        task.updateProgress({ current: i + 1, total: totalCount, statusText: statusMsg })
+
+        try {
+          const res = await exportUgoiraToAlbum(item)
+          if (res.success) successCount++
+        } catch (e: any) {
+          console.log(`downloadAuthorUgoiraToAlbum failed for ${item.id}:`, e?.message ?? e)
+        }
+        await yieldToMainThread()
+      }
+
+      const albumName = loadSettings().downloadPhotoAlbumName || "Pix-Scripting"
+      await task.finish({
+        success: true,
+        summary: `已成功将 ${successCount}/${totalCount} 部动图保存至相簿「${albumName}」。`,
+      })
+
+      return { successCount, totalCount }
+    }
+  )
+}
+
+/**
+ * 批量将画师全量动图导出至 Ugoira 存储文件夹 (独立 .mp4 / .gif 动图或帧包)
+ */
+export async function exportAuthorUgoiraToFiles(
+  authorName: string,
+  authorId: number,
+  ugoiras: PixivIllustration[],
+  onProgress?: (msg: string, current: number, total: number) => void
+): Promise<{ successCount: number; totalCount: number }> {
+  const format = loadSettings().ugoiraExportFormat ?? "mp4"
+  const safeAuthorName = sanitizeFileName(authorName || `User_${authorId}`)
+  const targetDir = getAuthorDownloadDirectory(safeAuthorName, authorId, "ugoira")
+  const ugoiraList = ugoiras.filter((it) => it.type === "ugoira")
+
+  return runWithBackgroundTask(
+    {
+      title: "导出用户动图全集",
+      subtitle: `用户: ${safeAuthorName}`,
+      total: ugoiraList.length,
+      categoryIcon: "film",
+      initialStatus: `准备导出 ${ugoiraList.length} 部动图…`,
+    },
+    async (task) => {
+      let successCount = 0
+      const totalCount = ugoiraList.length
+
+      for (let i = 0; i < ugoiraList.length; i++) {
+        const item = ugoiraList[i]
+        const safeTitle = sanitizeFileName(`${item.title}_${safeAuthorName}_${item.id}`)
+        const destPath = `${targetDir}/${safeTitle}.${format}`
+        const statusMsg = `正在合成导出动图 (${i + 1}/${totalCount}): ${item.title}`
+        onProgress?.(statusMsg, i + 1, totalCount)
+        task.updateProgress({ current: i + 1, total: totalCount, statusText: statusMsg })
+
+        try {
+          const ugoiraRes = await buildUgoira(item.id, format)
+          if (ugoiraRes?.mp4Path && FileManager.existsSync(ugoiraRes.mp4Path)) {
+            await FileManager.copyFile(ugoiraRes.mp4Path, destPath)
+            notifyDownloadFilesChanged()
+            successCount++
+          }
+        } catch (ugErr: any) {
+          console.log(`exportAuthorUgoiraToFiles failed for ${item.id}:`, ugErr?.message ?? ugErr)
+        }
+        await yieldToMainThread()
+      }
+
+      await task.finish({
+        success: true,
+        summary: `已成功将 ${successCount}/${totalCount} 部动图导出至 Ugoira 文件夹。`,
+      })
+
+      return { successCount, totalCount }
+    }
+  )
+}
+
+/**
+ * 批量将画师全量静态插画打包导出为单一分层 ZIP 归档文件
  */
 export async function exportAuthorIllustrationsToZip(
   authorName: string,
@@ -264,14 +365,15 @@ export async function exportAuthorIllustrationsToZip(
   const quality = getDownloadImageQuality()
   const safeAuthorName = sanitizeFileName(authorName || `User_${authorId}`)
   const targetDir = getAuthorDownloadDirectory(safeAuthorName, authorId, "illustrations")
+  const pureIllusts = illusts.filter((it) => it.type !== "ugoira")
 
   // 计算总 P 数
   let totalPages = 0
-  illusts.forEach((item) => {
+  pureIllusts.forEach((item) => {
     totalPages += Math.max(1, item.page_count || item.meta_pages?.length || 1)
   })
 
-  const zipFileName = sanitizeFileName(`[${safeAuthorName}] 插画全集 (共${illusts.length}部_${totalPages}P)`) + ".zip"
+  const zipFileName = sanitizeFileName(`[${safeAuthorName}] 插画全集 (共${pureIllusts.length}部_${totalPages}P)`) + ".zip"
   const targetFilePath = `${targetDir}/${zipFileName}`
   const tempDir = `${getCategoryDirectory("temp")}/zip_author_${authorId}_${Date.now()}`
 
@@ -281,39 +383,23 @@ export async function exportAuthorIllustrationsToZip(
       subtitle: `用户: ${safeAuthorName}`,
       total: totalPages,
       categoryIcon: "doc.zipper",
-      initialStatus: `准备打包 ${illusts.length} 部插画 (${totalPages} 张)…`,
+      initialStatus: `准备打包 ${pureIllusts.length} 部插画 (${totalPages} 张)…`,
     },
     async (task) => {
       try {
         FileManager.createDirectorySync(tempDir, true)
 
         let processedPages = 0
-        const initialMsg = `准备下载用户「${safeAuthorName}」插画全集 (共 ${illusts.length} 部, ${totalPages} 张)…`
+        const initialMsg = `准备下载用户「${safeAuthorName}」插画全集 (共 ${pureIllusts.length} 部, ${totalPages} 张)…`
         onProgress?.(initialMsg, 0, totalPages)
         task.updateProgress({ current: 0, total: totalPages, statusText: initialMsg })
 
-        for (let i = 0; i < illusts.length; i++) {
-          const item = illusts[i]
+        for (let i = 0; i < pureIllusts.length; i++) {
+          const item = pureIllusts[i]
           const safeTitle = sanitizeFileName(item.title || "Untitled")
           const pageCount = Math.max(1, item.page_count || item.meta_pages?.length || 1)
 
-          if (item.type === "ugoira") {
-            // 动图按用户设置格式导出放入根目录
-            const format = loadSettings().ugoiraExportFormat ?? "mp4"
-            const statusMsg = `正在合成动图 (${i + 1}/${illusts.length}): ${item.title}`
-            onProgress?.(statusMsg, processedPages, totalPages)
-            task.updateProgress({ current: processedPages, total: totalPages, statusText: statusMsg })
-            try {
-              const ugoiraRes = await buildUgoira(item.id, format)
-              if (ugoiraRes?.mp4Path && FileManager.existsSync(ugoiraRes.mp4Path)) {
-                const destPath = `${tempDir}/${item.id}_${safeTitle}.${format}`
-                await FileManager.copyFile(ugoiraRes.mp4Path, destPath)
-              }
-            } catch (ugErr: any) {
-              console.log(`Ugoira export error in batch ${item.id}:`, ugErr?.message ?? ugErr)
-            }
-            processedPages++
-          } else if (pageCount === 1) {
+          if (pageCount === 1) {
             // 单页插画：直接放入根目录
             const url = imageUrlOf(item, 0, quality)
             if (url) {
@@ -363,9 +449,9 @@ export async function exportAuthorIllustrationsToZip(
             name: authorName,
           },
           exported_at: new Date().toISOString(),
-          total_works: illusts.length,
+          total_works: pureIllusts.length,
           total_pages: totalPages,
-          works: illusts.map((it) => ({
+          works: pureIllusts.map((it) => ({
             id: it.id,
             title: it.title,
             type: it.type,
@@ -403,10 +489,11 @@ export async function exportAuthorIllustrationsToZip(
 
         // 使用 .bak 回滚与临时文件校验进行原子发布
         publishPreparedFile(tempZipPath, targetFilePath)
+        notifyDownloadFilesChanged()
 
         await task.finish({
           success: true,
-          summary: `已成功将 ${illusts.length} 部作品 (${totalPages}P) 打包归档至文件。`,
+          summary: `已成功将 ${pureIllusts.length} 部静态插画作品 (${totalPages}P) 打包归档至文件。`,
         })
 
         return targetFilePath

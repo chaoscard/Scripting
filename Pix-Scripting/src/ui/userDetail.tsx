@@ -18,9 +18,11 @@ import {
 } from "scripting"
 import {
   downloadAuthorIllustrationsToAlbum,
+  downloadAuthorUgoiraToAlbum,
   exportAuthorIllustrationsToZip,
   exportAuthorManga,
   exportAuthorNovels,
+  exportAuthorUgoiraToFiles,
   fetchAllUserIllustrations,
   fetchAllUserNovels,
 } from "../downloader"
@@ -280,9 +282,10 @@ export function UserDetailView(props: { userID: number }) {
     }
 
     // 构造可选作品类别列表
-    const categories: { key: "illust" | "manga" | "novel"; label: string }[] = []
+    const categories: { key: "illust" | "ugoira" | "manga" | "novel"; label: string }[] = []
     if (totalIllusts > 0) {
-      categories.push({ key: "illust", label: `下载全部插画 (${totalIllusts} 部)` })
+      categories.push({ key: "illust", label: `下载插画作品 (静态图片)` })
+      categories.push({ key: "ugoira", label: `下载动图作品 (视频/GIF)` })
     }
     if (totalManga > 0) {
       categories.push({ key: "manga", label: `下载全部漫画 (${totalManga} 部)` })
@@ -291,7 +294,7 @@ export function UserDetailView(props: { userID: number }) {
       categories.push({ key: "novel", label: `下载全部小说 (${totalNovels} 部)` })
     }
 
-    let selectedCatKey: "illust" | "manga" | "novel" = categories[0].key
+    let selectedCatKey: "illust" | "ugoira" | "manga" | "novel" = categories[0].key
 
     if (categories.length > 1) {
       const choice = await Dialog.actionSheet({
@@ -309,10 +312,10 @@ export function UserDetailView(props: { userID: number }) {
     if (selectedCatKey === "illust") {
       const choice = await Dialog.actionSheet({
         title: "插画下载方式",
-        message: `共 ${totalIllusts} 部插画作品`,
+        message: "静态插画下载与打包归档",
         actions: [
-          { label: "下载至相簿" },
-          { label: "打包为 ZIP 归档" },
+          { label: "下载至系统相簿" },
+          { label: "打包为 ZIP 归档 (存入文件)" },
         ],
       })
       if (choice !== 0 && choice !== 1) return
@@ -321,7 +324,7 @@ export function UserDetailView(props: { userID: number }) {
         const albumName = loadSettings().downloadPhotoAlbumName || "Pix-Scripting"
         const confirmed = await Dialog.confirm({
           title: "确认下载全部插画？",
-          message: `将拉取用户「${detail.user.name}」全部插画并保存至专属相簿「${albumName}」。`,
+          message: `将拉取用户「${detail.user.name}」全部静态插画并保存至专属相簿「${albumName}」。`,
           confirmLabel: "开始下载",
           cancelLabel: "取消",
         })
@@ -330,11 +333,12 @@ export function UserDetailView(props: { userID: number }) {
         setDownloading(true)
         try {
           const list = await fetchAllUserIllustrations(userID, "illust", (msg) => setDownloadStatusText(msg))
-          if (list.length === 0) {
-            void Dialog.alert({ title: "提示", message: "未获取到插画作品" })
+          const pureIllusts = list.filter((it) => it.type !== "ugoira")
+          if (pureIllusts.length === 0) {
+            void Dialog.alert({ title: "提示", message: "未获取到静态插画作品" })
             return
           }
-          const result = await downloadAuthorIllustrationsToAlbum(detail.user.name, list, (msg) => setDownloadStatusText(msg))
+          const result = await downloadAuthorIllustrationsToAlbum(detail.user.name, pureIllusts, (msg) => setDownloadStatusText(msg))
           void Dialog.alert({
             title: "下载完成",
             message: `已成功将 ${result.successCount} 部插画保存至相簿「${albumName}」。`,
@@ -348,7 +352,7 @@ export function UserDetailView(props: { userID: number }) {
       } else {
         const confirmed = await Dialog.confirm({
           title: "确认打包全部插画？",
-          message: `将拉取用户「${detail.user.name}」全部插画原图并打包为 ZIP 归档，多页插画将归入独立子文件夹，请在“文件”App 查看。`,
+          message: `将拉取用户「${detail.user.name}」全部静态插画原图并打包为 ZIP 归档，多页插画将归入独立子文件夹，请在“文件”App 或“下载管理”中查看。`,
           confirmLabel: "开始下载",
           cancelLabel: "取消",
         })
@@ -357,21 +361,93 @@ export function UserDetailView(props: { userID: number }) {
         setDownloading(true)
         try {
           const list = await fetchAllUserIllustrations(userID, "illust", (msg) => setDownloadStatusText(msg))
-          if (list.length === 0) {
-            void Dialog.alert({ title: "提示", message: "未获取到插画作品" })
+          const pureIllusts = list.filter((it) => it.type !== "ugoira")
+          if (pureIllusts.length === 0) {
+            void Dialog.alert({ title: "提示", message: "未获取到静态插画作品" })
             return
           }
-          const zipPath = await exportAuthorIllustrationsToZip(detail.user.name, userID, list, (msg) => setDownloadStatusText(msg))
+          const zipPath = await exportAuthorIllustrationsToZip(detail.user.name, userID, pureIllusts, (msg) => setDownloadStatusText(msg))
           if (zipPath) {
             void Dialog.alert({
               title: "打包完成",
-              message: "插画全集 ZIP 归档已保存，请在“文件”App 查看。",
+              message: "插画全集 ZIP 归档已保存，请在“下载与文件管理”或“文件”App 查看。",
             })
           } else {
             void Dialog.alert({ title: "打包失败", message: "生成插画 ZIP 归档包失败" })
           }
         } catch (e: any) {
           void Dialog.alert({ title: "打包失败", message: e?.message ?? "打包插画时发生错误" })
+        } finally {
+          setDownloading(false)
+          setDownloadStatusText("")
+        }
+      }
+    } else if (selectedCatKey === "ugoira") {
+      const format = loadSettings().ugoiraExportFormat ?? "mp4"
+      const formatLabel = format.toUpperCase()
+      const choice = await Dialog.actionSheet({
+        title: "动图下载方式",
+        message: "动图合成与导出归档",
+        actions: [
+          { label: `合成并保存至相簿 (${formatLabel})` },
+          { label: `导出动图文件至 Ugoira 目录 (${formatLabel})` },
+        ],
+      })
+      if (choice !== 0 && choice !== 1) return
+
+      if (choice === 0) {
+        const albumName = loadSettings().downloadPhotoAlbumName || "Pix-Scripting"
+        const confirmed = await Dialog.confirm({
+          title: "确认下载全部动图？",
+          message: `将拉取用户「${detail.user.name}」全部动图，合成为 ${formatLabel} 并保存至专属相簿「${albumName}」。`,
+          confirmLabel: "开始下载",
+          cancelLabel: "取消",
+        })
+        if (!confirmed) return
+
+        setDownloading(true)
+        try {
+          const list = await fetchAllUserIllustrations(userID, "illust", (msg) => setDownloadStatusText(msg))
+          const ugoiras = list.filter((it) => it.type === "ugoira")
+          if (ugoiras.length === 0) {
+            void Dialog.alert({ title: "提示", message: "该创作者未投稿动图作品" })
+            return
+          }
+          const result = await downloadAuthorUgoiraToAlbum(detail.user.name, ugoiras, (msg) => setDownloadStatusText(msg))
+          void Dialog.alert({
+            title: "下载完成",
+            message: `已成功将 ${result.successCount} 部动图保存至相簿「${albumName}」。`,
+          })
+        } catch (e: any) {
+          void Dialog.alert({ title: "下载失败", message: e?.message ?? "下载动图时发生错误" })
+        } finally {
+          setDownloading(false)
+          setDownloadStatusText("")
+        }
+      } else {
+        const confirmed = await Dialog.confirm({
+          title: "确认导出全部动图？",
+          message: `将拉取用户「${detail.user.name}」全部动图并合成为 ${formatLabel} 文件，存入 Ugoira 独立目录中。`,
+          confirmLabel: "开始导出",
+          cancelLabel: "取消",
+        })
+        if (!confirmed) return
+
+        setDownloading(true)
+        try {
+          const list = await fetchAllUserIllustrations(userID, "illust", (msg) => setDownloadStatusText(msg))
+          const ugoiras = list.filter((it) => it.type === "ugoira")
+          if (ugoiras.length === 0) {
+            void Dialog.alert({ title: "提示", message: "该创作者未投稿动图作品" })
+            return
+          }
+          const result = await exportAuthorUgoiraToFiles(detail.user.name, userID, ugoiras, (msg) => setDownloadStatusText(msg))
+          void Dialog.alert({
+            title: "导出完成",
+            message: `已成功将 ${result.successCount} 部动图导出至 Ugoira 文件夹，请在“下载与文件管理”中查看。`,
+          })
+        } catch (e: any) {
+          void Dialog.alert({ title: "导出失败", message: e?.message ?? "导出动图时发生错误" })
         } finally {
           setDownloading(false)
           setDownloadStatusText("")

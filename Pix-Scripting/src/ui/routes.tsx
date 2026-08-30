@@ -21,6 +21,11 @@ import { UserConnectionsView, type ConnectionRouteKind } from "./userConnections
 import { UserWorksView } from "./userWorks"
 import { AboutView } from "./about"
 import { RankingCustomPickerView, type CustomRankingPickerKind } from "./rankingCustomPicker"
+import {
+  DownloadManagerView,
+  DownloadDetailListView,
+  DownloadCreatorsListView,
+} from "./downloadManager"
 import { seedIllustFromWidgetPool, seedPixivisionFromWidgetPool } from "../store/widgetStore"
 
 // 解析与规范化各类路由格式（支持 URL 编码如 %3A、纯数字 ID、Pixiv 网页链接等）
@@ -183,6 +188,16 @@ export function renderDestination(rawPage: string) {
     if (kind === "illust" || kind === "manga" || kind === "novel") {
       return <RankingCustomPickerView kind={kind} />
     }
+  }
+  if (page === "downloadManager") return <DownloadManagerView />
+  if (page === "downloadCreators") return <DownloadCreatorsListView />
+  if (page.startsWith("downloadCreator:")) {
+    const folder = page.slice("downloadCreator:".length)
+    return <DownloadDetailListView creatorFolder={folder} />
+  }
+  if (page.startsWith("downloadDetail:")) {
+    const cat = page.slice("downloadDetail:".length)
+    return <DownloadDetailListView category={cat as any} />
   }
   if (page === "blockedSettings") return <BlockedSettingsView />
   if (page === "customAISettings") return <CustomAISettingsView />

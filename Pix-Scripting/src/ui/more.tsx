@@ -50,15 +50,24 @@ export function MoreView(props: { onClose: () => void }) {
       toolbar={appToolbar(
         props.onClose,
         "我的",
-        <NavigationLink
-          value={`user:${user.id}`}
-          buttonStyle="glass"
-          frame={{ width: 30, height: 30 }}
-          clipShape={{ type: "rect", cornerRadius: 15 }}
-          contentShape="rect"
-        >
-          <AvatarImage url={avatarURL} size={28} />
-        </NavigationLink>
+        [
+          <NavigationLink
+            key="downloads"
+            value="downloadManager"
+          >
+            <Image systemName="arrow.down.circle" />
+          </NavigationLink>,
+          <NavigationLink
+            key="profile"
+            value={`user:${user.id}`}
+            buttonStyle="glass"
+            frame={{ width: 30, height: 30 }}
+            clipShape={{ type: "rect", cornerRadius: 15 }}
+            contentShape="rect"
+          >
+            <AvatarImage url={avatarURL} size={28} />
+          </NavigationLink>,
+        ]
       )}
     >
       <Section header={<Text>浏览</Text>}>
@@ -70,7 +79,7 @@ export function MoreView(props: { onClose: () => void }) {
         </NavigationLink>
         {hideNovels ? null : (
           <NavigationLink value="novelBookmarks">
-            <MoreRow icon="book.pages.fill" iconColor="#0096FA" title="小说书签" />
+            <MoreRow icon="book.pages.fill" iconColor="#AF52DE" title="小说书签" />
           </NavigationLink>
         )}
       </Section>

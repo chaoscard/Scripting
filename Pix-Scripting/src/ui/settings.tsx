@@ -922,6 +922,16 @@ export function SettingsView() {
               </HStack>
             </Button>
           </HStack>
+
+          <NavigationLink value="downloadManager">
+            <HStack spacing={8} alignment="center">
+              <Text font="body">下载与文件管理</Text>
+              <Spacer />
+              <Text font="caption" foregroundStyle="secondaryLabel">
+                分类浏览与清理
+              </Text>
+            </HStack>
+          </NavigationLink>
         </DisclosureGroup>
       </Section>
 
