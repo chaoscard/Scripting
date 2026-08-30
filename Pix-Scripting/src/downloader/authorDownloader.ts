@@ -18,7 +18,7 @@ import {
   getCategoryDirectory,
   sanitizeFileName,
 } from "./directoryResolver"
-import { fetchImageBinaryWithRetry, runConcurrentTasks } from "./downloadHelper"
+import { fetchImageBinaryWithRetry, runConcurrentTasks, yieldToMainThread, yieldIfExceeded } from "./downloadHelper"
 import { exportMangaToEpub, exportNovelToEpub, type NovelChapter } from "./epubExporter"
 import { downloadIllustToAlbum, saveVideoToPixivAlbum } from "./photoAlbum"
 import { runWithBackgroundTask } from "./backgroundTaskManager"
@@ -238,6 +238,7 @@ export async function downloadAuthorIllustrationsToAlbum(
         } catch (e: any) {
           console.log(`downloadAuthorIllustrationsToAlbum failed for ${item.id}:`, e?.message ?? e)
         }
+        await yieldToMainThread()
       }
 
       const albumName = loadSettings().downloadPhotoAlbumName || "Pix-Scripting"
@@ -352,6 +353,7 @@ export async function exportAuthorIllustrationsToZip(
               task.updateProgress({ current: processedPages, total: totalPages, statusText: statusMsg })
             })
           }
+          await yieldToMainThread()
         }
 
         // 写入画师与作品元数据
@@ -541,6 +543,7 @@ export async function exportAuthorManga(
         } else {
           failedTasks++
         }
+        await yieldToMainThread()
       }
 
       // 2. 导出不成系列的单篇漫画
@@ -602,6 +605,7 @@ export async function exportAuthorManga(
         } else {
           failedTasks++
         }
+        await yieldToMainThread()
       }
 
       const totalSuccessful = completedTasks + partialTasks
@@ -739,6 +743,7 @@ export async function exportAuthorNovels(
     }
 
     completedTasks++
+    await yieldToMainThread()
   }
 
   // 2. 导出不成系列的短篇小说
@@ -799,6 +804,7 @@ export async function exportAuthorNovels(
     }
 
     completedTasks++
+    await yieldToMainThread()
   }
 
   await task.finish({

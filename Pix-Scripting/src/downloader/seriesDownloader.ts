@@ -13,6 +13,7 @@ import { exportNovelToEpub, type NovelChapter } from "./epubExporter"
 import { exportMangaToCbz } from "./cbzExporter"
 import { exportMangaToEpub } from "./epubExporter"
 import { runWithBackgroundTask } from "./backgroundTaskManager"
+import { yieldToMainThread } from "./downloadHelper"
 
 /**
  * 整本下载并导出小说系列为单本 EPUB 电子书
@@ -120,6 +121,7 @@ export async function downloadEntireNovelSeries(
           } catch (err: any) {
             console.log(`Failed to fetch novel ${novelItem.id}:`, err?.message ?? err)
           }
+          await yieldToMainThread()
         }
 
         if (chapters.length === 0) {
@@ -270,6 +272,7 @@ export async function downloadEntireMangaSeries(
           } catch (err: any) {
             console.log(`Failed to fetch manga detail ${item.id}:`, err?.message ?? err)
           }
+          await yieldToMainThread()
         }
 
         const allPages = chapters.flatMap((c) => c.pages)

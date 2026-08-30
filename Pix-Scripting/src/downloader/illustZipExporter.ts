@@ -1,4 +1,10 @@
-import { fetchImageBinaryWithRetry, runConcurrentTasks, type ExportResult } from "./downloadHelper"
+import {
+  fetchImageBinaryWithRetry,
+  runConcurrentTasks,
+  yieldToMainThread,
+  createThrottledProgress,
+  type ExportResult,
+} from "./downloadHelper"
 import { getCategoryDirectory, sanitizeFileName } from "./directoryResolver"
 import { publishPreparedFile } from "../store/safeFile"
 import type { PixivIllustration } from "../types"
@@ -21,11 +27,12 @@ export async function exportIllustToZip(options: IllustZipOptions): Promise<Expo
 
   const tempDir = `${getCategoryDirectory("temp")}/zip_illust_${illust.id}_${Date.now()}`
   const tempZipPath = `${tempDir}.zip`
+  const progressReporter = createThrottledProgress(onProgress, 80)
 
   try {
     FileManager.createDirectorySync(tempDir, true)
 
-    onProgress?.(`下载插画原图 (共 ${imageUrls.length} 张)...`, 0, imageUrls.length)
+    progressReporter.notify(`下载插画原图 (共 ${imageUrls.length} 张)...`, 0, imageUrls.length)
     const downloadedIndexes = new Set<number>()
     const failedPages: number[] = []
 
@@ -41,7 +48,7 @@ export async function exportIllustToZip(options: IllustZipOptions): Promise<Expo
       } else {
         failedPages.push(pageNum)
       }
-      onProgress?.(`下载插画原图 (${idx + 1}/${imageUrls.length})`, idx + 1, imageUrls.length)
+      progressReporter.notify(`下载插画原图 (${idx + 1}/${imageUrls.length})`, idx + 1, imageUrls.length)
     })
 
     const downloadedCount = downloadedIndexes.size
@@ -106,7 +113,9 @@ export async function exportIllustToZip(options: IllustZipOptions): Promise<Expo
       "utf-8"
     )
 
-    onProgress?.("正在打包插画 ZIP 压缩包...", imageUrls.length, imageUrls.length)
+    progressReporter.notify("正在打包插画 ZIP 压缩包...", imageUrls.length, imageUrls.length)
+    progressReporter.flush()
+    await yieldToMainThread()
 
     if (FileManager.existsSync(tempZipPath)) {
       try { FileManager.removeSync(tempZipPath) } catch {}

@@ -1,4 +1,11 @@
-import { fetchImageBinaryWithRetry, runConcurrentTasks, type ExportResult } from "./downloadHelper"
+import {
+  fetchImageBinaryWithRetry,
+  runConcurrentTasks,
+  yieldToMainThread,
+  yieldIfExceeded,
+  createThrottledProgress,
+  type ExportResult,
+} from "./downloadHelper"
 import { getCategoryDirectory, sanitizeFileName } from "./directoryResolver"
 import { publishPreparedFile } from "../store/safeFile"
 import { session } from "../api/session"
@@ -715,6 +722,7 @@ export async function exportNovelToEpub(options: NovelEpubOptions): Promise<stri
   const imagesDir = `${oebpsDir}/images`
 
   try {
+    const progressReporter = createThrottledProgress(onProgress, 80)
     FileManager.createDirectorySync(imagesDir, true)
     FileManager.createDirectorySync(metaInfDir, true)
 
@@ -734,7 +742,7 @@ export async function exportNovelToEpub(options: NovelEpubOptions): Promise<stri
     FileManager.writeAsStringSync(`${oebpsDir}/style.css`, NOVEL_CSS, "utf-8")
 
     // 4. 下载封面与系列名印制处理
-    onProgress?.("准备下载封面与插图...", 0, chapters.length)
+    progressReporter.notify("准备下载封面与插图...", 0, chapters.length)
     let hasCover = false
     let rawCoverData: Data | null = null
     if (coverUrl) {
@@ -811,13 +819,13 @@ export async function exportNovelToEpub(options: NovelEpubOptions): Promise<stri
     }
 
     if (allImagesToDownload.length > 0) {
-      onProgress?.(`下载插图 (共 ${allImagesToDownload.length} 张)...`, 0, allImagesToDownload.length)
+      progressReporter.notify(`下载插图 (共 ${allImagesToDownload.length} 张)...`, 0, allImagesToDownload.length)
       await runConcurrentTasks(allImagesToDownload, 4, async (item, idx) => {
         const data = await fetchImageBinaryWithRetry(item.url)
         if (data) {
           FileManager.writeAsDataSync(`${imagesDir}/${item.filename}`, data)
         }
-        onProgress?.(`下载插图 (${idx + 1}/${allImagesToDownload.length})`, idx + 1, allImagesToDownload.length)
+        progressReporter.notify(`下载插图 (${idx + 1}/${allImagesToDownload.length})`, idx + 1, allImagesToDownload.length)
       })
     }
 
@@ -946,6 +954,7 @@ export async function exportNovelToEpub(options: NovelEpubOptions): Promise<stri
     const authorUrl = authorId ? `https://www.pixiv.net/users/${authorId}` : ""
 
     let pageCounter = 0
+    let timeSliceNovel = Date.now()
     for (const chapPlan of chapterPlans) {
       const chapCaptionHtml = formatCaptionToXHtml(chapPlan.caption)
 
@@ -1046,7 +1055,8 @@ export async function exportNovelToEpub(options: NovelEpubOptions): Promise<stri
         manifestItems.push(`<item id="${page.xhtmlId}" href="${page.fileName}" media-type="application/xhtml+xml"/>`)
         spineItems.push(`<itemref idref="${page.xhtmlId}"/>`)
 
-        onProgress?.(`生成正文页面 (${pageCounter}/${totalPages})...`, pageCounter, totalPages)
+        progressReporter.notify(`生成正文页面 (${pageCounter}/${totalPages})...`, pageCounter, totalPages)
+        timeSliceNovel = await yieldIfExceeded(timeSliceNovel, 12)
       }
     }
 
@@ -1216,7 +1226,9 @@ export async function exportNovelToEpub(options: NovelEpubOptions): Promise<stri
     FileManager.writeAsStringSync(`${oebpsDir}/toc.xhtml`, tocXhtml, "utf-8")
 
     // 9. 打包压缩
-    onProgress?.("正在组装 EPUB 电子书...", chapters.length, chapters.length)
+    progressReporter.notify("正在组装 EPUB 电子书...", chapters.length, chapters.length)
+    progressReporter.flush()
+    await yieldToMainThread()
     const success = await packageEpubDirectory(tempDir, targetFilePath)
     return success ? targetFilePath : null
   } catch (err: any) {
@@ -1252,6 +1264,7 @@ export async function exportMangaToEpub(options: MangaEpubOptions): Promise<Expo
     onProgress,
   } = options
 
+  const progressReporter = createThrottledProgress(onProgress, 80)
   const tempDir = `${getCategoryDirectory("temp")}/epub_manga_${id}_${Date.now()}`
   const oebpsDir = `${tempDir}/OEBPS`
   const metaInfDir = `${tempDir}/META-INF`
@@ -1279,6 +1292,7 @@ export async function exportMangaToEpub(options: MangaEpubOptions): Promise<Expo
       url: string
       chapIndex: number
       chapTitle: string
+      isChapFirstPage?: boolean
     }
 
     interface NormalizedMangaChapter {
@@ -1301,6 +1315,7 @@ export async function exportMangaToEpub(options: MangaEpubOptions): Promise<Expo
             url: p.url,
             chapIndex: cIdx,
             chapTitle,
+            isChapFirstPage: pIdx === 0,
           }
         })
         if (pageList.length > 0) {
@@ -1327,12 +1342,14 @@ export async function exportMangaToEpub(options: MangaEpubOptions): Promise<Expo
           currentChapPages = []
           currentChapIdx++
         }
+        const isChapFirstPage = currentChapPages.length === 0
         currentChapPages.push({
           globalIndex: p.pageIndex ?? idx + 1,
           pageInChap: currentChapPages.length + 1,
           url: p.url,
           chapIndex: currentChapIdx,
           chapTitle: currentChapTitle,
+          isChapFirstPage,
         })
       })
       if (currentChapPages.length > 0) {
@@ -1356,8 +1373,16 @@ export async function exportMangaToEpub(options: MangaEpubOptions): Promise<Expo
     }
 
     // 2. 并发下载所有漫画页面原图并提取宽高
-    onProgress?.(`下载漫画图片 (共 ${allPagesToDownload.length} 页)...`, 0, allPagesToDownload.length)
-    const downloadedPagesMap = new Map<number, { index: number; fileName: string; width: number; height: number }>()
+    progressReporter.notify(`下载漫画图片 (共 ${allPagesToDownload.length} 页)...`, 0, allPagesToDownload.length)
+    const downloadedPagesMap = new Map<number, {
+      index: number
+      pageInChap: number
+      chapTitle: string
+      isChapFirstPage: boolean
+      fileName: string
+      width: number
+      height: number
+    }>()
     const failedPages: number[] = []
 
     await runConcurrentTasks(allPagesToDownload, 4, async (p, idx) => {
@@ -1381,11 +1406,19 @@ export async function exportMangaToEpub(options: MangaEpubOptions): Promise<Expo
           }
         } catch {}
 
-        downloadedPagesMap.set(pageNum, { index: pageNum, fileName, width, height })
+        downloadedPagesMap.set(pageNum, {
+          index: pageNum,
+          pageInChap: p.pageInChap,
+          chapTitle: p.chapTitle,
+          isChapFirstPage: p.isChapFirstPage ?? (p.pageInChap === 1),
+          fileName,
+          width,
+          height,
+        })
       } else {
         failedPages.push(pageNum)
       }
-      onProgress?.(`下载漫画图片 (${idx + 1}/${allPagesToDownload.length})`, idx + 1, allPagesToDownload.length)
+      progressReporter.notify(`下载漫画图片 (${idx + 1}/${allPagesToDownload.length})`, idx + 1, allPagesToDownload.length)
     })
 
     const downloadedCount = downloadedPagesMap.size
@@ -1510,12 +1543,19 @@ export async function exportMangaToEpub(options: MangaEpubOptions): Promise<Expo
 
     // 4. 生成各个漫画页面的 XHTML 与 Spine
     const downloadedPagesSorted = Array.from(downloadedPagesMap.values()).sort((a, b) => a.index - b.index)
+    const isMultiChapManga = normalizedChapters.length > 1
 
-    downloadedPagesSorted.forEach((p, idx) => {
+    let timeSliceManga = Date.now()
+    for (let idx = 0; idx < downloadedPagesSorted.length; idx++) {
+      const p = downloadedPagesSorted[idx]
       const pageId = `page_${p.index}`
       const pageXhtmlName = `${pageId}.xhtml`
       const mime = p.fileName.endsWith(".png") ? "image/png" : "image/jpeg"
       const isCover = idx === 0
+
+      const pageDocTitle = isMultiChapManga
+        ? `${p.chapTitle} · 第 ${p.pageInChap} 页`
+        : `${title} · 第 ${p.index} 页`
 
       const pageXhtml = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
@@ -1523,7 +1563,7 @@ export async function exportMangaToEpub(options: MangaEpubOptions): Promise<Expo
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=${p.width}, height=${p.height}"/>
-  <title>P${p.index}</title>
+  <title>${escapeXml(pageDocTitle)}</title>
   <link rel="stylesheet" type="text/css" href="style.css"/>
 </head>
 <body class="manga-page-body">
@@ -1542,17 +1582,25 @@ export async function exportMangaToEpub(options: MangaEpubOptions): Promise<Expo
       manifestItems.push(`<item id="img_${pageId}" href="images/${p.fileName}" media-type="${mime}"${isCover ? ` properties="cover-image"` : ""}/>`)
       manifestItems.push(`<item id="${pageId}" href="${pageXhtmlName}" media-type="application/xhtml+xml"/>`)
       spineItems.push(`<itemref idref="${pageId}"/>`)
-    })
+
+      timeSliceManga = await yieldIfExceeded(timeSliceManga, 12)
+    }
 
     // 5. 构建 TOC 目录树 (支持系列漫画章节层级与单篇平铺)
     let currentPlayOrder = 2
-    const hasMultipleChapters = normalizedChapters.length > 1
+    const pageListItems: string[] = [
+      `<li><a href="info.xhtml">作品信息</a></li>`
+    ]
 
-    if (hasMultipleChapters) {
+    downloadedPagesSorted.forEach((p) => {
+      pageListItems.push(`<li><a href="page_${p.index}.xhtml">${p.index}</a></li>`)
+    })
+
+    if (isMultiChapManga) {
       normalizedChapters.forEach((c, cIdx) => {
         const chapDownloadedPages = c.pages
           .map((p) => downloadedPagesMap.get(p.globalIndex))
-          .filter((p): p is { index: number; fileName: string; width: number; height: number } => p != null)
+          .filter((p): p is { index: number; pageInChap: number; chapTitle: string; isChapFirstPage: boolean; fileName: string; width: number; height: number } => p != null)
 
         if (chapDownloadedPages.length === 0) return
 
@@ -1562,9 +1610,10 @@ export async function exportMangaToEpub(options: MangaEpubOptions): Promise<Expo
         const chapPlayOrder = currentPlayOrder++
         const subNavPoints: string[] = chapDownloadedPages.map((p) => {
           const pagePlayOrder = currentPlayOrder++
+          const subTitle = `${c.title} · 第 ${p.pageInChap} 页`
           return `
       <navPoint id="nav-page-${p.index}" playOrder="${pagePlayOrder}">
-        <navLabel><text>第 ${p.index} 页</text></navLabel>
+        <navLabel><text>${escapeXml(subTitle)}</text></navLabel>
         <content src="page_${p.index}.xhtml"/>
       </navPoint>`
         })
@@ -1575,7 +1624,7 @@ export async function exportMangaToEpub(options: MangaEpubOptions): Promise<Expo
     <content src="${firstPageXhtml}"/>${subNavPoints.join("")}
   </navPoint>`)
 
-        const subTocItems = chapDownloadedPages.map((p) => `<li><a href="page_${p.index}.xhtml">第 ${p.index} 页</a></li>`).join("\n          ")
+        const subTocItems = chapDownloadedPages.map((p) => `<li><a href="page_${p.index}.xhtml">${escapeXml(c.title)} · 第 ${p.pageInChap} 页</a></li>`).join("\n          ")
         tocList.push(`<li>
         <a href="${firstPageXhtml}">${escapeXml(c.title)}</a>
         <ol>
@@ -1587,12 +1636,13 @@ export async function exportMangaToEpub(options: MangaEpubOptions): Promise<Expo
       downloadedPagesSorted.forEach((p) => {
         const pageId = `page_${p.index}`
         const pageXhtmlName = `${pageId}.xhtml`
+        const pTitle = `第 ${p.index} 页`
         navPoints.push(`
   <navPoint id="nav-${pageId}" playOrder="${currentPlayOrder++}">
-    <navLabel><text>第 ${p.index} 页</text></navLabel>
+    <navLabel><text>${escapeXml(pTitle)}</text></navLabel>
     <content src="${pageXhtmlName}"/>
   </navPoint>`)
-        tocList.push(`<li><a href="${pageXhtmlName}">第 ${p.index} 页</a></li>`)
+        tocList.push(`<li><a href="${pageXhtmlName}">${escapeXml(pTitle)}</a></li>`)
       })
     }
 
@@ -1642,7 +1692,7 @@ export async function exportMangaToEpub(options: MangaEpubOptions): Promise<Expo
 <ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
   <head>
     <meta name="dtb:uid" content="urn:pixiv:manga:${id}"/>
-    <meta name="dtb:depth" content="${hasMultipleChapters ? "2" : "1"}"/>
+    <meta name="dtb:depth" content="${isMultiChapManga ? "2" : "1"}"/>
   </head>
   <docTitle><text>${escapeXml(title)}</text></docTitle>
   <navMap>${navPoints.join("")}</navMap>
@@ -1653,11 +1703,26 @@ export async function exportMangaToEpub(options: MangaEpubOptions): Promise<Expo
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
 <head><title>目录</title><link rel="stylesheet" type="text/css" href="style.css"/></head>
-<body><nav epub:type="toc" id="toc"><h1>目录</h1><ol>${tocList.join("\n")}</ol></nav></body>
+<body>
+  <nav epub:type="toc" id="toc">
+    <h1>目录</h1>
+    <ol>
+      ${tocList.join("\n      ")}
+    </ol>
+  </nav>
+  <nav epub:type="page-list" id="page-list" hidden="hidden">
+    <h2>页码表</h2>
+    <ol>
+      ${pageListItems.join("\n      ")}
+    </ol>
+  </nav>
+</body>
 </html>`
     FileManager.writeAsStringSync(`${oebpsDir}/toc.xhtml`, tocXhtml, "utf-8")
 
-    onProgress?.("正在组装漫画 EPUB...", allPagesToDownload.length, allPagesToDownload.length)
+    progressReporter.notify("正在组装漫画 EPUB...", allPagesToDownload.length, allPagesToDownload.length)
+    progressReporter.flush()
+    await yieldToMainThread()
     const success = await packageEpubDirectory(tempDir, targetFilePath)
     return {
       success,

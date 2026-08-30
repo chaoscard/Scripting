@@ -1,4 +1,11 @@
-import { fetchImageBinaryWithRetry, runConcurrentTasks, type ExportResult } from "./downloadHelper"
+import {
+  fetchImageBinaryWithRetry,
+  runConcurrentTasks,
+  yieldToMainThread,
+  yieldIfExceeded,
+  createThrottledProgress,
+  type ExportResult,
+} from "./downloadHelper"
 import { getCategoryDirectory, sanitizeFileName } from "./directoryResolver"
 import { publishPreparedFile } from "../store/safeFile"
 import { htmlToPlainText } from "../ui/components/formatUtils"
@@ -58,6 +65,7 @@ export async function exportMangaToCbz(options: MangaCbzOptions): Promise<Export
 
   const tempDir = `${getCategoryDirectory("temp")}/cbz_${id}_${Date.now()}`
   const tempZipPath = `${tempDir}.zip`
+  const progressReporter = createThrottledProgress(onProgress, 80)
 
   try {
     FileManager.createDirectorySync(tempDir, true)
@@ -150,7 +158,7 @@ export async function exportMangaToCbz(options: MangaCbzOptions): Promise<Export
     }
 
     // 2. 并发下载漫画页面原图并提取宽高与尺寸
-    onProgress?.(`下载漫画原图 (共 ${allPagesToDownload.length} 页)...`, 0, allPagesToDownload.length)
+    progressReporter.notify(`下载漫画原图 (共 ${allPagesToDownload.length} 页)...`, 0, allPagesToDownload.length)
     const downloadedPagesMap = new Map<number, {
       index: number
       fileName: string
@@ -202,7 +210,7 @@ export async function exportMangaToCbz(options: MangaCbzOptions): Promise<Export
       } else {
         failedPages.push(pageNum)
       }
-      onProgress?.(`下载漫画原图 (${idx + 1}/${allPagesToDownload.length})`, idx + 1, allPagesToDownload.length)
+      progressReporter.notify(`下载漫画原图 (${idx + 1}/${allPagesToDownload.length})`, idx + 1, allPagesToDownload.length)
     })
 
     const downloadedCount = downloadedPagesMap.size
@@ -268,6 +276,7 @@ export async function exportMangaToCbz(options: MangaCbzOptions): Promise<Export
     const ageRatingTag = `<AgeRating>${hasR18Tag ? "Adults Only 18+" : "Everyone"}</AgeRating>`
 
     const sortedDownloadedPages = Array.from(downloadedPagesMap.values()).sort((a, b) => a.index - b.index)
+    const isMultiChap = normalizedChapters.length > 1
     const pagesXmlItems: string[] = []
 
     sortedDownloadedPages.forEach((p, idx) => {
@@ -275,13 +284,19 @@ export async function exportMangaToCbz(options: MangaCbzOptions): Promise<Export
       const attrs: string[] = [`Image="${idx}"`]
       if (isFrontCover) {
         attrs.push('Type="FrontCover"')
+      } else {
+        attrs.push('Type="Story"')
       }
       if (p.width > 0) attrs.push(`ImageWidth="${p.width}"`)
       if (p.height > 0) attrs.push(`ImageHeight="${p.height}"`)
       if (p.fileSize > 0) attrs.push(`ImageSize="${p.fileSize}"`)
       
-      if (normalizedChapters.length > 1 && p.isChapFirstPage) {
-        attrs.push(`Bookmark="${escapeXml(p.chapTitle)}"`)
+      if (isMultiChap) {
+        if (p.isChapFirstPage) {
+          attrs.push(`Bookmark="${escapeXml(p.chapTitle)}"`)
+        }
+      } else if (idx === 0) {
+        attrs.push(`Bookmark="${escapeXml(title || '正文')}"`)
       }
       pagesXmlItems.push(`    <Page ${attrs.join(" ")}/>`)
     })
@@ -317,7 +332,9 @@ ${pagesXmlItems.join("\n")}
     FileManager.writeAsStringSync(`${tempDir}/ComicInfo.xml`, comicInfoXml, "utf-8")
 
     // 4. 打包并原子发布
-    onProgress?.("正在打包 CBZ 漫画文件...", allPagesToDownload.length, allPagesToDownload.length)
+    progressReporter.notify("正在打包 CBZ 漫画文件...", allPagesToDownload.length, allPagesToDownload.length)
+    progressReporter.flush()
+    await yieldToMainThread()
 
     if (FileManager.existsSync(tempZipPath)) {
       try { FileManager.removeSync(tempZipPath) } catch {}

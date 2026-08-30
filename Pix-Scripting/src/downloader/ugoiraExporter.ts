@@ -3,6 +3,7 @@ import { saveImageToPixivAlbum, saveVideoToPixivAlbum } from "./photoAlbum"
 import { getCategoryDirectory, sanitizeFileName } from "./directoryResolver"
 import { loadSettings, type UgoiraExportFormat } from "../store/settings"
 import { publishPreparedFile } from "../store/safeFile"
+import { yieldToMainThread, yieldIfExceeded } from "./downloadHelper"
 import type { PixivIllustration } from "../types"
 
 export interface UgoiraExportResult {
@@ -90,12 +91,14 @@ export async function exportUgoiraZip(
 
     // 1. 复制所有帧图像文件至临时打包目录
     onProgress?.("正在整理动图序列帧...")
+    let timeSliceFrames = Date.now()
     for (const frame of prep.frames) {
       const srcFramePath = `${prep.framesDir}/${frame.file}`
       const destFramePath = `${tempDir}/${frame.file}`
       if (FileManager.existsSync(srcFramePath)) {
         FileManager.copyFileSync(srcFramePath, destFramePath)
       }
+      timeSliceFrames = await yieldIfExceeded(timeSliceFrames, 12)
     }
 
     // 2. 写入 info.json 元数据（包含作品基础信息与动图帧率延迟结构）
@@ -135,6 +138,7 @@ export async function exportUgoiraZip(
 
     // 3. 打包生成 ZIP 文件
     onProgress?.("正在压缩打包 ZIP 动图帧包...")
+    await yieldToMainThread()
     if (FileManager.existsSync(tempZipPath)) {
       try { FileManager.removeSync(tempZipPath) } catch {}
     }

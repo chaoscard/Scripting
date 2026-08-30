@@ -26,67 +26,89 @@ export type TaskLiveActivityState = {
 }
 
 function LockScreenContentView(state: TaskLiveActivityState) {
-  const icon = state.isDone
+  const isDone = Boolean(state.isDone)
+  const isError = Boolean(state.isError)
+  const percentVal = Math.max(0, Math.min(100, Math.round((state.progress || 0) * 100)))
+  const percentText = `${percentVal}%`
+
+  const iconName = isDone
     ? "checkmark.circle.fill"
-    : state.isError
+    : isError
     ? "exclamationmark.triangle.fill"
     : state.categoryIcon || "arrow.down.circle.fill"
 
-  const iconColor = state.isDone
+  const tintColor = isDone
     ? "systemGreen"
-    : state.isError
+    : isError
     ? "systemRed"
     : "systemBlue"
 
-  const percentText = `${Math.round(state.progress * 100)}%`
+  const cleanSubtitle = state.subtitle ? state.subtitle.replace(/^用户[:：]\s*/, "") : ""
+  const titleText = cleanSubtitle ? `${state.title} · ${cleanSubtitle}` : state.title
 
   return (
     <VStack
       spacing={6}
-      padding={{ horizontal: 4, vertical: 2 }}
-      activityBackgroundTint={{
-        light: "rgba(255, 255, 255, 0.9)",
-        dark: "rgba(30, 30, 30, 0.85)",
-      }}
+      padding={{ horizontal: 12, vertical: 8 }}
     >
-      <HStack spacing={6}>
-        <Image systemName={icon} foregroundStyle={iconColor} font="headline" />
-        <VStack alignment="leading" spacing={1}>
-          <Text font="subheadline" lineLimit={1}>
-            {state.title}
+      {/* 1. 顶行：左侧图标 + 主副标题；右侧醒目大号百分比与数字 */}
+      <HStack spacing={8}>
+        <Image
+          systemName={iconName}
+          foregroundStyle={tintColor}
+          font="headline"
+        />
+        <Text font="headline" fontWeight="semibold" lineLimit={1}>
+          {titleText}
+        </Text>
+
+        <Spacer />
+
+        <HStack spacing={4} alignment="lastTextBaseline">
+          <Text
+            font="title3"
+            fontWeight="bold"
+            foregroundStyle={isDone ? "systemGreen" : isError ? "systemRed" : "tintColor"}
+          >
+            {isDone ? "完成" : isError ? "失败" : percentText}
           </Text>
-          {state.subtitle ? (
-            <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={1}>
-              {state.subtitle}
+          {state.total > 0 && !isDone ? (
+            <Text font="caption2" foregroundStyle="secondaryLabel">
+              {state.current}/{state.total}
             </Text>
           ) : null}
-        </VStack>
-        <Spacer />
-        <Text font="caption" foregroundStyle={state.isDone ? "systemGreen" : "secondaryLabel"}>
-          {state.isDone ? "已完成" : `${state.current}/${state.total} · ${percentText}`}
-        </Text>
+        </HStack>
       </HStack>
 
-      <ProgressView value={Math.max(0, Math.min(1, state.progress))} total={1.0} />
+      {/* 2. 中行：系统原生进度指示条 */}
+      <ProgressView value={Math.max(0, Math.min(1, state.progress || 0))} total={1.0} />
 
-      <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={1}>
-        {state.statusText}
-      </Text>
+      {/* 3. 底行：实时动态状态文字 */}
+      <HStack>
+        <Text font="caption" foregroundStyle="secondaryLabel" lineLimit={1}>
+          {state.statusText || (isDone ? "全部任务处理完毕" : "正在处理…")}
+        </Text>
+        <Spacer />
+      </HStack>
     </VStack>
   )
 }
 
 const builder: LiveActivityUIBuilder<TaskLiveActivityState> = (state) => {
-  const percentText = `${Math.round(state.progress * 100)}%`
-  const icon = state.isDone
+  const isDone = Boolean(state.isDone)
+  const isError = Boolean(state.isError)
+  const percentVal = Math.max(0, Math.min(100, Math.round((state.progress || 0) * 100)))
+  const percentText = `${percentVal}%`
+
+  const iconName = isDone
     ? "checkmark.circle.fill"
-    : state.isError
+    : isError
     ? "exclamationmark.triangle.fill"
     : state.categoryIcon || "arrow.down.circle.fill"
 
-  const iconColor = state.isDone
+  const iconColor = isDone
     ? "systemGreen"
-    : state.isError
+    : isError
     ? "systemRed"
     : "systemBlue"
 
@@ -94,20 +116,31 @@ const builder: LiveActivityUIBuilder<TaskLiveActivityState> = (state) => {
     <LiveActivityUI
       content={<LockScreenContentView {...state} />}
       compactLeading={
-        <Image systemName={icon} foregroundStyle={iconColor} font="subheadline" />
+        <HStack spacing={4}>
+          <Image systemName={iconName} foregroundStyle={iconColor} font="subheadline" />
+          <Text font="caption2" fontWeight="semibold">
+            {isDone ? "完成" : isError ? "错误" : percentText}
+          </Text>
+        </HStack>
       }
       compactTrailing={
-        <Text font="caption2" foregroundStyle={state.isDone ? "systemGreen" : "tintColor"}>
-          {state.isDone ? "完成" : percentText}
+        <Text font="caption2" foregroundStyle="secondaryLabel">
+          {state.total > 0 && !isDone ? `${state.current}/${state.total}` : "Pixiv"}
         </Text>
       }
-      minimal={<Image systemName={icon} foregroundStyle={iconColor} />}
+      minimal={
+        <Image systemName={iconName} foregroundStyle={iconColor} font="subheadline" />
+      }
     >
       <LiveActivityUIExpandedLeading>
         <HStack spacing={6}>
-          <Image systemName={icon} foregroundStyle={iconColor} font="title3" />
-          <VStack alignment="leading" spacing={2}>
-            <Text font="headline" lineLimit={1}>
+          <Image
+            systemName={iconName}
+            foregroundStyle={iconColor}
+            font="title3"
+          />
+          <VStack alignment="leading" spacing={1}>
+            <Text font="headline" fontWeight="semibold" lineLimit={1}>
               {state.title}
             </Text>
             {state.subtitle ? (
@@ -119,21 +152,30 @@ const builder: LiveActivityUIBuilder<TaskLiveActivityState> = (state) => {
         </HStack>
       </LiveActivityUIExpandedLeading>
       <LiveActivityUIExpandedTrailing>
-        <VStack alignment="trailing" spacing={2}>
-          <Text font="title3" foregroundStyle={state.isDone ? "systemGreen" : "tintColor"}>
-            {state.isDone ? "100%" : percentText}
+        <VStack alignment="trailing" spacing={1}>
+          <Text
+            font="title3"
+            fontWeight="bold"
+            foregroundStyle={isDone ? "systemGreen" : isError ? "systemRed" : "tintColor"}
+          >
+            {isDone ? "100%" : isError ? "失败" : percentText}
           </Text>
-          <Text font="caption2" foregroundStyle="secondaryLabel">
-            {state.current}/{state.total}
-          </Text>
+          {state.total > 0 && !isDone ? (
+            <Text font="caption2" foregroundStyle="secondaryLabel">
+              {state.current}/{state.total}
+            </Text>
+          ) : null}
         </VStack>
       </LiveActivityUIExpandedTrailing>
       <LiveActivityUIExpandedBottom>
         <VStack spacing={4}>
-          <ProgressView value={Math.max(0, Math.min(1, state.progress))} total={1.0} />
-          <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={1}>
-            {state.statusText}
-          </Text>
+          <ProgressView value={Math.max(0, Math.min(1, state.progress || 0))} total={1.0} />
+          <HStack>
+            <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={1}>
+              {state.statusText || (isDone ? "任务已完成" : "正在处理…")}
+            </Text>
+            <Spacer />
+          </HStack>
         </VStack>
       </LiveActivityUIExpandedBottom>
     </LiveActivityUI>
