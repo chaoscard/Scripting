@@ -12,6 +12,11 @@ export interface IllustAmbientPalette {
   topColor: Color
   midColor: Color
   backgroundColor: Color
+  // 探索算法专属（感知自适应 + 极光双焦点）
+  exploreAccentColor?: Color
+  exploreTopColor?: Color
+  exploreMidColor?: Color
+  exploreBgColor?: Color
 }
 
 export type IntensityPaletteMap<T> = {
@@ -344,6 +349,203 @@ export async function extractUserAmbientPalette(
 }
 
 /**
+ * 针对探索算法的感知明度与舒适度自适应修饰
+ */
+function adaptPerceptualColor(
+  red: number,
+  green: number,
+  blue: number,
+  isDark: boolean,
+  intensity: AmbientIntensity = "medium"
+): [number, number, number] {
+  const [h, s, l] = rgbToHsl(red, green, blue)
+  let targetS = s
+  let targetL = l
+
+  if (isDark) {
+    // 深色模式：限制最高明度防晃眼，适度增强饱和度维持暗夜微光质感
+    if (intensity === "low") {
+      targetS = Math.min(0.70, Math.max(0.20, s * 1.05))
+      targetL = Math.min(0.32, Math.max(0.12, l * 0.70))
+    } else if (intensity === "high") {
+      targetS = Math.min(0.90, Math.max(0.35, s * 1.25))
+      targetL = Math.min(0.42, Math.max(0.18, l * 0.85))
+    } else {
+      // medium (标准)
+      targetS = Math.min(0.80, Math.max(0.25, s * 1.15))
+      targetL = Math.min(0.36, Math.max(0.14, l * 0.78))
+    }
+  } else {
+    // 浅色模式：粉彩化提升明度防脏底，收敛过激饱和度
+    if (intensity === "low") {
+      targetS = Math.min(0.45, Math.max(0.10, s * 0.85))
+      targetL = Math.min(0.92, Math.max(0.78, 0.65 + l * 0.30))
+    } else if (intensity === "high") {
+      targetS = Math.min(0.75, Math.max(0.25, s * 1.10))
+      targetL = Math.min(0.84, Math.max(0.62, 0.45 + l * 0.40))
+    } else {
+      // medium (标准)
+      targetS = Math.min(0.60, Math.max(0.18, s * 0.95))
+      targetL = Math.min(0.88, Math.max(0.70, 0.55 + l * 0.35))
+    }
+  }
+
+  return hslToRgb(h, targetS, targetL)
+}
+
+function buildIllustPalette(
+  tRaw: [number, number, number],
+  dRaw: [number, number, number],
+  aRaw: [number, number, number],
+  isDark: boolean,
+  intensity: AmbientIntensity
+): IllustAmbientPalette {
+  // 1. 经典算法色彩 (Classic - 完全保持原有渲染参数与色彩)
+  const [tR, tG, tB] = boostVibrancy(tRaw[0], tRaw[1], tRaw[2], isDark, intensity)
+  const [dR, dG, dB] = boostVibrancy(dRaw[0], dRaw[1], dRaw[2], isDark, intensity)
+  let topAlpha = 0.54
+  let midAlpha = 0.28
+  let bgAlpha = 0.10
+  if (intensity === "low") {
+    topAlpha = 0.46
+    midAlpha = 0.24
+    bgAlpha = 0.08
+  } else if (intensity === "high") {
+    topAlpha = isDark ? 0.66 : 0.64
+    midAlpha = isDark ? 0.36 : 0.34
+    bgAlpha = 0.14
+  }
+
+  // 2. 探索算法色彩 (Explore - 极光双焦点与感知明度自适应)
+  const [expTR, expTG, expTB] = adaptPerceptualColor(tRaw[0], tRaw[1], tRaw[2], isDark, intensity)
+  const [expDR, expDG, expDB] = adaptPerceptualColor(dRaw[0], dRaw[1], dRaw[2], isDark, intensity)
+  const [expAR, expAG, expAB] = adaptPerceptualColor(aRaw[0], aRaw[1], aRaw[2], isDark, intensity)
+
+  let expAccentAlpha = isDark ? 0.52 : 0.44
+  let expTopAlpha = isDark ? 0.58 : 0.50
+  let expMidAlpha = isDark ? 0.24 : 0.18
+  let expBgAlpha = 0.00
+  if (intensity === "low") {
+    expAccentAlpha = isDark ? 0.32 : 0.24
+    expTopAlpha = isDark ? 0.38 : 0.30
+    expMidAlpha = isDark ? 0.14 : 0.10
+    expBgAlpha = 0.00
+  } else if (intensity === "high") {
+    expAccentAlpha = isDark ? 0.70 : 0.60
+    expTopAlpha = isDark ? 0.76 : 0.68
+    expMidAlpha = isDark ? 0.38 : 0.30
+    expBgAlpha = isDark ? 0.04 : 0.02
+  }
+
+  return {
+    topColor: `rgba(${tR},${tG},${tB},${topAlpha})` as Color,
+    midColor: `rgba(${dR},${dG},${dB},${midAlpha})` as Color,
+    backgroundColor: `rgba(${dR},${dG},${dB},${bgAlpha})` as Color,
+
+    exploreAccentColor: `rgba(${expAR},${expAG},${expAB},${expAccentAlpha})` as Color,
+    exploreTopColor: `rgba(${expTR},${expTG},${expTB},${expTopAlpha})` as Color,
+    exploreMidColor: `rgba(${expDR},${expDG},${expDB},${expMidAlpha})` as Color,
+    exploreBgColor: `rgba(${expDR},${expDG},${expDB},${expBgAlpha})` as Color,
+  }
+}
+
+function processIllustPaletteFromImage(uiImage: UIImage, url?: string): IllustAmbientResult | null {
+  if (!uiImage || uiImage.width <= 0 || uiImage.height <= 0) return null
+
+  // 1. 顶部 30% 区域采样（无缝衔接顶部导航区）
+  const cropH = Math.max(2, Math.round(uiImage.height * 0.3))
+  const topCrop = uiImage.croppedTo({
+    x: 0,
+    y: 0,
+    width: uiImage.width,
+    height: cropH,
+  })
+  const topAvg = topCrop?.averageColor() ?? uiImage.averageColor()
+
+  // 2. 全局多主色采样：在主色列表中优先选取鲜活度适中的颜色
+  const dominants = uiImage.dominantColors(6)
+  let bestDominant = uiImage.averageColor()
+  let secondDominant: any = null
+  if (dominants && dominants.length > 0) {
+    let maxScore = -1
+    for (const d of dominants) {
+      const c = d.color
+      const [, s] = rgbToHsl(c.red ?? 0, c.green ?? 0, c.blue ?? 0)
+      const score = s * 1.6 + d.fraction
+      if (score > maxScore) {
+        maxScore = score
+        bestDominant = c
+      }
+    }
+
+    if (bestDominant) {
+      // 寻找与 bestDominant 色相差异明显的主色作为极光副色
+      const [dMainH] = rgbToHsl(bestDominant.red ?? 0, bestDominant.green ?? 0, bestDominant.blue ?? 0)
+      let bestAccentScore = -1
+      for (const d of dominants) {
+        const c = d.color
+        if (c === bestDominant) continue
+        const [h, s] = rgbToHsl(c.red ?? 0, c.green ?? 0, c.blue ?? 0)
+        let hueDiff = Math.abs(h - dMainH)
+        if (hueDiff > 0.5) hueDiff = 1 - hueDiff
+        // 色相差在 30度 (0.083) 以上，饱和度适中
+        if (hueDiff >= 0.08 && s >= 0.15) {
+          const score = hueDiff * 2.0 + s * 1.2 + d.fraction
+          if (score > bestAccentScore) {
+            bestAccentScore = score
+            secondDominant = c
+          }
+        }
+      }
+    }
+  }
+
+  if (!topAvg || !bestDominant) return null
+
+  const tRawR = topAvg.red ?? 0
+  const tRawG = topAvg.green ?? 0
+  const tRawB = topAvg.blue ?? 0
+
+  const dRawR = bestDominant.red ?? 0
+  const dRawG = bestDominant.green ?? 0
+  const dRawB = bestDominant.blue ?? 0
+
+  // 若没有从主色列表中找到明显的第二副色，通过 HSL 色相偏移衍生和谐极光副色（偏移 ~35°）
+  let accentRawR = dRawR
+  let accentRawG = dRawG
+  let accentRawB = dRawB
+  if (secondDominant) {
+    accentRawR = secondDominant.red ?? 0
+    accentRawG = secondDominant.green ?? 0
+    accentRawB = secondDominant.blue ?? 0
+  } else {
+    const [h, s, l] = rgbToHsl(dRawR, dRawG, dRawB)
+    const shiftedH = (h + 0.098) % 1
+    const [ar, ag, ab] = hslToRgb(shiftedH, Math.max(0.3, s), l)
+    accentRawR = ar
+    accentRawG = ag
+    accentRawB = ab
+  }
+
+  const result: IllustAmbientResult = {
+    light: {
+      low: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], [accentRawR, accentRawG, accentRawB], false, "low"),
+      medium: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], [accentRawR, accentRawG, accentRawB], false, "medium"),
+      high: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], [accentRawR, accentRawG, accentRawB], false, "high"),
+    },
+    dark: {
+      low: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], [accentRawR, accentRawG, accentRawB], true, "low"),
+      medium: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], [accentRawR, accentRawG, accentRawB], true, "medium"),
+      high: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], [accentRawR, accentRawG, accentRawB], true, "high"),
+    },
+  }
+  if (url) {
+    illustPaletteCache.set(url, result)
+  }
+  return result
+}
+
+/**
  * 同步尝试从已缓存到本地的插画封面提取氛围色
  */
 export function extractIllustAmbientPaletteSync(
@@ -360,83 +562,7 @@ export function extractIllustAmbientPaletteSync(
     const uiImage = UIImage.fromFile(filePath)
     if (!uiImage || uiImage.width <= 0 || uiImage.height <= 0) return null
 
-    // 1. 顶部 30% 区域采样（无缝衔接顶部导航区）
-    const cropH = Math.max(2, Math.round(uiImage.height * 0.3))
-    const topCrop = uiImage.croppedTo({
-      x: 0,
-      y: 0,
-      width: uiImage.width,
-      height: cropH,
-    })
-    const topAvg = topCrop?.averageColor() ?? uiImage.averageColor()
-
-    // 2. 全局多主色采样：在主色列表中优先选取鲜活度适中的颜色
-    const dominants = uiImage.dominantColors(6)
-    let bestDominant = uiImage.averageColor()
-    if (dominants && dominants.length > 0) {
-      let maxScore = -1
-      for (const d of dominants) {
-        const c = d.color
-        const [, s] = rgbToHsl(c.red ?? 0, c.green ?? 0, c.blue ?? 0)
-        const score = s * 1.6 + d.fraction
-        if (score > maxScore) {
-          maxScore = score
-          bestDominant = c
-        }
-      }
-    }
-
-    if (!topAvg || !bestDominant) return null
-
-    const tRawR = topAvg.red ?? 0
-    const tRawG = topAvg.green ?? 0
-    const tRawB = topAvg.blue ?? 0
-
-    const dRawR = bestDominant.red ?? 0
-    const dRawG = bestDominant.green ?? 0
-    const dRawB = bestDominant.blue ?? 0
-
-    const buildIllustPalette = (
-      tRaw: [number, number, number],
-      dRaw: [number, number, number],
-      isDark: boolean,
-      intensity: AmbientIntensity
-    ): IllustAmbientPalette => {
-      const [tR, tG, tB] = boostVibrancy(tRaw[0], tRaw[1], tRaw[2], isDark, intensity)
-      const [dR, dG, dB] = boostVibrancy(dRaw[0], dRaw[1], dRaw[2], isDark, intensity)
-      let topAlpha = 0.54
-      let midAlpha = 0.28
-      let bgAlpha = 0.10
-      if (intensity === "low") {
-        topAlpha = 0.46
-        midAlpha = 0.24
-        bgAlpha = 0.08
-      } else if (intensity === "high") {
-        topAlpha = isDark ? 0.66 : 0.64
-        midAlpha = isDark ? 0.36 : 0.34
-        bgAlpha = 0.14
-      }
-      return {
-        topColor: `rgba(${tR},${tG},${tB},${topAlpha})` as Color,
-        midColor: `rgba(${dR},${dG},${dB},${midAlpha})` as Color,
-        backgroundColor: `rgba(${dR},${dG},${dB},${bgAlpha})` as Color,
-      }
-    }
-
-    const result: IllustAmbientResult = {
-      light: {
-        low: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], false, "low"),
-        medium: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], false, "medium"),
-        high: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], false, "high"),
-      },
-      dark: {
-        low: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], true, "low"),
-        medium: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], true, "medium"),
-        high: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], true, "high"),
-      },
-    }
-    illustPaletteCache.set(url, result)
-    return result
+    return processIllustPaletteFromImage(uiImage, url)
   } catch (err) {
     console.log("extractIllustAmbientPaletteSync error:", err)
     return null
@@ -481,83 +607,7 @@ export async function extractIllustAmbientPalette(
     const uiImage = UIImage.fromFile(filePath)
     if (!uiImage || uiImage.width <= 0 || uiImage.height <= 0) return null
 
-    // 1. 顶部 30% 区域采样（无缝衔接顶部导航区）
-    const cropH = Math.max(2, Math.round(uiImage.height * 0.3))
-    const topCrop = uiImage.croppedTo({
-      x: 0,
-      y: 0,
-      width: uiImage.width,
-      height: cropH,
-    })
-    const topAvg = topCrop?.averageColor() ?? uiImage.averageColor()
-
-    // 2. 全局多主色采样：在主色列表中优先选取鲜活度适中的颜色
-    const dominants = uiImage.dominantColors(6)
-    let bestDominant = uiImage.averageColor()
-    if (dominants && dominants.length > 0) {
-      let maxScore = -1
-      for (const d of dominants) {
-        const c = d.color
-        const [, s] = rgbToHsl(c.red ?? 0, c.green ?? 0, c.blue ?? 0)
-        const score = s * 1.6 + d.fraction
-        if (score > maxScore) {
-          maxScore = score
-          bestDominant = c
-        }
-      }
-    }
-
-    if (!topAvg || !bestDominant) return null
-
-    const tRawR = topAvg.red ?? 0
-    const tRawG = topAvg.green ?? 0
-    const tRawB = topAvg.blue ?? 0
-
-    const dRawR = bestDominant.red ?? 0
-    const dRawG = bestDominant.green ?? 0
-    const dRawB = bestDominant.blue ?? 0
-
-    const buildIllustPalette = (
-      tRaw: [number, number, number],
-      dRaw: [number, number, number],
-      isDark: boolean,
-      intensity: AmbientIntensity
-    ): IllustAmbientPalette => {
-      const [tR, tG, tB] = boostVibrancy(tRaw[0], tRaw[1], tRaw[2], isDark, intensity)
-      const [dR, dG, dB] = boostVibrancy(dRaw[0], dRaw[1], dRaw[2], isDark, intensity)
-      let topAlpha = 0.54
-      let midAlpha = 0.28
-      let bgAlpha = 0.10
-      if (intensity === "low") {
-        topAlpha = 0.46
-        midAlpha = 0.24
-        bgAlpha = 0.08
-      } else if (intensity === "high") {
-        topAlpha = isDark ? 0.66 : 0.64
-        midAlpha = isDark ? 0.36 : 0.34
-        bgAlpha = 0.14
-      }
-      return {
-        topColor: `rgba(${tR},${tG},${tB},${topAlpha})` as Color,
-        midColor: `rgba(${dR},${dG},${dB},${midAlpha})` as Color,
-        backgroundColor: `rgba(${dR},${dG},${dB},${bgAlpha})` as Color,
-      }
-    }
-
-    const result: IllustAmbientResult = {
-      light: {
-        low: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], false, "low"),
-        medium: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], false, "medium"),
-        high: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], false, "high"),
-      },
-      dark: {
-        low: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], true, "low"),
-        medium: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], true, "medium"),
-        high: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], true, "high"),
-      },
-    }
-    illustPaletteCache.set(url, result)
-    return result
+    return processIllustPaletteFromImage(uiImage, url)
   } catch (err) {
     console.log("extractIllustAmbientPalette error:", err)
     return null

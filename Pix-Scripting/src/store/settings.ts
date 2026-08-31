@@ -10,6 +10,7 @@ export type DownloadStorageMode = "local" | "icloud"
 export type CloseButtonAction = "minimize" | "exit"
 export type WatchlistSortOrder = "asc" | "desc"
 export type AmbientIntensity = "low" | "medium" | "high"
+export type AmbientAlgorithm = "classic" | "explore"
 export type LaunchPage = "discovery" | "ranking" | "following"
 export type ImageBatchConcurrency = number
 export type AITranslateConcurrency = number
@@ -100,6 +101,7 @@ export interface AppSettings {
   ambientIntensity: AmbientIntensity
   experimentalImmersion: boolean
   experimentalImmersionIntensity: AmbientIntensity
+  experimentalImmersionAlgorithm: AmbientAlgorithm
   watchlistSortOrder: WatchlistSortOrder
   longPressBookmarkAction: "off" | "follow" | "detail"
   closeButtonAction: CloseButtonAction
@@ -157,6 +159,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   ambientIntensity: "medium",
   experimentalImmersion: false,
   experimentalImmersionIntensity: "medium",
+  experimentalImmersionAlgorithm: "classic",
   watchlistSortOrder: "asc",
   longPressBookmarkAction: "off",
   closeButtonAction: "minimize",
@@ -222,6 +225,7 @@ const DOWNLOAD_STORAGE_MODE_VALUES: readonly DownloadStorageMode[] = ["local", "
 const LONG_PRESS_ACTION_VALUES: readonly AppSettings["longPressBookmarkAction"][] = ["off", "follow", "detail"]
 const CLOSE_BUTTON_ACTION_VALUES: readonly CloseButtonAction[] = ["minimize", "exit"]
 const AMBIENT_INTENSITY_VALUES: readonly AmbientIntensity[] = ["low", "medium", "high"]
+const AMBIENT_ALGORITHM_VALUES: readonly AmbientAlgorithm[] = ["classic", "explore"]
 const CACHE_LIMIT_VALUES = [300, 500, 1000, 2000] as const
 
 export function getImageBatchSize(level?: number): number {
@@ -388,6 +392,12 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
     )
       ? stored.experimentalImmersionIntensity
       : DEFAULT_SETTINGS.experimentalImmersionIntensity,
+    experimentalImmersionAlgorithm: isOneOf(
+      stored?.experimentalImmersionAlgorithm,
+      AMBIENT_ALGORITHM_VALUES
+    )
+      ? stored.experimentalImmersionAlgorithm
+      : DEFAULT_SETTINGS.experimentalImmersionAlgorithm,
     watchlistSortOrder: isOneOf(stored?.watchlistSortOrder, WATCHLIST_SORT_VALUES)
       ? stored.watchlistSortOrder
       : DEFAULT_SETTINGS.watchlistSortOrder,

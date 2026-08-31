@@ -461,19 +461,33 @@ export function SettingsView() {
                 }}
               />
               {settings.experimentalImmersion ? (
-                <Picker
-                  title="实验性沉浸效果强度"
-                  value={settings.experimentalImmersionIntensity}
-                  onChanged={(value: string) =>
-                    update({
-                      experimentalImmersionIntensity: value as "low" | "medium" | "high",
-                    })
-                  }
-                >
-                  <Text tag="low">低</Text>
-                  <Text tag="medium">中</Text>
-                  <Text tag="high">高</Text>
-                </Picker>
+                <>
+                  <Picker
+                    title="实验性沉浸效果算法"
+                    value={settings.experimentalImmersionAlgorithm}
+                    onChanged={(value: string) =>
+                      update({
+                        experimentalImmersionAlgorithm: value as "classic" | "explore",
+                      })
+                    }
+                  >
+                    <Text tag="classic">经典</Text>
+                    <Text tag="explore">探索</Text>
+                  </Picker>
+                  <Picker
+                    title="实验性沉浸效果强度"
+                    value={settings.experimentalImmersionIntensity}
+                    onChanged={(value: string) =>
+                      update({
+                        experimentalImmersionIntensity: value as "low" | "medium" | "high",
+                      })
+                    }
+                  >
+                    <Text tag="low">低</Text>
+                    <Text tag="medium">中</Text>
+                    <Text tag="high">高</Text>
+                  </Picker>
+                </>
               ) : null}
             </>
           ) : null}

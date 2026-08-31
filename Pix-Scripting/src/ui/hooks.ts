@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useColorScheme, type Color } from "scripting"
+import { useCallback, useEffect, useMemo, useRef, useState, useColorScheme, type Color, type KeywordPoint } from "scripting"
 import { session } from "../api/session"
-import { getImageBatchSize, loadSettings, onSettingsChanged, type AmbientIntensity } from "../store/settings"
+import { getImageBatchSize, loadSettings, onSettingsChanged, type AmbientIntensity, type AmbientAlgorithm } from "../store/settings"
 import { onBlocklistChanged } from "../store/blocklist"
 import {
   getIllustContentBlockReason,
@@ -114,8 +114,9 @@ export function useUserAmbientPalette(imageUrl: string | null | undefined): {
 export function useExperimentalAmbientPalette(imageUrl: string | null | undefined): {
   ambientEnabled: boolean
   ambientIntensity: AmbientIntensity
+  ambientAlgorithm: AmbientAlgorithm
   ambientPalette: IllustAmbientPalette | null
-  ambientBackground: { colors: Color[]; startPoint: "top"; endPoint: "bottom" } | undefined
+  ambientBackground: { colors: Color[]; startPoint: KeywordPoint; endPoint: KeywordPoint } | undefined
   topColor: Color | undefined
 } {
   const colorScheme = useColorScheme()
@@ -125,6 +126,9 @@ export function useExperimentalAmbientPalette(imageUrl: string | null | undefine
   )
   const [ambientIntensity, setAmbientIntensity] = useState<AmbientIntensity>(
     () => loadSettings().experimentalImmersionIntensity
+  )
+  const [ambientAlgorithm, setAmbientAlgorithm] = useState<AmbientAlgorithm>(
+    () => loadSettings().experimentalImmersionAlgorithm
   )
   const [ambientPalette, setAmbientPalette] = useState<IllustAmbientPalette | null>(() => {
     const s = loadSettings()
@@ -141,6 +145,7 @@ export function useExperimentalAmbientPalette(imageUrl: string | null | undefine
       const nextSettings = loadSettings()
       setAmbientEnabled(nextSettings.ambientImmersion && nextSettings.experimentalImmersion)
       setAmbientIntensity(nextSettings.experimentalImmersionIntensity)
+      setAmbientAlgorithm(nextSettings.experimentalImmersionAlgorithm)
     })
   }, [])
 
@@ -171,23 +176,49 @@ export function useExperimentalAmbientPalette(imageUrl: string | null | undefine
       : null
   const effectivePalette = ambientPalette ?? synchronousPalette
 
-  const ambientBackground =
+  const ambientBackground = useMemo(() => {
+    if (!ambientEnabled || !effectivePalette) return undefined
+
+    if (ambientAlgorithm === "explore") {
+      const accent = effectivePalette.exploreAccentColor ?? effectivePalette.topColor
+      const top = effectivePalette.exploreTopColor ?? effectivePalette.topColor
+      const mid = effectivePalette.exploreMidColor ?? effectivePalette.midColor
+      const bg = effectivePalette.exploreBgColor ?? effectivePalette.backgroundColor
+      return {
+        colors: [accent, top, mid, bg],
+        startPoint: "topLeading" as const,
+        endPoint: "bottomTrailing" as const,
+      }
+    }
+
+    // 经典算法 (Classic)
+    return {
+      colors: [
+        effectivePalette.topColor,
+        effectivePalette.midColor,
+        effectivePalette.backgroundColor,
+        effectivePalette.backgroundColor,
+      ],
+      startPoint: "top" as const,
+      endPoint: "bottom" as const,
+    }
+  }, [ambientEnabled, effectivePalette, ambientAlgorithm])
+
+  const topColor =
     ambientEnabled && effectivePalette
-      ? {
-          colors: [
-            effectivePalette.topColor,
-            effectivePalette.midColor,
-            effectivePalette.backgroundColor,
-            effectivePalette.backgroundColor,
-          ],
-          startPoint: "top" as const,
-          endPoint: "bottom" as const,
-        }
+      ? ambientAlgorithm === "explore"
+        ? (effectivePalette.exploreTopColor ?? effectivePalette.topColor)
+        : effectivePalette.topColor
       : undefined
 
-  const topColor = ambientEnabled && effectivePalette ? effectivePalette.topColor : undefined
-
-  return { ambientEnabled, ambientIntensity, ambientPalette: effectivePalette, ambientBackground, topColor }
+  return {
+    ambientEnabled,
+    ambientIntensity,
+    ambientAlgorithm,
+    ambientPalette: effectivePalette,
+    ambientBackground,
+    topColor,
+  }
 }
 
 // ---------- 通用 hooks ----------
