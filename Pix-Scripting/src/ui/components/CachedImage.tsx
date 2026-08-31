@@ -21,12 +21,12 @@ import {
 import { loadSettings } from "../../store/settings"
 import { useLatest } from "../hooks"
 function imageFadeDurationSec(): number {
-  const ms = loadSettings().imageFadeInDuration ?? 150
+  const ms = loadSettings().imageFadeInDuration ?? 100
   return Math.max(0.001, Math.min(0.5, ms / 1000))
 }
 
 function blurCrossFadeDurationSec(): number {
-  const ms = loadSettings().blurCrossFadeDuration ?? 150
+  const ms = loadSettings().blurCrossFadeDuration ?? 100
   return Math.max(0, Math.min(0.25, ms / 1000))
 }
 
@@ -453,7 +453,7 @@ export function CachedImage(props: {
 
   // 首帧已命中缓存或显式禁用淡入时直接硬切呈现（0ms 动画），秒开无延时无白闪；
   // 异步加载完成后：
-  // 1. 有旧图垫底或本地模糊预览图垫底时，采用配置的模糊消融（0-250ms，默认 150ms），平滑过渡；
+  // 1. 有旧图垫底或本地模糊预览图垫底时，采用配置的模糊消融（0-250ms，默认 100ms），平滑过渡；
   // 2. 无本地预览图垫底时（如普通卡片/冷启动），使用标准设置淡入。
   // 注意：此 transition 属性在首次决定后必须保持稳定，绝不可在 transitionCompleted 后动态变更为 undefined，
   // 否则会因修改已挂载视图的修饰符结构（_ModifiedContent -> 原生 View）触发 SwiftUI 视图销毁重建，在淡入动画结束瞬间引发闪屏！

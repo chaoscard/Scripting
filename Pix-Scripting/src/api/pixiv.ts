@@ -739,6 +739,18 @@ export async function recommendedUsers(
   return { items: json?.user_previews ?? [], nextURL: json?.next_url ?? null }
 }
 
+export async function userRelated(
+  seedUserID: number,
+  accessToken: string
+): Promise<PixivPage<PixivUserPreview>> {
+  const json = await apiGet<PixivUserPreviewListResponse>(
+    "/v1/user/related",
+    { filter: "for_ios", seed_user_id: String(seedUserID) },
+    accessToken
+  )
+  return { items: json?.user_previews ?? [], nextURL: json?.next_url ?? null }
+}
+
 // ---------- 作品详情 ----------
 
 export async function illustrationDetail(

@@ -442,6 +442,11 @@ export function SettingsView() {
             <Text tag="exit">完全关闭</Text>
           </Picker>
           <Toggle
+            title="关注后推荐相似创作者"
+            value={settings.showRelatedUsersOnFollow}
+            onChanged={(value) => update({ showRelatedUsersOnFollow: value })}
+          />
+          <Toggle
             title="灵动岛实时进度"
             value={settings.enableLiveActivity}
             onChanged={(value) => update({ enableLiveActivity: value })}
@@ -1118,7 +1123,7 @@ export function SettingsView() {
               title="淡入动画时长"
               unit="ms"
               value={settings.imageFadeInDuration}
-              defaultValue={150}
+              defaultValue={100}
               min={1}
               max={500}
               onSave={(val) => update({ imageFadeInDuration: val })}
@@ -1127,7 +1132,7 @@ export function SettingsView() {
               title="模糊消融时长"
               unit="ms"
               value={settings.blurCrossFadeDuration}
-              defaultValue={150}
+              defaultValue={100}
               min={0}
               max={250}
               onSave={(val) => update({ blurCrossFadeDuration: val })}

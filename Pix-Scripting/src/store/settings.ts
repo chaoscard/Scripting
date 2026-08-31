@@ -93,6 +93,7 @@ export interface AppSettings {
   showR18: boolean
   showR18G: boolean
   showAI: boolean
+  showRelatedUsersOnFollow: boolean
   exemptFilterForPersonal: boolean
   hideNovels: boolean
   ambientImmersion: boolean
@@ -147,6 +148,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   showR18: false,
   showR18G: false,
   showAI: false,
+  showRelatedUsersOnFollow: true,
   exemptFilterForPersonal: false,
   hideNovels: false,
   ambientImmersion: true,
@@ -172,8 +174,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   aiTranslateConcurrency: 4,
   imageDownloadConcurrencyRatio: 100,
   imagePrefetchConcurrencyRatio: 100,
-  imageFadeInDuration: 150,
-  blurCrossFadeDuration: 150,
+  imageFadeInDuration: 100,
+  blurCrossFadeDuration: 100,
   backgroundPreheatDuration: 1000,
   loadingAnimationDuration: 400,
   novelLoadingDuration: 1000,
@@ -357,6 +359,10 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
     showR18: boolOr(stored?.showR18, DEFAULT_SETTINGS.showR18),
     showR18G: boolOr(stored?.showR18G, DEFAULT_SETTINGS.showR18G),
     showAI: boolOr(stored?.showAI, DEFAULT_SETTINGS.showAI),
+    showRelatedUsersOnFollow: boolOr(
+      stored?.showRelatedUsersOnFollow,
+      DEFAULT_SETTINGS.showRelatedUsersOnFollow
+    ),
     exemptFilterForPersonal: boolOr(
       stored?.exemptFilterForPersonal,
       DEFAULT_SETTINGS.exemptFilterForPersonal

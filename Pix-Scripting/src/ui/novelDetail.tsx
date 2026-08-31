@@ -92,6 +92,7 @@ import {
   LoadingView,
   LoadMoreTrigger,
   NovelCard,
+  RelatedUsersSheet,
   SeriesEpisodePager,
   TagChip,
 } from "./components"
@@ -142,6 +143,7 @@ export function NovelDetailView(props: { novelID: number }) {
   const [showBookmarkDetail, setShowBookmarkDetail] = useState(false)
   const [followed, setFollowed] = useState(false)
   const [followLoading, setFollowLoading] = useState(false)
+  const [showRelatedUsers, setShowRelatedUsers] = useState(false)
   const [showComments, setShowComments] = useState(false)
   const [showAISheet, setShowAISheet] = useState(false)
   const [showTypographySheet, setShowTypographySheet] = useState(false)
@@ -494,6 +496,9 @@ export function NovelDetailView(props: { novelID: number }) {
       }
       await session.call((token) => followUser(novel.user.id, "public", token))
       setFollowed(true)
+      if (loadSettings().showRelatedUsersOnFollow) {
+        setShowRelatedUsers(true)
+      }
     } catch {
       // ignore
     } finally {
@@ -519,6 +524,9 @@ export function NovelDetailView(props: { novelID: number }) {
     try {
       await session.call((token) => followUser(novel.user.id, restrict, token))
       setFollowed(true)
+      if (loadSettings().showRelatedUsersOnFollow) {
+        setShowRelatedUsers(true)
+      }
     } catch {
       // ignore
     } finally {
@@ -1356,6 +1364,19 @@ export function NovelDetailView(props: { novelID: number }) {
           ),
           isPresented: showBookmarkDetail,
           onChanged: setShowBookmarkDetail,
+        }}
+      />
+      <VStack
+        sheet={{
+          content: (
+            <RelatedUsersSheet
+              seedUserID={current.user.id}
+              seedUserName={current.user.name}
+              onClose={() => setShowRelatedUsers(false)}
+            />
+          ),
+          isPresented: showRelatedUsers,
+          onChanged: setShowRelatedUsers,
         }}
       />
     </ScrollView>

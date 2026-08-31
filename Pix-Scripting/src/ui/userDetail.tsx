@@ -64,6 +64,7 @@ import {
   ErrorView,
   LoadingView,
   RefreshableScrollView,
+  RelatedUsersSheet,
 } from "./components"
 import { UserProfileHeader } from "./UserProfileHeader"
 import { UserWorkTagFilterBar } from "./UserWorkTagFilterBar"
@@ -77,6 +78,7 @@ export function UserDetailView(props: { userID: number }) {
   const [followed, setFollowed] = useState(false)
   const [detailError, setDetailError] = useState<string | null>(null)
   const [followBusy, setFollowBusy] = useState(false)
+  const [showRelatedUsers, setShowRelatedUsers] = useState(false)
   const [kind, setKind] = useState<UserWorkKind>("illust")
   const [selectedTag, setSelectedTag] = useState<string | null>(null)
   const [tagsByKind, setTagsByKind] = useState<Partial<Record<UserWorkKind, PixivWebUserTag[]>>>({})
@@ -215,19 +217,17 @@ export function UserDetailView(props: { userID: number }) {
   async function followWithVisibility(restrict: "public" | "private") {
     if (followBusy || isOwnProfile) return
     void Haptics.transient()
-    const followStateVersion = ++followStateVersionRef.current
+    followStateVersionRef.current++
     setFollowBusy(true)
     try {
       await session.call((token) => followUser(userID, restrict, token))
-      if (followStateVersion === followStateVersionRef.current) {
-        setFollowed(true)
+      setFollowed(true)
+      if (loadSettings().showRelatedUsersOnFollow) {
+        setShowRelatedUsers(true)
       }
     } catch {
       // Keep the current UI state when the request fails.
     } finally {
-      if (followStateVersion === followStateVersionRef.current) {
-        followStateVersionRef.current++
-      }
       setFollowBusy(false)
     }
   }
@@ -239,19 +239,14 @@ export function UserDetailView(props: { userID: number }) {
       return
     }
     void Haptics.transient()
-    const followStateVersion = ++followStateVersionRef.current
+    followStateVersionRef.current++
     setFollowBusy(true)
     try {
       await session.call((token) => unfollowUser(userID, token))
-      if (followStateVersion === followStateVersionRef.current) {
-        setFollowed(false)
-      }
+      setFollowed(false)
     } catch {
       // Keep the current UI state when the request fails.
     } finally {
-      if (followStateVersion === followStateVersionRef.current) {
-        followStateVersionRef.current++
-      }
       setFollowBusy(false)
     }
   }
@@ -710,6 +705,19 @@ export function UserDetailView(props: { userID: number }) {
           />
         )}
       </VStack>
+      <VStack
+        sheet={{
+          content: (
+            <RelatedUsersSheet
+              seedUserID={userID}
+              seedUserName={detail?.user?.name}
+              onClose={() => setShowRelatedUsers(false)}
+            />
+          ),
+          isPresented: showRelatedUsers,
+          onChanged: setShowRelatedUsers,
+        }}
+      />
     </RefreshableScrollView>
   )
 }

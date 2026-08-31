@@ -87,6 +87,7 @@ import {
   formatDate,
   formatNumber,
   LoadingView,
+  RelatedUsersSheet,
   SeriesEpisodePager,
   useSeriesEpisodeNav,
   TagChip,
@@ -160,6 +161,7 @@ export function IllustDetailView(props: { illustID: number }) {
   const [showBookmarkDetail, setShowBookmarkDetail] = useState(false)
   const [followed, setFollowed] = useState(() => getCachedIllust(illustID)?.user?.is_followed ?? false)
   const [followLoading, setFollowLoading] = useState(false)
+  const [showRelatedUsers, setShowRelatedUsers] = useState(false)
   const [showComments, setShowComments] = useState(false)
   const [showAISheet, setShowAISheet] = useState(false)
   const [aiMode, setAIMode] = useState<IllustAIMode>("caption")
@@ -463,6 +465,9 @@ export function IllustDetailView(props: { illustID: number }) {
       }
       await session.call((token) => followUser(current.user.id, "public", token))
       setFollowed(true)
+      if (loadSettings().showRelatedUsersOnFollow) {
+        setShowRelatedUsers(true)
+      }
     } catch {
       // ignore
     } finally {
@@ -611,6 +616,9 @@ export function IllustDetailView(props: { illustID: number }) {
     try {
       await session.call((token) => followUser(current.user.id, restrict, token))
       setFollowed(true)
+      if (loadSettings().showRelatedUsersOnFollow) {
+        setShowRelatedUsers(true)
+      }
     } catch {
       // ignore
     } finally {
@@ -1065,6 +1073,19 @@ export function IllustDetailView(props: { illustID: number }) {
           ),
           isPresented: showBookmarkDetail,
           onChanged: setShowBookmarkDetail,
+        }}
+      />
+      <VStack
+        sheet={{
+          content: (
+            <RelatedUsersSheet
+              seedUserID={current.user.id}
+              seedUserName={current.user.name}
+              onClose={() => setShowRelatedUsers(false)}
+            />
+          ),
+          isPresented: showRelatedUsers,
+          onChanged: setShowRelatedUsers,
         }}
       />
     </ScrollView>
