@@ -9,6 +9,7 @@ import {
   Section,
   Spacer,
   Text,
+  VirtualNode,
   useEffect,
   useState,
   ZStack,
@@ -18,6 +19,10 @@ import { loadSettings, onSettingsChanged } from "../store/settings"
 import { appToolbar, AvatarImage } from "./components"
 import { destinationElement } from "./routes"
 import { useExperimentalAmbientPalette } from "./hooks"
+
+function isVirtualNode(v: unknown): v is VirtualNode {
+  return !!v && typeof v === "object" && ("render" in v || "isInternal" in v || "props" in v)
+}
 
 export function MoreView(props: { onClose: () => void }) {
   const user = session.user
@@ -49,7 +54,11 @@ export function MoreView(props: { onClose: () => void }) {
 
   return (
     <ZStack>
-      <Rectangle fill={ambientBackground ?? "clear"} ignoresSafeArea={true} />
+      {isVirtualNode(ambientBackground) ? (
+        ambientBackground
+      ) : (
+        <Rectangle fill={ambientBackground ?? "clear"} ignoresSafeArea={true} />
+      )}
       <List
         navigationBarTitleDisplayMode="inline"
         navigationDestination={destinationElement}

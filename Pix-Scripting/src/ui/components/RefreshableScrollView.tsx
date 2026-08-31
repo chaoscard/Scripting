@@ -8,6 +8,7 @@ import {
   ScrollViewReader,
   Spacer,
   Text,
+  VirtualNode,
   VStack,
   ZStack,
   useCallback,
@@ -18,6 +19,10 @@ import {
 } from "scripting"
 import { loadSettings } from "../../store/settings"
 const REFRESH_TOP_KEY = "__refresh_top"
+
+function isVirtualNode(v: unknown): v is VirtualNode {
+  return !!v && typeof v === "object" && ("render" in v || "isInternal" in v || "props" in v)
+}
 
 export function RefreshableScrollView(props: {
   refreshable: () => Promise<void>
@@ -83,10 +88,14 @@ export function RefreshableScrollView(props: {
 
   return (
     <ZStack>
-      <Rectangle
-        fill={props.background ?? "clear"}
-        ignoresSafeArea={true}
-      />
+      {isVirtualNode(props.background) ? (
+        props.background
+      ) : (
+        <Rectangle
+          fill={props.background ?? "clear"}
+          ignoresSafeArea={true}
+        />
+      )}
       <ScrollViewReader>
         {(proxy) => {
           proxyRef.current = proxy

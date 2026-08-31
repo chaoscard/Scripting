@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useColorScheme, type Color, type KeywordPoint } from "scripting"
 import { session } from "../api/session"
-import { getImageBatchSize, loadSettings, onSettingsChanged, type AmbientIntensity, type AmbientAlgorithm } from "../store/settings"
+import { getImageBatchSize, loadSettings, onSettingsChanged, type AmbientIntensity, type AmbientAlgorithm, type NovelReaderExperimentalAlgorithm } from "../store/settings"
 import { onBlocklistChanged } from "../store/blocklist"
 import {
   getIllustContentBlockReason,
@@ -26,6 +26,7 @@ import {
   type IllustAmbientPalette,
   type UserAmbientPalette,
 } from "../image/colorExtractor"
+import { TranscendAmbientBackground } from "./components/TranscendAmbientBackground"
 
 // 触底回弹缓冲：由调试设置配置（默认 400ms），确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
 export function paginationFeedbackDuration(): number {
@@ -116,7 +117,7 @@ export function useExperimentalAmbientPalette(imageUrl: string | null | undefine
   ambientIntensity: AmbientIntensity
   ambientAlgorithm: AmbientAlgorithm
   ambientPalette: IllustAmbientPalette | null
-  ambientBackground: { colors: Color[]; startPoint: KeywordPoint; endPoint: KeywordPoint } | undefined
+  ambientBackground: any
   topColor: Color | undefined
 } {
   const colorScheme = useColorScheme()
@@ -179,6 +180,28 @@ export function useExperimentalAmbientPalette(imageUrl: string | null | undefine
   const ambientBackground = useMemo(() => {
     if (!ambientEnabled || !effectivePalette) return undefined
 
+    if (ambientAlgorithm === "transcend") {
+      const lead = effectivePalette.ultimateLeadingColor ?? effectivePalette.topColor
+      const prism = effectivePalette.ultimatePrismColor ?? effectivePalette.topColor
+      const trail = effectivePalette.ultimateTrailingColor ?? effectivePalette.topColor
+      const mid = effectivePalette.ultimateMidColor ?? effectivePalette.midColor
+      const bg = effectivePalette.ultimateBgColor ?? effectivePalette.backgroundColor
+      return (
+        <TranscendAmbientBackground
+          leadColor={lead}
+          prismColor={prism}
+          trailColor={trail}
+          midColor={mid}
+          bgColor={bg}
+          leadCoreColor={effectivePalette.ultimateLeadingCoreColor}
+          prismCoreColor={effectivePalette.ultimatePrismCoreColor}
+          trailCoreColor={effectivePalette.ultimateTrailingCoreColor}
+          isDark={isDark}
+          intensity={ambientIntensity}
+        />
+      )
+    }
+
     if (ambientAlgorithm === "ultimate") {
       const lead = effectivePalette.ultimateLeadingColor ?? effectivePalette.topColor
       const prism = effectivePalette.ultimatePrismColor ?? effectivePalette.topColor
@@ -215,11 +238,11 @@ export function useExperimentalAmbientPalette(imageUrl: string | null | undefine
       startPoint: "top" as const,
       endPoint: "bottom" as const,
     }
-  }, [ambientEnabled, effectivePalette, ambientAlgorithm])
+  }, [ambientEnabled, effectivePalette, ambientAlgorithm, isDark, ambientIntensity])
 
   const topColor =
     ambientEnabled && effectivePalette
-      ? ambientAlgorithm === "ultimate"
+      ? ambientAlgorithm === "transcend" || ambientAlgorithm === "ultimate"
         ? (effectivePalette.ultimateLeadingColor ?? effectivePalette.topColor)
         : ambientAlgorithm === "explore"
           ? (effectivePalette.exploreTopColor ?? effectivePalette.topColor)
@@ -230,6 +253,166 @@ export function useExperimentalAmbientPalette(imageUrl: string | null | undefine
     ambientEnabled,
     ambientIntensity,
     ambientAlgorithm,
+    ambientPalette: effectivePalette,
+    ambientBackground,
+    topColor,
+  }
+}
+
+export function useNovelExperimentalAmbientPalette(imageUrl: string | null | undefined): {
+  ambientEnabled: boolean
+  ambientIntensity: AmbientIntensity
+  ambientAlgorithm: NovelReaderExperimentalAlgorithm
+  ambientPalette: IllustAmbientPalette | null
+  ambientBackground: any
+  topColor: Color | undefined
+} {
+  const colorScheme = useColorScheme()
+  const isDark = colorScheme === "dark"
+  const [ambientIntensity, setAmbientIntensity] = useState<AmbientIntensity>(
+    () => loadSettings().experimentalImmersionIntensity
+  )
+  const [novelAlgorithm, setNovelAlgorithm] = useState<NovelReaderExperimentalAlgorithm>(
+    () => loadSettings().novelReaderExperimentalAlgorithm
+  )
+  const [ambientEnabled, setAmbientEnabled] = useState(
+    () =>
+      loadSettings().ambientImmersion &&
+      loadSettings().experimentalImmersion &&
+      loadSettings().novelReaderExperimentalAlgorithm !== "off"
+  )
+  const [ambientPalette, setAmbientPalette] = useState<IllustAmbientPalette | null>(() => {
+    const s = loadSettings()
+    if (
+      !s.ambientImmersion ||
+      !s.experimentalImmersion ||
+      s.novelReaderExperimentalAlgorithm === "off" ||
+      !imageUrl
+    ) {
+      return null
+    }
+    return getCachedIllustAmbientPalette(
+      imageUrl,
+      isDark,
+      s.experimentalImmersionIntensity
+    )
+  })
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      const nextSettings = loadSettings()
+      setAmbientEnabled(
+        nextSettings.ambientImmersion &&
+        nextSettings.experimentalImmersion &&
+        nextSettings.novelReaderExperimentalAlgorithm !== "off"
+      )
+      setAmbientIntensity(nextSettings.experimentalImmersionIntensity)
+      setNovelAlgorithm(nextSettings.novelReaderExperimentalAlgorithm)
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!ambientEnabled || !imageUrl || novelAlgorithm === "off") {
+      setAmbientPalette(null)
+      return
+    }
+    let active = true
+    const cached = getCachedIllustAmbientPalette(imageUrl, isDark, ambientIntensity)
+    if (cached) {
+      setAmbientPalette(cached)
+    }
+    void extractIllustAmbientPalette(imageUrl).then((result) => {
+      if (!active || !result) return
+      const modeObj = isDark ? result.dark : result.light
+      setAmbientPalette(modeObj[ambientIntensity] ?? modeObj.medium)
+    })
+    return () => {
+      active = false
+    }
+  }, [imageUrl, isDark, ambientEnabled, ambientIntensity, novelAlgorithm])
+
+  const synchronousPalette =
+    ambientEnabled && imageUrl && novelAlgorithm !== "off"
+      ? getCachedIllustAmbientPalette(imageUrl, isDark, ambientIntensity)
+      : null
+  const effectivePalette = ambientPalette ?? synchronousPalette
+
+  const ambientBackground = useMemo(() => {
+    if (!ambientEnabled || !effectivePalette || novelAlgorithm === "off") return undefined
+
+    if (novelAlgorithm === "transcend") {
+      const lead = effectivePalette.ultimateLeadingColor ?? effectivePalette.topColor
+      const prism = effectivePalette.ultimatePrismColor ?? effectivePalette.topColor
+      const trail = effectivePalette.ultimateTrailingColor ?? effectivePalette.topColor
+      const mid = effectivePalette.ultimateMidColor ?? effectivePalette.midColor
+      const bg = effectivePalette.ultimateBgColor ?? effectivePalette.backgroundColor
+      return (
+        <TranscendAmbientBackground
+          leadColor={lead}
+          prismColor={prism}
+          trailColor={trail}
+          midColor={mid}
+          bgColor={bg}
+          leadCoreColor={effectivePalette.ultimateLeadingCoreColor}
+          prismCoreColor={effectivePalette.ultimatePrismCoreColor}
+          trailCoreColor={effectivePalette.ultimateTrailingCoreColor}
+          isDark={isDark}
+          intensity={ambientIntensity}
+        />
+      )
+    }
+
+    if (novelAlgorithm === "ultimate") {
+      const lead = effectivePalette.ultimateLeadingColor ?? effectivePalette.topColor
+      const prism = effectivePalette.ultimatePrismColor ?? effectivePalette.topColor
+      const trail = effectivePalette.ultimateTrailingColor ?? effectivePalette.topColor
+      const mid = effectivePalette.ultimateMidColor ?? effectivePalette.midColor
+      const bg = effectivePalette.ultimateBgColor ?? effectivePalette.backgroundColor
+      return {
+        colors: [lead, prism, trail, mid, bg],
+        startPoint: "topLeading" as const,
+        endPoint: "bottomTrailing" as const,
+      }
+    }
+
+    if (novelAlgorithm === "explore") {
+      const accent = effectivePalette.exploreAccentColor ?? effectivePalette.topColor
+      const top = effectivePalette.exploreTopColor ?? effectivePalette.topColor
+      const mid = effectivePalette.exploreMidColor ?? effectivePalette.midColor
+      const bg = effectivePalette.exploreBgColor ?? effectivePalette.backgroundColor
+      return {
+        colors: [accent, top, mid, bg],
+        startPoint: "topLeading" as const,
+        endPoint: "bottomTrailing" as const,
+      }
+    }
+
+    // 经典算法 (Classic)
+    return {
+      colors: [
+        effectivePalette.topColor,
+        effectivePalette.midColor,
+        effectivePalette.backgroundColor,
+        effectivePalette.backgroundColor,
+      ],
+      startPoint: "top" as const,
+      endPoint: "bottom" as const,
+    }
+  }, [ambientEnabled, effectivePalette, novelAlgorithm, isDark, ambientIntensity])
+
+  const topColor =
+    ambientEnabled && effectivePalette && novelAlgorithm !== "off"
+      ? novelAlgorithm === "transcend" || novelAlgorithm === "ultimate"
+        ? (effectivePalette.ultimateLeadingColor ?? effectivePalette.topColor)
+        : novelAlgorithm === "explore"
+          ? (effectivePalette.exploreTopColor ?? effectivePalette.topColor)
+          : effectivePalette.topColor
+      : undefined
+
+  return {
+    ambientEnabled,
+    ambientIntensity,
+    ambientAlgorithm: novelAlgorithm,
     ambientPalette: effectivePalette,
     ambientBackground,
     topColor,

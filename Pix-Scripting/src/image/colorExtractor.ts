@@ -23,6 +23,9 @@ export interface IllustAmbientPalette {
   ultimateTrailingColor?: Color
   ultimateMidColor?: Color
   ultimateBgColor?: Color
+  ultimateLeadingCoreColor?: Color
+  ultimatePrismCoreColor?: Color
+  ultimateTrailingCoreColor?: Color
 }
 
 export type IntensityPaletteMap<T> = {
@@ -506,6 +509,29 @@ function adaptUltimatePerceptualColor(
   return hslToRgb(h, targetS, targetL)
 }
 
+/**
+ * 计算动态流光球中心最高亮度高光核色彩（极高明度 + 适度饱和发光）
+ */
+function adaptUltimateCoreColor(
+  red: number,
+  green: number,
+  blue: number,
+  isDark: boolean
+): [number, number, number] {
+  const [h, s, l] = rgbToHsl(red, green, blue)
+  if (isDark) {
+    // 深色模式：大幅拉高明度至 0.76~0.92，保留适度发光纯度，形成超亮发光中心
+    const coreS = Math.min(0.55, Math.max(0.18, s * 0.70))
+    const coreL = Math.min(0.92, Math.max(0.76, 0.58 + l * 0.38))
+    return hslToRgb(h, coreS, coreL)
+  } else {
+    // 浅色模式：晶莹白光透射，极轻柔淡彩
+    const coreS = Math.min(0.25, Math.max(0.06, s * 0.35))
+    const coreL = 0.98
+    return hslToRgb(h, coreS, coreL)
+  }
+}
+
 function buildIllustPalette(
   tRaw: [number, number, number],
   dRaw: [number, number, number],
@@ -561,23 +587,30 @@ function buildIllustPalette(
   const [ultMidR, ultMidG, ultMidB] = adaptUltimatePerceptualColor(dRaw[0], dRaw[1], dRaw[2], isDark, intensity, "mid")
   const [ultBgR, ultBgG, ultBgB] = adaptUltimatePerceptualColor(bRaw[0], bRaw[1], bRaw[2], isDark, intensity, "bg")
 
+  const [ultLeadCoreR, ultLeadCoreG, ultLeadCoreB] = adaptUltimateCoreColor(tlRaw[0], tlRaw[1], tlRaw[2], isDark)
+  const [ultPrismCoreR, ultPrismCoreG, ultPrismCoreB] = adaptUltimateCoreColor(prismRaw[0], prismRaw[1], prismRaw[2], isDark)
+  const [ultTrailCoreR, ultTrailCoreG, ultTrailCoreB] = adaptUltimateCoreColor(trRaw[0], trRaw[1], trRaw[2], isDark)
+
   let ultLeadAlpha = isDark ? 0.62 : 0.54
   let ultPrismAlpha = isDark ? 0.52 : 0.44
   let ultTrailAlpha = isDark ? 0.46 : 0.38
   let ultMidAlpha = isDark ? 0.20 : 0.14
   let ultBgAlpha = 0.00
+  let ultCoreAlpha = isDark ? 0.68 : 0.58
   if (intensity === "low") {
     ultLeadAlpha = isDark ? 0.42 : 0.34
     ultPrismAlpha = isDark ? 0.34 : 0.26
     ultTrailAlpha = isDark ? 0.28 : 0.20
     ultMidAlpha = isDark ? 0.12 : 0.08
     ultBgAlpha = 0.00
+    ultCoreAlpha = isDark ? 0.44 : 0.36
   } else if (intensity === "high") {
     ultLeadAlpha = isDark ? 0.80 : 0.72
     ultPrismAlpha = isDark ? 0.70 : 0.60
     ultTrailAlpha = isDark ? 0.62 : 0.52
     ultMidAlpha = isDark ? 0.34 : 0.26
     ultBgAlpha = isDark ? 0.03 : 0.01
+    ultCoreAlpha = isDark ? 0.88 : 0.78
   }
 
   return {
@@ -595,6 +628,10 @@ function buildIllustPalette(
     ultimateTrailingColor: `rgba(${ultTrailR},${ultTrailG},${ultTrailB},${ultTrailAlpha})` as Color,
     ultimateMidColor: `rgba(${ultMidR},${ultMidG},${ultMidB},${ultMidAlpha})` as Color,
     ultimateBgColor: `rgba(${ultBgR},${ultBgG},${ultBgB},${ultBgAlpha})` as Color,
+
+    ultimateLeadingCoreColor: `rgba(${ultLeadCoreR},${ultLeadCoreG},${ultLeadCoreB},${ultCoreAlpha})` as Color,
+    ultimatePrismCoreColor: `rgba(${ultPrismCoreR},${ultPrismCoreG},${ultPrismCoreB},${ultCoreAlpha})` as Color,
+    ultimateTrailingCoreColor: `rgba(${ultTrailCoreR},${ultTrailCoreG},${ultTrailCoreB},${ultCoreAlpha})` as Color,
   }
 }
 

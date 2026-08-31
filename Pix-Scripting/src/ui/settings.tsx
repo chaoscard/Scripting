@@ -467,13 +467,29 @@ export function SettingsView() {
                     value={settings.experimentalImmersionAlgorithm}
                     onChanged={(value: string) =>
                       update({
-                        experimentalImmersionAlgorithm: value as "classic" | "explore" | "ultimate",
+                        experimentalImmersionAlgorithm: value as "classic" | "explore" | "ultimate" | "transcend",
                       })
                     }
                   >
                     <Text tag="classic">经典</Text>
                     <Text tag="explore">探索</Text>
                     <Text tag="ultimate">极致</Text>
+                    <Text tag="transcend">超越</Text>
+                  </Picker>
+                  <Picker
+                    title="小说正文实验性算法"
+                    value={settings.novelReaderExperimentalAlgorithm}
+                    onChanged={(value: string) =>
+                      update({
+                        novelReaderExperimentalAlgorithm: value as "off" | "classic" | "explore" | "ultimate" | "transcend",
+                      })
+                    }
+                  >
+                    <Text tag="off">关闭</Text>
+                    <Text tag="classic">经典</Text>
+                    <Text tag="explore">探索</Text>
+                    <Text tag="ultimate">极致</Text>
+                    <Text tag="transcend">超越</Text>
                   </Picker>
                   <Picker
                     title="实验性沉浸效果强度"

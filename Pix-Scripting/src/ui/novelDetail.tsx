@@ -25,6 +25,7 @@ import {
   useState,
   VStack,
   ZStack,
+  VirtualNode,
   type Color,
   type ScrollViewProxy,
 } from "scripting"
@@ -51,7 +52,7 @@ import {
   useNovelBookmark,
   useNovelMarker,
   usePagedList,
-  useExperimentalAmbientPalette,
+  useNovelExperimentalAmbientPalette,
   waitForNovelLoadingFeedback,
 } from "./hooks"
 import { novelThumbUrlOf, prefetch } from "../image/imageLoader"
@@ -130,6 +131,10 @@ function historyNovelFromDetail(detail: PixivNovelDetail): PixivNovel {
   return { ...detail, is_muted: false, visible: true }
 }
 
+function isVirtualNode(v: unknown): v is VirtualNode {
+  return !!v && typeof v === "object" && ("render" in v || "isInternal" in v || "props" in v)
+}
+
 export function NovelDetailView(props: { novelID: number }) {
   const { novelID } = props
   const [novel, setNovel] = useState<PixivNovelDetail | null>(null)
@@ -193,7 +198,7 @@ export function NovelDetailView(props: { novelID: number }) {
     novel?.image_urls?.medium ||
     (novel?.series as any)?.cover_image_urls?.medium ||
     null
-  const { ambientBackground } = useExperimentalAmbientPalette(coverUrl)
+  const { ambientBackground } = useNovelExperimentalAmbientPalette(coverUrl)
 
   const performScrollRestoration = useCallback(
     (targetChunk?: string, forceDirect = false) => {
@@ -776,7 +781,11 @@ export function NovelDetailView(props: { novelID: number }) {
 
   return (
     <ZStack>
-      <Rectangle fill={ambientBackground ?? "clear"} ignoresSafeArea={true} />
+      {isVirtualNode(ambientBackground) ? (
+        ambientBackground
+      ) : (
+        <Rectangle fill={ambientBackground ?? "clear"} ignoresSafeArea={true} />
+      )}
       <ScrollViewReader>
         {(proxy) => {
           proxyRef.current = proxy
