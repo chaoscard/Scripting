@@ -47,6 +47,7 @@ import {
   LoadMoreTrigger,
   IllustFlowFeed,
   NovelCard,
+  RecommendedUsersSheet,
   RefreshableScrollView,
   WatchlistSeriesCard,
 } from "./components"
@@ -68,6 +69,7 @@ export function FollowFeedView(props: {
   const [watchKind, setWatchKind] = useState<WatchKind>("manga")
   const [friendKind, setFriendKind] = useState<WorkKind>("illust")
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
+  const [showRecommendedUsers, setShowRecommendedUsers] = useState(false)
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
   useEffect(() => {
@@ -103,6 +105,7 @@ export function FollowFeedView(props: {
         scope,
         onModeChange: setMode,
         onScopeChange: setScope,
+        onOpenRecommendedUsers: () => setShowRecommendedUsers(true),
         onClose: props.onClose,
       })}
       refreshable={() => refreshHandlerRef.current()}
@@ -144,6 +147,17 @@ export function FollowFeedView(props: {
             onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
           />
         )}
+        <VStack
+          sheet={{
+            content: (
+              <RecommendedUsersSheet
+                onClose={() => setShowRecommendedUsers(false)}
+              />
+            ),
+            isPresented: showRecommendedUsers,
+            onChanged: setShowRecommendedUsers,
+          }}
+        />
       </VStack>
     </RefreshableScrollView>
   )
@@ -154,6 +168,7 @@ function followToolbar(props: {
   scope: FollowScope
   onModeChange: (mode: FollowMode) => void
   onScopeChange: (scope: FollowScope) => void
+  onOpenRecommendedUsers: () => void
   onClose: () => void
 }) {
   const title =
@@ -193,6 +208,11 @@ function followToolbar(props: {
         title="好友"
         systemImage="person.2.badge.gearshape"
         action={() => props.onModeChange("friends")}
+      />
+      <Button
+        title="推荐"
+        systemImage="sparkles"
+        action={props.onOpenRecommendedUsers}
       />
     </Menu>
   )

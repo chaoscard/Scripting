@@ -9,7 +9,7 @@ import {
   useEffect,
   useState,
 } from "scripting"
-import { userRelated } from "../../api/pixiv"
+import { nextUsers, recommendedUsers } from "../../api/pixiv"
 import { session } from "../../api/session"
 import { loadSettings, onSettingsChanged } from "../../store/settings"
 import { destinationElement } from "../routes"
@@ -18,19 +18,31 @@ import {
   CONNECTION_LIST_HORIZONTAL_PADDING,
   CONNECTION_PREVIEW_GAP,
   ConnectionRow,
+  connectionPreviewImageURLs,
 } from "./ConnectionRow"
 import { EmptyView, ErrorView, LoadingView } from "./StatusViews"
-import type { PixivUserPreview } from "../../types"
+import { LoadMoreTrigger } from "./RefreshableScrollView"
+import { prefetch } from "../../image/imageLoader"
+import { currentBatchSize, usePagedList } from "../hooks"
+import type { PixivPage, PixivUserPreview } from "../../types"
 
-export function RelatedUsersSheet(props: {
-  seedUserID: number
-  seedUserName?: string
+type ConnectionPreview = PixivUserPreview & { id: number }
+
+function normalizePage(page: PixivPage<PixivUserPreview>): PixivPage<ConnectionPreview> {
+  const myID = session.userID
+  const items = (page.items ?? [])
+    .filter((item) => item.user.id !== myID)
+    .map((item) => ({
+      ...item,
+      id: item.user.id,
+    }))
+  return { items, nextURL: page.nextURL }
+}
+
+export function RecommendedUsersSheet(props: {
   onClose: () => void
 }) {
-  const { seedUserID, seedUserName, onClose } = props
-  const [users, setUsers] = useState<PixivUserPreview[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const { onClose } = props
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
 
   useEffect(() => {
@@ -39,30 +51,13 @@ export function RelatedUsersSheet(props: {
     })
   }, [])
 
-  const loadRelated = async () => {
-    if (!seedUserID) {
-      setLoading(false)
-      return
-    }
-    setLoading(true)
-    setError(null)
-    try {
-      const page = await session.call((token) => userRelated(seedUserID, token))
-      const myID = session.userID
-      const filtered = (page.items ?? []).filter(
-        (u) => u.user.id !== seedUserID && u.user.id !== myID
-      )
-      setUsers(filtered)
-    } catch (err: any) {
-      setError(err?.message ?? "加载相似创作者失败")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    void loadRelated()
-  }, [seedUserID])
+  const paged = usePagedList<ConnectionPreview>({
+    first: async (token) => normalizePage(await recommendedUsers(token)),
+    more: async (nextURL, token) => normalizePage(await nextUsers(nextURL, token)),
+    deps: [],
+    onBatchPublished: (_, pendingItems) =>
+      prefetch(pendingItems.slice(0, currentBatchSize()).flatMap(connectionPreviewImageURLs)).cancel,
+  })
 
   return (
     <NavigationStack navigationDestination={destinationElement}>
@@ -85,12 +80,12 @@ export function RelatedUsersSheet(props: {
         }}
         frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
       >
-        {loading ? (
+        {paged.initialLoading && paged.items.length === 0 ? (
           <LoadingView />
-        ) : error && users.length === 0 ? (
-          <ErrorView message={error} onRetry={loadRelated} />
-        ) : users.length === 0 ? (
-          <EmptyView text="暂无更多相似创作者推荐" />
+        ) : paged.error && paged.items.length === 0 ? (
+          <ErrorView message={paged.error} onRetry={paged.refresh} />
+        ) : paged.items.length === 0 ? (
+          <EmptyView text="暂无推荐创作者" />
         ) : (
           <GeometryReader>
             {(proxy) => {
@@ -111,15 +106,21 @@ export function RelatedUsersSheet(props: {
                     padding={{ horizontal: CONNECTION_LIST_HORIZONTAL_PADDING, top: 12, bottom: 24 }}
                     frame={{ maxWidth: "infinity" }}
                   >
-                    {users.map((item) => (
+                    {paged.items.map((item) => (
                       <ConnectionRow
-                        key={`related-${item.user.id}`}
+                        key={`recommended-${item.user.id}`}
                         preview={item}
                         showFollowControl={item.user.id !== session.userID}
                         previewSide={previewSide}
                         hideNovels={hideNovels}
                       />
                     ))}
+                    <LoadMoreTrigger
+                      anchor={paged.items[paged.items.length - 1].user.id}
+                      onLoadMore={paged.loadMore}
+                      hasMore={paged.hasMore}
+                      isLoading={paged.loadingMore}
+                    />
                   </LazyVStack>
                 </ScrollView>
               )

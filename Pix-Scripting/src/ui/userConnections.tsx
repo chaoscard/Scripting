@@ -1,10 +1,12 @@
 import {
+  Button,
   GeometryReader,
   Image,
   Label,
   LazyVStack,
   Menu,
   Picker,
+  VStack,
   useEffect,
   useState,
 } from "scripting"
@@ -27,6 +29,7 @@ import {
   ErrorView,
   LoadMoreTrigger,
   LoadingView,
+  RecommendedUsersSheet,
   RefreshableScrollView,
 } from "./components"
 import { prefetch } from "../image/imageLoader"
@@ -61,6 +64,7 @@ export function UserConnectionsView(props: {
           : "好友")
   const [restrict, setRestrict] = useState<ConnectionVisibility>("public")
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
+  const [showRecommendedUsers, setShowRecommendedUsers] = useState(false)
   const showVisibilityPicker =
     props.showVisibilityPicker ?? (props.kind === "following" && props.userID == null)
 
@@ -94,7 +98,11 @@ export function UserConnectionsView(props: {
             navigationBarTitleDisplayMode="inline"
             toolbar={
               showVisibilityPicker
-                ? connectionToolbar({ restrict, onRestrictChange: setRestrict })
+                ? connectionToolbar({
+                    restrict,
+                    onRestrictChange: setRestrict,
+                    onOpenRecommendedUsers: () => setShowRecommendedUsers(true),
+                  })
                 : undefined
             }
             refreshable={paged.refresh}
@@ -133,6 +141,17 @@ export function UserConnectionsView(props: {
                 />
               </LazyVStack>
             )}
+            <VStack
+              sheet={{
+                content: (
+                  <RecommendedUsersSheet
+                    onClose={() => setShowRecommendedUsers(false)}
+                  />
+                ),
+                isPresented: showRecommendedUsers,
+                onChanged: setShowRecommendedUsers,
+              }}
+            />
           </RefreshableScrollView>
         )
       }}
@@ -154,6 +173,7 @@ async function loadConnections(
 function connectionToolbar(props: {
   restrict: ConnectionVisibility
   onRestrictChange: (restrict: ConnectionVisibility) => void
+  onOpenRecommendedUsers: () => void
 }) {
   return {
     topBarTrailing: [
@@ -168,6 +188,11 @@ function connectionToolbar(props: {
           <Label tag="public" title="公开" systemImage="globe" />
           <Label tag="private" title="私密" systemImage="lock" />
         </Picker>
+        <Button
+          title="推荐"
+          systemImage="sparkles"
+          action={props.onOpenRecommendedUsers}
+        />
       </Menu>,
     ],
   }
