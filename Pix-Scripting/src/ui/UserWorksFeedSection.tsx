@@ -1,11 +1,16 @@
 import {
+  Button,
+  Group,
   LazyVStack,
   Picker,
   Text,
+  useCallback,
   useEffect,
   VStack,
 } from "scripting"
 import {
+  deleteIllust,
+  deleteNovel,
   fetchTagFilteredNovelsByUrl,
   fetchTagFilteredWorksByUrl,
   fetchUserTagFilteredNovels,
@@ -15,6 +20,7 @@ import {
   userNovels,
   userWorks,
 } from "../api/pixiv"
+import { session } from "../api/session"
 import { cardThumbUrlOf, novelThumbUrlOf, prefetch } from "../image/imageLoader"
 import { loadSettings, onSettingsChanged } from "../store/settings"
 import { isIllustContentVisible, isNovelContentVisible } from "../store/contentFilter"
@@ -42,6 +48,9 @@ export function UserWorksFeedSection(props: {
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
   const { userID, kind, selectedTag = null, isAuthorFollowed = false, onKindEmpty, onRegisterRefresh } = props
+  const isOwn = Boolean(
+    userID && session.userID && String(userID) === String(session.userID)
+  )
 
   // 1. 插画
   const illustPaged = usePagedList<PixivIllustration>({
@@ -130,6 +139,122 @@ export function UserWorksFeedSection(props: {
   const illustPagedRef = useLatest(illustPaged)
   const mangaPagedRef = useLatest(mangaPaged)
   const novelPagedRef = useLatest(novelPaged)
+
+  const handleDeleteIllust = useCallback(async (illust: PixivIllustration) => {
+    const title = illust.title?.trim() || "未命名作品"
+    const confirmed = await Dialog.confirm({
+      title: "删除作品",
+      message: `确定要删除作品「${title}」吗？此操作不可撤销。`,
+      cancelLabel: "取消",
+      confirmLabel: "删除",
+    })
+    if (!confirmed) return
+
+    try {
+      await session.call((token) => deleteIllust(illust.id, token))
+      void Haptics.transient()
+      if (kind === "illust") {
+        illustPagedRef.current.removeItem(illust.id)
+      } else if (kind === "manga") {
+        mangaPagedRef.current.removeItem(illust.id)
+      }
+    } catch (err: any) {
+      void Dialog.alert({
+        title: "删除失败",
+        message: err?.message ?? "删除作品时发生错误，请重试",
+      })
+    }
+  }, [kind])
+
+  const handleDeleteNovel = useCallback(async (novel: PixivNovel) => {
+    const title = novel.title?.trim() || "未命名作品"
+    const confirmed = await Dialog.confirm({
+      title: "删除作品",
+      message: `确定要删除作品「${title}」吗？此操作不可撤销。`,
+      cancelLabel: "取消",
+      confirmLabel: "删除",
+    })
+    if (!confirmed) return
+
+    try {
+      await session.call((token) => deleteNovel(novel.id, token))
+      void Haptics.transient()
+      novelPagedRef.current.removeItem(novel.id)
+    } catch (err: any) {
+      void Dialog.alert({
+        title: "删除失败",
+        message: err?.message ?? "删除作品时发生错误，请重试",
+      })
+    }
+  }, [])
+
+  const illustContextMenuOf = useCallback((illust: PixivIllustration) => {
+    if (!isOwn) return undefined
+    return {
+      override: true,
+      menuItems: (
+        <Group>
+          <Button
+            title="分享作品"
+            systemImage="square.and.arrow.up"
+            action={() => {
+              void ShareSheet.present([`https://www.pixiv.net/artworks/${illust.id}`])
+            }}
+          />
+          <Button
+            title="编辑作品"
+            systemImage="square.and.pencil"
+            action={() => {
+              const isManga = illust.type === "manga" || kind === "manga"
+              const url = isManga
+                ? `https://www.pixiv.net/upload.php?mode=mod&id=${illust.id}&uptype=manga`
+                : `https://www.pixiv.net/upload.php?mode=mod&id=${illust.id}`
+              void Safari.present(url, false)
+            }}
+          />
+          <Button
+            title="删除作品"
+            systemImage="trash"
+            role="destructive"
+            action={() => void handleDeleteIllust(illust)}
+          />
+        </Group>
+      ),
+    }
+  }, [isOwn, handleDeleteIllust])
+
+  const novelContextMenuOf = useCallback((novel: PixivNovel) => {
+    if (!isOwn) return undefined
+    return {
+      menuItems: (
+        <Group>
+          <Button
+            title="分享作品"
+            systemImage="square.and.arrow.up"
+            action={() => {
+              void ShareSheet.present([`https://www.pixiv.net/novel/show.php?id=${novel.id}`])
+            }}
+          />
+          <Button
+            title="编辑作品"
+            systemImage="square.and.pencil"
+            action={() => {
+              void Safari.present(
+                `https://www.pixiv.net/novel/upload.php?mode=mod&id=${novel.id}`,
+                false
+              )
+            }}
+          />
+          <Button
+            title="删除作品"
+            systemImage="trash"
+            role="destructive"
+            action={() => void handleDeleteNovel(novel)}
+          />
+        </Group>
+      ),
+    }
+  }, [isOwn, handleDeleteNovel])
 
   useEffect(() => {
     const handleFollow = (changedUserID: number) => {
@@ -223,16 +348,6 @@ export function UserWorksFeedSection(props: {
     })
   }, [])
 
-  useEffect(() => {
-    return onUserFollowChanged((changedUserID) => {
-      if (changedUserID === userID) {
-        illustPagedRef.current.refresh()
-        mangaPagedRef.current.refresh()
-        novelPagedRef.current.refresh()
-      }
-    })
-  }, [userID])
-
   const activeRefresh =
     kind === "illust"
       ? illustPaged.refresh
@@ -273,6 +388,7 @@ export function UserWorksFeedSection(props: {
           onLoadMore={illustPaged.loadMore}
           hasMore={illustPaged.hasMore}
           isLoading={illustPaged.loadingMore}
+          contextMenuOf={illustContextMenuOf}
         />
       </VStack>
     )
@@ -311,6 +427,7 @@ export function UserWorksFeedSection(props: {
           onLoadMore={mangaPaged.loadMore}
           hasMore={mangaPaged.hasMore}
           isLoading={mangaPaged.loadingMore}
+          contextMenuOf={illustContextMenuOf}
         />
       </VStack>
     )
@@ -340,7 +457,12 @@ export function UserWorksFeedSection(props: {
     <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
       {novelPaged.hasFilteredContent ? <FilteredContentNotice isNovel={true} /> : null}
       {novelPaged.items.map((novel, index) => (
-        <NovelCard key={novel.id} novel={novel} priority={index} />
+        <NovelCard
+          key={novel.id}
+          novel={novel}
+          priority={index}
+          contextMenu={novelContextMenuOf(novel)}
+        />
       ))}
       <LoadMoreTrigger
         anchor={novelPaged.items[novelPaged.items.length - 1]?.id}
@@ -352,7 +474,6 @@ export function UserWorksFeedSection(props: {
   )
 }
 
-
 export function UserWorkPicker(props: {
   availableKinds: UserWorkKind[]
   kind: UserWorkKind
@@ -363,7 +484,7 @@ export function UserWorkPicker(props: {
 
   return (
     <Picker
-      title="投稿类型"
+      title="作品类型"
       value={kind}
       onChanged={(value: string) => onChanged(value as UserWorkKind)}
       pickerStyle="segmented"

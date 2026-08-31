@@ -614,6 +614,12 @@ export function usePagedList<T extends { id: number | string }>(
     }
   }, [autoReapplyOnFilterChange, reapplyFilter])
 
+  const removeItem = useCallback((id: number | string) => {
+    const idStr = String(id)
+    setItems((current) => current.filter((item) => String(item.id) !== idStr))
+    setPendingItems((current) => current.filter((item) => String(item.id) !== idStr))
+  }, [])
+
   useEffect(() => {
     return () => {
       invalidateInactiveWork()
@@ -629,6 +635,7 @@ export function usePagedList<T extends { id: number | string }>(
     error,
     refresh,
     reapplyFilter,
+    removeItem,
     loadMore,
     hasMore: pendingItems.length > 0 || nextURL != null,
     hasFilteredContent,

@@ -591,6 +591,13 @@ function renderIllustContextMenu(
   }
 
   const customItems = customContextMenu.menuItems ?? customContextMenu
+  if (customContextMenu.override) {
+    return {
+      ...customContextMenu,
+      menuItems: customItems,
+    }
+  }
+
   return {
     ...customContextMenu,
     menuItems: (

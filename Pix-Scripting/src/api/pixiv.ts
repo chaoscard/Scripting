@@ -651,6 +651,17 @@ export async function removeBookmark(
   notifyIllustBookmarkChanged(id, false)
 }
 
+export async function deleteIllust(
+  id: number,
+  accessToken: string
+): Promise<void> {
+  await apiPost(
+    "/v1/illust/delete",
+    { illust_id: String(id) },
+    accessToken
+  )
+}
+
 // ---------- 搜索 ----------
 
 export async function searchIllustrations(
@@ -1788,6 +1799,17 @@ export async function removeNovelBookmark(
     accessToken
   )
   notifyNovelBookmarkChanged(id, false)
+}
+
+export async function deleteNovel(
+  id: number,
+  accessToken: string
+): Promise<void> {
+  await apiPost(
+    "/v1/novel/delete",
+    { novel_id: String(id) },
+    accessToken
+  )
 }
 
 // ---------- 标签百科与摘要 ----------
