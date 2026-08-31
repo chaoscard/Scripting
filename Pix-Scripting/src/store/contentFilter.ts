@@ -27,6 +27,10 @@ export interface ContentFilterOptions {
    * 是否豁免 R18/R18G/AI 作品过滤限制（黑名单用户与标签仍然生效）
    */
   exemptRestrictions?: boolean
+  /**
+   * 是否豁免用户黑名单过滤（例如进入该用户个人主页查看作品时，不因作者被屏蔽而隐藏作品）
+   */
+  exemptBlockedUser?: boolean
 }
 
 export type ContentFilterBlockReason = "blocklist" | "restriction" | null
@@ -43,7 +47,7 @@ export function getIllustContentBlockReason(
   blocklist: BlocklistData = loadBlocklist(),
   options?: ContentFilterOptions
 ): ContentFilterBlockReason {
-  if (item.user?.id && isUserBlocked(item.user.id, blocklist.blockedUsers)) {
+  if (!options?.exemptBlockedUser && item.user?.id && isUserBlocked(item.user.id, blocklist.blockedUsers)) {
     return "blocklist"
   }
   if (
@@ -76,7 +80,7 @@ export function getNovelContentBlockReason(
   blocklist: BlocklistData = loadBlocklist(),
   options?: ContentFilterOptions
 ): ContentFilterBlockReason {
-  if (item.user?.id && isUserBlocked(item.user.id, blocklist.blockedUsers)) {
+  if (!options?.exemptBlockedUser && item.user?.id && isUserBlocked(item.user.id, blocklist.blockedUsers)) {
     return "blocklist"
   }
   if (

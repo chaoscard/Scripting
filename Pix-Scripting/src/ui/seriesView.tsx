@@ -125,6 +125,7 @@ function filterSeriesIllusts(items: PixivIllustration[]): PixivIllustration[] {
   return items.filter((item) =>
     isIllustContentVisible(item, settings, undefined, {
       exemptRestrictions: settings.exemptFilterForPersonal,
+      exemptBlockedUser: true,
     })
   )
 }
@@ -134,6 +135,7 @@ function filterSeriesNovels(items: PixivNovel[]): PixivNovel[] {
   return items.filter((item) =>
     isNovelContentVisible(item, settings, undefined, {
       exemptRestrictions: settings.exemptFilterForPersonal,
+      exemptBlockedUser: true,
     })
   )
 }

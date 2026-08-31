@@ -61,6 +61,7 @@ export function UserWorksFeedSection(props: {
       return items.filter((item) =>
         isIllustContentVisible(item, settings, undefined, {
           exemptRestrictions: exempt,
+          exemptBlockedUser: true,
         })
       )
     },
@@ -88,6 +89,7 @@ export function UserWorksFeedSection(props: {
       return items.filter((item) =>
         isIllustContentVisible(item, settings, undefined, {
           exemptRestrictions: exempt,
+          exemptBlockedUser: true,
         })
       )
     },
@@ -115,6 +117,7 @@ export function UserWorksFeedSection(props: {
       return items.filter((item) =>
         isNovelContentVisible(item, settings, undefined, {
           exemptRestrictions: exempt,
+          exemptBlockedUser: true,
         })
       )
     },

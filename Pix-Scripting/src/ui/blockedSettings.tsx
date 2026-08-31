@@ -1,16 +1,19 @@
 import {
   Button,
+  Circle,
   Group,
   HStack,
   Image,
+  List,
   NavigationLink,
   Picker,
-  ScrollView,
+  Section,
   Text,
   TextField,
   useEffect,
   useState,
   VStack,
+  ZStack,
 } from "scripting"
 import { userDetail } from "../api/pixiv"
 import { session } from "../api/session"
@@ -25,7 +28,7 @@ import {
   unblockUser,
   type BlockedUser,
 } from "../store/blocklist"
-import { AuthorRow, EmptyView } from "./components"
+import { AvatarImage, EmptyView } from "./components"
 
 type BlockedScope = "tag" | "user"
 
@@ -94,19 +97,22 @@ export function BlockedSettingsView() {
       ? { text: "暂无已屏蔽标签", systemImage: "tag" }
       : { text: "暂无已屏蔽用户", systemImage: "person.crop.circle.badge.xmark" }
 
+  const currentCount =
+    scope === "tag" ? blocklist.blockedTags.length : blocklist.blockedUsers.length
+
   return (
-    <ScrollView
-      navigationTitle="屏蔽标签"
+    <VStack
+      spacing={0}
+      navigationTitle={scope === "tag" ? "屏蔽标签" : "屏蔽用户"}
       navigationBarTitleDisplayMode="inline"
       toolbar={{
         topBarTrailing: [
-          <Button
-            action={openInput}
-          >
+          <Button action={openInput}>
             <Image systemName="plus" />
           </Button>,
           <Button
             action={() => {}}
+            disabled={currentCount === 0}
             contextMenu={{
               menuItems: (
                 <Group>
@@ -179,99 +185,130 @@ export function BlockedSettingsView() {
           : undefined
       }
     >
-      <VStack alignment="leading" spacing={8} padding={{ horizontal: 10, bottom: 12 }}>
-        <Picker
-          title="屏蔽类型"
-          value={scope}
-          onChanged={(value: string) => {
-            setScope(value as BlockedScope)
-            closeInput()
-          }}
-          pickerStyle="segmented"
-          padding={{ horizontal: 4 }}
-        >
-          <Text tag="tag">标签</Text>
-          <Text tag="user">用户</Text>
-        </Picker>
+      <Picker
+        title="屏蔽类型"
+        value={scope}
+        onChanged={(value: string) => {
+          setScope(value as BlockedScope)
+          closeInput()
+        }}
+        pickerStyle="segmented"
+        padding={{ horizontal: 16, top: 6, bottom: 8 }}
+      >
+        <Text tag="tag">标签</Text>
+        <Text tag="user">用户</Text>
+      </Picker>
 
-          {scope === "tag" ? (
-            blocklist.blockedTags.length === 0 ? (
+      <List frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
+        {scope === "tag" ? (
+          blocklist.blockedTags.length === 0 ? (
+            <Section>
               <EmptyView text={empty.text} systemImage={empty.systemImage} />
-            ) : (
-              <VStack alignment="leading" spacing={8}>
-                {blocklist.blockedTags.map((tag) => (
-                  <HStack
-                    key={tag}
-                    spacing={10}
-                    padding={10}
-                    glassEffect={{ type: "rect", cornerRadius: 8 }}
-                    glassEffectTransition="materialize"
-                    frame={{ maxWidth: "infinity" }}
-                  >
-                    <Image systemName="tag" foregroundStyle="secondaryLabel" />
-                    <Text font="body" lineLimit={1} frame={{ maxWidth: "infinity", alignment: "leading" }}>
-                      {tag}
-                    </Text>
-                    <Button
-                      buttonStyle="glass"
-                      frame={{ width: 28, height: 28 }}
-                      clipShape={{ type: "rect", cornerRadius: 14 }}
-                      contentShape="rect"
-                      action={() => setBlocklist(unblockTag(tag))}
-                    >
-                      <Image systemName="xmark" foregroundStyle="systemRed" />
-                    </Button>
-                  </HStack>
-                ))}
-              </VStack>
-            )
-          ) : blocklist.blockedUsers.length === 0 ? (
-            <EmptyView text={empty.text} systemImage={empty.systemImage} />
+            </Section>
           ) : (
-            <VStack alignment="leading" spacing={8}>
-              {blocklist.blockedUsers.map((user) => (
-                <BlockedUserRow
-                  key={user.id}
-                  user={user}
-                  onRemove={() => setBlocklist(unblockUser(user.id))}
+            <Section header={<Text>已屏蔽标签（{blocklist.blockedTags.length}）</Text>}>
+              {blocklist.blockedTags.map((tag) => (
+                <BlockedTagRow
+                  key={tag}
+                  tag={tag}
+                  onRemove={() => setBlocklist(unblockTag(tag))}
                 />
               ))}
-            </VStack>
-          )}
-      </VStack>
-    </ScrollView>
+            </Section>
+          )
+        ) : blocklist.blockedUsers.length === 0 ? (
+          <Section>
+            <EmptyView text={empty.text} systemImage={empty.systemImage} />
+          </Section>
+        ) : (
+          <Section header={<Text>已屏蔽用户（{blocklist.blockedUsers.length}）</Text>}>
+            {blocklist.blockedUsers.map((user) => (
+              <BlockedUserRow
+                key={user.id}
+                user={user}
+                onRemove={() => setBlocklist(unblockUser(user.id))}
+              />
+            ))}
+          </Section>
+        )}
+      </List>
+    </VStack>
+  )
+}
+
+function BlockedTagRow(props: { tag: string; onRemove: () => void }) {
+  const { tag, onRemove } = props
+  return (
+    <HStack
+      alignment="center"
+      spacing={12}
+      padding={{ vertical: 4 }}
+      trailingSwipeActions={{
+        allowsFullSwipe: true,
+        actions: [
+          <Button
+            key="delete"
+            title="删除"
+            systemImage="trash"
+            role="destructive"
+            action={onRemove}
+          />,
+        ],
+      }}
+    >
+      <ZStack
+        frame={{ width: 28, height: 28 }}
+        glassEffect={{ type: "rect", cornerRadius: 6 }}
+      >
+        <Image systemName="tag.fill" font="subheadline" foregroundStyle="systemBlue" />
+      </ZStack>
+      <Text font="body" frame={{ maxWidth: "infinity", alignment: "leading" }} lineLimit={1}>
+        {tag}
+      </Text>
+    </HStack>
   )
 }
 
 function BlockedUserRow(props: { user: BlockedUser; onRemove: () => void }) {
-  const { user } = props
+  const { user, onRemove } = props
   return (
     <HStack
+      alignment="center"
       spacing={10}
-      padding={10}
-      glassEffect={{ type: "rect", cornerRadius: 8 }}
-      glassEffectTransition="materialize"
-      frame={{ maxWidth: "infinity" }}
+      padding={{ vertical: 4 }}
+      trailingSwipeActions={{
+        allowsFullSwipe: true,
+        actions: [
+          <Button
+            key="delete"
+            title="删除"
+            systemImage="trash"
+            role="destructive"
+            action={onRemove}
+          />,
+        ],
+      }}
     >
       <NavigationLink value={`user:${user.id}`} frame={{ maxWidth: "infinity" }}>
-        <AuthorRow
-          user={{
-            id: user.id,
-            name: user.name,
-            account: user.account,
-            profile_image_urls: user.avatarURL ? { medium: user.avatarURL } : { medium: "" },
-          }}
-        />
+        <HStack spacing={10} alignment="center">
+          <ZStack frame={{ width: 38, height: 38 }}>
+            <Circle
+              fill="rgba(255, 255, 255, 0.16)"
+              glassEffect={true}
+              frame={{ width: 38, height: 38 }}
+            />
+            <AvatarImage url={user.avatarURL ?? null} size={32} />
+          </ZStack>
+          <VStack alignment="leading" spacing={2}>
+            <Text font="body" fontWeight="semibold" lineLimit={1}>
+              {user.name}
+            </Text>
+            <Text font="caption" foregroundStyle="secondaryLabel" lineLimit={1}>
+              {user.account ? `@${user.account}` : `UID: ${user.id}`}
+            </Text>
+          </VStack>
+        </HStack>
       </NavigationLink>
-      <Button
-        buttonStyle="glass"
-        frame={{ width: 28, height: 28 }}
-        clipShape={{ type: "rect", cornerRadius: 14 }}
-        contentShape="rect"
-        action={props.onRemove}
-      >
-        <Image systemName="xmark" foregroundStyle="systemRed" />
-      </Button>
     </HStack>
   )
 }
