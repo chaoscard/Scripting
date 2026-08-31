@@ -179,6 +179,19 @@ export function useExperimentalAmbientPalette(imageUrl: string | null | undefine
   const ambientBackground = useMemo(() => {
     if (!ambientEnabled || !effectivePalette) return undefined
 
+    if (ambientAlgorithm === "ultimate") {
+      const lead = effectivePalette.ultimateLeadingColor ?? effectivePalette.topColor
+      const prism = effectivePalette.ultimatePrismColor ?? effectivePalette.topColor
+      const trail = effectivePalette.ultimateTrailingColor ?? effectivePalette.topColor
+      const mid = effectivePalette.ultimateMidColor ?? effectivePalette.midColor
+      const bg = effectivePalette.ultimateBgColor ?? effectivePalette.backgroundColor
+      return {
+        colors: [lead, prism, trail, mid, bg],
+        startPoint: "topLeading" as const,
+        endPoint: "bottomTrailing" as const,
+      }
+    }
+
     if (ambientAlgorithm === "explore") {
       const accent = effectivePalette.exploreAccentColor ?? effectivePalette.topColor
       const top = effectivePalette.exploreTopColor ?? effectivePalette.topColor
@@ -206,9 +219,11 @@ export function useExperimentalAmbientPalette(imageUrl: string | null | undefine
 
   const topColor =
     ambientEnabled && effectivePalette
-      ? ambientAlgorithm === "explore"
-        ? (effectivePalette.exploreTopColor ?? effectivePalette.topColor)
-        : effectivePalette.topColor
+      ? ambientAlgorithm === "ultimate"
+        ? (effectivePalette.ultimateLeadingColor ?? effectivePalette.topColor)
+        : ambientAlgorithm === "explore"
+          ? (effectivePalette.exploreTopColor ?? effectivePalette.topColor)
+          : effectivePalette.topColor
       : undefined
 
   return {

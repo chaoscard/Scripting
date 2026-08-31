@@ -17,6 +17,12 @@ export interface IllustAmbientPalette {
   exploreTopColor?: Color
   exploreMidColor?: Color
   exploreBgColor?: Color
+  // 极致算法专属（空间四象限物理光影 + 棱镜色散流光）
+  ultimateLeadingColor?: Color
+  ultimatePrismColor?: Color
+  ultimateTrailingColor?: Color
+  ultimateMidColor?: Color
+  ultimateBgColor?: Color
 }
 
 export type IntensityPaletteMap<T> = {
@@ -393,10 +399,121 @@ function adaptPerceptualColor(
   return hslToRgb(h, targetS, targetL)
 }
 
+/**
+ * 从图片裁剪区域中提取饱和度与活力度最高的局部峰值色彩（避免大面积均值稀释高光）
+ */
+function extractPeakVibrantColor(
+  crop: UIImage | null,
+  fallback: { red?: number; green?: number; blue?: number } | null | undefined
+): { red?: number; green?: number; blue?: number } {
+  if (!crop) return fallback ?? { red: 128, green: 128, blue: 128 }
+  try {
+    const dominants = crop.dominantColors(4)
+    if (dominants && dominants.length > 0) {
+      let best = dominants[0].color
+      let maxScore = -1
+      for (const d of dominants) {
+        const c = d.color
+        const [, s, l] = rgbToHsl(c.red ?? 0, c.green ?? 0, c.blue ?? 0)
+        // 过滤极暗或极亮死色，偏好高纯度色彩
+        if (l >= 0.12 && l <= 0.90) {
+          const score = s * 2.2 + (1 - Math.abs(l - 0.52)) * 1.0 + d.fraction
+          if (score > maxScore) {
+            maxScore = score
+            best = c
+          }
+        }
+      }
+      if (maxScore > 0 && best) return best
+    }
+    return crop.averageColor() ?? fallback ?? { red: 128, green: 128, blue: 128 }
+  } catch {
+    return crop.averageColor() ?? fallback ?? { red: 128, green: 128, blue: 128 }
+  }
+}
+
+/**
+ * 计算两色之间的色散过渡桥接色（避免冷暖色彩相交时在渐变中段产生泥泞灰暗）
+ */
+function computePrismaticBridge(
+  c1: [number, number, number],
+  c2: [number, number, number]
+): [number, number, number] {
+  const [h1, s1, l1] = rgbToHsl(c1[0], c1[1], c1[2])
+  const [h2, s2, l2] = rgbToHsl(c2[0], c2[1], c2[2])
+
+  let diff = h2 - h1
+  if (diff > 0.5) diff -= 1
+  if (diff < -0.5) diff += 1
+
+  // 取色轮最短弧度中点
+  const bridgeH = (h1 + diff * 0.5 + 1) % 1
+  // 通透度补偿：提升色散桥接处的纯度与饱满感
+  const bridgeS = Math.min(1.0, Math.max(s1, s2, 0.45) * 1.20)
+  const bridgeL = Math.min(0.75, Math.max(0.35, (l1 + l2) / 2))
+
+  return hslToRgb(bridgeH, bridgeS, bridgeL)
+}
+
+/**
+ * 针对极致算法的晶莹通透度与 OLED 深空对比自适应
+ */
+function adaptUltimatePerceptualColor(
+  red: number,
+  green: number,
+  blue: number,
+  isDark: boolean,
+  intensity: AmbientIntensity = "medium",
+  role: "leading" | "prism" | "trailing" | "mid" | "bg" = "leading"
+): [number, number, number] {
+  const [h, s, l] = rgbToHsl(red, green, blue)
+  let targetS = s
+  let targetL = l
+
+  if (isDark) {
+    // 深色模式 (OLED Nebula)：高光保留高纯度霓虹发光感，背景收敛于深空黑曜石
+    if (role === "bg") {
+      targetS = Math.min(0.50, Math.max(0.10, s * 0.80))
+      targetL = 0.05
+    } else if (role === "mid") {
+      targetS = Math.min(0.85, Math.max(0.20, s * 1.10))
+      targetL = intensity === "high" ? 0.22 : intensity === "low" ? 0.12 : 0.16
+    } else {
+      // leading / prism / trailing
+      const sMultiplier = intensity === "high" ? 1.35 : intensity === "low" ? 1.10 : 1.25
+      const maxL = intensity === "high" ? 0.46 : intensity === "low" ? 0.34 : 0.40
+      const minL = intensity === "high" ? 0.20 : intensity === "low" ? 0.14 : 0.16
+      targetS = Math.min(0.95, Math.max(0.35, s * sMultiplier))
+      targetL = Math.min(maxL, Math.max(minL, l * 0.82))
+    }
+  } else {
+    // 浅色模式 (Frost Crystal)：提升通透清澈感与明度，去除灰雾感
+    if (role === "bg") {
+      targetS = Math.min(0.25, Math.max(0.04, s * 0.50))
+      targetL = 0.96
+    } else if (role === "mid") {
+      targetS = Math.min(0.55, Math.max(0.12, s * 0.85))
+      targetL = intensity === "high" ? 0.82 : intensity === "low" ? 0.90 : 0.86
+    } else {
+      // leading / prism / trailing
+      const sMultiplier = intensity === "high" ? 1.15 : intensity === "low" ? 0.88 : 1.00
+      const minL = intensity === "high" ? 0.60 : intensity === "low" ? 0.78 : 0.70
+      targetS = Math.min(0.75, Math.max(0.20, s * sMultiplier))
+      targetL = Math.min(0.92, Math.max(minL, 0.55 + l * 0.35))
+    }
+  }
+
+  return hslToRgb(h, targetS, targetL)
+}
+
 function buildIllustPalette(
   tRaw: [number, number, number],
   dRaw: [number, number, number],
   aRaw: [number, number, number],
+  tlRaw: [number, number, number],
+  trRaw: [number, number, number],
+  prismRaw: [number, number, number],
+  bRaw: [number, number, number],
   isDark: boolean,
   intensity: AmbientIntensity
 ): IllustAmbientPalette {
@@ -437,6 +554,32 @@ function buildIllustPalette(
     expBgAlpha = isDark ? 0.04 : 0.02
   }
 
+  // 3. 极致算法色彩 (Ultimate - 空间四象限物理光影 + 棱镜色散流光)
+  const [ultLeadR, ultLeadG, ultLeadB] = adaptUltimatePerceptualColor(tlRaw[0], tlRaw[1], tlRaw[2], isDark, intensity, "leading")
+  const [ultPrismR, ultPrismG, ultPrismB] = adaptUltimatePerceptualColor(prismRaw[0], prismRaw[1], prismRaw[2], isDark, intensity, "prism")
+  const [ultTrailR, ultTrailG, ultTrailB] = adaptUltimatePerceptualColor(trRaw[0], trRaw[1], trRaw[2], isDark, intensity, "trailing")
+  const [ultMidR, ultMidG, ultMidB] = adaptUltimatePerceptualColor(dRaw[0], dRaw[1], dRaw[2], isDark, intensity, "mid")
+  const [ultBgR, ultBgG, ultBgB] = adaptUltimatePerceptualColor(bRaw[0], bRaw[1], bRaw[2], isDark, intensity, "bg")
+
+  let ultLeadAlpha = isDark ? 0.62 : 0.54
+  let ultPrismAlpha = isDark ? 0.52 : 0.44
+  let ultTrailAlpha = isDark ? 0.46 : 0.38
+  let ultMidAlpha = isDark ? 0.20 : 0.14
+  let ultBgAlpha = 0.00
+  if (intensity === "low") {
+    ultLeadAlpha = isDark ? 0.42 : 0.34
+    ultPrismAlpha = isDark ? 0.34 : 0.26
+    ultTrailAlpha = isDark ? 0.28 : 0.20
+    ultMidAlpha = isDark ? 0.12 : 0.08
+    ultBgAlpha = 0.00
+  } else if (intensity === "high") {
+    ultLeadAlpha = isDark ? 0.80 : 0.72
+    ultPrismAlpha = isDark ? 0.70 : 0.60
+    ultTrailAlpha = isDark ? 0.62 : 0.52
+    ultMidAlpha = isDark ? 0.34 : 0.26
+    ultBgAlpha = isDark ? 0.03 : 0.01
+  }
+
   return {
     topColor: `rgba(${tR},${tG},${tB},${topAlpha})` as Color,
     midColor: `rgba(${dR},${dG},${dB},${midAlpha})` as Color,
@@ -446,13 +589,19 @@ function buildIllustPalette(
     exploreTopColor: `rgba(${expTR},${expTG},${expTB},${expTopAlpha})` as Color,
     exploreMidColor: `rgba(${expDR},${expDG},${expDB},${expMidAlpha})` as Color,
     exploreBgColor: `rgba(${expDR},${expDG},${expDB},${expBgAlpha})` as Color,
+
+    ultimateLeadingColor: `rgba(${ultLeadR},${ultLeadG},${ultLeadB},${ultLeadAlpha})` as Color,
+    ultimatePrismColor: `rgba(${ultPrismR},${ultPrismG},${ultPrismB},${ultPrismAlpha})` as Color,
+    ultimateTrailingColor: `rgba(${ultTrailR},${ultTrailG},${ultTrailB},${ultTrailAlpha})` as Color,
+    ultimateMidColor: `rgba(${ultMidR},${ultMidG},${ultMidB},${ultMidAlpha})` as Color,
+    ultimateBgColor: `rgba(${ultBgR},${ultBgG},${ultBgB},${ultBgAlpha})` as Color,
   }
 }
 
 function processIllustPaletteFromImage(uiImage: UIImage, url?: string): IllustAmbientResult | null {
   if (!uiImage || uiImage.width <= 0 || uiImage.height <= 0) return null
 
-  // 1. 顶部 30% 区域采样（无缝衔接顶部导航区）
+  // 1. 顶部 30% 区域采样（经典/探索共用）
   const cropH = Math.max(2, Math.round(uiImage.height * 0.3))
   const topCrop = uiImage.croppedTo({
     x: 0,
@@ -462,8 +611,37 @@ function processIllustPaletteFromImage(uiImage: UIImage, url?: string): IllustAm
   })
   const topAvg = topCrop?.averageColor() ?? uiImage.averageColor()
 
-  // 2. 全局多主色采样：在主色列表中优先选取鲜活度适中的颜色
-  const dominants = uiImage.dominantColors(6)
+  // 2. 空间局部角标峰值活力采样（极致算法：21% 黄金微窗口精准捕捉边缘与角部高光）
+  const cornerW = Math.max(2, Math.round(uiImage.width * 0.21))
+  const cornerH = Math.max(2, Math.round(uiImage.height * 0.21))
+
+  const topLeftCrop = uiImage.croppedTo({
+    x: 0,
+    y: 0,
+    width: cornerW,
+    height: cornerH,
+  })
+  const topLeftColor = extractPeakVibrantColor(topLeftCrop, topAvg)
+
+  const topRightCrop = uiImage.croppedTo({
+    x: Math.max(0, uiImage.width - cornerW),
+    y: 0,
+    width: cornerW,
+    height: cornerH,
+  })
+  const topRightColor = extractPeakVibrantColor(topRightCrop, topAvg)
+
+  const bottomH = Math.max(2, Math.round(uiImage.height * 0.15))
+  const bottomCrop = uiImage.croppedTo({
+    x: 0,
+    y: Math.max(0, uiImage.height - bottomH),
+    width: uiImage.width,
+    height: bottomH,
+  })
+  const bottomAvg = bottomCrop?.averageColor() ?? uiImage.averageColor()
+
+  // 3. 全局多主色采样：在主色列表中优先选取鲜活度适中的颜色
+  const dominants = uiImage.dominantColors(8)
   let bestDominant = uiImage.averageColor()
   let secondDominant: any = null
   if (dominants && dominants.length > 0) {
@@ -479,7 +657,7 @@ function processIllustPaletteFromImage(uiImage: UIImage, url?: string): IllustAm
     }
 
     if (bestDominant) {
-      // 寻找与 bestDominant 色相差异明显的主色作为极光副色
+      // 寻找与 bestDominant 色相差异明显的主色作为极光副色与空间补充色
       const [dMainH] = rgbToHsl(bestDominant.red ?? 0, bestDominant.green ?? 0, bestDominant.blue ?? 0)
       let bestAccentScore = -1
       for (const d of dominants) {
@@ -527,16 +705,52 @@ function processIllustPaletteFromImage(uiImage: UIImage, url?: string): IllustAm
     accentRawB = ab
   }
 
+  // 极致算法：空间多方位峰值色彩 + 色相张力保底
+  let tlRawR = topLeftColor.red ?? tRawR
+  let tlRawG = topLeftColor.green ?? tRawG
+  let tlRawB = topLeftColor.blue ?? tRawB
+
+  let trRawR = topRightColor.red ?? tRawR
+  let trRawG = topRightColor.green ?? tRawG
+  let trRawB = topRightColor.blue ?? tRawB
+
+  const [tlH] = rgbToHsl(tlRawR, tlRawG, tlRawB)
+  const [trH] = rgbToHsl(trRawR, trRawG, trRawB)
+  let cornerHueDiff = Math.abs(tlH - trH)
+  if (cornerHueDiff > 0.5) cornerHueDiff = 1 - cornerHueDiff
+
+  // 若两角提取到的色相过于接近（< 36°），启用色相张力保护机制
+  if (cornerHueDiff < 0.10) {
+    if (secondDominant) {
+      trRawR = secondDominant.red ?? 0
+      trRawG = secondDominant.green ?? 0
+      trRawB = secondDominant.blue ?? 0
+    } else {
+      const [h, s, l] = rgbToHsl(tlRawR, tlRawG, tlRawB)
+      const shiftedH = (h + 0.13) % 1
+      const [ar, ag, ab] = hslToRgb(shiftedH, Math.max(0.40, s), l)
+      trRawR = ar
+      trRawG = ag
+      trRawB = ab
+    }
+  }
+
+  const bRawR = bottomAvg?.red ?? dRawR
+  const bRawG = bottomAvg?.green ?? dRawG
+  const bRawB = bottomAvg?.blue ?? dRawB
+
+  const prismRaw = computePrismaticBridge([tlRawR, tlRawG, tlRawB], [trRawR, trRawG, trRawB])
+
   const result: IllustAmbientResult = {
     light: {
-      low: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], [accentRawR, accentRawG, accentRawB], false, "low"),
-      medium: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], [accentRawR, accentRawG, accentRawB], false, "medium"),
-      high: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], [accentRawR, accentRawG, accentRawB], false, "high"),
+      low: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], [accentRawR, accentRawG, accentRawB], [tlRawR, tlRawG, tlRawB], [trRawR, trRawG, trRawB], prismRaw, [bRawR, bRawG, bRawB], false, "low"),
+      medium: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], [accentRawR, accentRawG, accentRawB], [tlRawR, tlRawG, tlRawB], [trRawR, trRawG, trRawB], prismRaw, [bRawR, bRawG, bRawB], false, "medium"),
+      high: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], [accentRawR, accentRawG, accentRawB], [tlRawR, tlRawG, tlRawB], [trRawR, trRawG, trRawB], prismRaw, [bRawR, bRawG, bRawB], false, "high"),
     },
     dark: {
-      low: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], [accentRawR, accentRawG, accentRawB], true, "low"),
-      medium: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], [accentRawR, accentRawG, accentRawB], true, "medium"),
-      high: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], [accentRawR, accentRawG, accentRawB], true, "high"),
+      low: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], [accentRawR, accentRawG, accentRawB], [tlRawR, tlRawG, tlRawB], [trRawR, trRawG, trRawB], prismRaw, [bRawR, bRawG, bRawB], true, "low"),
+      medium: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], [accentRawR, accentRawG, accentRawB], [tlRawR, tlRawG, tlRawB], [trRawR, trRawG, trRawB], prismRaw, [bRawR, bRawG, bRawB], true, "medium"),
+      high: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], [accentRawR, accentRawG, accentRawB], [tlRawR, tlRawG, tlRawB], [trRawR, trRawG, trRawB], prismRaw, [bRawR, bRawG, bRawB], true, "high"),
     },
   }
   if (url) {

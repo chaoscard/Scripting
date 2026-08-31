@@ -467,12 +467,13 @@ export function SettingsView() {
                     value={settings.experimentalImmersionAlgorithm}
                     onChanged={(value: string) =>
                       update({
-                        experimentalImmersionAlgorithm: value as "classic" | "explore",
+                        experimentalImmersionAlgorithm: value as "classic" | "explore" | "ultimate",
                       })
                     }
                   >
                     <Text tag="classic">经典</Text>
                     <Text tag="explore">探索</Text>
+                    <Text tag="ultimate">极致</Text>
                   </Picker>
                   <Picker
                     title="实验性沉浸效果强度"
