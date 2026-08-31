@@ -77,6 +77,7 @@ export function NovelLibraryView() {
               novel={item.novel}
               priority={index}
               markerPage={item.novel_marker.page}
+              showEpisodeNumber={false}
             />
           ))}
           <LoadMoreTrigger

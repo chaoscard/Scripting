@@ -91,13 +91,15 @@ function decodeTag(value: string): string {
   }
 }
 
+let routeNavigationSeq = 0
+
 export function renderDestination(rawPage: string) {
   const page = normalizeRoute(rawPage)
   if (page.startsWith("illust:")) {
     const id = parseID(page, "illust:")
     if (id != null) {
       seedIllustFromWidgetPool(id)
-      return <IllustDetailView key={`illust-${id}`} illustID={id} />
+      return <IllustDetailView key={`illust-${id}-${++routeNavigationSeq}`} illustID={id} />
     }
   }
   if (page.startsWith("pixivision:")) {

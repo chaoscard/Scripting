@@ -36,11 +36,6 @@ import { saveImageToPixivAlbum } from "../../downloader/photoAlbum"
 import { CachedImage, ErrorView } from "../components"
 import { cachedFilePath, imageUrlOf, loadImage, pageThumbUrlOf } from "../../image/imageLoader"
 import { loadSettings } from "../../store/settings"
-import {
-  getIllustAICache,
-  setIllustAICache,
-  clearIllustAICache,
-} from "../../store/aiTranslationCache"
 import { drawOCROverlay } from "./OCRCanvas"
 import { createThrottledUpdater } from "./throttle"
 import type { IllustAIMode, PageTranslationCache, ScreenshotMaker } from "./types"
@@ -419,23 +414,9 @@ export function IllustAISheet(props: {
   const [fontScale, setFontScale] = useState(1.0)
   const [showAllOverlay, setShowAllOverlay] = useState(true)
 
-  // 记录每一页独立翻译/生图缓存（初始从全局会话缓存获取）
-  const [pageCaches, setPageCaches] = useState<Record<number, PageTranslationCache>>(() => {
-    return getIllustAICache(illust.id, mode) || {}
-  })
+  // 记录每一页独立翻译/生图缓存
+  const [pageCaches, setPageCaches] = useState<Record<number, PageTranslationCache>>({})
   const [translatingIndices, setTranslatingIndices] = useState<number[]>([])
-
-  function updatePageCaches(
-    updater:
-      | Record<number, PageTranslationCache>
-      | ((prev: Record<number, PageTranslationCache>) => Record<number, PageTranslationCache>)
-  ) {
-    setPageCaches((prev) => {
-      const next = typeof updater === "function" ? updater(prev) : updater
-      setIllustAICache(illust.id, mode, next)
-      return next
-    })
-  }
 
   interface TaskToken {
     id: number
@@ -512,7 +493,7 @@ export function IllustAISheet(props: {
 
   // 切换指定页气泡的独立显隐（通过气泡下标）
   function handleToggleBubbleIndex(pageIndex: number, hitIndex: number) {
-    updatePageCaches((prev) => {
+    setPageCaches((prev) => {
       const prevHidden = prev[pageIndex]?.hiddenBubbleIndices || []
       const nextHidden = prevHidden.includes(hitIndex)
         ? prevHidden.filter((i: number) => i !== hitIndex)
@@ -594,7 +575,7 @@ export function IllustAISheet(props: {
     setTranslatingIndices((prev) => (prev.includes(targetIndex) ? prev : [...prev, targetIndex]))
 
     // 清除该页先前的错误
-    updatePageCaches((prev) => ({
+    setPageCaches((prev) => ({
       ...prev,
       [targetIndex]: {
         ...prev[targetIndex],
@@ -606,7 +587,7 @@ export function IllustAISheet(props: {
 
     const throttler = createThrottledUpdater((text) => {
       if (pageTokensRef.current[targetIndex]?.id !== taskToken.id || taskToken.aborted) return
-      updatePageCaches((prev) => ({
+      setPageCaches((prev) => ({
         ...prev,
         [targetIndex]: {
           ...prev[targetIndex],
@@ -620,7 +601,7 @@ export function IllustAISheet(props: {
       if (mode === "caption") {
         if (!rawCaption) {
           if (pageTokensRef.current[targetIndex]?.id === taskToken.id && !taskToken.aborted) {
-            updatePageCaches((prev) => ({
+            setPageCaches((prev) => ({
               ...prev,
               [targetIndex]: { resultText: "该作品作者未填写简介。", error: null },
             }))
@@ -643,7 +624,7 @@ export function IllustAISheet(props: {
         const finalResult = await streamVisionTranslateImage(illust, targetIndex, {
           onImageReady: (filePath) => {
             if (pageTokensRef.current[targetIndex]?.id === taskToken.id && !taskToken.aborted) {
-              updatePageCaches((prev) => ({
+              setPageCaches((prev) => ({
                 ...prev,
                 [targetIndex]: {
                   ...prev[targetIndex],
@@ -654,7 +635,7 @@ export function IllustAISheet(props: {
           },
           onBubblesParsed: (bubbles) => {
             if (pageTokensRef.current[targetIndex]?.id === taskToken.id && !taskToken.aborted) {
-              updatePageCaches((prev) => ({
+              setPageCaches((prev) => ({
                 ...prev,
                 [targetIndex]: {
                   ...prev[targetIndex],
@@ -683,7 +664,7 @@ export function IllustAISheet(props: {
           },
           onImageGenerated: (imageData) => {
             if (pageTokensRef.current[targetIndex]?.id === taskToken.id && !taskToken.aborted) {
-              updatePageCaches((prev) => ({
+              setPageCaches((prev) => ({
                 ...prev,
                 [targetIndex]: {
                   ...prev[targetIndex],
@@ -704,7 +685,7 @@ export function IllustAISheet(props: {
       throttler.cancel()
       if (pageTokensRef.current[targetIndex]?.id === taskToken.id && !taskToken.aborted) {
         const errorMsg = e?.message || "AI 请求发生异常"
-        updatePageCaches((prev) => ({
+        setPageCaches((prev) => ({
           ...prev,
           [targetIndex]: {
             ...prev[targetIndex],
@@ -746,7 +727,7 @@ export function IllustAISheet(props: {
     setTranslatingIndices((prev) => Array.from(new Set([...prev, ...targetIndices])))
 
     // 清空待处理页面的历史错误
-    updatePageCaches((prev) => {
+    setPageCaches((prev) => {
       const next = { ...prev }
       for (const idx of targetIndices) {
         next[idx] = {
@@ -842,8 +823,7 @@ export function IllustAISheet(props: {
   }, [])
 
   useEffect(() => {
-    const cached = getIllustAICache(illust.id, mode) || {}
-    setPageCaches(cached)
+    setPageCaches({})
     setSelectedPageIndex(0)
     setTranslatingIndices([])
     setShowAllOverlay(true)
@@ -852,8 +832,7 @@ export function IllustAISheet(props: {
   useEffect(() => {
     if (isPresented) {
       if (mode === "caption") {
-        const cached = getIllustAICache(illust.id, "caption")
-        if (!cached?.[0]?.resultText && !pageCaches[0]?.resultText) {
+        if (!pageCaches[0]?.resultText) {
           void executePage(0)
         }
       }

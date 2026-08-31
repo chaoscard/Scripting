@@ -33,6 +33,7 @@ export function NovelCard(props: {
   priority?: number
   footerText?: string
   markerPage?: number
+  showEpisodeNumber?: boolean
   topTrailingAction?: IllustCardAction
   contextMenu?: any
 }) {
@@ -42,6 +43,7 @@ export function NovelCard(props: {
     priority,
     footerText,
     markerPage,
+    showEpisodeNumber = true,
     topTrailingAction,
     contextMenu,
   } = props
@@ -198,7 +200,7 @@ export function NovelCard(props: {
                     </Text>
                   </HStack>
                 ) : null}
-                {episodeNumber != null ? (
+                {showEpisodeNumber && episodeNumber != null ? (
                   <Text font="caption2" foregroundStyle="secondaryLabel">
                     {`第${episodeNumber}话`}
                   </Text>

@@ -31,13 +31,6 @@ import {
 } from "../../api/aiService"
 import { ErrorView } from "../components"
 import { createThrottledUpdater } from "./throttle"
-import {
-  getNovelAICache,
-  setNovelAICache,
-  updateNovelPageAICache,
-  updateNovelAICaption,
-  clearNovelAICache,
-} from "../../store/aiTranslationCache"
 import { PRESET_CONTINUE_PROMPTS, type NovelAIMode } from "./types"
 
 interface NovelPageCache {
@@ -74,44 +67,11 @@ export function NovelAISheet(props: {
   const [progressInfo, setProgressInfo] = useState<string | null>(null)
   const [showOriginalCaption, setShowOriginalCaption] = useState(false)
 
-  const [pageCaches, setPageCaches] = useState<Record<number, NovelPageCache>>(() => {
-    return getNovelAICache(novel.id)?.pageCaches || {}
+  const [pageCaches, setPageCaches] = useState<Record<number, NovelPageCache>>({})
+  const [captionCache, setCaptionCache] = useState<{ resultText: string; error: string | null }>({
+    resultText: "",
+    error: null,
   })
-  const [captionCache, setCaptionCache] = useState<{ resultText: string; error: string | null }>(() => {
-    return getNovelAICache(novel.id)?.captionCache || { resultText: "", error: null }
-  })
-
-  function updatePageCaches(
-    updater:
-      | Record<number, NovelPageCache>
-      | ((prev: Record<number, NovelPageCache>) => Record<number, NovelPageCache>)
-  ) {
-    setPageCaches((prev) => {
-      const next = typeof updater === "function" ? updater(prev) : updater
-      const curNovelCache = getNovelAICache(novel.id) || {}
-      setNovelAICache(novel.id, {
-        ...curNovelCache,
-        pageCaches: next,
-      })
-      return next
-    })
-  }
-
-  function updateCaption(
-    updater:
-      | { resultText: string; error: string | null }
-      | ((prev: { resultText: string; error: string | null }) => { resultText: string; error: string | null })
-  ) {
-    setCaptionCache((prev) => {
-      const next = typeof updater === "function" ? updater(prev) : updater
-      const curNovelCache = getNovelAICache(novel.id) || {}
-      setNovelAICache(novel.id, {
-        ...curNovelCache,
-        captionCache: next,
-      })
-      return next
-    })
-  }
 
   const [continueInstruction, setContinueInstruction] = useState("")
 
@@ -218,7 +178,7 @@ export function NovelAISheet(props: {
 
     // 清空当前模式的旧数据
     if (mode === "caption") {
-      updateCaption({ resultText: "", error: null })
+      setCaptionCache({ resultText: "", error: null })
     } else {
       const field =
         mode === "translate"
@@ -226,7 +186,7 @@ export function NovelAISheet(props: {
           : mode === "summary"
           ? "summaryText"
           : "continueText"
-      updatePageCaches((prev) => ({
+      setPageCaches((prev) => ({
         ...prev,
         [selectedPage]: {
           ...prev[selectedPage],
@@ -240,7 +200,7 @@ export function NovelAISheet(props: {
     const throttler = createThrottledUpdater((text) => {
       if (activeTaskTokenRef.current.id !== taskToken.id || taskToken.aborted) return
       if (mode === "caption") {
-        updateCaption((prev) => ({ ...prev, resultText: text, error: null }))
+        setCaptionCache((prev) => ({ ...prev, resultText: text, error: null }))
       } else {
         const field =
           mode === "translate"
@@ -248,7 +208,7 @@ export function NovelAISheet(props: {
             : mode === "summary"
             ? "summaryText"
             : "continueText"
-        updatePageCaches((prev) => ({
+        setPageCaches((prev) => ({
           ...prev,
           [selectedPage]: {
             ...prev[selectedPage],
@@ -264,7 +224,7 @@ export function NovelAISheet(props: {
       if (mode === "caption") {
         if (!rawCaption) {
           if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
-            updateCaption({ resultText: "该小说作者未填写简介。", error: null })
+            setCaptionCache({ resultText: "该小说作者未填写简介。", error: null })
             setLoading(false)
           }
           return
@@ -286,7 +246,7 @@ export function NovelAISheet(props: {
         if (!cleanedText) {
           if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
             const msg = isMultiPage ? "当前页小说正文为空。" : "未获取到小说正文文本。"
-            updatePageCaches((prev) => ({
+            setPageCaches((prev) => ({
               ...prev,
               [selectedPage]: { ...prev[selectedPage], translateText: msg, error: null },
             }))
@@ -311,7 +271,7 @@ export function NovelAISheet(props: {
         if (!cleanedText) {
           if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
             const msg = isMultiPage ? "当前页小说正文为空。" : "未获取到小说正文文本。"
-            updatePageCaches((prev) => ({
+            setPageCaches((prev) => ({
               ...prev,
               [selectedPage]: { ...prev[selectedPage], summaryText: msg, error: null },
             }))
@@ -336,7 +296,7 @@ export function NovelAISheet(props: {
       } else if (mode === "continue") {
         if (!cleanedText) {
           if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
-            updatePageCaches((prev) => ({
+            setPageCaches((prev) => ({
               ...prev,
               [selectedPage]: { ...prev[selectedPage], continueText: "未获取到小说正文文本。", error: null },
             }))
@@ -363,9 +323,9 @@ export function NovelAISheet(props: {
       if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
         const errorMsg = e?.message || "AI 请求发生异常"
         if (mode === "caption") {
-          updateCaption((prev) => ({ ...prev, error: errorMsg }))
+          setCaptionCache((prev) => ({ ...prev, error: errorMsg }))
         } else {
-          updatePageCaches((prev) => ({
+          setPageCaches((prev) => ({
             ...prev,
             [selectedPage]: {
               ...prev[selectedPage],
@@ -390,10 +350,9 @@ export function NovelAISheet(props: {
   }, [])
 
   useEffect(() => {
-    // 切换小说作品时从全局会话缓存加载
-    const cached = getNovelAICache(novel.id)
-    setPageCaches(cached?.pageCaches || {})
-    setCaptionCache(cached?.captionCache || { resultText: "", error: null })
+    // 切换小说作品时重置全部缓存
+    setPageCaches({})
+    setCaptionCache({ resultText: "", error: null })
   }, [novel.id])
 
   useEffect(() => {
