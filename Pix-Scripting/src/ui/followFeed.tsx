@@ -288,12 +288,29 @@ function FollowingFeed(props: {
   useEffect(() => {
     if (kind === "illust") {
       const first = illustPaged.items[0]
-      onFirstImageUrlChange?.(first ? cardThumbUrlOf(first) : null)
+      if (first) {
+        onFirstImageUrlChange?.(cardThumbUrlOf(first))
+      } else if (!illustPaged.initialLoading && illustPaged.items.length === 0) {
+        onFirstImageUrlChange?.(null)
+      }
     } else {
       const first = novelPaged.items[0]
-      onFirstImageUrlChange?.(first ? novelThumbUrlOf(first) : null)
+      if (first) {
+        onFirstImageUrlChange?.(novelThumbUrlOf(first))
+      } else if (!novelPaged.initialLoading && novelPaged.items.length === 0) {
+        onFirstImageUrlChange?.(null)
+      }
     }
-  }, [kind, illustPaged.items[0]?.id, novelPaged.items[0]?.id, onFirstImageUrlChange])
+  }, [
+    kind,
+    illustPaged.items[0]?.id,
+    illustPaged.initialLoading,
+    illustPaged.items.length,
+    novelPaged.items[0]?.id,
+    novelPaged.initialLoading,
+    novelPaged.items.length,
+    onFirstImageUrlChange,
+  ])
 
   useEffect(() => {
     onRegisterRefresh?.(activeRefresh)
@@ -406,8 +423,17 @@ function WatchlistFeed(props: {
 
   useEffect(() => {
     const first = currentPaged.items[0]
-    onFirstImageUrlChange?.(first ? watchlistThumbUrlOf(first) : null)
-  }, [currentPaged.items[0]?.id, onFirstImageUrlChange])
+    if (first) {
+      onFirstImageUrlChange?.(watchlistThumbUrlOf(first))
+    } else if (!currentPaged.initialLoading && currentPaged.items.length === 0) {
+      onFirstImageUrlChange?.(null)
+    }
+  }, [
+    currentPaged.items[0]?.id,
+    currentPaged.initialLoading,
+    currentPaged.items.length,
+    onFirstImageUrlChange,
+  ])
 
   useEffect(() => {
     onRegisterRefresh?.(activeRefresh)
@@ -481,12 +507,29 @@ function FriendsFeed(props: {
   useEffect(() => {
     if (kind === "illust") {
       const first = illustPaged.items[0]
-      onFirstImageUrlChange?.(first ? cardThumbUrlOf(first) : null)
+      if (first) {
+        onFirstImageUrlChange?.(cardThumbUrlOf(first))
+      } else if (!illustPaged.initialLoading && illustPaged.items.length === 0) {
+        onFirstImageUrlChange?.(null)
+      }
     } else {
       const first = novelPaged.items[0]
-      onFirstImageUrlChange?.(first ? novelThumbUrlOf(first) : null)
+      if (first) {
+        onFirstImageUrlChange?.(novelThumbUrlOf(first))
+      } else if (!novelPaged.initialLoading && novelPaged.items.length === 0) {
+        onFirstImageUrlChange?.(null)
+      }
     }
-  }, [kind, illustPaged.items[0]?.id, novelPaged.items[0]?.id, onFirstImageUrlChange])
+  }, [
+    kind,
+    illustPaged.items[0]?.id,
+    illustPaged.initialLoading,
+    illustPaged.items.length,
+    novelPaged.items[0]?.id,
+    novelPaged.initialLoading,
+    novelPaged.items.length,
+    onFirstImageUrlChange,
+  ])
 
   useEffect(() => {
     onRegisterRefresh?.(activeRefresh)

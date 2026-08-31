@@ -3,11 +3,13 @@ import {
   HStack,
   Image,
   ProgressView,
+  Rectangle,
   ScrollView,
   ScrollViewReader,
   Spacer,
   Text,
   VStack,
+  ZStack,
   useCallback,
   useEffect,
   useRef,
@@ -79,50 +81,41 @@ export function RefreshableScrollView(props: {
     }, 120)
   }, [])
 
-  const effectiveToolbarBackground =
-    props.toolbarBackground !== undefined
-      ? props.toolbarBackground
-      : props.background?.colors?.[0]
-        ? { style: props.background.colors[0], bars: ["navigationBar"] }
-        : undefined
-
-  const effectiveToolbarBackgroundVisibility =
-    props.toolbarBackgroundVisibility !== undefined
-      ? props.toolbarBackgroundVisibility
-      : effectiveToolbarBackground
-        ? { visibility: "visible", bars: ["navigationBar"] }
-        : undefined
-
   return (
-    <ScrollViewReader>
-      {(proxy) => {
-        proxyRef.current = proxy
-        return (
-          <ScrollView
-            navigationTitle={props.navigationTitle}
-            navigationBarTitleDisplayMode={props.navigationBarTitleDisplayMode}
-            refreshable={handleRefresh}
-            navigationDestination={props.navigationDestination}
-            searchable={props.searchable}
-            searchSuggestions={props.searchSuggestions}
-            onSubmit={props.onSubmit}
-            submitLabel={props.submitLabel}
-            ignoresSafeArea={props.ignoresSafeArea}
-            toolbarBackground={effectiveToolbarBackground}
-            toolbarBackgroundVisibility={effectiveToolbarBackgroundVisibility}
-            background={props.background}
-          >
-            <VStack
-              key={REFRESH_TOP_KEY}
-              alignment="leading"
-              frame={{ maxWidth: "infinity" }}
+    <ZStack>
+      <Rectangle
+        fill={props.background ?? "clear"}
+        ignoresSafeArea={true}
+      />
+      <ScrollViewReader>
+        {(proxy) => {
+          proxyRef.current = proxy
+          return (
+            <ScrollView
+              navigationTitle={props.navigationTitle}
+              navigationBarTitleDisplayMode={props.navigationBarTitleDisplayMode}
+              refreshable={handleRefresh}
+              navigationDestination={props.navigationDestination}
+              searchable={props.searchable}
+              searchSuggestions={props.searchSuggestions}
+              onSubmit={props.onSubmit}
+              submitLabel={props.submitLabel}
+              ignoresSafeArea={props.ignoresSafeArea}
+              toolbarBackground={props.toolbarBackground}
+              toolbarBackgroundVisibility={props.toolbarBackgroundVisibility}
             >
-              {props.children}
-            </VStack>
-          </ScrollView>
-        )
-      }}
-    </ScrollViewReader>
+              <VStack
+                key={REFRESH_TOP_KEY}
+                alignment="leading"
+                frame={{ maxWidth: "infinity" }}
+              >
+                {props.children}
+              </VStack>
+            </ScrollView>
+          )
+        }}
+      </ScrollViewReader>
+    </ZStack>
   )
 }
 

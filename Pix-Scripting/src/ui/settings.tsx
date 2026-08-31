@@ -414,39 +414,68 @@ export function SettingsView() {
             <Text tag="ranking">排行</Text>
             <Text tag="following">关注</Text>
           </Picker>
-          <Toggle title="沉浸效果" value={settings.ambientImmersion} onChanged={(value) => update({ ambientImmersion: value })} />
-          {settings.ambientImmersion ? (
-            <Picker
-              title="效果强度"
-              value={settings.ambientIntensity}
-              onChanged={(value: string) =>
-                update({ ambientIntensity: value as "low" | "medium" | "high" })
-              }
-            >
-              <Text tag="low">低</Text>
-              <Text tag="medium">中</Text>
-              <Text tag="high">高</Text>
-            </Picker>
-          ) : null}
           <Toggle
-            title="实验性沉浸效果"
-            value={settings.experimentalImmersion}
-            onChanged={(value) => update({ experimentalImmersion: value })}
-          />
-          {settings.experimentalImmersion ? (
-            <Picker
-              title="实验性沉浸效果强度"
-              value={settings.experimentalImmersionIntensity}
-              onChanged={(value: string) =>
+            title="沉浸效果"
+            value={settings.ambientImmersion}
+            onChanged={(value) => {
+              if (!value) {
                 update({
-                  experimentalImmersionIntensity: value as "low" | "medium" | "high",
+                  ambientImmersion: false,
+                  experimentalImmersion: false,
                 })
+              } else {
+                update({ ambientImmersion: true })
               }
-            >
-              <Text tag="low">低</Text>
-              <Text tag="medium">中</Text>
-              <Text tag="high">高</Text>
-            </Picker>
+            }}
+          />
+          {settings.ambientImmersion ? (
+            <>
+              <Picker
+                title="效果强度"
+                value={settings.ambientIntensity}
+                onChanged={(value: string) =>
+                  update({ ambientIntensity: value as "low" | "medium" | "high" })
+                }
+              >
+                <Text tag="low">低</Text>
+                <Text tag="medium">中</Text>
+                <Text tag="high">高</Text>
+              </Picker>
+              <Toggle
+                title="实验性沉浸效果"
+                value={settings.experimentalImmersion}
+                onChanged={async (value) => {
+                  if (value) {
+                    const confirmed = await Dialog.confirm({
+                      title: "提示",
+                      message: "此功能可能会导致发热和崩溃",
+                      confirmLabel: "确认开启",
+                      cancelLabel: "取消",
+                    })
+                    if (confirmed) {
+                      update({ experimentalImmersion: true })
+                    }
+                  } else {
+                    update({ experimentalImmersion: false })
+                  }
+                }}
+              />
+              {settings.experimentalImmersion ? (
+                <Picker
+                  title="实验性沉浸效果强度"
+                  value={settings.experimentalImmersionIntensity}
+                  onChanged={(value: string) =>
+                    update({
+                      experimentalImmersionIntensity: value as "low" | "medium" | "high",
+                    })
+                  }
+                >
+                  <Text tag="low">低</Text>
+                  <Text tag="medium">中</Text>
+                  <Text tag="high">高</Text>
+                </Picker>
+              ) : null}
+            </>
           ) : null}
           <Picker title="追更顺序" value={settings.watchlistSortOrder} onChanged={(value: string) => update({ watchlistSortOrder: value as "asc" | "desc" })}>
             <Text tag="asc">从第一话开始</Text>

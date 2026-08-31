@@ -12,6 +12,7 @@ import {
   Menu,
   NavigationLink,
   ProgressView,
+  Rectangle,
   ScrollView,
   ScrollViewReader,
   Spacer,
@@ -186,6 +187,13 @@ export function NovelDetailView(props: { novelID: number }) {
   const resolvedSeriesID = rawSeriesObj?.id ?? associatedRef?.seriesID ?? null
   const resolvedSeriesTitle = rawSeriesObj?.title ?? associatedRef?.seriesTitle ?? null
   const resolvedEpisodeNumber = novel?.episode_number ?? associatedRef?.episodeNumber ?? null
+
+  const coverUrl =
+    novel?.image_urls?.large ||
+    novel?.image_urls?.medium ||
+    (novel?.series as any)?.cover_image_urls?.medium ||
+    null
+  const { ambientBackground } = useExperimentalAmbientPalette(coverUrl)
 
   const performScrollRestoration = useCallback(
     (targetChunk?: string, forceDirect = false) => {
@@ -762,39 +770,23 @@ export function NovelDetailView(props: { novelID: number }) {
 
   const current = novel
 
-  const coverUrl =
-    current?.image_urls?.large ||
-    current?.image_urls?.medium ||
-    (current?.series as any)?.cover_image_urls?.medium ||
-    null
-  const { ambientBackground, topColor } = useExperimentalAmbientPalette(coverUrl)
-
   if (resolvedSeriesID) {
     recordWorkSeriesAssociation(current.id, "novel", resolvedSeriesID, resolvedSeriesTitle, resolvedEpisodeNumber)
   }
 
   return (
-    <ScrollViewReader>
-      {(proxy) => {
-        proxyRef.current = proxy
-        return (
-          <ScrollView
-            scrollPosition={{
-              value: scrollPos,
-              anchor: "top",
-            }}
-            background={ambientBackground}
-            toolbarBackground={
-              topColor
-                ? { style: topColor, bars: ["navigationBar"] }
-                : undefined
-            }
-            toolbarBackgroundVisibility={
-              topColor
-                ? { visibility: "visible", bars: ["navigationBar"] }
-                : undefined
-            }
-            ignoresSafeArea={{ edges: "bottom" }}
+    <ZStack>
+      <Rectangle fill={ambientBackground ?? "clear"} ignoresSafeArea={true} />
+      <ScrollViewReader>
+        {(proxy) => {
+          proxyRef.current = proxy
+          return (
+            <ScrollView
+              scrollPosition={{
+                value: scrollPos,
+                anchor: "top",
+              }}
+              ignoresSafeArea={{ edges: "bottom" }}
             navigationTitle={current.title}
             navigationBarTitleDisplayMode="inline"
             onAppear={() => {
@@ -1399,9 +1391,10 @@ export function NovelDetailView(props: { novelID: number }) {
         }}
       />
     </ScrollView>
-        )
-      }}
-    </ScrollViewReader>
+          )
+        }}
+      </ScrollViewReader>
+    </ZStack>
   )
 }
 

@@ -528,21 +528,38 @@ function UserWorksFeed(props: {
   ])
 
   useEffect(() => {
+    let url: string | null = null
+    let hasLoaded = false
+    let isEmpty = false
     if (tab === "illust") {
-      const first = illustPaged.items[0]
-      onFirstImageUrlChange?.(first ? cardThumbUrlOf(first) : null)
+      if (illustPaged.items[0]) url = cardThumbUrlOf(illustPaged.items[0])
+      hasLoaded = !illustPaged.initialLoading
+      isEmpty = illustPaged.items.length === 0
     } else if (tab === "manga") {
-      const first = mangaPaged.items[0]
-      onFirstImageUrlChange?.(first ? cardThumbUrlOf(first) : null)
+      if (mangaPaged.items[0]) url = cardThumbUrlOf(mangaPaged.items[0])
+      hasLoaded = !mangaPaged.initialLoading
+      isEmpty = mangaPaged.items.length === 0
     } else {
-      const first = novelPaged.items[0]
-      onFirstImageUrlChange?.(first ? novelThumbUrlOf(first) : null)
+      if (novelPaged.items[0]) url = novelThumbUrlOf(novelPaged.items[0])
+      hasLoaded = !novelPaged.initialLoading
+      isEmpty = novelPaged.items.length === 0
+    }
+    if (url) {
+      onFirstImageUrlChange?.(url)
+    } else if (hasLoaded && isEmpty) {
+      onFirstImageUrlChange?.(null)
     }
   }, [
     tab,
     illustPaged.items[0]?.id,
+    illustPaged.initialLoading,
+    illustPaged.items.length,
     mangaPaged.items[0]?.id,
+    mangaPaged.initialLoading,
+    mangaPaged.items.length,
     novelPaged.items[0]?.id,
+    novelPaged.initialLoading,
+    novelPaged.items.length,
     onFirstImageUrlChange,
   ])
 

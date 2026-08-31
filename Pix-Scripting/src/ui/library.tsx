@@ -257,12 +257,29 @@ function LibraryFeed(props: {
   useEffect(() => {
     if (kind === "illustration") {
       const first = illustPaged.items[0]
-      onFirstImageUrlChange?.(first ? cardThumbUrlOf(first) : null)
+      if (first) {
+        onFirstImageUrlChange?.(cardThumbUrlOf(first))
+      } else if (!illustPaged.initialLoading && illustPaged.items.length === 0) {
+        onFirstImageUrlChange?.(null)
+      }
     } else {
       const first = novelPaged.items[0]
-      onFirstImageUrlChange?.(first ? novelThumbUrlOf(first) : null)
+      if (first) {
+        onFirstImageUrlChange?.(novelThumbUrlOf(first))
+      } else if (!novelPaged.initialLoading && novelPaged.items.length === 0) {
+        onFirstImageUrlChange?.(null)
+      }
     }
-  }, [kind, illustPaged.items[0]?.id, novelPaged.items[0]?.id, onFirstImageUrlChange])
+  }, [
+    kind,
+    illustPaged.items[0]?.id,
+    illustPaged.initialLoading,
+    illustPaged.items.length,
+    novelPaged.items[0]?.id,
+    novelPaged.initialLoading,
+    novelPaged.items.length,
+    onFirstImageUrlChange,
+  ])
 
   const activeRefresh = useCallback(async () => {
     if (kind === "illustration") {

@@ -376,10 +376,12 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
     ambientIntensity: isOneOf(stored?.ambientIntensity, AMBIENT_INTENSITY_VALUES)
       ? stored.ambientIntensity
       : DEFAULT_SETTINGS.ambientIntensity,
-    experimentalImmersion: boolOr(
-      stored?.experimentalImmersion,
-      DEFAULT_SETTINGS.experimentalImmersion
-    ),
+    experimentalImmersion: boolOr(stored?.ambientImmersion, DEFAULT_SETTINGS.ambientImmersion)
+      ? boolOr(
+          stored?.experimentalImmersion,
+          DEFAULT_SETTINGS.experimentalImmersion
+        )
+      : false,
     experimentalImmersionIntensity: isOneOf(
       stored?.experimentalImmersionIntensity,
       AMBIENT_INTENSITY_VALUES

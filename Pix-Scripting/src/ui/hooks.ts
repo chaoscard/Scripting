@@ -121,24 +121,25 @@ export function useExperimentalAmbientPalette(imageUrl: string | null | undefine
   const colorScheme = useColorScheme()
   const isDark = colorScheme === "dark"
   const [ambientEnabled, setAmbientEnabled] = useState(
-    () => loadSettings().experimentalImmersion
+    () => loadSettings().ambientImmersion && loadSettings().experimentalImmersion
   )
   const [ambientIntensity, setAmbientIntensity] = useState<AmbientIntensity>(
     () => loadSettings().experimentalImmersionIntensity
   )
   const [ambientPalette, setAmbientPalette] = useState<IllustAmbientPalette | null>(() => {
-    if (!loadSettings().experimentalImmersion || !imageUrl) return null
+    const s = loadSettings()
+    if (!s.ambientImmersion || !s.experimentalImmersion || !imageUrl) return null
     return getCachedIllustAmbientPalette(
       imageUrl,
       isDark,
-      loadSettings().experimentalImmersionIntensity
+      s.experimentalImmersionIntensity
     )
   })
 
   useEffect(() => {
     return onSettingsChanged(() => {
       const nextSettings = loadSettings()
-      setAmbientEnabled(nextSettings.experimentalImmersion)
+      setAmbientEnabled(nextSettings.ambientImmersion && nextSettings.experimentalImmersion)
       setAmbientIntensity(nextSettings.experimentalImmersionIntensity)
     })
   }, [])
@@ -163,23 +164,30 @@ export function useExperimentalAmbientPalette(imageUrl: string | null | undefine
     }
   }, [imageUrl, isDark, ambientEnabled, ambientIntensity])
 
+  // 同步直接读取内存缓存中的调色板，无需等待 useEffect 触发二次渲染
+  const synchronousPalette =
+    ambientEnabled && imageUrl
+      ? getCachedIllustAmbientPalette(imageUrl, isDark, ambientIntensity)
+      : null
+  const effectivePalette = ambientPalette ?? synchronousPalette
+
   const ambientBackground =
-    ambientEnabled && ambientPalette
+    ambientEnabled && effectivePalette
       ? {
           colors: [
-            ambientPalette.topColor,
-            ambientPalette.midColor,
-            ambientPalette.backgroundColor,
-            ambientPalette.backgroundColor,
+            effectivePalette.topColor,
+            effectivePalette.midColor,
+            effectivePalette.backgroundColor,
+            effectivePalette.backgroundColor,
           ],
           startPoint: "top" as const,
           endPoint: "bottom" as const,
         }
       : undefined
 
-  const topColor = ambientEnabled && ambientPalette ? ambientPalette.topColor : undefined
+  const topColor = ambientEnabled && effectivePalette ? effectivePalette.topColor : undefined
 
-  return { ambientEnabled, ambientIntensity, ambientPalette, ambientBackground, topColor }
+  return { ambientEnabled, ambientIntensity, ambientPalette: effectivePalette, ambientBackground, topColor }
 }
 
 // ---------- 通用 hooks ----------

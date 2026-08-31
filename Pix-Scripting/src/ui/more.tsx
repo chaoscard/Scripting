@@ -5,11 +5,13 @@ import {
   Image,
   List,
   NavigationLink,
+  Rectangle,
   Section,
   Spacer,
   Text,
   useEffect,
   useState,
+  ZStack,
 } from "scripting"
 import { session } from "../api/session"
 import { loadSettings, onSettingsChanged } from "../store/settings"
@@ -20,6 +22,8 @@ import { useExperimentalAmbientPalette } from "./hooks"
 export function MoreView(props: { onClose: () => void }) {
   const user = session.user
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
+  const avatarURL = user?.profile_image_urls?.px_170x170 ?? null
+  const { ambientBackground } = useExperimentalAmbientPalette(avatarURL)
 
   useEffect(() => {
     return onSettingsChanged(() => {
@@ -43,24 +47,14 @@ export function MoreView(props: { onClose: () => void }) {
     )
   }
 
-  const avatarURL = user.profile_image_urls?.px_170x170 ?? null
-  const { ambientBackground, topColor } = useExperimentalAmbientPalette(avatarURL)
   return (
-    <List
-      navigationBarTitleDisplayMode="inline"
-      navigationDestination={destinationElement}
-      background={ambientBackground}
-      toolbarBackground={
-        topColor
-          ? { style: topColor, bars: ["navigationBar"] }
-          : undefined
-      }
-      toolbarBackgroundVisibility={
-        topColor
-          ? { visibility: "visible", bars: ["navigationBar"] }
-          : undefined
-      }
-      toolbar={appToolbar(
+    <ZStack>
+      <Rectangle fill={ambientBackground ?? "clear"} ignoresSafeArea={true} />
+      <List
+        navigationBarTitleDisplayMode="inline"
+        navigationDestination={destinationElement}
+        scrollContentBackground={ambientBackground ? "hidden" : undefined}
+        toolbar={appToolbar(
         props.onClose,
         "我的",
         [
@@ -157,7 +151,8 @@ export function MoreView(props: { onClose: () => void }) {
           </HStack>
         </Button>
       </Section>
-    </List>
+      </List>
+    </ZStack>
   )
 }
 

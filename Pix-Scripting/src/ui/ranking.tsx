@@ -510,10 +510,14 @@ function IllustRankingFeedItem(props: {
   useEffect(() => {
     if (active && enabled) {
       const first = paged.items[0]
-      onFirstImageUrlChange?.(first ? cardThumbUrlOf(first) : null)
+      if (first) {
+        onFirstImageUrlChange?.(cardThumbUrlOf(first))
+      } else if (!paged.initialLoading && paged.items.length === 0) {
+        onFirstImageUrlChange?.(null)
+      }
       onRegisterRefresh?.(paged.refresh)
     }
-  }, [active, enabled, paged.items[0]?.id, paged.refresh, onFirstImageUrlChange, onRegisterRefresh])
+  }, [active, enabled, paged.items[0]?.id, paged.initialLoading, paged.items.length, paged.refresh, onFirstImageUrlChange, onRegisterRefresh])
 
   if (!active) return null
 
@@ -551,10 +555,14 @@ function NovelRankingFeedItem(props: {
   useEffect(() => {
     if (active && enabled) {
       const first = paged.items[0]
-      onFirstImageUrlChange?.(first ? novelThumbUrlOf(first) : null)
+      if (first) {
+        onFirstImageUrlChange?.(novelThumbUrlOf(first))
+      } else if (!paged.initialLoading && paged.items.length === 0) {
+        onFirstImageUrlChange?.(null)
+      }
       onRegisterRefresh?.(paged.refresh)
     }
-  }, [active, enabled, paged.items[0]?.id, paged.refresh, onFirstImageUrlChange, onRegisterRefresh])
+  }, [active, enabled, paged.items[0]?.id, paged.initialLoading, paged.items.length, paged.refresh, onFirstImageUrlChange, onRegisterRefresh])
 
   if (!active) return null
 
@@ -607,10 +615,18 @@ function AdvancedRankingFeedItem(props: {
     if (active && enabled) {
       if (isNovel) {
         const first = novelPaged.items[0]
-        onFirstImageUrlChange?.(first ? novelThumbUrlOf(first) : null)
+        if (first) {
+          onFirstImageUrlChange?.(novelThumbUrlOf(first))
+        } else if (!novelPaged.initialLoading && novelPaged.items.length === 0) {
+          onFirstImageUrlChange?.(null)
+        }
       } else {
         const first = illustPaged.items[0]
-        onFirstImageUrlChange?.(first ? cardThumbUrlOf(first) : null)
+        if (first) {
+          onFirstImageUrlChange?.(cardThumbUrlOf(first))
+        } else if (!illustPaged.initialLoading && illustPaged.items.length === 0) {
+          onFirstImageUrlChange?.(null)
+        }
       }
       onRegisterRefresh?.(activeRefresh)
     }
@@ -619,7 +635,11 @@ function AdvancedRankingFeedItem(props: {
     enabled,
     isNovel,
     illustPaged.items[0]?.id,
+    illustPaged.initialLoading,
+    illustPaged.items.length,
     novelPaged.items[0]?.id,
+    novelPaged.initialLoading,
+    novelPaged.items.length,
     activeRefresh,
     onFirstImageUrlChange,
     onRegisterRefresh,
