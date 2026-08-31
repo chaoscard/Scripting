@@ -33,7 +33,7 @@ import {
 import { onWatchlistChanged } from "../store/bookmarkSync"
 import { recordWorkSeriesAssociation } from "../store/seriesCache"
 import { destinationElement } from "./routes"
-import { useLatest, usePagedList, currentBatchSize } from "./hooks"
+import { useLatest, usePagedList, currentBatchSize, useExperimentalAmbientPalette } from "./hooks"
 import type {
   PixivIllustration,
   PixivNovel,
@@ -70,6 +70,8 @@ export function FollowFeedView(props: {
   const [friendKind, setFriendKind] = useState<WorkKind>("illust")
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
   const [showRecommendedUsers, setShowRecommendedUsers] = useState(false)
+  const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(null)
+  const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
   useEffect(() => {
@@ -100,6 +102,7 @@ export function FollowFeedView(props: {
     <RefreshableScrollView
       navigationBarTitleDisplayMode="inline"
       navigationDestination={destinationElement}
+      background={ambientBackground}
       toolbar={followToolbar({
         mode,
         scope,
@@ -130,6 +133,7 @@ export function FollowFeedView(props: {
             enabled={activated}
             kind={followingKind}
             scope={scope}
+            onFirstImageUrlChange={setAmbientImageUrl}
             onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
           />
         ) : mode === "watchlist" ? (
@@ -137,6 +141,7 @@ export function FollowFeedView(props: {
             key="watchlist"
             enabled={activated}
             kind={watchKind}
+            onFirstImageUrlChange={setAmbientImageUrl}
             onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
           />
         ) : (
@@ -144,6 +149,7 @@ export function FollowFeedView(props: {
             key="friends"
             enabled={activated}
             kind={friendKind}
+            onFirstImageUrlChange={setAmbientImageUrl}
             onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
           />
         )}
@@ -250,9 +256,10 @@ function FollowingFeed(props: {
   enabled?: boolean
   kind: WorkKind
   scope: FollowScope
+  onFirstImageUrlChange?: (url: string | null) => void
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { enabled = true, kind, scope, onRegisterRefresh } = props
+  const { enabled = true, kind, scope, onFirstImageUrlChange, onRegisterRefresh } = props
 
   const illustPaged = usePagedList<PixivIllustration>({
     first: (token) => followingFeed(scope, token),
@@ -277,6 +284,16 @@ function FollowingFeed(props: {
   const activeRefresh = kind === "illust" ? illustPaged.refresh : novelPaged.refresh
   const illustPagedRef = useLatest(illustPaged)
   const novelPagedRef = useLatest(novelPaged)
+
+  useEffect(() => {
+    if (kind === "illust") {
+      const first = illustPaged.items[0]
+      onFirstImageUrlChange?.(first ? cardThumbUrlOf(first) : null)
+    } else {
+      const first = novelPaged.items[0]
+      onFirstImageUrlChange?.(first ? novelThumbUrlOf(first) : null)
+    }
+  }, [kind, illustPaged.items[0]?.id, novelPaged.items[0]?.id, onFirstImageUrlChange])
 
   useEffect(() => {
     onRegisterRefresh?.(activeRefresh)
@@ -347,9 +364,10 @@ function FollowingFeed(props: {
 function WatchlistFeed(props: {
   enabled?: boolean
   kind: WatchKind
+  onFirstImageUrlChange?: (url: string | null) => void
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { enabled = true, kind, onRegisterRefresh } = props
+  const { enabled = true, kind, onFirstImageUrlChange, onRegisterRefresh } = props
 
   const mangaPaged = usePagedList<PixivWatchlistSeries>({
     first: (token) => watchlistManga(token),
@@ -384,6 +402,13 @@ function WatchlistFeed(props: {
   })
 
   const activeRefresh = kind === "manga" ? mangaPaged.refresh : novelPaged.refresh
+  const currentPaged = kind === "manga" ? mangaPaged : novelPaged
+
+  useEffect(() => {
+    const first = currentPaged.items[0]
+    onFirstImageUrlChange?.(first ? watchlistThumbUrlOf(first) : null)
+  }, [currentPaged.items[0]?.id, onFirstImageUrlChange])
+
   useEffect(() => {
     onRegisterRefresh?.(activeRefresh)
   }, [activeRefresh, onRegisterRefresh])
@@ -395,8 +420,6 @@ function WatchlistFeed(props: {
       }
     })
   }, [activeRefresh, kind])
-
-  const currentPaged = kind === "manga" ? mangaPaged : novelPaged
 
   return (
     <VStack alignment="leading" spacing={10}>
@@ -426,9 +449,10 @@ function WatchlistFeed(props: {
 function FriendsFeed(props: {
   enabled?: boolean
   kind: WorkKind
+  onFirstImageUrlChange?: (url: string | null) => void
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { enabled = true, kind, onRegisterRefresh } = props
+  const { enabled = true, kind, onFirstImageUrlChange, onRegisterRefresh } = props
 
   const illustPaged = usePagedList<PixivIllustration>({
     first: myPixivFeed,
@@ -453,6 +477,16 @@ function FriendsFeed(props: {
   const activeRefresh = kind === "illust" ? illustPaged.refresh : novelPaged.refresh
   const illustPagedRef = useLatest(illustPaged)
   const novelPagedRef = useLatest(novelPaged)
+
+  useEffect(() => {
+    if (kind === "illust") {
+      const first = illustPaged.items[0]
+      onFirstImageUrlChange?.(first ? cardThumbUrlOf(first) : null)
+    } else {
+      const first = novelPaged.items[0]
+      onFirstImageUrlChange?.(first ? novelThumbUrlOf(first) : null)
+    }
+  }, [kind, illustPaged.items[0]?.id, novelPaged.items[0]?.id, onFirstImageUrlChange])
 
   useEffect(() => {
     onRegisterRefresh?.(activeRefresh)

@@ -30,7 +30,7 @@ import {
   isNovelContentVisible,
 } from "../store/contentFilter"
 import { destinationElement } from "./routes"
-import { useLatest, usePagedList, currentBatchSize } from "./hooks"
+import { useLatest, usePagedList, currentBatchSize, useExperimentalAmbientPalette } from "./hooks"
 import type {
   PixivIllustration,
   PixivNovel,
@@ -58,6 +58,8 @@ export function DiscoveryView(props: { onClose: () => void }) {
   const [mode, setMode] = useState<ExploreMode>("recommended")
   const [kind, setKind] = useState<FeedKind>("illustration")
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
+  const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(null)
+  const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
   useEffect(() => {
@@ -75,6 +77,7 @@ export function DiscoveryView(props: { onClose: () => void }) {
       navigationBarTitleDisplayMode="inline"
       navigationDestination={destinationElement}
       toolbar={exploreToolbar({ mode, onModeChange: setMode, onClose: props.onClose })}
+      background={ambientBackground}
       refreshable={() => refreshHandlerRef.current()}
     >
       <VStack
@@ -91,6 +94,7 @@ export function DiscoveryView(props: { onClose: () => void }) {
           <PixivisionExploreFeed
             key="pixivision"
             enabled={activated}
+            onFirstImageUrlChange={setAmbientImageUrl}
             onRegisterRefresh={(fn) => {
               refreshHandlerRef.current = fn
             }}
@@ -100,6 +104,7 @@ export function DiscoveryView(props: { onClose: () => void }) {
             key="recommended"
             kind={kind}
             enabled={activated}
+            onFirstImageUrlChange={setAmbientImageUrl}
             onRegisterRefresh={(fn) => {
               refreshHandlerRef.current = fn
             }}
@@ -109,6 +114,7 @@ export function DiscoveryView(props: { onClose: () => void }) {
             key="latest"
             kind={kind}
             enabled={activated}
+            onFirstImageUrlChange={setAmbientImageUrl}
             onRegisterRefresh={(fn) => {
               refreshHandlerRef.current = fn
             }}
@@ -122,9 +128,10 @@ export function DiscoveryView(props: { onClose: () => void }) {
 function RecommendedExploreFeed(props: {
   kind: FeedKind
   enabled?: boolean
+  onFirstImageUrlChange?: (url: string | null) => void
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { kind, enabled = true, onRegisterRefresh } = props
+  const { kind, enabled = true, onFirstImageUrlChange, onRegisterRefresh } = props
 
   // 1. 推荐 - 插画
   const illustPaged = usePagedList<PixivIllustration>({
@@ -179,6 +186,24 @@ function RecommendedExploreFeed(props: {
         : novelPaged.refresh
 
   useEffect(() => {
+    let url: string | null = null
+    if (kind === "illustration" && illustPaged.items[0]) {
+      url = cardThumbUrlOf(illustPaged.items[0])
+    } else if (kind === "manga" && mangaPaged.items[0]) {
+      url = cardThumbUrlOf(mangaPaged.items[0])
+    } else if (kind === "novel" && novelPaged.items[0]) {
+      url = novelThumbUrlOf(novelPaged.items[0])
+    }
+    onFirstImageUrlChange?.(url)
+  }, [
+    kind,
+    illustPaged.items[0]?.id,
+    mangaPaged.items[0]?.id,
+    novelPaged.items[0]?.id,
+    onFirstImageUrlChange,
+  ])
+
+  useEffect(() => {
     onRegisterRefresh?.(activeRefresh)
   }, [activeRefresh, onRegisterRefresh])
 
@@ -194,9 +219,10 @@ function RecommendedExploreFeed(props: {
 function LatestExploreFeed(props: {
   kind: FeedKind
   enabled?: boolean
+  onFirstImageUrlChange?: (url: string | null) => void
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { kind, enabled = true, onRegisterRefresh } = props
+  const { kind, enabled = true, onFirstImageUrlChange, onRegisterRefresh } = props
 
   // 1. 最新 - 插画
   const illustPaged = usePagedList<PixivIllustration>({
@@ -251,6 +277,24 @@ function LatestExploreFeed(props: {
         : novelPaged.refresh
 
   useEffect(() => {
+    let url: string | null = null
+    if (kind === "illustration" && illustPaged.items[0]) {
+      url = cardThumbUrlOf(illustPaged.items[0])
+    } else if (kind === "manga" && mangaPaged.items[0]) {
+      url = cardThumbUrlOf(mangaPaged.items[0])
+    } else if (kind === "novel" && novelPaged.items[0]) {
+      url = novelThumbUrlOf(novelPaged.items[0])
+    }
+    onFirstImageUrlChange?.(url)
+  }, [
+    kind,
+    illustPaged.items[0]?.id,
+    mangaPaged.items[0]?.id,
+    novelPaged.items[0]?.id,
+    onFirstImageUrlChange,
+  ])
+
+  useEffect(() => {
     onRegisterRefresh?.(activeRefresh)
   }, [activeRefresh, onRegisterRefresh])
 
@@ -265,9 +309,10 @@ function LatestExploreFeed(props: {
 
 function PixivisionExploreFeed(props: {
   enabled?: boolean
+  onFirstImageUrlChange?: (url: string | null) => void
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { enabled = true, onRegisterRefresh } = props
+  const { enabled = true, onFirstImageUrlChange, onRegisterRefresh } = props
 
   const paged = usePagedList<PixivisionArticle>({
     first: () => pixivisionHome(),
@@ -278,6 +323,10 @@ function PixivisionExploreFeed(props: {
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map((item) => item.imageURL)).cancel,
   })
+
+  useEffect(() => {
+    onFirstImageUrlChange?.(paged.items[0]?.imageURL ?? null)
+  }, [paged.items[0]?.id, paged.items[0]?.imageURL, onFirstImageUrlChange])
 
   useEffect(() => {
     onRegisterRefresh?.(paged.refresh)

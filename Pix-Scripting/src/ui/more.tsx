@@ -15,6 +15,7 @@ import { session } from "../api/session"
 import { loadSettings, onSettingsChanged } from "../store/settings"
 import { appToolbar, AvatarImage } from "./components"
 import { destinationElement } from "./routes"
+import { useExperimentalAmbientPalette } from "./hooks"
 
 export function MoreView(props: { onClose: () => void }) {
   const user = session.user
@@ -43,10 +44,22 @@ export function MoreView(props: { onClose: () => void }) {
   }
 
   const avatarURL = user.profile_image_urls?.px_170x170 ?? null
+  const { ambientBackground, topColor } = useExperimentalAmbientPalette(avatarURL)
   return (
     <List
       navigationBarTitleDisplayMode="inline"
       navigationDestination={destinationElement}
+      background={ambientBackground}
+      toolbarBackground={
+        topColor
+          ? { style: topColor, bars: ["navigationBar"] }
+          : undefined
+      }
+      toolbarBackgroundVisibility={
+        topColor
+          ? { visibility: "visible", bars: ["navigationBar"] }
+          : undefined
+      }
       toolbar={appToolbar(
         props.onClose,
         "我的",

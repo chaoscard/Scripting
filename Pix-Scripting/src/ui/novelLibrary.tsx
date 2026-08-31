@@ -10,7 +10,7 @@ import {
 } from "../store/settings"
 import { isNovelContentVisible } from "../store/contentFilter"
 import { onNovelMarkerChanged } from "../store/bookmarkSync"
-import { useLatest, usePagedList, currentBatchSize } from "./hooks"
+import { useLatest, usePagedList, currentBatchSize, useExperimentalAmbientPalette } from "./hooks"
 import { destinationElement } from "./routes"
 import type { PixivNovelMarker } from "../types"
 import {
@@ -44,6 +44,8 @@ export function NovelLibraryView() {
   })
 
   const pagedRef = useLatest(paged)
+  const firstNovelUrl = paged.items[0] ? novelThumbUrlOf(paged.items[0].novel) : null
+  const { ambientBackground } = useExperimentalAmbientPalette(firstNovelUrl)
   useEffect(() => {
     return onSettingsChanged(() => {
       pagedRef.current.reapplyFilter()
@@ -60,6 +62,7 @@ export function NovelLibraryView() {
     <RefreshableScrollView
       navigationTitle="小说书签"
       navigationBarTitleDisplayMode="inline"
+      background={ambientBackground}
       refreshable={paged.refresh}
       navigationDestination={destinationElement}
     >

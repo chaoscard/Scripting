@@ -22,7 +22,7 @@ import {
   onIllustBookmarkChanged,
   onNovelBookmarkChanged,
 } from "../store/bookmarkSync"
-import { useAsyncGuard, useLatest, usePagedList, currentBatchSize } from "./hooks"
+import { useAsyncGuard, useLatest, usePagedList, currentBatchSize, useExperimentalAmbientPalette } from "./hooks"
 import type { PixivBookmarkTag, PixivIllustration, PixivNovel } from "../types"
 import {
   BookmarkTags,
@@ -44,6 +44,8 @@ type BookmarkKind = "illustration" | "novel"
 export function UserBookmarksView(props: { userID: number }) {
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
   const [kind, setKind] = useState<BookmarkKind>("illustration")
+  const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(null)
+  const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
   useEffect(() => {
@@ -60,6 +62,7 @@ export function UserBookmarksView(props: { userID: number }) {
     <RefreshableScrollView
       navigationTitle="收藏"
       navigationBarTitleDisplayMode="inline"
+      background={ambientBackground}
       refreshable={() => refreshHandlerRef.current()}
     >
       <VStack alignment="leading" spacing={8}>
@@ -69,6 +72,7 @@ export function UserBookmarksView(props: { userID: number }) {
         <UserBookmarksFeed
           userID={props.userID}
           kind={kind}
+          onFirstImageUrlChange={setAmbientImageUrl}
           onRegisterRefresh={(fn) => {
             refreshHandlerRef.current = fn
           }}
@@ -81,9 +85,10 @@ export function UserBookmarksView(props: { userID: number }) {
 function UserBookmarksFeed(props: {
   userID: number
   kind: BookmarkKind
+  onFirstImageUrlChange?: (url: string | null) => void
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { userID, kind, onRegisterRefresh } = props
+  const { userID, kind, onFirstImageUrlChange, onRegisterRefresh } = props
   const [tags, setTags] = useState<PixivBookmarkTag[]>([])
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const guard = useAsyncGuard()
@@ -150,6 +155,16 @@ function UserBookmarksFeed(props: {
       for (const unsub of unsubs) unsub()
     }
   }, [])
+
+  useEffect(() => {
+    if (kind === "illustration") {
+      const first = illustPaged.items[0]
+      onFirstImageUrlChange?.(first ? cardThumbUrlOf(first) : null)
+    } else {
+      const first = novelPaged.items[0]
+      onFirstImageUrlChange?.(first ? novelThumbUrlOf(first) : null)
+    }
+  }, [kind, illustPaged.items[0]?.id, novelPaged.items[0]?.id, onFirstImageUrlChange])
 
   const activeRefresh = useCallback(async () => {
     if (kind === "illustration") {

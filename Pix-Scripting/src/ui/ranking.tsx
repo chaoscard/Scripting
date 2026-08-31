@@ -30,7 +30,7 @@ import {
   isNovelContentVisible,
 } from "../store/contentFilter"
 import { destinationElement } from "./routes"
-import { useLatest, usePagedList, currentBatchSize } from "./hooks"
+import { useLatest, usePagedList, currentBatchSize, useExperimentalAmbientPalette } from "./hooks"
 import type { PixivIllustration, PixivNovel } from "../types"
 import {
   appToolbar,
@@ -101,6 +101,8 @@ export function RankingView(props: { onClose: () => void }) {
   )
   const [isAdvancedSheetOpen, setIsAdvancedSheetOpen] = useState(false)
   const hasQueriedAdvancedRef = useRef(false)
+  const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(null)
+  const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
 
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
@@ -178,6 +180,7 @@ export function RankingView(props: { onClose: () => void }) {
     <RefreshableScrollView
       navigationBarTitleDisplayMode="inline"
       navigationDestination={destinationElement}
+      background={ambientBackground}
       sheet={{
         isPresented: isAdvancedSheetOpen,
         onChanged: (presented: boolean) => setIsAdvancedSheetOpen(presented),
@@ -231,6 +234,7 @@ export function RankingView(props: { onClose: () => void }) {
             selectedMode={illustrationMode}
             label="插画"
             enabled={activated}
+            onFirstImageUrlChange={setAmbientImageUrl}
             onRegisterRefresh={(fn) => {
               refreshHandlerRef.current = fn
             }}
@@ -241,6 +245,7 @@ export function RankingView(props: { onClose: () => void }) {
             selectedMode={mangaMode}
             label="漫画"
             enabled={activated}
+            onFirstImageUrlChange={setAmbientImageUrl}
             onRegisterRefresh={(fn) => {
               refreshHandlerRef.current = fn
             }}
@@ -250,6 +255,7 @@ export function RankingView(props: { onClose: () => void }) {
             key="ranking-novel"
             selectedMode={novelMode}
             enabled={activated}
+            onFirstImageUrlChange={setAmbientImageUrl}
             onRegisterRefresh={(fn) => {
               refreshHandlerRef.current = fn
             }}
@@ -260,6 +266,7 @@ export function RankingView(props: { onClose: () => void }) {
             params={advancedParams}
             active={true}
             enabled={activated}
+            onFirstImageUrlChange={setAmbientImageUrl}
             onRegisterRefresh={(fn) => {
               refreshHandlerRef.current = fn
             }}
@@ -401,9 +408,10 @@ function IllustRankingSection(props: {
   selectedMode: string
   label: "插画" | "漫画"
   enabled?: boolean
+  onFirstImageUrlChange?: (url: string | null) => void
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { selectedMode, label, enabled = true, onRegisterRefresh } = props
+  const { selectedMode, label, enabled = true, onFirstImageUrlChange, onRegisterRefresh } = props
   const [visitedModes, setVisitedModes] = useState<string[]>(() => [selectedMode])
 
   useEffect(() => {
@@ -425,6 +433,7 @@ function IllustRankingSection(props: {
             label={label}
             active={isCurrent}
             enabled={enabled && isCurrent}
+            onFirstImageUrlChange={onFirstImageUrlChange}
             onRegisterRefresh={onRegisterRefresh}
           />
         )
@@ -436,9 +445,10 @@ function IllustRankingSection(props: {
 function NovelRankingSection(props: {
   selectedMode: string
   enabled?: boolean
+  onFirstImageUrlChange?: (url: string | null) => void
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { selectedMode, enabled = true, onRegisterRefresh } = props
+  const { selectedMode, enabled = true, onFirstImageUrlChange, onRegisterRefresh } = props
   const [visitedModes, setVisitedModes] = useState<string[]>(() => [selectedMode])
 
   useEffect(() => {
@@ -459,6 +469,7 @@ function NovelRankingSection(props: {
             mode={m}
             active={isCurrent}
             enabled={enabled && isCurrent}
+            onFirstImageUrlChange={onFirstImageUrlChange}
             onRegisterRefresh={onRegisterRefresh}
           />
         )
@@ -473,9 +484,10 @@ function IllustRankingFeedItem(props: {
   date?: string | null
   active: boolean
   enabled?: boolean
+  onFirstImageUrlChange?: (url: string | null) => void
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { mode, label, date = null, active, enabled = true, onRegisterRefresh } = props
+  const { mode, label, date = null, active, enabled = true, onFirstImageUrlChange, onRegisterRefresh } = props
 
   const paged = usePagedList<PixivIllustration>({
     first: (token) => ranking(mode, date, token),
@@ -497,9 +509,11 @@ function IllustRankingFeedItem(props: {
 
   useEffect(() => {
     if (active && enabled) {
+      const first = paged.items[0]
+      onFirstImageUrlChange?.(first ? cardThumbUrlOf(first) : null)
       onRegisterRefresh?.(paged.refresh)
     }
-  }, [active, enabled, paged.refresh, onRegisterRefresh])
+  }, [active, enabled, paged.items[0]?.id, paged.refresh, onFirstImageUrlChange, onRegisterRefresh])
 
   if (!active) return null
 
@@ -511,9 +525,10 @@ function NovelRankingFeedItem(props: {
   date?: string | null
   active: boolean
   enabled?: boolean
+  onFirstImageUrlChange?: (url: string | null) => void
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { mode, date = null, active, enabled = true, onRegisterRefresh } = props
+  const { mode, date = null, active, enabled = true, onFirstImageUrlChange, onRegisterRefresh } = props
 
   const paged = usePagedList<PixivNovel>({
     first: (token) => novelRanking(mode, date, token),
@@ -535,9 +550,11 @@ function NovelRankingFeedItem(props: {
 
   useEffect(() => {
     if (active && enabled) {
+      const first = paged.items[0]
+      onFirstImageUrlChange?.(first ? novelThumbUrlOf(first) : null)
       onRegisterRefresh?.(paged.refresh)
     }
-  }, [active, enabled, paged.refresh, onRegisterRefresh])
+  }, [active, enabled, paged.items[0]?.id, paged.refresh, onFirstImageUrlChange, onRegisterRefresh])
 
   if (!active) return null
 
@@ -548,9 +565,10 @@ function AdvancedRankingFeedItem(props: {
   params: AdvancedRankingParams
   active: boolean
   enabled?: boolean
+  onFirstImageUrlChange?: (url: string | null) => void
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { params, active, enabled = true, onRegisterRefresh } = props
+  const { params, active, enabled = true, onFirstImageUrlChange, onRegisterRefresh } = props
   const isNovel = params.category === "novel"
 
   const illustPaged = usePagedList<PixivIllustration>({
@@ -587,9 +605,25 @@ function AdvancedRankingFeedItem(props: {
 
   useEffect(() => {
     if (active && enabled) {
+      if (isNovel) {
+        const first = novelPaged.items[0]
+        onFirstImageUrlChange?.(first ? novelThumbUrlOf(first) : null)
+      } else {
+        const first = illustPaged.items[0]
+        onFirstImageUrlChange?.(first ? cardThumbUrlOf(first) : null)
+      }
       onRegisterRefresh?.(activeRefresh)
     }
-  }, [active, enabled, activeRefresh, onRegisterRefresh])
+  }, [
+    active,
+    enabled,
+    isNovel,
+    illustPaged.items[0]?.id,
+    novelPaged.items[0]?.id,
+    activeRefresh,
+    onFirstImageUrlChange,
+    onRegisterRefresh,
+  ])
 
   if (!active) return null
 

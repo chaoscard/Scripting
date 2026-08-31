@@ -98,6 +98,8 @@ export interface AppSettings {
   hideNovels: boolean
   ambientImmersion: boolean
   ambientIntensity: AmbientIntensity
+  experimentalImmersion: boolean
+  experimentalImmersionIntensity: AmbientIntensity
   watchlistSortOrder: WatchlistSortOrder
   longPressBookmarkAction: "off" | "follow" | "detail"
   closeButtonAction: CloseButtonAction
@@ -153,6 +155,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   hideNovels: false,
   ambientImmersion: true,
   ambientIntensity: "medium",
+  experimentalImmersion: false,
+  experimentalImmersionIntensity: "medium",
   watchlistSortOrder: "asc",
   longPressBookmarkAction: "off",
   closeButtonAction: "minimize",
@@ -372,6 +376,16 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
     ambientIntensity: isOneOf(stored?.ambientIntensity, AMBIENT_INTENSITY_VALUES)
       ? stored.ambientIntensity
       : DEFAULT_SETTINGS.ambientIntensity,
+    experimentalImmersion: boolOr(
+      stored?.experimentalImmersion,
+      DEFAULT_SETTINGS.experimentalImmersion
+    ),
+    experimentalImmersionIntensity: isOneOf(
+      stored?.experimentalImmersionIntensity,
+      AMBIENT_INTENSITY_VALUES
+    )
+      ? stored.experimentalImmersionIntensity
+      : DEFAULT_SETTINGS.experimentalImmersionIntensity,
     watchlistSortOrder: isOneOf(stored?.watchlistSortOrder, WATCHLIST_SORT_VALUES)
       ? stored.watchlistSortOrder
       : DEFAULT_SETTINGS.watchlistSortOrder,

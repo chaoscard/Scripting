@@ -50,6 +50,7 @@ import {
   useNovelBookmark,
   useNovelMarker,
   usePagedList,
+  useExperimentalAmbientPalette,
   waitForNovelLoadingFeedback,
 } from "./hooks"
 import { novelThumbUrlOf, prefetch } from "../image/imageLoader"
@@ -761,6 +762,13 @@ export function NovelDetailView(props: { novelID: number }) {
 
   const current = novel
 
+  const coverUrl =
+    current?.image_urls?.large ||
+    current?.image_urls?.medium ||
+    (current?.series as any)?.cover_image_urls?.medium ||
+    null
+  const { ambientBackground, topColor } = useExperimentalAmbientPalette(coverUrl)
+
   if (resolvedSeriesID) {
     recordWorkSeriesAssociation(current.id, "novel", resolvedSeriesID, resolvedSeriesTitle, resolvedEpisodeNumber)
   }
@@ -775,6 +783,17 @@ export function NovelDetailView(props: { novelID: number }) {
               value: scrollPos,
               anchor: "top",
             }}
+            background={ambientBackground}
+            toolbarBackground={
+              topColor
+                ? { style: topColor, bars: ["navigationBar"] }
+                : undefined
+            }
+            toolbarBackgroundVisibility={
+              topColor
+                ? { visibility: "visible", bars: ["navigationBar"] }
+                : undefined
+            }
             ignoresSafeArea={{ edges: "bottom" }}
             navigationTitle={current.title}
             navigationBarTitleDisplayMode="inline"

@@ -428,6 +428,26 @@ export function SettingsView() {
               <Text tag="high">高</Text>
             </Picker>
           ) : null}
+          <Toggle
+            title="实验性沉浸效果"
+            value={settings.experimentalImmersion}
+            onChanged={(value) => update({ experimentalImmersion: value })}
+          />
+          {settings.experimentalImmersion ? (
+            <Picker
+              title="实验性沉浸效果强度"
+              value={settings.experimentalImmersionIntensity}
+              onChanged={(value: string) =>
+                update({
+                  experimentalImmersionIntensity: value as "low" | "medium" | "high",
+                })
+              }
+            >
+              <Text tag="low">低</Text>
+              <Text tag="medium">中</Text>
+              <Text tag="high">高</Text>
+            </Picker>
+          ) : null}
           <Picker title="追更顺序" value={settings.watchlistSortOrder} onChanged={(value: string) => update({ watchlistSortOrder: value as "asc" | "desc" })}>
             <Text tag="asc">从第一话开始</Text>
             <Text tag="desc">从最新话开始</Text>

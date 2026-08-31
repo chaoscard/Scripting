@@ -33,7 +33,7 @@ import {
   isNovelContentVisible,
 } from "../store/contentFilter"
 import { isUserFollowed, onUserFollowChanged } from "../store/userFollow"
-import { useAsyncGuard, useLatest, usePagedList, currentBatchSize } from "./hooks"
+import { useAsyncGuard, useLatest, usePagedList, currentBatchSize, useExperimentalAmbientPalette } from "./hooks"
 import type { PixivIllustration, PixivNovel, PixivUserDetail } from "../types"
 import {
   EmptyView,
@@ -59,6 +59,8 @@ export function UserWorksView(props: { userID?: number; title?: string }) {
   const [tab, setTab] = useState<WorkTab>("illust")
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
   const [emptyKinds, setEmptyKinds] = useState<Partial<Record<WorkTab, boolean>>>({})
+  const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(null)
+  const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
   const guard = useAsyncGuard()
   const worksRefreshRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
@@ -200,6 +202,7 @@ export function UserWorksView(props: { userID?: number; title?: string }) {
       navigationTitle={props.title ?? (isOwn ? "我的作品" : "作品")}
       navigationBarTitleDisplayMode="inline"
       toolbar={toolbar}
+      background={ambientBackground}
       refreshable={async () => {
         await Promise.all([loadDetail(), worksRefreshRef.current()])
       }}
@@ -217,6 +220,7 @@ export function UserWorksView(props: { userID?: number; title?: string }) {
           <UserWorksFeed
             userID={currentUserID}
             tab={activeTab}
+            onFirstImageUrlChange={setAmbientImageUrl}
             onKindEmpty={handleKindEmpty}
             onRegisterRefresh={(fn) => {
               worksRefreshRef.current = fn
@@ -256,10 +260,11 @@ function UserWorkPicker(props: {
 function UserWorksFeed(props: {
   userID: number
   tab: WorkTab
+  onFirstImageUrlChange?: (url: string | null) => void
   onKindEmpty?: (kind: WorkTab, isEmpty: boolean) => void
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { userID, tab, onKindEmpty, onRegisterRefresh } = props
+  const { userID, tab, onFirstImageUrlChange, onKindEmpty, onRegisterRefresh } = props
   const [isFollowed, setIsFollowed] = useState(() => isUserFollowed(userID) ?? false)
   const isOwn = Boolean(
     userID && session.userID && String(userID) === String(session.userID)
@@ -520,6 +525,25 @@ function UserWorksFeed(props: {
     novelPaged.items.length,
     novelPaged.hasFilteredContent,
     onKindEmpty,
+  ])
+
+  useEffect(() => {
+    if (tab === "illust") {
+      const first = illustPaged.items[0]
+      onFirstImageUrlChange?.(first ? cardThumbUrlOf(first) : null)
+    } else if (tab === "manga") {
+      const first = mangaPaged.items[0]
+      onFirstImageUrlChange?.(first ? cardThumbUrlOf(first) : null)
+    } else {
+      const first = novelPaged.items[0]
+      onFirstImageUrlChange?.(first ? novelThumbUrlOf(first) : null)
+    }
+  }, [
+    tab,
+    illustPaged.items[0]?.id,
+    mangaPaged.items[0]?.id,
+    novelPaged.items[0]?.id,
+    onFirstImageUrlChange,
   ])
 
   useEffect(() => {

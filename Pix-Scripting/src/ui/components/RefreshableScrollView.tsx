@@ -79,6 +79,20 @@ export function RefreshableScrollView(props: {
     }, 120)
   }, [])
 
+  const effectiveToolbarBackground =
+    props.toolbarBackground !== undefined
+      ? props.toolbarBackground
+      : props.background?.colors?.[0]
+        ? { style: props.background.colors[0], bars: ["navigationBar"] }
+        : undefined
+
+  const effectiveToolbarBackgroundVisibility =
+    props.toolbarBackgroundVisibility !== undefined
+      ? props.toolbarBackgroundVisibility
+      : effectiveToolbarBackground
+        ? { visibility: "visible", bars: ["navigationBar"] }
+        : undefined
+
   return (
     <ScrollViewReader>
       {(proxy) => {
@@ -94,15 +108,14 @@ export function RefreshableScrollView(props: {
             onSubmit={props.onSubmit}
             submitLabel={props.submitLabel}
             ignoresSafeArea={props.ignoresSafeArea}
-            toolbarBackground={props.toolbarBackground}
-            toolbarBackgroundVisibility={props.toolbarBackgroundVisibility}
+            toolbarBackground={effectiveToolbarBackground}
+            toolbarBackgroundVisibility={effectiveToolbarBackgroundVisibility}
             background={props.background}
           >
             <VStack
               key={REFRESH_TOP_KEY}
               alignment="leading"
               frame={{ maxWidth: "infinity" }}
-              background={props.background}
             >
               {props.children}
             </VStack>

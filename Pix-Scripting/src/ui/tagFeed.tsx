@@ -15,7 +15,7 @@ import {
   onSettingsChanged,
 } from "../store/settings"
 import { isIllustContentVisible, isNovelContentVisible } from "../store/contentFilter"
-import { useLatest, usePagedList, currentBatchSize } from "./hooks"
+import { useLatest, usePagedList, currentBatchSize, useExperimentalAmbientPalette } from "./hooks"
 import type { PixivIllustration, PixivNovel } from "../types"
 import {
   EmptyView,
@@ -59,6 +59,9 @@ function TagIllustFeed(props: { tag: string }) {
 
   // 设置变更（屏蔽标签/用户）后立即重新加载过滤
   const pagedRef = useLatest(paged)
+  const firstIllustUrl = paged.items[0] ? cardThumbUrlOf(paged.items[0]) : null
+  const { ambientBackground } = useExperimentalAmbientPalette(firstIllustUrl)
+
   useEffect(() => {
     return onSettingsChanged(() => {
       pagedRef.current.reapplyFilter()
@@ -69,6 +72,7 @@ function TagIllustFeed(props: { tag: string }) {
     <RefreshableScrollView
       navigationTitle={`#${tag}`}
       navigationBarTitleDisplayMode="inline"
+      background={ambientBackground}
       refreshable={paged.refresh}
     >
       <VStack alignment="leading" spacing={10} padding={{ top: 4 }}>
@@ -119,6 +123,9 @@ function TagNovelFeed(props: { tag: string }) {
   })
 
   const pagedRef = useLatest(paged)
+  const firstNovelUrl = paged.items[0] ? novelThumbUrlOf(paged.items[0]) : null
+  const { ambientBackground } = useExperimentalAmbientPalette(firstNovelUrl)
+
   useEffect(() => {
     return onSettingsChanged(() => {
       pagedRef.current.reapplyFilter()
@@ -129,6 +136,7 @@ function TagNovelFeed(props: { tag: string }) {
     <RefreshableScrollView
       navigationTitle={`#${tag}`}
       navigationBarTitleDisplayMode="inline"
+      background={ambientBackground}
       refreshable={paged.refresh}
     >
       <VStack alignment="leading" spacing={10} padding={{ top: 4 }}>

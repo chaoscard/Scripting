@@ -63,6 +63,7 @@ import {
   useDebouncedCallback,
   useLatest,
   usePagedList,
+  useExperimentalAmbientPalette,
 } from "./hooks"
 import type {
   AdvancedSearchParams,
@@ -498,12 +499,49 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
         ? novelPaged
         : userSearchPaged
 
+  // 实验性沉浸环境光背景
+  const ambientImageUrl = useMemo(() => {
+    if (submitted) {
+      if (scope === "illust" && illustPaged.items[0]) {
+        return cardThumbUrlOf(illustPaged.items[0])
+      }
+      if (scope === "novel" && novelPaged.items[0]) {
+        return novelThumbUrlOf(novelPaged.items[0])
+      }
+      if (scope === "user" && userSearchPaged.items[0]?.user?.profile_image_urls?.medium) {
+        return userSearchPaged.items[0].user.profile_image_urls.medium
+      }
+    } else {
+      if (scope === "illust" && trendingIllust[0]) {
+        return trendingTagHeroUrl(trendingIllust[0])
+      }
+      if (scope === "novel" && trendingNovel[0]) {
+        return trendingTagHeroUrl(trendingNovel[0])
+      }
+      if (scope === "user" && userRecommendedPaged.items[0]?.user?.profile_image_urls?.medium) {
+        return userRecommendedPaged.items[0].user.profile_image_urls.medium
+      }
+    }
+    return null
+  }, [
+    submitted,
+    scope,
+    illustPaged.items[0]?.id,
+    novelPaged.items[0]?.id,
+    userSearchPaged.items[0]?.id,
+    trendingIllust[0]?.tag,
+    trendingNovel[0]?.tag,
+    userRecommendedPaged.items[0]?.id,
+  ])
+  const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
+
   // 是否处于搜索提示词展示态：输入框有内容，且处于输入或查看提示词状态（未提交或键盘激活中）
   const isSuggestingActive = query.trim().length > 0 && (!submitted || searchPresented)
 
   return (
     <RefreshableScrollView
       navigationBarTitleDisplayMode="inline"
+      background={ambientBackground}
       refreshable={async () => {
         if (submitted && !searchPresented) {
           await activePaged.refresh()

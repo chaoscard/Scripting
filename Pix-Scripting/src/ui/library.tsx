@@ -36,7 +36,7 @@ import {
   getCachedIllustBookmark,
   getCachedNovelBookmark,
 } from "../store/bookmarkSync"
-import { useAsyncGuard, useLatest, usePagedList, currentBatchSize } from "./hooks"
+import { useAsyncGuard, useLatest, usePagedList, currentBatchSize, useExperimentalAmbientPalette } from "./hooks"
 import type { PixivBookmarkTag, PixivIllustration, PixivNovel } from "../types"
 import {
   EmptyView,
@@ -58,6 +58,8 @@ export function LibraryView() {
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
   const [kind, setKind] = useState<LibraryKind>("illustration")
   const [restrict, setRestrict] = useState<Visibility>("public")
+  const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(null)
+  const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
   useEffect(() => {
@@ -75,6 +77,7 @@ export function LibraryView() {
       navigationTitle="我的收藏"
       navigationBarTitleDisplayMode="inline"
       toolbar={libraryToolbar({ restrict, onRestrictChange: setRestrict })}
+      background={ambientBackground}
       refreshable={() => refreshHandlerRef.current()}
     >
       <VStack alignment="leading" spacing={8}>
@@ -85,6 +88,7 @@ export function LibraryView() {
           key={restrict}
           kind={kind}
           restrict={restrict}
+          onFirstImageUrlChange={setAmbientImageUrl}
           onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
         />
       </VStack>
@@ -167,9 +171,10 @@ export function BookmarkTags(props: {
 function LibraryFeed(props: {
   kind: LibraryKind
   restrict: Visibility
+  onFirstImageUrlChange?: (url: string | null) => void
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { kind, restrict, onRegisterRefresh } = props
+  const { kind, restrict, onFirstImageUrlChange, onRegisterRefresh } = props
 
   const [illustTags, setIllustTags] = useState<PixivBookmarkTag[]>([])
   const [illustActiveTag, setIllustActiveTag] = useState<string | null>(null)
@@ -248,6 +253,16 @@ function LibraryFeed(props: {
       void loadNovelTags(restrict)
     }
   }, [kind, restrict])
+
+  useEffect(() => {
+    if (kind === "illustration") {
+      const first = illustPaged.items[0]
+      onFirstImageUrlChange?.(first ? cardThumbUrlOf(first) : null)
+    } else {
+      const first = novelPaged.items[0]
+      onFirstImageUrlChange?.(first ? novelThumbUrlOf(first) : null)
+    }
+  }, [kind, illustPaged.items[0]?.id, novelPaged.items[0]?.id, onFirstImageUrlChange])
 
   const activeRefresh = useCallback(async () => {
     if (kind === "illustration") {

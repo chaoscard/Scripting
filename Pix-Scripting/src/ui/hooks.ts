@@ -19,8 +19,11 @@ import {
 } from "../store/bookmarkSync"
 import { isUserFollowed, onUserFollowChanged } from "../store/userFollow"
 import {
+  extractIllustAmbientPalette,
   extractUserAmbientPalette,
+  getCachedIllustAmbientPalette,
   getCachedUserAmbientPalette,
+  type IllustAmbientPalette,
   type UserAmbientPalette,
 } from "../image/colorExtractor"
 
@@ -106,6 +109,77 @@ export function useUserAmbientPalette(imageUrl: string | null | undefined): {
       : undefined
 
   return { ambientEnabled, ambientIntensity, ambientPalette, ambientBackground }
+}
+
+export function useExperimentalAmbientPalette(imageUrl: string | null | undefined): {
+  ambientEnabled: boolean
+  ambientIntensity: AmbientIntensity
+  ambientPalette: IllustAmbientPalette | null
+  ambientBackground: { colors: Color[]; startPoint: "top"; endPoint: "bottom" } | undefined
+  topColor: Color | undefined
+} {
+  const colorScheme = useColorScheme()
+  const isDark = colorScheme === "dark"
+  const [ambientEnabled, setAmbientEnabled] = useState(
+    () => loadSettings().experimentalImmersion
+  )
+  const [ambientIntensity, setAmbientIntensity] = useState<AmbientIntensity>(
+    () => loadSettings().experimentalImmersionIntensity
+  )
+  const [ambientPalette, setAmbientPalette] = useState<IllustAmbientPalette | null>(() => {
+    if (!loadSettings().experimentalImmersion || !imageUrl) return null
+    return getCachedIllustAmbientPalette(
+      imageUrl,
+      isDark,
+      loadSettings().experimentalImmersionIntensity
+    )
+  })
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      const nextSettings = loadSettings()
+      setAmbientEnabled(nextSettings.experimentalImmersion)
+      setAmbientIntensity(nextSettings.experimentalImmersionIntensity)
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!ambientEnabled || !imageUrl) {
+      setAmbientPalette(null)
+      return
+    }
+    let active = true
+    const cached = getCachedIllustAmbientPalette(imageUrl, isDark, ambientIntensity)
+    if (cached) {
+      setAmbientPalette(cached)
+    }
+    void extractIllustAmbientPalette(imageUrl).then((result) => {
+      if (!active || !result) return
+      const modeObj = isDark ? result.dark : result.light
+      setAmbientPalette(modeObj[ambientIntensity] ?? modeObj.medium)
+    })
+    return () => {
+      active = false
+    }
+  }, [imageUrl, isDark, ambientEnabled, ambientIntensity])
+
+  const ambientBackground =
+    ambientEnabled && ambientPalette
+      ? {
+          colors: [
+            ambientPalette.topColor,
+            ambientPalette.midColor,
+            ambientPalette.backgroundColor,
+            ambientPalette.backgroundColor,
+          ],
+          startPoint: "top" as const,
+          endPoint: "bottom" as const,
+        }
+      : undefined
+
+  const topColor = ambientEnabled && ambientPalette ? ambientPalette.topColor : undefined
+
+  return { ambientEnabled, ambientIntensity, ambientPalette, ambientBackground, topColor }
 }
 
 // ---------- 通用 hooks ----------

@@ -41,7 +41,7 @@ import {
   isNovelContentVisible,
 } from "../store/contentFilter"
 import { cardThumbUrlOf, novelThumbUrlOf, prefetch } from "../image/imageLoader"
-import { currentBatchSize, useLatest, usePagedList } from "./hooks"
+import { currentBatchSize, useLatest, usePagedList, useExperimentalAmbientPalette } from "./hooks"
 import type { PixivIllustration, PixivNovel } from "../types"
 
 export type HistoryKind = HistoryContentKind
@@ -132,6 +132,8 @@ export function HistoryView() {
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
   const [kind, setKind] = useState<HistoryKind>("illustration")
   const [searchQuery, setSearchQuery] = useState("")
+  const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(null)
+  const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
   useEffect(() => {
@@ -153,6 +155,7 @@ export function HistoryView() {
       navigationTitle="浏览记录"
       navigationBarTitleDisplayMode="inline"
       toolbar={historyToolbar({ kind, onClear: clearCurrentKind })}
+      background={ambientBackground}
       searchable={{
         value: searchQuery,
         onChanged: setSearchQuery,
@@ -166,6 +169,7 @@ export function HistoryView() {
         <HistoryFeed
           kind={kind}
           searchQuery={searchQuery}
+          onFirstImageUrlChange={setAmbientImageUrl}
           onRegisterRefresh={(fn) => {
             refreshHandlerRef.current = fn
           }}
@@ -244,9 +248,10 @@ function HistoryKindPicker(props: {
 function HistoryFeed(props: {
   kind: HistoryKind
   searchQuery?: string
+  onFirstImageUrlChange?: (url: string | null) => void
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { kind, searchQuery = "", onRegisterRefresh } = props
+  const { kind, searchQuery = "", onFirstImageUrlChange, onRegisterRefresh } = props
 
   // 1. 插画历史流
   const illustPaged = usePagedList<HistoryIllustItem>({
@@ -342,6 +347,24 @@ function HistoryFeed(props: {
       : kind === "manga"
         ? mangaPaged.refresh
         : novelPaged.refresh
+
+  useEffect(() => {
+    let url: string | null = null
+    if (kind === "illustration" && illustPaged.items[0]) {
+      url = cardThumbUrlOf(illustPaged.items[0])
+    } else if (kind === "manga" && mangaPaged.items[0]) {
+      url = cardThumbUrlOf(mangaPaged.items[0])
+    } else if (kind === "novel" && novelPaged.items[0]) {
+      url = novelThumbUrlOf(novelPaged.items[0])
+    }
+    onFirstImageUrlChange?.(url)
+  }, [
+    kind,
+    illustPaged.items[0]?.id,
+    mangaPaged.items[0]?.id,
+    novelPaged.items[0]?.id,
+    onFirstImageUrlChange,
+  ])
 
   useEffect(() => {
     onRegisterRefresh?.(async () => {
