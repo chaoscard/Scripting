@@ -7,6 +7,9 @@ import {
   Text,
   VStack,
   ZStack,
+  useEffect,
+  useMemo,
+  useState,
 } from "scripting"
 import {
   notificationViewMore,
@@ -14,7 +17,7 @@ import {
   nextNotifications,
   type PixivNotification,
 } from "../api/pixiv"
-import { currentBatchSize, usePagedList } from "./hooks"
+import { currentBatchSize, useExperimentalAmbientPalette, usePagedList } from "./hooks"
 import { prefetch } from "../image/imageLoader"
 import {
   AvatarImage,
@@ -65,6 +68,9 @@ function NotificationList(props: {
     nextURL: string | null
   }>
 }) {
+  const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(null)
+  const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
+
   const paged = usePagedList<PixivNotification>({
     first: props.first,
     more: (nextURL, token) => nextNotifications(nextURL, token),
@@ -74,10 +80,25 @@ function NotificationList(props: {
       prefetch(pendingItems.slice(0, currentBatchSize()).map(notificationThumbUrlOf)).cancel,
   })
 
+  const firstImageUrl = useMemo(() => {
+    if (paged.items.length === 0) return null
+    for (const item of paged.items) {
+      const url = notificationThumbUrlOf(item)
+      if (url) return url
+    }
+    return null
+  }, [paged.items])
+
+  useEffect(() => {
+    if (paged.initialLoading) return
+    setAmbientImageUrl(firstImageUrl)
+  }, [paged.initialLoading, firstImageUrl])
+
   return (
     <RefreshableScrollView
       navigationTitle={props.title}
       navigationBarTitleDisplayMode="inline"
+      background={ambientBackground}
       refreshable={paged.refresh}
     >
       {paged.initialLoading ? (

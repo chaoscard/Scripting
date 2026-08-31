@@ -8,6 +8,7 @@ import {
   Picker,
   VStack,
   useEffect,
+  useMemo,
   useState,
 } from "scripting"
 import {
@@ -33,7 +34,7 @@ import {
   RefreshableScrollView,
 } from "./components"
 import { prefetch } from "../image/imageLoader"
-import { currentBatchSize, usePagedList } from "./hooks"
+import { currentBatchSize, useExperimentalAmbientPalette, usePagedList } from "./hooks"
 
 export type ConnectionRouteKind = "following" | "follower" | "mypixiv"
 type ConnectionVisibility = Extract<Visibility, "public" | "private">
@@ -65,6 +66,8 @@ export function UserConnectionsView(props: {
   const [restrict, setRestrict] = useState<ConnectionVisibility>("public")
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
   const [showRecommendedUsers, setShowRecommendedUsers] = useState(false)
+  const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(null)
+  const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
   const showVisibilityPicker =
     props.showVisibilityPicker ?? (props.kind === "following" && props.userID == null)
 
@@ -83,6 +86,23 @@ export function UserConnectionsView(props: {
       prefetch(pendingItems.slice(0, currentBatchSize()).flatMap(connectionPreviewImageURLs)).cancel,
   })
 
+  const firstImageUrl = useMemo(() => {
+    if (paged.items.length === 0) return null
+    if (props.kind === "following") {
+      for (const item of paged.items) {
+        const urls = connectionPreviewImageURLs(item).filter(Boolean) as string[]
+        if (urls.length > 0) return urls[0]
+      }
+      return paged.items[0]?.user.profile_image_urls?.medium ?? null
+    }
+    return paged.items[0]?.user.profile_image_urls?.medium ?? null
+  }, [paged.items, props.kind])
+
+  useEffect(() => {
+    if (paged.initialLoading) return
+    setAmbientImageUrl(firstImageUrl)
+  }, [paged.initialLoading, firstImageUrl])
+
   return (
     <GeometryReader>
       {(proxy) => {
@@ -96,6 +116,7 @@ export function UserConnectionsView(props: {
           <RefreshableScrollView
             navigationTitle={title}
             navigationBarTitleDisplayMode="inline"
+            background={ambientBackground}
             toolbar={
               showVisibilityPicker
                 ? connectionToolbar({
