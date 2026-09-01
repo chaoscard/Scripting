@@ -7,10 +7,10 @@
     "name": "chaoscard",
     "email": null
   },
-  "version": "0.8.150",
+  "version": "0.8.151",
   "remoteResource": {
     "url": "https://raw.githubusercontent.com/chaoscard/Scripting/main/Release/Pix-Scripting.scripting",
-    "hash": "3555d4b15cc6adf75237e668b9eef0fa",
+    "hash": "9c39b8f9d64e69b414c8da7a15d9086e",
     "autoUpdateInterval": null
   },
   "icon": "paintpalette",

@@ -700,7 +700,7 @@ export function IllustDetailView(props: { illustID: number }) {
           <Button
             disabled={bookmarkLoading || bookmarkLongPressLocked}
             action={toggleBookmark}
-            simultaneousGesture={
+            highPriorityGesture={
               LongPressGesture({ minDuration: 500 }).onEnded(() => {
                 setBookmarkLongPressLocked(true)
                 handleBookmarkLongPress()

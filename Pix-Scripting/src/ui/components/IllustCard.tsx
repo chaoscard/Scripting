@@ -226,7 +226,6 @@ export function IllustCard(props: {
     <ZStack
       alignment="topTrailing"
       frame={cardFrame}
-      contextMenu={resolvedContextMenu}
       sheet={
         showBlockSheet
           ? {
@@ -256,6 +255,7 @@ export function IllustCard(props: {
           <NavigationLink
             value={`illust:${illust.id}`}
             frame={cardFrame}
+            contextMenu={resolvedContextMenu}
           >
             <ZStack alignment="topLeading" frame={cardFrame}>
               <ZStack
@@ -311,7 +311,10 @@ export function IllustCard(props: {
             onSheetChanged={setShowBookmarkDetail}
           />
         </ZStack>
-        <NavigationLink value={`illust:${illust.id}`}>
+        <NavigationLink
+          value={`illust:${illust.id}`}
+          contextMenu={resolvedContextMenu}
+        >
           <Text
             font={hero ? "headline" : "caption"}
             fontWeight={hero ? "bold" : "medium"}
@@ -329,6 +332,7 @@ export function IllustCard(props: {
           <NavigationLink
             value={`illust:${illust.id}`}
             frame={{ maxWidth: "infinity", alignment: "leading" }}
+            contextMenu={resolvedContextMenu}
           >
             <Text
               font={hero ? "subheadline" : "caption2"}

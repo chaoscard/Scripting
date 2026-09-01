@@ -119,10 +119,9 @@ export function NovelCard(props: {
     <ZStack
       alignment="topTrailing"
       frame={{ maxWidth: "infinity" }}
-      contextMenu={contextMenu}
     >
       <ZStack alignment="bottomTrailing" frame={{ maxWidth: "infinity" }}>
-        <NavigationLink value={`novel:${novel.id}`}>
+        <NavigationLink value={`novel:${novel.id}`} contextMenu={contextMenu}>
           <HStack
             spacing={10}
             padding={10}
