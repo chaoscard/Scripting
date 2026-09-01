@@ -1,5 +1,5 @@
 // 历史记录与阅读进度 iCloud 低频双向同步引擎
-// 5 个独立同构文件按需低频同步，支持 5条阈值 + 10秒空闲 + 30秒兜底多维触发与 Tombstone（30天TTL）机制。
+// 5 个独立同构文件按需低频同步，支持 15条阈值 + 10秒空闲 + 30秒兜底多维触发、互斥锁与在途变更尾随排队（Trailing Queue）及 Tombstone（30天TTL）机制。
 import {
   pixivCloudHistoryDirectory,
   pixivHistoryDirectory,
@@ -53,7 +53,11 @@ const IDLE_SYNC_DELAY_MS = 10 * 1000 // 2. 前台操作停止空闲 10 秒后自
 const MAX_WAIT_THROTTLE_MS = 30 * 1000 // 3. 自首次变更起，最多 30 秒兜底强制同步
 const AUTO_SYNC_FALLBACK_INTERVAL_MS = 60 * 1000 // 前台轮询兜底周期 60 秒
 
+// 单飞互斥锁与尾随排队标记
 let isSyncing = false
+let hasQueuedSync = false
+let queuedUserId: string | number | null | undefined = undefined
+
 let schedulerTimer: ReturnType<typeof setTimeout> | null = null
 let idleSyncTimer: ReturnType<typeof setTimeout> | null = null
 let maxWaitTimer: ReturnType<typeof setTimeout> | null = null
@@ -126,12 +130,17 @@ function resetMutationTracking(): void {
 }
 
 // 当本地 5 项记录（插画/漫画/小说历史、小说进度、搜索历史）中任意一项发生变更时触发：
-// 采用「5条阈值立即触发 + 10秒空闲防抖 + 30秒最大等待兜底」多维触发机制
+// 采用「15条阈值立即触发 + 10秒空闲防抖 + 30秒最大等待兜底 + 执行中排队尾随」机制
 export function notifyLocalMutation(): void {
   pendingMutationCount++
   const now = Date.now()
   if (firstMutationTime === 0) {
     firstMutationTime = now
+  }
+
+  // 若当前正在执行同步，标记尾随排队，确保本轮执行完毕后自动无缝触发下一轮补跑
+  if (isSyncing) {
+    hasQueuedSync = true
   }
 
   // 维度 1：累积 15 条变更立即触发同步
@@ -399,13 +408,20 @@ async function syncSearchHistoryFile(
   }
 }
 
-// 统一立即同步入口（用于下拉刷新或定时调度）
+// 统一立即同步入口（用于下拉刷新、多维触发或定时调度）
 export async function syncHistoryNow(userId?: string | number | null): Promise<boolean> {
-  if (isSyncing) return false
+  // 单飞互斥保护：若当前已经在执行同步，记录排队请求并安全退出，防止在途重入冲突
+  if (isSyncing) {
+    hasQueuedSync = true
+    queuedUserId = userId
+    return false
+  }
+
   const cloudDir = pixivCloudHistoryDirectory(userId)
   if (!cloudDir) return false
 
   isSyncing = true
+  hasQueuedSync = false
   try {
     // 1. 同步前先强制刷盘本地所有未持久化数据
     flushHistory()
@@ -423,16 +439,24 @@ export async function syncHistoryNow(userId?: string | number | null): Promise<b
     await syncNovelProgressFile(localDir, cloudDir, userId)
     await syncSearchHistoryFile(localDir, cloudDir, userId)
 
-    // 3. 更新同步状态与清空变更计数
+    // 3. 更新同步状态
     state.lastSyncTime = Date.now()
     saveSyncState(state, userId)
-    resetMutationTracking()
     return true
   } catch (error: any) {
     console.warn("syncHistoryNow error:", error?.message ?? error)
     return false
   } finally {
     isSyncing = false
+    // 4. 尾随排队检测：如果本次同步期间产生了新变更或新的同步请求，无缝自动启动下一轮补跑
+    if (hasQueuedSync) {
+      hasQueuedSync = false
+      const nextUid = queuedUserId
+      queuedUserId = undefined
+      setTimeout(() => {
+        syncHistoryNow(nextUid).catch(() => {})
+      }, 50)
+    }
   }
 }
 
