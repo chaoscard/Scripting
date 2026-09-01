@@ -704,6 +704,14 @@ function IllustRankingFeedContent(props: {
   label: string
 }) {
   const { paged, label } = props
+  const [heroFirst, setHeroFirst] = useState(() => loadSettings().heroFirstFeedCard)
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      setHeroFirst(loadSettings().heroFirstFeedCard)
+    })
+  }, [])
+
   const badgeOf = useCallback(
     (_: PixivIllustration, index: number) =>
       index < 50 ? <ImageNumberBadge number={index + 1} /> : undefined,
@@ -737,6 +745,7 @@ function IllustRankingFeedContent(props: {
           hasMore={paged.hasMore}
           isLoading={paged.loadingMore}
           cornerBadgeOf={badgeOf}
+          enableHeroFirst={heroFirst}
         />
       )}
     </VStack>

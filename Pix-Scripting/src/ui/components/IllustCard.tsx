@@ -40,9 +40,16 @@ const FLOW_ROW_SPACING = 4
 const FLOW_CARD_WIDTH = Math.floor(
   (Device.screen.width - FLOW_HORIZONTAL_PADDING * 2 - FLOW_COLUMN_SPACING) / 2
 )
+const HERO_CARD_WIDTH = Math.floor(
+  Device.screen.width - FLOW_HORIZONTAL_PADDING * 2
+)
 // 流式布局允许最长 1:4 的竖图保留原始比例；更极端的图片仍受此下限保护。
 const MIN_FLOW_IMAGE_RATIO = 1 / 4
 const MAX_FLOW_IMAGE_RATIO = 2.5
+// Hero 模式下限制最大高度，防止极端超长图占满屏幕
+const MIN_HERO_IMAGE_RATIO = 0.65
+const MAX_HERO_IMAGE_RATIO = 2.2
+const MAX_HERO_IMAGE_HEIGHT = 440
 
 
 export interface IllustCardAction {
@@ -57,6 +64,7 @@ export function IllustCard(props: {
   illust: PixivIllustration
   onAppear?: () => void
   flow?: boolean
+  hero?: boolean
   priority?: number
   cornerBadge?: any
   footerText?: string
@@ -67,6 +75,7 @@ export function IllustCard(props: {
     illust,
     onAppear,
     flow = false,
+    hero = false,
     priority,
     cornerBadge,
     footerText,
@@ -81,16 +90,27 @@ export function IllustCard(props: {
   const [showBookmarkDetail, setShowBookmarkDetail] = useState(false)
   const [showBlockSheet, setShowBlockSheet] = useState(false)
   const [downloading, setDownloading] = useState(false)
-  // 流式卡片只在进入原生可见区后请求图片；骨架尺寸仍由作品元数据提前固定。
-  const [imageVisible, setImageVisible] = useState(!flow)
+  // 流式或Hero卡片只在进入原生可见区后请求图片；骨架尺寸仍由作品元数据提前固定。
+  const [imageVisible, setImageVisible] = useState(!flow && !hero)
   const rawRatio = illust.width > 0 && illust.height > 0 ? illust.width / illust.height : 0.75
-  const imageRatio = Math.min(Math.max(rawRatio, MIN_FLOW_IMAGE_RATIO), MAX_FLOW_IMAGE_RATIO)
-  const flowImageFrame = flow
-    ? { width: FLOW_CARD_WIDTH, height: FLOW_CARD_WIDTH / imageRatio }
-    : undefined
-  const flowCardFrame = flow
-    ? { width: FLOW_CARD_WIDTH }
-    : { maxWidth: "infinity" }
+
+  let imageRatio = 1
+  let imageFrame: { width?: number; height?: number } | undefined = undefined
+  let cardFrame: { width?: number; maxWidth?: string } = { maxWidth: "infinity" }
+  let isLongHeroImage = false
+
+  if (hero) {
+    cardFrame = { width: HERO_CARD_WIDTH }
+    isLongHeroImage = rawRatio < MIN_HERO_IMAGE_RATIO
+    imageRatio = Math.min(Math.max(rawRatio, MIN_HERO_IMAGE_RATIO), MAX_HERO_IMAGE_RATIO)
+    const rawHeight = HERO_CARD_WIDTH / imageRatio
+    const heroHeight = Math.min(rawHeight, MAX_HERO_IMAGE_HEIGHT)
+    imageFrame = { width: HERO_CARD_WIDTH, height: heroHeight }
+  } else if (flow) {
+    cardFrame = { width: FLOW_CARD_WIDTH }
+    imageRatio = Math.min(Math.max(rawRatio, MIN_FLOW_IMAGE_RATIO), MAX_FLOW_IMAGE_RATIO)
+    imageFrame = { width: FLOW_CARD_WIDTH, height: FLOW_CARD_WIDTH / imageRatio }
+  }
 
   function handleAppear() {
     if (!imageVisible) setImageVisible(true)
@@ -213,7 +233,7 @@ export function IllustCard(props: {
   return (
     <ZStack
       alignment="topTrailing"
-      frame={flowCardFrame}
+      frame={cardFrame}
       contextMenu={resolvedContextMenu}
       sheet={
         showBlockSheet
@@ -233,33 +253,33 @@ export function IllustCard(props: {
     >
       <VStack
         alignment="leading"
-        spacing={2}
-        frame={flowCardFrame}
+        spacing={hero ? 4 : 2}
+        frame={cardFrame}
         onAppear={handleAppear}
-        padding={4}
-        glassEffect={{ type: "rect", cornerRadius: 14 }}
-        shadow={{ color: "#0000000F", radius: 18, y: 8 }}
+        padding={hero ? 6 : 4}
+        glassEffect={{ type: "rect", cornerRadius: hero ? 16 : 14 }}
+        shadow={{ color: "#0000000F", radius: hero ? 20 : 18, y: hero ? 10 : 8 }}
       >
-        <ZStack alignment="bottomTrailing" frame={flowCardFrame}>
+        <ZStack alignment="bottomTrailing" frame={cardFrame}>
           <NavigationLink
             value={`illust:${illust.id}`}
-            frame={flowCardFrame}
+            frame={cardFrame}
           >
-            <ZStack alignment="topLeading" frame={flowCardFrame}>
+            <ZStack alignment="topLeading" frame={cardFrame}>
               <ZStack
                 alignment="bottomLeading"
-                aspectRatio={flow ? undefined : { value: 1, contentMode: "fill" }}
-                frame={flowImageFrame ?? { maxWidth: "infinity" }}
-                clipShape={{ type: "rect", cornerRadius: 10 }}
+                aspectRatio={flow || hero ? undefined : { value: 1, contentMode: "fill" }}
+                frame={imageFrame ?? { maxWidth: "infinity" }}
+                clipShape={{ type: "rect", cornerRadius: hero ? 12 : 10 }}
                 clipped={true}
               >
                 <CachedImage
                   url={imageVisible ? cardThumbUrlOf(illust) : null}
-                  aspectRatioValue={flow ? imageRatio : 1}
-                  contentMode={flow ? "fit" : "fill"}
-                  centerCropSquare={!flow}
-                  cornerRadius={10}
-                  frame={flowImageFrame}
+                  aspectRatioValue={flow || hero ? imageRatio : 1}
+                  contentMode={hero ? (isLongHeroImage ? "fill" : "fit") : flow ? "fit" : "fill"}
+                  centerCropSquare={!flow && !hero}
+                  cornerRadius={hero ? 12 : 10}
+                  frame={imageFrame}
                   priority={priority}
                 />
                 {illust.page_count > 1 ? (
@@ -293,16 +313,16 @@ export function IllustCard(props: {
         </ZStack>
         <NavigationLink value={`illust:${illust.id}`}>
           <Text
-            font="caption"
-            fontWeight="medium"
-            lineLimit={1}
-            padding={{ horizontal: 4, top: 2 }}
+            font={hero ? "subheadline" : "caption"}
+            fontWeight={hero ? "semibold" : "medium"}
+            lineLimit={hero ? 2 : 1}
+            padding={{ horizontal: 4, top: hero ? 3 : 2 }}
           >
             {illust.title}
           </Text>
         </NavigationLink>
         <HStack
-          spacing={5}
+          spacing={hero ? 6 : 5}
           padding={{ horizontal: 4, bottom: footerText ? 0 : 4 }}
           frame={{ maxWidth: "infinity" }}
         >
@@ -311,7 +331,7 @@ export function IllustCard(props: {
             frame={{ maxWidth: "infinity", alignment: "leading" }}
           >
             <Text
-              font="caption2"
+              font={hero ? "caption" : "caption2"}
               foregroundStyle="secondaryLabel"
               lineLimit={1}
               frame={{ maxWidth: "infinity", alignment: "leading" }}
@@ -320,7 +340,7 @@ export function IllustCard(props: {
             </Text>
           </NavigationLink>
           <HStack
-            spacing={5}
+            spacing={hero ? 6 : 5}
             fixedSize={{ horizontal: true, vertical: false }}
             layoutPriority={1}
             frame={{ alignment: "trailing" }}
@@ -328,11 +348,11 @@ export function IllustCard(props: {
             <HStack spacing={2} fixedSize={{ horizontal: true, vertical: false }}>
               <Image
                 systemName="eye"
-                font="caption2"
+                font={hero ? "caption" : "caption2"}
                 foregroundStyle="secondaryLabel"
               />
               <Text
-                font="caption2"
+                font={hero ? "caption" : "caption2"}
                 foregroundStyle="secondaryLabel"
                 lineLimit={1}
                 fixedSize={{ horizontal: true, vertical: false }}
@@ -343,11 +363,11 @@ export function IllustCard(props: {
             <HStack spacing={2} fixedSize={{ horizontal: true, vertical: false }}>
               <Image
                 systemName="heart"
-                font="caption2"
+                font={hero ? "caption" : "caption2"}
                 foregroundStyle="secondaryLabel"
               />
               <Text
-                font="caption2"
+                font={hero ? "caption" : "caption2"}
                 foregroundStyle="secondaryLabel"
                 lineLimit={1}
                 fixedSize={{ horizontal: true, vertical: false }}
@@ -359,7 +379,7 @@ export function IllustCard(props: {
         </HStack>
         {footerText ? (
           <Text
-            font="caption2"
+            font={hero ? "caption" : "caption2"}
             foregroundStyle="secondaryLabel"
             lineLimit={1}
             padding={{ horizontal: 4, bottom: 4 }}
@@ -403,6 +423,7 @@ export function IllustFlowFeed(props: {
   onLoadMore: (anchor: number | string) => void
   hasMore?: boolean
   isLoading?: boolean
+  enableHeroFirst?: boolean
   cornerBadgeOf?: (illust: PixivIllustration, index: number) => any
   footerTextOf?: (illust: PixivIllustration, index: number) => string | undefined
   topTrailingActionOf?: (
@@ -415,9 +436,14 @@ export function IllustFlowFeed(props: {
   ) => any
 }) {
   cacheIllusts(props.items)
+  const isHeroActive = Boolean(props.enableHeroFirst && props.items.length > 0)
+  const heroItem = isHeroActive ? props.items[0] : null
+  const waterfallItems = isHeroActive ? props.items.slice(1) : props.items
+  const startIndex = isHeroActive ? 1 : 0
+
   const [leading, trailing] = useMemo(
-    () => distributeFlowItems(props.items),
-    [props.items]
+    () => distributeFlowItems(waterfallItems, startIndex),
+    [waterfallItems, startIndex]
   )
   const lastItem = props.items[props.items.length - 1]
   const lastId = lastItem ? lastItem.id : null
@@ -478,16 +504,53 @@ export function IllustFlowFeed(props: {
     ]
   )
 
-  return (
-    <VStack spacing={10} frame={{ maxWidth: "infinity" }}>
-      <HStack
-        alignment="top"
-        spacing={FLOW_COLUMN_SPACING}
+  const heroView = useMemo(() => {
+    if (!heroItem) return null
+    return (
+      <VStack
+        key={`hero:${heroItem.id}`}
         padding={{ horizontal: FLOW_HORIZONTAL_PADDING }}
         frame={{ width: Device.screen.width }}
       >
-        {columnViews}
-      </HStack>
+        <IllustCard
+          key={heroItem.id}
+          illust={heroItem}
+          hero={true}
+          priority={0}
+          cornerBadge={props.cornerBadgeOf?.(heroItem, 0)}
+          footerText={props.footerTextOf?.(heroItem, 0)}
+          topTrailingAction={props.topTrailingActionOf?.(heroItem, 0)}
+          contextMenu={props.contextMenuOf?.(heroItem, 0)}
+        />
+      </VStack>
+    )
+  }, [
+    heroItem,
+    props.cornerBadgeOf,
+    props.footerTextOf,
+    props.topTrailingActionOf,
+    props.contextMenuOf,
+  ])
+
+  return (
+    <VStack spacing={10} frame={{ maxWidth: "infinity" }}>
+      {heroView}
+      {waterfallItems.length > 0 ? (
+        <HStack
+          alignment="top"
+          spacing={FLOW_COLUMN_SPACING}
+          padding={{ horizontal: FLOW_HORIZONTAL_PADDING }}
+          frame={{ width: Device.screen.width }}
+        >
+          {columnViews}
+        </HStack>
+      ) : props.hasMore && triggerAnchor ? (
+        <VStack
+          key={`hero-trigger:${triggerAnchor}`}
+          frame={{ width: FLOW_CARD_WIDTH, height: 1 }}
+          onAppear={() => props.onLoadMore(triggerAnchor)}
+        />
+      ) : null}
       {props.hasMore ? (
         <VStack
           key="flow-footer"
@@ -508,11 +571,14 @@ export function IllustFlowFeed(props: {
 }
 
 function distributeFlowItems(
-  items: PixivIllustration[]
+  items: PixivIllustration[],
+  startIndex = 0
 ): [IllustFlowItem[], IllustFlowItem[]] {
   const columns: [IllustFlowItem[], IllustFlowItem[]] = [[], []]
   const heights = [0, 0]
-  for (const [index, illust] of items.entries()) {
+  for (let i = 0; i < items.length; i++) {
+    const illust = items[i]
+    const index = startIndex + i
     const rawRatio = illust.width > 0 && illust.height > 0
       ? illust.width / illust.height
       : 0.75

@@ -440,6 +440,14 @@ function IllustFeedContent(props: {
   label: string
 }) {
   const { paged, label } = props
+  const [heroFirst, setHeroFirst] = useState(() => loadSettings().heroFirstFeedCard)
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      setHeroFirst(loadSettings().heroFirstFeedCard)
+    })
+  }, [])
+
   return (
     <VStack alignment="leading" spacing={10}>
       {paged.initialLoading ? (
@@ -461,6 +469,7 @@ function IllustFeedContent(props: {
           onLoadMore={paged.loadMore}
           hasMore={paged.hasMore}
           isLoading={paged.loadingMore}
+          enableHeroFirst={heroFirst}
         />
       )}
     </VStack>

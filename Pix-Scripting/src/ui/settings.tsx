@@ -52,6 +52,7 @@ const CACHE_LIMIT_OPTIONS = [300, 500, 1000, 2000] as const
 interface SectionExpandedState {
   content: boolean
   ranking: boolean
+  appearance: boolean
   features: boolean
   ai: boolean
   widgets: boolean
@@ -65,6 +66,7 @@ interface SectionExpandedState {
 const DEFAULT_EXPANDED_STATE: SectionExpandedState = {
   content: false,
   ranking: false,
+  appearance: false,
   features: false,
   ai: false,
   widgets: false,
@@ -98,6 +100,7 @@ export function SettingsView() {
     setExpanded({
       content: true,
       ranking: true,
+      appearance: true,
       features: true,
       ai: true,
       widgets: true,
@@ -113,6 +116,7 @@ export function SettingsView() {
     setExpanded({
       content: false,
       ranking: false,
+      appearance: false,
       features: false,
       ai: false,
       widgets: false,
@@ -380,40 +384,36 @@ export function SettingsView() {
         </DisclosureGroup>
       </Section>
 
-      {/* 3. 功能与交互 */}
+      {/* 3. 外观与布局 */}
       <Section>
         <DisclosureGroup
-          isExpanded={expanded.features}
-          onChanged={(v) => setExpandedKey("features", v)}
+          isExpanded={expanded.appearance}
+          onChanged={(v) => setExpandedKey("appearance", v)}
           label={
             <HStack spacing={10} alignment="center">
-              <Image systemName="slider.horizontal.3" font="body" foregroundStyle="systemIndigo" />
-              <Text font="headline">功能与交互</Text>
+              <Image systemName="paintpalette" font="body" foregroundStyle="systemPink" />
+              <Text font="headline">外观与布局</Text>
               <Spacer />
-              {!expanded.features ? (
+              {!expanded.appearance ? (
                 <Text font="footnote" foregroundStyle="tertiaryLabel">
-                  {settings.launchPage === "discovery" ? "探索" : settings.launchPage === "ranking" ? "排行" : "关注"}
+                  {settings.heroFirstFeedCard ? "全宽首图" : "传统双列"}
+                  {settings.ambientImmersion ? " · 沉浸开启" : ""}
                 </Text>
               ) : null}
             </HStack>
           }
         >
           <Toggle
-            title="预取后续图片"
-            value={settings.prefetchEnabled}
-            onChanged={(value) => update({ prefetchEnabled: value })}
-          />
-          <Picker
-            title="启动页面"
-            value={settings.launchPage}
-            onChanged={(value: string) =>
-              update({ launchPage: value as LaunchPage })
-            }
+            value={settings.heroFirstFeedCard}
+            onChanged={(value) => update({ heroFirstFeedCard: value })}
           >
-            <Text tag="discovery">探索</Text>
-            <Text tag="ranking">排行</Text>
-            <Text tag="following">关注</Text>
-          </Picker>
+            <VStack alignment="leading" spacing={2}>
+              <Text font="body">瀑布流首图全宽展示</Text>
+              <Text font="caption" foregroundStyle="secondaryLabel">
+                在插画与漫画的推荐、最新和排行榜中全宽放大展示第一张作品
+              </Text>
+            </VStack>
+          </Toggle>
           <Toggle
             title="沉浸效果"
             value={settings.ambientImmersion}
@@ -508,6 +508,43 @@ export function SettingsView() {
               ) : null}
             </>
           ) : null}
+        </DisclosureGroup>
+      </Section>
+
+      {/* 4. 功能与交互 */}
+      <Section>
+        <DisclosureGroup
+          isExpanded={expanded.features}
+          onChanged={(v) => setExpandedKey("features", v)}
+          label={
+            <HStack spacing={10} alignment="center">
+              <Image systemName="slider.horizontal.3" font="body" foregroundStyle="systemIndigo" />
+              <Text font="headline">功能与交互</Text>
+              <Spacer />
+              {!expanded.features ? (
+                <Text font="footnote" foregroundStyle="tertiaryLabel">
+                  {settings.launchPage === "discovery" ? "探索" : settings.launchPage === "ranking" ? "排行" : "关注"}
+                </Text>
+              ) : null}
+            </HStack>
+          }
+        >
+          <Toggle
+            title="预取后续图片"
+            value={settings.prefetchEnabled}
+            onChanged={(value) => update({ prefetchEnabled: value })}
+          />
+          <Picker
+            title="启动页面"
+            value={settings.launchPage}
+            onChanged={(value: string) =>
+              update({ launchPage: value as LaunchPage })
+            }
+          >
+            <Text tag="discovery">探索</Text>
+            <Text tag="ranking">排行</Text>
+            <Text tag="following">关注</Text>
+          </Picker>
           <Picker title="追更顺序" value={settings.watchlistSortOrder} onChanged={(value: string) => update({ watchlistSortOrder: value as "asc" | "desc" })}>
             <Text tag="asc">从第一话开始</Text>
             <Text tag="desc">从最新话开始</Text>
