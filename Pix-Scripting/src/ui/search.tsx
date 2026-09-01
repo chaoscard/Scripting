@@ -172,7 +172,7 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
 
   // 搜索记录
-  const [historyItems, setHistoryItems] = useState<string[]>(() => getSearchHistory())
+  const [historyItems, setHistoryItems] = useState<string[]>(() => getSearchHistory(scope))
 
   // 热门标签状态
   const [trendingIllust, setTrendingIllust] = useState<PixivTrendingTag[]>([])
@@ -295,10 +295,11 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
   const userRecommendedPagedRef = useLatest(userRecommendedPaged)
 
   useEffect(() => {
+    setHistoryItems(getSearchHistory(scope))
     return onSearchHistoryChanged(() => {
-      setHistoryItems(getSearchHistory())
+      setHistoryItems(getSearchHistory(scope))
     })
-  }, [])
+  }, [scope])
 
   useEffect(() => {
     return onSettingsChanged(() => {
@@ -481,7 +482,7 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
     userSeq.current += 1
     debouncedTagAutocomplete.cancel()
     debouncedUserAutocomplete.cancel()
-    addSearchHistory(trimmed)
+    addSearchHistory(trimmed, scope)
     setSubmitted(trimmed)
     setQuery("")
     setAdvancedParams((prev) => ({ ...prev, word: trimmed, scope }))
@@ -570,7 +571,7 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
               if (params.word.trim()) {
                 setQuery(params.word.trim())
                 setSubmitted(params.word.trim())
-                addSearchHistory(params.word.trim())
+                addSearchHistory(params.word.trim(), params.scope)
               }
               setIsAdvancedSheetOpen(false)
             }}
@@ -640,8 +641,8 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
             <SearchHistorySection
               history={historyItems}
               onSelect={submitSearch}
-              onRemove={(item) => removeSearchHistory(item)}
-              onClear={clearSearchHistory}
+              onRemove={(item) => removeSearchHistory(item, scope)}
+              onClear={() => clearSearchHistory(scope)}
             />
           ) : null}
 

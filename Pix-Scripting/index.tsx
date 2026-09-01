@@ -4,8 +4,9 @@ import { flushHistory, prepareHistoryStorage } from "./src/store/history"
 import { prepareSettingsStorage } from "./src/store/settings"
 import { prepareBlocklistStorage } from "./src/store/blocklist"
 import { flushNovelProgress, prepareNovelProgressStorage } from "./src/store/novelProgress"
-import { prepareSearchHistoryStorage } from "./src/store/searchHistory"
+import { flushSearchHistory, prepareSearchHistoryStorage } from "./src/store/searchHistory"
 import { flushSeriesCache, prepareSeriesCacheStorage } from "./src/store/seriesCache"
+import { startHistorySyncScheduler, triggerResumeSync } from "./src/store/historySync"
 import { requestPixivRoute } from "./src/ui/routeNavigation"
 import { populateWidgetPool, seedIllustFromWidgetPool, seedPixivisionFromWidgetPool } from "./src/store/widgetStore"
 import { normalizeRoute } from "./src/ui/routes"
@@ -49,10 +50,12 @@ async function main() {
         seedIfRoute(resumeRoute)
         requestPixivRoute(resumeRoute)
       }
+      triggerResumeSync()
     })
     Script.onMinimize(() => {
       flushHistory()
       flushNovelProgress()
+      flushSearchHistory()
       flushSeriesCache()
     })
     Script.enableMinimize()
@@ -69,19 +72,25 @@ async function main() {
     // 后台静默预热小组件数据池
     populateWidgetPool().catch(() => {})
 
+    // 启动低频 iCloud 同步调度器 (5s启动延迟 + 15分钟周期)
+    const stopSyncScheduler = startHistorySyncScheduler()
+
     await Navigation.present({
       element: <RootView />,
       modalPresentationStyle: "overFullScreen",
     })
+    stopSyncScheduler()
     abortAllAITasks()
     flushHistory()
     flushNovelProgress()
+    flushSearchHistory()
     flushSeriesCache()
     Script.exit()
   } catch (e) {
     abortAllAITasks()
     flushHistory()
     flushNovelProgress()
+    flushSearchHistory()
     flushSeriesCache()
     console.present().then(Script.exit)
     console.error(e)

@@ -1,6 +1,7 @@
 import { pixivHistoryDirectory } from "./dataDirectory"
 import { recoverFile, writeTextSafely } from "./safeFile"
 import { session } from "../api/session"
+import { notifyLocalMutation } from "./historySync"
 
 export interface NovelReadingProgress {
   novelID: number
@@ -10,7 +11,7 @@ export interface NovelReadingProgress {
 }
 
 const PROGRESS_FILE_NAME = "novel_progress.json"
-const DEBOUNCE_DELAY_MS = 1000
+const DEBOUNCE_DELAY_MS = 500
 
 let progressCache: Map<number, NovelReadingProgress> | null = null
 let isDirty = false
@@ -61,18 +62,23 @@ function loadProgressSync(): Map<number, NovelReadingProgress> {
 }
 
 export async function prepareNovelProgressStorage(): Promise<void> {
-  if (!FileManager.isiCloudEnabled) return
   const path = progressFilePath()
-  if (
-    !FileManager.existsSync(path) ||
-    !FileManager.isFileStoredIniCloud(path) ||
-    FileManager.isiCloudFileDownloaded(path)
-  ) {
-    return
+  const dir = path.substring(0, path.lastIndexOf("/"))
+  if (!FileManager.existsSync(dir)) {
+    FileManager.createDirectorySync(dir, true)
   }
-  try {
-    await FileManager.downloadFileFromiCloud(path)
-  } catch {}
+}
+
+export function getAllNovelProgressMap(): Map<number, NovelReadingProgress> {
+  return loadProgressSync()
+}
+
+export function replaceNovelProgressMap(map: Map<number, NovelReadingProgress>, persist = true): void {
+  progressCache = new Map(map)
+  if (persist) {
+    flushNovelProgress()
+    persistSync(progressCache)
+  }
 }
 
 export function getNovelProgress(novelID: number): NovelReadingProgress | undefined {
@@ -126,6 +132,7 @@ export function recordNovelProgress(
     updatedAt: Date.now(),
   })
   isDirty = true
+  notifyLocalMutation()
 
   if (immediate) {
     flushNovelProgress()
@@ -149,5 +156,6 @@ export function clearNovelProgress(novelID?: number): void {
     map.clear()
   }
   isDirty = true
+  notifyLocalMutation()
   flushNovelProgress()
 }

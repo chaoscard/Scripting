@@ -1,3 +1,5 @@
+import { session } from "../api/session"
+
 const DATA_DIR_NAME = "Pix-Scripting"
 
 function ensureDirectory(dir: string): string {
@@ -5,6 +7,14 @@ function ensureDirectory(dir: string): string {
     FileManager.createDirectorySync(dir, true)
   }
   return dir
+}
+
+export function resolveEffectiveUID(userId?: string | number | null): string {
+  const target = userId !== undefined ? userId : session.userID
+  if (target != null && String(target).trim().length > 0) {
+    return String(target).trim()
+  }
+  return "anonymous"
 }
 
 // Pix-Scripting 设备本地持久数据的根目录，缓存等不应同步到 iCloud。
@@ -31,15 +41,27 @@ function pixivCloudDirectory(subDir: string): string {
   return pixivDataPath(subDir)
 }
 
+// 历史记录（插画/漫画/小说、小说阅读进度、搜索历史）保存在本地 Documents，实时读写不走 iCloud。
 export function pixivHistoryDirectory(userId?: string | number | null): string {
-  const uid = userId != null && String(userId).trim().length > 0 ? String(userId).trim() : "anonymous"
-  return pixivCloudDirectory(`History/users/${uid}`)
+  const uid = resolveEffectiveUID(userId)
+  return ensureDirectory(`${pixivDataDirectory()}/History/users/${uid}`)
 }
 
-// 系列目录与话数映射保存在 iCloud Documents，按账号隔离支持跨设备同步。
+// 历史记录云端同步目录（仅由 syncEngine 低频读取和推送）。
+export function pixivCloudHistoryDirectory(userId?: string | number | null): string | null {
+  if (!FileManager.isiCloudEnabled) return null
+  const uid = resolveEffectiveUID(userId)
+  try {
+    return ensureDirectory(`${FileManager.iCloudDocumentsDirectory}/${DATA_DIR_NAME}/History/users/${uid}`)
+  } catch {
+    return null
+  }
+}
+
+// 系列目录与话数映射保存在设备本地目录（派生缓存无需同步 iCloud），按账号隔离。
 export function pixivSeriesCacheDirectory(userId?: string | number | null): string {
-  const uid = userId != null && String(userId).trim().length > 0 ? String(userId).trim() : "anonymous"
-  return pixivCloudDirectory(`Series/users/${uid}`)
+  const uid = resolveEffectiveUID(userId)
+  return ensureDirectory(`${pixivDataDirectory()}/Series/users/${uid}`)
 }
 
 // 应用设置保存在 iCloud Documents，以便多设备间同步配置。
@@ -49,7 +71,7 @@ export function pixivSettingsDirectory(): string {
 
 // 黑名单保存在 iCloud Documents，按账号隔离支持跨设备同步。
 export function pixivBlocklistDirectory(userId?: string | number | null): string {
-  const uid = userId != null && String(userId).trim().length > 0 ? String(userId).trim() : "anonymous"
+  const uid = resolveEffectiveUID(userId)
   return pixivCloudDirectory(`Blocklist/users/${uid}`)
 }
 
@@ -67,4 +89,3 @@ export function pixivWidgetDirectory(): string {
 export function pixivWidgetPath(...parts: string[]): string {
   return [pixivWidgetDirectory(), ...parts].join("/")
 }
-

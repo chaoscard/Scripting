@@ -142,18 +142,11 @@ export function clearSeriesMemoryCache(): void {
 }
 
 export async function prepareSeriesCacheStorage(userId?: string | number | null): Promise<void> {
-  if (!FileManager.isiCloudEnabled) return
   const path = seriesCacheFilePath(userId)
-  if (
-    !FileManager.existsSync(path) ||
-    !FileManager.isFileStoredIniCloud(path) ||
-    FileManager.isiCloudFileDownloaded(path)
-  ) {
-    return
+  const dir = path.substring(0, path.lastIndexOf("/"))
+  if (!FileManager.existsSync(dir)) {
+    FileManager.createDirectorySync(dir, true)
   }
-  try {
-    await FileManager.downloadFileFromiCloud(path)
-  } catch {}
 }
 
 export function recordWorkSeriesAssociation(
@@ -166,6 +159,19 @@ export function recordWorkSeriesAssociation(
   if (!workID || !seriesID) return
   ensureLoadedSync()
   const key = workKey(workID, kind)
+  const normalizedTitle = seriesTitle?.trim() || (kind === "novel" ? "小说系列" : "漫画系列")
+  const normalizedEp = episodeNumber ?? undefined
+
+  const existing = workToSeriesCache.get(key)
+  if (
+    existing &&
+    existing.seriesID === seriesID &&
+    existing.seriesTitle === normalizedTitle &&
+    existing.episodeNumber === normalizedEp
+  ) {
+    return
+  }
+
   if (workToSeriesCache.has(key)) {
     workToSeriesCache.delete(key)
   } else if (workToSeriesCache.size >= MAX_WORK_ASSOCIATIONS) {
@@ -176,8 +182,8 @@ export function recordWorkSeriesAssociation(
   }
   workToSeriesCache.set(key, {
     seriesID,
-    seriesTitle: seriesTitle?.trim() || (kind === "novel" ? "小说系列" : "漫画系列"),
-    episodeNumber: episodeNumber ?? undefined,
+    seriesTitle: normalizedTitle,
+    episodeNumber: normalizedEp,
   })
   scheduleSave()
 }

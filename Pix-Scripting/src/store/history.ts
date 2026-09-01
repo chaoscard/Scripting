@@ -6,6 +6,7 @@ import { pixivHistoryDirectory } from "./dataDirectory"
 import { recoverFile, writeTextSafely } from "./safeFile"
 import { clearNovelProgress } from "./novelProgress"
 import { session } from "../api/session"
+import { notifyLocalMutation, recordClearBefore, recordTombstone, syncHistoryNow } from "./historySync"
 import type { PixivIllustration, PixivNovel } from "../types"
 
 export type HistoryContentKind = "illustration" | "manga" | "novel"
@@ -137,28 +138,12 @@ export function historyFilePath(
   return `${pixivHistoryDirectory(userId ?? session.userID)}/${fileNameForKind(kind)}`
 }
 
-async function prepareSingleFile(path: string): Promise<void> {
-  if (
-    !FileManager.existsSync(path) ||
-    !FileManager.isFileStoredIniCloud(path) ||
-    FileManager.isiCloudFileDownloaded(path)
-  ) {
-    return
-  }
-  try {
-    await FileManager.downloadFileFromiCloud(path)
-  } catch {
-    // 忽略下载异常
-  }
-}
-
 export async function prepareHistoryStorage(): Promise<void> {
-  if (!FileManager.isiCloudEnabled) return
-  await Promise.all([
-    prepareSingleFile(historyFilePath("illustration")),
-    prepareSingleFile(historyFilePath("manga")),
-    prepareSingleFile(historyFilePath("novel")),
-  ]).catch(() => {})
+  const path = historyFilePath("illustration")
+  const dir = path.substring(0, path.lastIndexOf("/"))
+  if (!FileManager.existsSync(dir)) {
+    FileManager.createDirectorySync(dir, true)
+  }
 }
 
 function toStoredIllustData(illust: PixivIllustration): StoredIllustData {
@@ -222,7 +207,7 @@ function toStoredNovelData(novel: PixivNovel): StoredNovelData {
   }
 }
 
-function toStoredEntry(entry: HistoryEntry): StoredHistoryEntry {
+export function toStoredEntry(entry: HistoryEntry): StoredHistoryEntry {
   if (entry.kind === "illust") {
     return {
       kind: "illust",
@@ -344,6 +329,7 @@ function commitKind(kind: HistoryContentKind, next: any[], immediate = false): b
   caches[kind] = next as any
   dirtyFlags[kind] = true
   emitChanged()
+  notifyLocalMutation()
 
   if (immediate) {
     if (saveTimers[kind]) {
@@ -395,15 +381,22 @@ export function onHistoryChanged(fn: () => void): () => void {
 }
 
 export async function refreshHistoryFromCloud(): Promise<void> {
-  flushHistory()
-  await prepareHistoryStorage()
-  caches.illustration = null
-  caches.manga = null
-  caches.novel = null
+  await syncHistoryNow()
+}
+
+export function replaceKindEntries(kind: HistoryContentKind, next: any[], persist = true): void {
+  caches[kind] = next as any
+  if (persist) {
+    if (saveTimers[kind]) {
+      clearTimeout(saveTimers[kind]!)
+      saveTimers[kind] = null
+    }
+    persistKindSync(kind)
+  }
   emitChanged()
 }
 
-function parseRawEntriesForKind(
+export function parseRawEntriesForKind(
   kind: HistoryContentKind,
   rawEntries: any[]
 ): (IllustrationHistoryEntry | NovelHistoryEntry)[] {
@@ -435,7 +428,7 @@ function parseRawEntriesForKind(
   return valid.sort((a, b) => b.viewedAt - a.viewedAt)
 }
 
-function loadKindEntries(kind: HistoryContentKind): (IllustrationHistoryEntry | NovelHistoryEntry)[] {
+export function loadKindEntries(kind: HistoryContentKind): (IllustrationHistoryEntry | NovelHistoryEntry)[] {
   if (caches[kind] !== null) {
     return caches[kind]!
   }
@@ -547,12 +540,14 @@ export function removeHistoryEntry(kind: HistoryEntry["kind"], id: number): void
       commitKind("novel", next, true)
     }
     clearNovelProgress(id)
+    recordTombstone("novel", id)
   } else {
     for (const k of ["illustration", "manga"] as const) {
       const list = loadKindEntries(k) as IllustrationHistoryEntry[]
       const next = list.filter((e) => e.illustration.id !== id)
       if (next.length !== list.length) {
         commitKind(k, next, true)
+        recordTombstone(k, id)
       }
     }
   }
@@ -560,6 +555,7 @@ export function removeHistoryEntry(kind: HistoryEntry["kind"], id: number): void
 
 export function clearHistoryKind(kind: HistoryContentKind): void {
   commitKind(kind, [], true)
+  recordClearBefore(kind)
   if (kind === "novel") {
     clearNovelProgress()
   }
@@ -569,5 +565,8 @@ export function clearHistory(): void {
   commitKind("illustration", [], true)
   commitKind("manga", [], true)
   commitKind("novel", [], true)
+  recordClearBefore("illustration")
+  recordClearBefore("manga")
+  recordClearBefore("novel")
   clearNovelProgress()
 }
