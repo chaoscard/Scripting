@@ -386,7 +386,7 @@ function exploreToolbar(props: {
       ? "推荐"
       : props.mode === "latest"
         ? "最新"
-        : "专辑"
+        : "特辑"
   return appToolbar(
     props.onClose,
     title,
@@ -398,7 +398,7 @@ function exploreToolbar(props: {
       >
         <Label tag="recommended" title="推荐" systemImage="sparkles" />
         <Label tag="latest" title="最新" systemImage="clock" />
-        <Label tag="pixivision" title="专辑" systemImage="rectangle.stack" />
+        <Label tag="pixivision" title="特辑" systemImage="rectangle.stack" />
       </Picker>
     </Menu>
   )
@@ -449,7 +449,7 @@ function IllustFeedContent(props: {
   }, [])
 
   return (
-    <VStack alignment="leading" spacing={10}>
+    <VStack alignment="leading" spacing={8}>
       {paged.initialLoading ? (
         <LoadingView />
       ) : paged.error && paged.items.length === 0 ? (
@@ -482,7 +482,7 @@ function NovelFeedContent(props: {
 }) {
   const { paged, label } = props
   return (
-    <VStack alignment="leading" spacing={10}>
+    <VStack alignment="leading" spacing={8}>
       {paged.initialLoading ? (
         <LoadingView />
       ) : paged.error && paged.items.length === 0 ? (
@@ -518,15 +518,15 @@ function PixivisionFeedContent(props: {
 }) {
   const { paged } = props
   return (
-    <VStack alignment="leading" spacing={12} padding={{ top: 4, bottom: 24 }}>
+    <VStack alignment="leading" spacing={8} padding={{ top: 4, bottom: 24 }}>
       {paged.initialLoading ? (
         <LoadingView />
       ) : paged.error && paged.items.length === 0 ? (
         <ErrorView message={paged.error} onRetry={paged.refresh} />
       ) : paged.items.length === 0 ? (
-        <EmptyView text="暂无专辑，下拉刷新试试" systemImage="rectangle.stack" />
+        <EmptyView text="暂无特辑，下拉刷新试试" systemImage="rectangle.stack" />
       ) : (
-        <LazyVStack alignment="leading" spacing={12}>
+        <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 12 }}>
           {paged.items.map((article, index) => (
             <PixivisionCard key={article.id} article={article} priority={index} />
           ))}

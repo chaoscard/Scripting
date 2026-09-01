@@ -555,7 +555,7 @@ export function IllustFlowFeed(props: {
   ])
 
   return (
-    <VStack spacing={10} frame={{ maxWidth: "infinity" }}>
+    <VStack spacing={8} frame={{ maxWidth: "infinity" }}>
       {heroView}
       {waterfallItems.length > 0 ? (
         <HStack

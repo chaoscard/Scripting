@@ -72,18 +72,29 @@ export interface PixivIllustration {
   comment_access_control: number
 }
 
+export interface PixivisionTag {
+  id?: number
+  name: string
+}
+
 export interface PixivisionArticle {
   id: number
   title: string
   imageURL: string
   date: string
   category: string
+  tags?: string[]
 }
 
 export interface PixivisionArtwork {
   id: number
   title: string
   imageURL: string
+  authorName?: string
+  authorID?: number
+  width?: number
+  height?: number
+  comment?: string
 }
 
 export interface PixivisionDetail {
@@ -91,7 +102,9 @@ export interface PixivisionDetail {
   title: string
   date: string
   category: string
+  lead?: string
   description: string
+  tags: PixivisionTag[]
   artworks: PixivisionArtwork[]
   embeddedArticles: PixivisionArticle[]
 }

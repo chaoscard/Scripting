@@ -716,7 +716,7 @@ export function SettingsView() {
         footer={
           expanded.widgets ? (
             <Text>
-              您可在上方按不同尺寸选择默认内容源；若在桌面长按小组件选择“编辑小组件”，亦可在“参数”栏输入关键词进行单个小组件个性化覆盖（支持输入：日榜、周榜、月榜、关注、推荐、专辑）。
+              您可在上方按不同尺寸选择默认内容源；若在桌面长按小组件选择“编辑小组件”，亦可在“参数”栏输入关键词进行单个小组件个性化覆盖（支持输入：日榜、周榜、月榜、关注、推荐、特辑）。
             </Text>
           ) : undefined
         }
@@ -756,7 +756,7 @@ export function SettingsView() {
             <Text tag="ranking_month">月榜</Text>
             <Text tag="follow">关注</Text>
             <Text tag="discovery">推荐</Text>
-            <Text tag="pixivision">专辑</Text>
+            <Text tag="pixivision">特辑</Text>
           </Picker>
 
           <Picker
@@ -778,7 +778,7 @@ export function SettingsView() {
             <Text tag="ranking_month">月榜</Text>
             <Text tag="follow">关注</Text>
             <Text tag="discovery">推荐</Text>
-            <Text tag="pixivision">专辑</Text>
+            <Text tag="pixivision">特辑</Text>
           </Picker>
 
           <Picker
@@ -800,7 +800,7 @@ export function SettingsView() {
             <Text tag="ranking_month">月榜</Text>
             <Text tag="follow">关注</Text>
             <Text tag="discovery">推荐</Text>
-            <Text tag="pixivision">专辑</Text>
+            <Text tag="pixivision">特辑</Text>
           </Picker>
 
           {Device.isiPad && (
@@ -819,7 +819,7 @@ export function SettingsView() {
               <Text tag="ranking_month">月榜</Text>
               <Text tag="follow">关注</Text>
               <Text tag="discovery">推荐</Text>
-              <Text tag="pixivision">专辑</Text>
+              <Text tag="pixivision">特辑</Text>
             </Picker>
           )}
 
@@ -1319,7 +1319,7 @@ function sourceLabel(source?: string): string {
     case "ranking_month": return "月榜"
     case "follow": return "关注"
     case "discovery": return "推荐"
-    case "pixivision": return "专辑"
+    case "pixivision": return "特辑"
     default: return "默认"
   }
 }

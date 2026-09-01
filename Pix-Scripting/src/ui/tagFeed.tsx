@@ -6,6 +6,7 @@ import {
 import {
   nextIllustrations,
   nextNovels,
+  pixivisionByTag,
   searchIllustrations,
   searchNovels,
 } from "../api/pixiv"
@@ -16,7 +17,7 @@ import {
 } from "../store/settings"
 import { isIllustContentVisible, isNovelContentVisible } from "../store/contentFilter"
 import { useLatest, usePagedList, currentBatchSize, useExperimentalAmbientPalette } from "./hooks"
-import type { PixivIllustration, PixivNovel } from "../types"
+import type { PixivIllustration, PixivNovel, PixivisionArticle } from "../types"
 import {
   EmptyView,
   ErrorView,
@@ -24,14 +25,21 @@ import {
   IllustFlowFeed,
   LoadMoreTrigger,
   NovelCard,
+  PixivisionCard,
   RefreshableScrollView,
 } from "./components"
 
-export function TagFeedView(props: { tag: string; kind?: "illust" | "novel" }) {
+export function TagFeedView(props: {
+  tag: string
+  kind?: "illust" | "novel" | "pixivision"
+}) {
   const { tag, kind = "illust" } = props
 
   if (kind === "novel") {
     return <TagNovelFeed tag={tag} />
+  }
+  if (kind === "pixivision") {
+    return <TagPixivisionFeed tag={tag} />
   }
 
   return <TagIllustFeed tag={tag} />
@@ -75,7 +83,7 @@ function TagIllustFeed(props: { tag: string }) {
       background={ambientBackground}
       refreshable={paged.refresh}
     >
-      <VStack alignment="leading" spacing={10} padding={{ top: 4 }}>
+      <VStack alignment="leading" spacing={8} padding={{ top: 4 }}>
         {paged.initialLoading ? (
           <LoadingView />
         ) : paged.error && paged.items.length === 0 ? (
@@ -139,7 +147,7 @@ function TagNovelFeed(props: { tag: string }) {
       background={ambientBackground}
       refreshable={paged.refresh}
     >
-      <VStack alignment="leading" spacing={10} padding={{ top: 4 }}>
+      <VStack alignment="leading" spacing={8} padding={{ top: 4 }}>
         {paged.initialLoading ? (
           <LoadingView />
         ) : paged.error && paged.items.length === 0 ? (
@@ -157,6 +165,54 @@ function TagNovelFeed(props: { tag: string }) {
           <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
             {paged.items.map((novel, index) => (
               <NovelCard key={novel.id} novel={novel} priority={index} />
+            ))}
+            {paged.items.length > 0 ? (
+              <LoadMoreTrigger
+                anchor={paged.items[paged.items.length - 1].id}
+                onLoadMore={paged.loadMore}
+                hasMore={paged.hasMore}
+                isLoading={paged.loadingMore}
+              />
+            ) : null}
+          </LazyVStack>
+        )}
+      </VStack>
+    </RefreshableScrollView>
+  )
+}
+
+function TagPixivisionFeed(props: { tag: string }) {
+  const { tag } = props
+
+  const paged = usePagedList<PixivisionArticle>({
+    first: () => pixivisionByTag(tag, 1),
+    more: (nextURL) => {
+      const page = Number(nextURL?.match(/[?&]page=(\d+)/i)?.[1] ?? "2")
+      return pixivisionByTag(tag, page)
+    },
+    deps: [tag],
+  })
+
+  return (
+    <RefreshableScrollView
+      navigationTitle={`#${tag} - 特辑`}
+      navigationBarTitleDisplayMode="inline"
+      refreshable={paged.refresh}
+    >
+      <VStack alignment="leading" spacing={8} padding={{ top: 8, bottom: 28 }}>
+        {paged.initialLoading ? (
+          <LoadingView />
+        ) : paged.error && paged.items.length === 0 ? (
+          <ErrorView message={paged.error} onRetry={paged.refresh} />
+        ) : paged.items.length === 0 ? (
+          <EmptyView
+            text="该标签下暂无相关特辑"
+            systemImage="sparkles.rectangle.stack"
+          />
+        ) : (
+          <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 12 }}>
+            {paged.items.map((article, index) => (
+              <PixivisionCard key={article.id} article={article} priority={index} />
             ))}
             {paged.items.length > 0 ? (
               <LoadMoreTrigger
