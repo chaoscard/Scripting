@@ -99,6 +99,7 @@ export interface AppSettings {
   exemptFilterForPersonal: boolean
   hideNovels: boolean
   heroFirstFeedCard: boolean
+  compactIllustCard: boolean
   ambientImmersion: boolean
   ambientIntensity: AmbientIntensity
   experimentalImmersion: boolean
@@ -159,6 +160,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   exemptFilterForPersonal: false,
   hideNovels: false,
   heroFirstFeedCard: true,
+  compactIllustCard: false,
   ambientImmersion: true,
   ambientIntensity: "medium",
   experimentalImmersion: false,
@@ -389,6 +391,7 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
     ),
     hideNovels: boolOr(stored?.hideNovels, DEFAULT_SETTINGS.hideNovels),
     heroFirstFeedCard: boolOr(stored?.heroFirstFeedCard, DEFAULT_SETTINGS.heroFirstFeedCard),
+    compactIllustCard: boolOr(stored?.compactIllustCard, DEFAULT_SETTINGS.compactIllustCard),
     ambientImmersion: boolOr(stored?.ambientImmersion, DEFAULT_SETTINGS.ambientImmersion),
     ambientIntensity: isOneOf(stored?.ambientIntensity, AMBIENT_INTENSITY_VALUES)
       ? stored.ambientIntensity

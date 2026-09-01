@@ -27,7 +27,7 @@ import { CORNER_ICON_SIZE, formatNumber } from "./formatUtils"
 import { useIllustBookmark, useLatest, useUserFollow } from "../hooks"
 import { cacheIllust, cacheIllusts } from "../../store/illustCache"
 import { recordWorkSeriesAssociation } from "../../store/seriesCache"
-import { loadSettings, getDownloadImageQuality } from "../../store/settings"
+import { loadSettings, getDownloadImageQuality, onSettingsChanged } from "../../store/settings"
 import { blockTag, blockUser } from "../../store/blocklist"
 import { downloadIllustToAlbum, exportUgoiraToAlbum } from "../../downloader"
 import { addBookmark, bookmarkDetail, bookmarkTags, followUser, removeBookmark } from "../../api/pixiv"
@@ -61,6 +61,7 @@ export function IllustCard(props: {
   onAppear?: () => void
   flow?: boolean
   hero?: boolean
+  compact?: boolean
   priority?: number
   cornerBadge?: any
   footerText?: string
@@ -72,6 +73,7 @@ export function IllustCard(props: {
     onAppear,
     flow = false,
     hero = false,
+    compact,
     priority,
     cornerBadge,
     footerText,
@@ -86,6 +88,15 @@ export function IllustCard(props: {
   const [showBookmarkDetail, setShowBookmarkDetail] = useState(false)
   const [showBlockSheet, setShowBlockSheet] = useState(false)
   const [downloading, setDownloading] = useState(false)
+  const [compactSetting, setCompactSetting] = useState(() => loadSettings().compactIllustCard)
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      setCompactSetting(loadSettings().compactIllustCard)
+    })
+  }, [])
+
+  const isCompact = compact ?? compactSetting
   // 流式或Hero卡片只在进入原生可见区后请求图片；骨架尺寸仍由作品元数据提前固定。
   const [imageVisible, setImageVisible] = useState(!flow && !hero)
   const rawRatio = illust.width > 0 && illust.height > 0 ? illust.width / illust.height : 0.75
@@ -244,7 +255,7 @@ export function IllustCard(props: {
     >
       <VStack
         alignment="leading"
-        spacing={hero ? 4 : 2}
+        spacing={isCompact ? 0 : (hero ? 4 : 2)}
         frame={cardFrame}
         onAppear={handleAppear}
         padding={hero ? 6 : 4}
@@ -311,85 +322,89 @@ export function IllustCard(props: {
             onSheetChanged={setShowBookmarkDetail}
           />
         </ZStack>
-        <NavigationLink
-          value={`illust:${illust.id}`}
-          contextMenu={resolvedContextMenu}
-        >
-          <Text
-            font={hero ? "headline" : "caption"}
-            fontWeight={hero ? "bold" : "medium"}
-            lineLimit={hero ? 2 : 1}
-            padding={{ horizontal: hero ? 6 : 4, top: hero ? 4 : 2 }}
-          >
-            {illust.title}
-          </Text>
-        </NavigationLink>
-        <HStack
-          spacing={hero ? 8 : 5}
-          padding={{ horizontal: hero ? 6 : 4, bottom: footerText ? 0 : (hero ? 6 : 4) }}
-          frame={{ maxWidth: "infinity" }}
-        >
-          <NavigationLink
-            value={`illust:${illust.id}`}
-            frame={{ maxWidth: "infinity", alignment: "leading" }}
-            contextMenu={resolvedContextMenu}
-          >
-            <Text
-              font={hero ? "subheadline" : "caption2"}
-              foregroundStyle="secondaryLabel"
-              lineLimit={1}
-              frame={{ maxWidth: "infinity", alignment: "leading" }}
+        {!isCompact ? (
+          <>
+            <NavigationLink
+              value={`illust:${illust.id}`}
+              contextMenu={resolvedContextMenu}
             >
-              {illust.user.name}
-            </Text>
-          </NavigationLink>
-          <HStack
-            spacing={hero ? 8 : 5}
-            fixedSize={{ horizontal: true, vertical: false }}
-            layoutPriority={1}
-            frame={{ alignment: "trailing" }}
-          >
-            <HStack spacing={hero ? 3 : 2} fixedSize={{ horizontal: true, vertical: false }}>
-              <Image
-                systemName="eye"
-                font={hero ? "subheadline" : "caption2"}
-                foregroundStyle="secondaryLabel"
-              />
               <Text
-                font={hero ? "subheadline" : "caption2"}
+                font={hero ? "headline" : "caption"}
+                fontWeight={hero ? "bold" : "medium"}
+                lineLimit={hero ? 2 : 1}
+                padding={{ horizontal: hero ? 6 : 4, top: hero ? 4 : 2 }}
+              >
+                {illust.title}
+              </Text>
+            </NavigationLink>
+            <HStack
+              spacing={hero ? 8 : 5}
+              padding={{ horizontal: hero ? 6 : 4, bottom: footerText ? 0 : (hero ? 6 : 4) }}
+              frame={{ maxWidth: "infinity" }}
+            >
+              <NavigationLink
+                value={`illust:${illust.id}`}
+                frame={{ maxWidth: "infinity", alignment: "leading" }}
+                contextMenu={resolvedContextMenu}
+              >
+                <Text
+                  font={hero ? "subheadline" : "caption2"}
+                  foregroundStyle="secondaryLabel"
+                  lineLimit={1}
+                  frame={{ maxWidth: "infinity", alignment: "leading" }}
+                >
+                  {illust.user.name}
+                </Text>
+              </NavigationLink>
+              <HStack
+                spacing={hero ? 8 : 5}
+                fixedSize={{ horizontal: true, vertical: false }}
+                layoutPriority={1}
+                frame={{ alignment: "trailing" }}
+              >
+                <HStack spacing={hero ? 3 : 2} fixedSize={{ horizontal: true, vertical: false }}>
+                  <Image
+                    systemName="eye"
+                    font={hero ? "subheadline" : "caption2"}
+                    foregroundStyle="secondaryLabel"
+                  />
+                  <Text
+                    font={hero ? "subheadline" : "caption2"}
+                    foregroundStyle="secondaryLabel"
+                    lineLimit={1}
+                    fixedSize={{ horizontal: true, vertical: false }}
+                  >
+                    {formatNumber(illust.total_view)}
+                  </Text>
+                </HStack>
+                <HStack spacing={hero ? 3 : 2} fixedSize={{ horizontal: true, vertical: false }}>
+                  <Image
+                    systemName="heart"
+                    font={hero ? "subheadline" : "caption2"}
+                    foregroundStyle="secondaryLabel"
+                  />
+                  <Text
+                    font={hero ? "subheadline" : "caption2"}
+                    foregroundStyle="secondaryLabel"
+                    lineLimit={1}
+                    fixedSize={{ horizontal: true, vertical: false }}
+                  >
+                    {formatNumber(illust.total_bookmarks)}
+                  </Text>
+                </HStack>
+              </HStack>
+            </HStack>
+            {footerText ? (
+              <Text
+                font={hero ? "footnote" : "caption2"}
                 foregroundStyle="secondaryLabel"
                 lineLimit={1}
-                fixedSize={{ horizontal: true, vertical: false }}
+                padding={{ horizontal: hero ? 6 : 4, bottom: hero ? 6 : 4 }}
               >
-                {formatNumber(illust.total_view)}
+                {footerText}
               </Text>
-            </HStack>
-            <HStack spacing={hero ? 3 : 2} fixedSize={{ horizontal: true, vertical: false }}>
-              <Image
-                systemName="heart"
-                font={hero ? "subheadline" : "caption2"}
-                foregroundStyle="secondaryLabel"
-              />
-              <Text
-                font={hero ? "subheadline" : "caption2"}
-                foregroundStyle="secondaryLabel"
-                lineLimit={1}
-                fixedSize={{ horizontal: true, vertical: false }}
-              >
-                {formatNumber(illust.total_bookmarks)}
-              </Text>
-            </HStack>
-          </HStack>
-        </HStack>
-        {footerText ? (
-          <Text
-            font={hero ? "footnote" : "caption2"}
-            foregroundStyle="secondaryLabel"
-            lineLimit={1}
-            padding={{ horizontal: hero ? 6 : 4, bottom: hero ? 6 : 4 }}
-          >
-            {footerText}
-          </Text>
+            ) : null}
+          </>
         ) : null}
       </VStack>
       {topTrailingAction ? (

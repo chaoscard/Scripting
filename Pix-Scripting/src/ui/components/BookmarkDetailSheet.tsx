@@ -409,7 +409,7 @@ export function BookmarkButton(props: {
         glassEffect="circle"
         contentShape="circle"
         disabled={props.disabled || longPressLocked}
-        highPriorityGesture={
+        simultaneousGesture={
           LongPressGesture({ minDuration: 500 }).onEnded(() => {
             setLongPressLocked(true)
             props.onLongPress()

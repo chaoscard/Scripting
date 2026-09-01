@@ -396,24 +396,28 @@ export function SettingsView() {
               <Spacer />
               {!expanded.appearance ? (
                 <Text font="footnote" foregroundStyle="tertiaryLabel">
-                  {settings.heroFirstFeedCard ? "全宽首图" : "传统双列"}
-                  {settings.ambientImmersion ? " · 沉浸开启" : ""}
+                  {[
+                    settings.heroFirstFeedCard ? "全宽" : "双列",
+                    settings.compactIllustCard ? "简约" : null,
+                    settings.ambientImmersion ? "沉浸" : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </Text>
               ) : null}
             </HStack>
           }
         >
           <Toggle
+            title="瀑布流首图全宽展示"
             value={settings.heroFirstFeedCard}
             onChanged={(value) => update({ heroFirstFeedCard: value })}
-          >
-            <VStack alignment="leading" spacing={2}>
-              <Text font="body">瀑布流首图全宽展示</Text>
-              <Text font="caption" foregroundStyle="secondaryLabel">
-                在插画与漫画的推荐、最新和排行榜中全宽放大展示第一张作品
-              </Text>
-            </VStack>
-          </Toggle>
+          />
+          <Toggle
+            title="简约图片卡片"
+            value={settings.compactIllustCard}
+            onChanged={(value) => update({ compactIllustCard: value })}
+          />
           <Toggle
             title="沉浸效果"
             value={settings.ambientImmersion}

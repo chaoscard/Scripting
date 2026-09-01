@@ -984,7 +984,7 @@ export function NovelDetailView(props: { novelID: number }) {
                 <Button
                   disabled={bookmarkLoading || bookmarkLongPressLocked}
                   action={toggleBookmark}
-                  highPriorityGesture={
+                  simultaneousGesture={
                     LongPressGesture({ minDuration: 500 }).onEnded(() => {
                       setBookmarkLongPressLocked(true)
                       handleBookmarkLongPress()
