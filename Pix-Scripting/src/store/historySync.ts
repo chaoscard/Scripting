@@ -48,7 +48,7 @@ const RESUME_DELAY_MS = 2000 // 切回前台 2 秒后检查
 const MIN_RESUME_SYNC_INTERVAL_MS = 30 * 1000 // 切回前台最小检查间隔 30 秒
 
 // 多维触发配置
-const MUTATION_COUNT_THRESHOLD = 5 // 1. 累计 5 条变更立即触发同步
+const MUTATION_COUNT_THRESHOLD = 15 // 1. 累计 15 条变更立即触发同步
 const IDLE_SYNC_DELAY_MS = 10 * 1000 // 2. 前台操作停止空闲 10 秒后自动同步
 const MAX_WAIT_THROTTLE_MS = 30 * 1000 // 3. 自首次变更起，最多 30 秒兜底强制同步
 const AUTO_SYNC_FALLBACK_INTERVAL_MS = 60 * 1000 // 前台轮询兜底周期 60 秒
@@ -134,7 +134,7 @@ export function notifyLocalMutation(): void {
     firstMutationTime = now
   }
 
-  // 维度 1：累积 5 条变更立即触发同步
+  // 维度 1：累积 15 条变更立即触发同步
   if (pendingMutationCount >= MUTATION_COUNT_THRESHOLD) {
     resetMutationTracking()
     syncHistoryNow().catch(() => {})
