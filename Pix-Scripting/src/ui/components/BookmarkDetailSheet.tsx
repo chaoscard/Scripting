@@ -375,15 +375,19 @@ export function BookmarkButton(props: {
   sheetContent?: any
   sheetPresented?: boolean
   onSheetChanged?: (presented: boolean) => void
+  size?: number
+  hero?: boolean
 }) {
   const [longPressLocked, setLongPressLocked] = useState(false)
+  const size = props.size ?? (props.hero ? 30 : CORNER_ICON_SIZE)
+  const offset = props.hero ? { x: -5, y: -5 } : { x: -4, y: -4 }
 
   return (
     <ZStack
-      frame={{ width: CORNER_ICON_SIZE, height: CORNER_ICON_SIZE }}
+      frame={{ width: size, height: size }}
       contentShape="rect"
       zIndex={2}
-      offset={{ x: -4, y: -4 }}
+      offset={offset}
       allowsHitTesting={!props.disabled && !longPressLocked}
       sheet={
         props.sheetContent && props.onSheetChanged
@@ -400,10 +404,10 @@ export function BookmarkButton(props: {
           void Haptics.transient()
           props.onTap()
         }}
-        buttonStyle="glass"
-        frame={{ width: CORNER_ICON_SIZE, height: CORNER_ICON_SIZE }}
-        clipShape={{ type: "rect", cornerRadius: CORNER_ICON_SIZE / 2 }}
-        contentShape="rect"
+        buttonStyle="plain"
+        frame={{ width: size, height: size }}
+        glassEffect="circle"
+        contentShape="circle"
         disabled={props.disabled || longPressLocked}
         simultaneousGesture={
           LongPressGesture({ minDuration: 500 }).onEnded(() => {
@@ -415,7 +419,7 @@ export function BookmarkButton(props: {
       >
         <Image
           systemName={props.bookmarked ? "heart.fill" : "heart"}
-          font="body"
+          font={props.hero ? "title3" : "body"}
           foregroundStyle={props.bookmarked ? "#FF375F" : undefined}
         />
       </Button>

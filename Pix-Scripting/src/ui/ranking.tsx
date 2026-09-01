@@ -713,9 +713,11 @@ function IllustRankingFeedContent(props: {
   }, [])
 
   const badgeOf = useCallback(
-    (_: PixivIllustration, index: number) =>
-      index < 50 ? <ImageNumberBadge number={index + 1} /> : undefined,
-    []
+    (_: PixivIllustration, index: number) => {
+      if (heroFirst && index === 0) return undefined
+      return index < 50 ? <ImageNumberBadge number={index + 1} /> : undefined
+    },
+    [heroFirst]
   )
   return (
     <VStack alignment="leading" spacing={10} frame={{ maxWidth: "infinity" }}>

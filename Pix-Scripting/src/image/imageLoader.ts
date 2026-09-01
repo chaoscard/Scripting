@@ -1,5 +1,5 @@
 import { downloadBinary } from "../api/client"
-import { getFeedImageQuality, loadSettings } from "../store/settings"
+import { getFeedImageQuality, getHeroImageQuality, loadSettings } from "../store/settings"
 import { pixivDataPath } from "../store/dataDirectory"
 import { recoverFile, writeDataSafely, writeTextSafely } from "../store/safeFile"
 import { enforceUgoiraCacheLimit } from "../ugoira/ugoira"
@@ -593,13 +593,26 @@ export function cardThumbUrlOf(
     meta_pages?: { image_urls: PixivImageUrls }[]
     meta_single_page?: { original_image_url?: string }
   },
-  quality?: "medium" | "large" | unknown
+  quality?: "medium" | "large" | "original" | unknown
 ): string | null {
   if (!i) return null
   const selectedQuality =
-    quality === "medium" || quality === "large"
+    quality === "medium" || quality === "large" || quality === "original"
       ? quality
       : getFeedImageQuality()
+  if (selectedQuality === "original") {
+    const originalUrl =
+      i.meta_single_page?.original_image_url ||
+      (i.meta_pages && i.meta_pages.length > 0 ? i.meta_pages[0]?.image_urls?.original : undefined) ||
+      imageUrlOf(i, 0, "original")
+    return (
+      originalUrl ??
+      i.image_urls?.large ??
+      i.image_urls?.medium ??
+      i.image_urls?.square_medium ??
+      null
+    )
+  }
   if (selectedQuality === "large") {
     return i.image_urls?.large ?? i.image_urls?.medium ?? i.image_urls?.square_medium ?? null
   }
@@ -608,6 +621,29 @@ export function cardThumbUrlOf(
   return preferLarge
     ? (i.image_urls?.large ?? i.image_urls?.medium ?? i.image_urls?.square_medium ?? null)
     : (i.image_urls?.medium ?? i.image_urls?.large ?? i.image_urls?.square_medium ?? null)
+}
+
+// Hero 全宽卡片图片 URL：画质从当前瀑布流画质自动升一档（medium -> large，large -> original）。若无 original 则自动回退 large。
+export function heroCardThumbUrlOf(
+  i: {
+    width?: number
+    height?: number
+    image_urls?: PixivImageUrls | { square_medium?: string; medium?: string; large?: string; original?: string }
+    meta_pages?: { image_urls: PixivImageUrls }[]
+    meta_single_page?: { original_image_url?: string }
+  }
+): string | null {
+  if (!i) return null
+  const heroQuality = getHeroImageQuality()
+  const targetUrl = cardThumbUrlOf(i, heroQuality)
+  // 若目标为 original 但未获取到有效地址，显式兜底回退至 large
+  return (
+    targetUrl ??
+    i.image_urls?.large ??
+    i.image_urls?.medium ??
+    i.image_urls?.square_medium ??
+    null
+  )
 }
 
 // 多页插画与漫画的中等缩略图获取与推导函数（等比例缩放，严禁使用方形裁剪的 square_medium 以免消融时发生比例跳变）：

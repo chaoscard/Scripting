@@ -32,7 +32,7 @@ import { blockTag, blockUser } from "../../store/blocklist"
 import { downloadIllustToAlbum, exportUgoiraToAlbum } from "../../downloader"
 import { addBookmark, bookmarkDetail, bookmarkTags, followUser, removeBookmark } from "../../api/pixiv"
 import { session } from "../../api/session"
-import { cardThumbUrlOf } from "../../image/imageLoader"
+import { cardThumbUrlOf, heroCardThumbUrlOf } from "../../image/imageLoader"
 import type { PixivIllustration } from "../../types"
 const FLOW_HORIZONTAL_PADDING = 12
 const FLOW_COLUMN_SPACING = 12
@@ -46,10 +46,6 @@ const HERO_CARD_WIDTH = Math.floor(
 // 流式布局允许最长 1:4 的竖图保留原始比例；更极端的图片仍受此下限保护。
 const MIN_FLOW_IMAGE_RATIO = 1 / 4
 const MAX_FLOW_IMAGE_RATIO = 2.5
-// Hero 模式下限制最大高度，防止极端超长图占满屏幕
-const MIN_HERO_IMAGE_RATIO = 0.65
-const MAX_HERO_IMAGE_RATIO = 2.2
-const MAX_HERO_IMAGE_HEIGHT = 440
 
 
 export interface IllustCardAction {
@@ -97,15 +93,11 @@ export function IllustCard(props: {
   let imageRatio = 1
   let imageFrame: { width?: number; height?: number } | undefined = undefined
   let cardFrame: { width?: number; maxWidth?: string } = { maxWidth: "infinity" }
-  let isLongHeroImage = false
 
   if (hero) {
     cardFrame = { width: HERO_CARD_WIDTH }
-    isLongHeroImage = rawRatio < MIN_HERO_IMAGE_RATIO
-    imageRatio = Math.min(Math.max(rawRatio, MIN_HERO_IMAGE_RATIO), MAX_HERO_IMAGE_RATIO)
-    const rawHeight = HERO_CARD_WIDTH / imageRatio
-    const heroHeight = Math.min(rawHeight, MAX_HERO_IMAGE_HEIGHT)
-    imageFrame = { width: HERO_CARD_WIDTH, height: heroHeight }
+    imageRatio = Math.min(Math.max(rawRatio, MIN_FLOW_IMAGE_RATIO), MAX_FLOW_IMAGE_RATIO)
+    imageFrame = { width: HERO_CARD_WIDTH, height: HERO_CARD_WIDTH / imageRatio }
   } else if (flow) {
     cardFrame = { width: FLOW_CARD_WIDTH }
     imageRatio = Math.min(Math.max(rawRatio, MIN_FLOW_IMAGE_RATIO), MAX_FLOW_IMAGE_RATIO)
@@ -274,22 +266,30 @@ export function IllustCard(props: {
                 clipped={true}
               >
                 <CachedImage
-                  url={imageVisible ? cardThumbUrlOf(illust) : null}
+                  url={
+                    imageVisible
+                      ? hero
+                        ? heroCardThumbUrlOf(illust)
+                        : cardThumbUrlOf(illust)
+                      : null
+                  }
+                  previewUrl={hero ? cardThumbUrlOf(illust, "medium") : undefined}
                   aspectRatioValue={flow || hero ? imageRatio : 1}
-                  contentMode={hero ? (isLongHeroImage ? "fill" : "fit") : flow ? "fit" : "fill"}
+                  contentMode={flow || hero ? "fit" : "fill"}
                   centerCropSquare={!flow && !hero}
                   cornerRadius={hero ? 12 : 10}
                   frame={imageFrame}
                   priority={priority}
                 />
                 {illust.page_count > 1 ? (
-                  <PageCountBadge count={illust.page_count} />
+                  <PageCountBadge count={illust.page_count} hero={hero} />
                 ) : null}
               </ZStack>
               {cornerBadge ?? null}
             </ZStack>
           </NavigationLink>
           <BookmarkButton
+            hero={hero}
             bookmarked={bookmarked}
             disabled={bookmarkBusy}
             onTap={toggleBookmark}
@@ -313,17 +313,17 @@ export function IllustCard(props: {
         </ZStack>
         <NavigationLink value={`illust:${illust.id}`}>
           <Text
-            font={hero ? "subheadline" : "caption"}
-            fontWeight={hero ? "semibold" : "medium"}
+            font={hero ? "headline" : "caption"}
+            fontWeight={hero ? "bold" : "medium"}
             lineLimit={hero ? 2 : 1}
-            padding={{ horizontal: 4, top: hero ? 3 : 2 }}
+            padding={{ horizontal: hero ? 6 : 4, top: hero ? 4 : 2 }}
           >
             {illust.title}
           </Text>
         </NavigationLink>
         <HStack
-          spacing={hero ? 6 : 5}
-          padding={{ horizontal: 4, bottom: footerText ? 0 : 4 }}
+          spacing={hero ? 8 : 5}
+          padding={{ horizontal: hero ? 6 : 4, bottom: footerText ? 0 : (hero ? 6 : 4) }}
           frame={{ maxWidth: "infinity" }}
         >
           <NavigationLink
@@ -331,7 +331,7 @@ export function IllustCard(props: {
             frame={{ maxWidth: "infinity", alignment: "leading" }}
           >
             <Text
-              font={hero ? "caption" : "caption2"}
+              font={hero ? "subheadline" : "caption2"}
               foregroundStyle="secondaryLabel"
               lineLimit={1}
               frame={{ maxWidth: "infinity", alignment: "leading" }}
@@ -340,19 +340,19 @@ export function IllustCard(props: {
             </Text>
           </NavigationLink>
           <HStack
-            spacing={hero ? 6 : 5}
+            spacing={hero ? 8 : 5}
             fixedSize={{ horizontal: true, vertical: false }}
             layoutPriority={1}
             frame={{ alignment: "trailing" }}
           >
-            <HStack spacing={2} fixedSize={{ horizontal: true, vertical: false }}>
+            <HStack spacing={hero ? 3 : 2} fixedSize={{ horizontal: true, vertical: false }}>
               <Image
                 systemName="eye"
-                font={hero ? "caption" : "caption2"}
+                font={hero ? "subheadline" : "caption2"}
                 foregroundStyle="secondaryLabel"
               />
               <Text
-                font={hero ? "caption" : "caption2"}
+                font={hero ? "subheadline" : "caption2"}
                 foregroundStyle="secondaryLabel"
                 lineLimit={1}
                 fixedSize={{ horizontal: true, vertical: false }}
@@ -360,14 +360,14 @@ export function IllustCard(props: {
                 {formatNumber(illust.total_view)}
               </Text>
             </HStack>
-            <HStack spacing={2} fixedSize={{ horizontal: true, vertical: false }}>
+            <HStack spacing={hero ? 3 : 2} fixedSize={{ horizontal: true, vertical: false }}>
               <Image
                 systemName="heart"
-                font={hero ? "caption" : "caption2"}
+                font={hero ? "subheadline" : "caption2"}
                 foregroundStyle="secondaryLabel"
               />
               <Text
-                font={hero ? "caption" : "caption2"}
+                font={hero ? "subheadline" : "caption2"}
                 foregroundStyle="secondaryLabel"
                 lineLimit={1}
                 fixedSize={{ horizontal: true, vertical: false }}
@@ -379,10 +379,10 @@ export function IllustCard(props: {
         </HStack>
         {footerText ? (
           <Text
-            font={hero ? "caption" : "caption2"}
+            font={hero ? "footnote" : "caption2"}
             foregroundStyle="secondaryLabel"
             lineLimit={1}
-            padding={{ horizontal: 4, bottom: 4 }}
+            padding={{ horizontal: hero ? 6 : 4, bottom: hero ? 6 : 4 }}
           >
             {footerText}
           </Text>
@@ -390,17 +390,20 @@ export function IllustCard(props: {
       </VStack>
       {topTrailingAction ? (
         <Button
-          buttonStyle="glass"
+          buttonStyle="plain"
           action={topTrailingAction.action}
-          frame={{ width: CORNER_ICON_SIZE, height: CORNER_ICON_SIZE }}
-          clipShape={{ type: "rect", cornerRadius: CORNER_ICON_SIZE / 2 }}
-          contentShape="rect"
+          frame={{
+            width: hero ? 30 : CORNER_ICON_SIZE,
+            height: hero ? 30 : CORNER_ICON_SIZE,
+          }}
+          glassEffect="circle"
+          contentShape="circle"
           zIndex={1}
-          offset={{ x: -4, y: 4 }}
+          offset={hero ? { x: -5, y: 5 } : { x: -4, y: 4 }}
         >
           <Image
             systemName={topTrailingAction.systemImage}
-            font="body"
+            font={hero ? "title3" : "body"}
             tint={topTrailingAction.tint}
             foregroundStyle={topTrailingAction.foregroundStyle}
           />

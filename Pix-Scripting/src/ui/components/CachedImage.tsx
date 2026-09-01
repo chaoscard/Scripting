@@ -606,19 +606,24 @@ export function ImageNumberBadge(props: { number: number; foregroundStyle?: any;
 }
 
 
-export function PageCountBadge(props: { count: number }) {
+export function PageCountBadge(props: { count: number; hero?: boolean }) {
+  const isHero = Boolean(props.hero)
   return (
     <HStack
-      spacing={2}
-      offset={{ x: 4, y: -4 }}
+      spacing={isHero ? 4 : 2}
+      offset={isHero ? { x: 6, y: -6 } : { x: 4, y: -4 }}
       allowsHitTesting={false}
     >
       <Image
         systemName="rectangle.stack.fill"
-        font="body"
+        font={isHero ? "title3" : "body"}
         foregroundStyle="#FF9500"
       />
-      <Text font="body" fontWeight="semibold" foregroundStyle="#FF9500">
+      <Text
+        font={isHero ? "headline" : "body"}
+        fontWeight="semibold"
+        foregroundStyle="#FF9500"
+      >
         {props.count}
       </Text>
     </HStack>

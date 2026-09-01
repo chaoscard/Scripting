@@ -245,11 +245,11 @@ export function NovelCard(props: {
       </ZStack>
       {topTrailingAction ? (
         <Button
-          buttonStyle="glass"
+          buttonStyle="plain"
           action={topTrailingAction.action}
           frame={{ width: CORNER_ICON_SIZE, height: CORNER_ICON_SIZE }}
-          clipShape={{ type: "rect", cornerRadius: CORNER_ICON_SIZE / 2 }}
-          contentShape="rect"
+          glassEffect="circle"
+          contentShape="circle"
           zIndex={1}
           offset={{ x: -4, y: 4 }}
         >

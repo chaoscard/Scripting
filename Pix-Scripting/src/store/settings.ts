@@ -608,6 +608,11 @@ export function getFeedImageQuality(settings: AppSettings = loadSettings()): Fee
   return Device.isiPad ? settings.feedImageQualityIpad : settings.feedImageQualityIos
 }
 
+export function getHeroImageQuality(settings: AppSettings = loadSettings()): "large" | "original" {
+  const feedQuality = getFeedImageQuality(settings)
+  return feedQuality === "medium" ? "large" : "original"
+}
+
 export function getDetailImageQuality(settings: AppSettings = loadSettings()): DetailImageQuality {
   return Device.isiPad ? settings.detailImageQualityIpad : settings.detailImageQualityIos
 }
