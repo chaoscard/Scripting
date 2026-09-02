@@ -108,6 +108,33 @@ export interface PixivisionArtwork {
   comment?: string
 }
 
+export interface PixivisionTocItem {
+  id: string
+  title: string
+}
+
+export interface PixivisionProfile {
+  name: string
+  avatarURL?: string
+  description: string
+  links?: { title: string; url: string }[]
+}
+
+export type PixivisionBodyBlock =
+  | { type: "heading"; id?: string; title: string; level: number }
+  | { type: "subheading"; title: string }
+  | { type: "paragraph"; text: string }
+  | { type: "quote"; text: string; source?: string }
+  | { type: "comment"; text: string }
+  | { type: "illust"; artwork: PixivisionArtwork }
+  | { type: "article_card"; article: PixivisionArticle }
+  | { type: "profile"; profile: PixivisionProfile }
+  | { type: "qa"; question: string; answer: string; answerAvatarURL?: string }
+  | { type: "image"; src: string; caption?: string }
+  | { type: "movie"; videoURL: string }
+  | { type: "caption"; text: string }
+  | { type: "credit"; text: string }
+
 export interface PixivisionDetail {
   id: number
   title: string
@@ -120,6 +147,8 @@ export interface PixivisionDetail {
   artworks: PixivisionArtwork[]
   embeddedArticles: PixivisionArticle[]
   relatedSections?: PixivisionRelatedSection[]
+  tableOfContents?: PixivisionTocItem[]
+  blocks?: PixivisionBodyBlock[]
 }
 
 export interface PixivPage<T> {

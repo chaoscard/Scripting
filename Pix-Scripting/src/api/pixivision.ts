@@ -5,9 +5,12 @@ import type {
   PixivPage,
   PixivisionArticle,
   PixivisionArtwork,
+  PixivisionBodyBlock,
   PixivisionDetail,
+  PixivisionProfile,
   PixivisionRelatedSection,
   PixivisionTag,
+  PixivisionTocItem,
 } from "../types"
 
 const PIXIVISION_HOME_URL = "https://www.pixivision.net/zh/"
@@ -337,6 +340,10 @@ function buildPixivisionPageURL(page: number): string {
   return `${PIXIVISION_ORIGIN}/zh/?p=${page}`
 }
 
+function isPixivSignupPromo(text: string): boolean {
+  return /(?:注册\s*pixiv|立刻注册|免费注册|pixiv\s*アカウント|pixivに登録|sign\s*up)/i.test(text)
+}
+
 function buildPixivisionTagPageURL(tag: string, page: number): string {
   const isNumeric = /^\d+$/.test(tag)
   return isNumeric
@@ -413,77 +420,362 @@ export function parsePixivisionDetailPage(
     }
   }
 
-  // 4. 解析正文插画
+  // 4. 解析正文流式区块 (Body Blocks) 与目录 (Table of Contents)
+  const blocks: PixivisionBodyBlock[] = []
+  const tableOfContents: PixivisionTocItem[] = []
   const artworks: PixivisionArtwork[] = []
-  const artworkPattern =
-    /<div\b[^>]*class=["'][^"']*_feature-article-body__pixiv_illust[^"']*["'][^>]*>([\s\S]*?)(?=<div\b[^>]*class=["'][^"']*_feature-article-body__pixiv_illust|<div\b[^>]*class=["'][^"']*_feature-article-body__heading|<\/article>)/gi
-  let artworkMatch: RegExpExecArray | null
-  while ((artworkMatch = artworkPattern.exec(html)) != null) {
-    const block = artworkMatch[1]
-    const idText = block.match(/pixiv\.net\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?artworks\/(\d+)/i)?.[1]
-    const imageURL = matchAttribute(
-      block.match(/(?:aiwsp__main|am__work__main)[\s\S]*?<img\b[^>]*>/i)?.[0] ?? "",
-      "src"
-    )
-    const titleHTML = block.match(
-      /<h[23]\b[^>]*class=["'][^"']*(?:aiwsp__title|am__work__title)[^"']*["'][^>]*>([\s\S]*?)<\/h[23]>/i
-    )?.[1] ?? ""
-    
-    // 提取作者信息
-    const authorIDText = block.match(/pixiv\.net\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?users\/(\d+)/i)?.[1]
-    const authorNameHTML = block.match(
-      /<(?:a|span)\b[^>]*class=["'][^"']*(?:aiwsp__user-name|am__work__user-name)[^"']*["'][^>]*>([\s\S]*?)<\/(?:a|span)>/i
-    )?.[1] ?? ""
-
-    if (!idText || !imageURL) continue
-    const id = Number(idText)
-    if (!Number.isFinite(id) || artworks.some((item) => item.id === id)) continue
-
-    const thumbURL = derivePixivThumbUrl(imageURL) ?? imageURL
-    artworks.push({
-      id,
-      title: pixivisionHTMLToText(titleHTML) || `作品 ${id}`,
-      imageURL,
-      thumbURL,
-      authorID: authorIDText ? Number(authorIDText) : undefined,
-      authorName: authorNameHTML ? pixivisionHTMLToText(authorNameHTML) : undefined,
-    })
-  }
-
-  // 5. 解析正文中内嵌特辑卡片
   const embeddedArticles: PixivisionArticle[] = []
-  const embeddedPattern =
-    /<div\b[^>]*class=["'][^"']*(?:_feature-article-body__article_card|_article-card-container|amsp__recommended-article)[^"']*["'][^>]*>([\s\S]*?)(?=<div\b[^>]*class=["'][^"']*(?:_feature-article-body__article_card|_article-card-container|amsp__recommended-article)|<div\b[^>]*class=["'][^"']*_feature-article-body__heading|<\/article>)/gi
-  let embeddedMatch: RegExpExecArray | null
-  while ((embeddedMatch = embeddedPattern.exec(html)) != null) {
-    const block = embeddedMatch[1]
-    const idText = block.match(/href=["'](?:https?:\/\/www\.pixivision\.net)?\/zh\/a\/(\d+)["']/i)?.[1]
-    const imageURL =
-      matchAttribute(block.match(/<img\b[^>]*>/i)?.[0] ?? "", "src") ||
-      matchBackgroundImageURL(block)
-    const titleHTML = block.match(
-      /class=["'][^"']*arcsp__title[^"']*["'][^>]*>[\s\S]*?<h2\b[^>]*>([\s\S]*?)<\/h2>/i
-    )?.[1] ?? block.match(/<h2\b[^>]*>([\s\S]*?)<\/h2>/i)?.[1] ?? ""
-    const itemDate = matchAttribute(
-      block.match(/<time\b[^>]*>/i)?.[0] ?? "",
-      "datetime"
-    )
-    const categoryHTML = block.match(
-      /<span\b[^>]*class=["'][^"']*(?:arcsp__thumbnail-label|thumbnail-label|_category-label)[^"']*["'][^>]*>([\s\S]*?)<\/span>/i
-    )?.[1] ?? ""
-    if (!idText || !imageURL || !titleHTML) continue
-    const id = Number(idText)
-    if (!Number.isFinite(id) || id === articleID || embeddedArticles.some((item) => item.id === id)) continue
-    embeddedArticles.push({
-      id,
-      title: pixivisionHTMLToText(titleHTML),
-      imageURL,
-      date: itemDate,
-      category: pixivisionHTMLToText(categoryHTML) || "特辑",
-    })
+  const seenArtworks = new Set<number>()
+  const seenEmbeddedArticles = new Set<number>()
+
+  // 4.1 界定正文主体范围（排除底部相关推荐、分享与页脚）
+  const startBodyMatch = html.match(/<div\b[^>]*class=["'][^"']*\b_feature-article-body\b(?![a-zA-Z0-9_-])/i)
+  const startBodyIndex = startBodyMatch ? (startBodyMatch.index ?? -1) : -1
+
+  let bodySlice = ""
+  if (startBodyIndex !== -1) {
+    const bottomMarkers = [
+      /<div\b[^>]*class=["'][^"']*(?:amsp__related-articles|_related-articles|related-articles)/i,
+      /<div\b[^>]*class=["'][^"']*(?:am__footer|amsp__footer)/i,
+      /<div\b[^>]*class=["'][^"']*(?:_article-share|share-buttons)/i,
+      /<footer\b/i,
+    ]
+    let endBodyIndex = html.length
+    for (const marker of bottomMarkers) {
+      const m = html.slice(startBodyIndex).match(marker)
+      if (m && m.index != null && m.index > 0) {
+        const absolutePos = startBodyIndex + m.index
+        if (absolutePos < endBodyIndex) {
+          endBodyIndex = absolutePos
+        }
+      }
+    }
+    bodySlice = html.slice(startBodyIndex, endBodyIndex)
   }
 
-  // 6. 解析底部相关推荐分组 (Related Articles)
+  // 4.2 扫描所有以 _feature-article-body__ 开头的区块
+  if (bodySlice) {
+    const blockPattern =
+      /(<div\b[^>]*class=["'][^"']*_feature-article-body__([a-zA-Z0-9_]+)[^"']*["'][^>]*>[\s\S]*?)(?=<div\b[^>]*class=["'][^"']*_feature-article-body__|$)/gi
+    let blockMatch: RegExpExecArray | null
+    let pendingQuestion: string | null = null
+    let inSignupPromoSection = false
+
+    while ((blockMatch = blockPattern.exec(bodySlice)) != null) {
+      const rawBlock = blockMatch[1]
+      const blockType = blockMatch[2]
+
+      if (blockType === "table_of_contents") {
+        const linkPattern = /<a\b[^>]*href=["']#([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi
+        let lMatch: RegExpExecArray | null
+        while ((lMatch = linkPattern.exec(rawBlock)) != null) {
+          const id = lMatch[1]
+          const itemTitle = pixivisionHTMLToText(lMatch[2])
+          if (id && itemTitle && !isPixivSignupPromo(itemTitle)) {
+            tableOfContents.push({ id, title: itemTitle })
+          }
+        }
+      } else if (blockType === "heading") {
+        const idAttr = matchAttribute(rawBlock, "id")
+        const headingText = pixivisionHTMLToText(
+          rawBlock.match(/<h[23]\b[^>]*>([\s\S]*?)<\/h[23]>/i)?.[1] ?? rawBlock
+        )
+        if (isPixivSignupPromo(headingText)) {
+          inSignupPromoSection = true
+          continue
+        } else {
+          inSignupPromoSection = false
+        }
+        if (headingText) {
+          blocks.push({
+            type: "heading",
+            id: idAttr || undefined,
+            title: headingText,
+            level: 1,
+          })
+        }
+      } else {
+        // 过滤官方在合辑末尾定点插入的引导注册 pixiv 的宣传广告块
+        const isSignupPromoBlock =
+          inSignupPromoSection ||
+          rawBlock.includes("accounts.pixiv.net/signup") ||
+          rawBlock.includes("article_parts__signup") ||
+          (blockType === "image" && rawBlock.includes("798978602"))
+        if (isSignupPromoBlock) {
+          continue
+        }
+
+        if (blockType === "subheading") {
+        const subText = pixivisionHTMLToText(
+          rawBlock.match(/<h[34]\b[^>]*>([\s\S]*?)<\/h[34]>/i)?.[1] ?? rawBlock
+        )
+        if (subText) {
+          blocks.push({
+            type: "subheading",
+            title: subText,
+          })
+        }
+      } else if (blockType === "pixiv_illust") {
+        const idText = rawBlock.match(/pixiv\.net\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?artworks\/(\d+)/i)?.[1]
+        const imageURL = matchAttribute(
+          rawBlock.match(/(?:aiwsp__main|am__work__main)[\s\S]*?<img\b[^>]*>/i)?.[0] ?? "",
+          "src"
+        )
+        const titleHTML = rawBlock.match(
+          /<h[23]\b[^>]*class=["'][^"']*(?:aiwsp__title|am__work__title)[^"']*["'][^>]*>([\s\S]*?)<\/h[23]>/i
+        )?.[1] ?? ""
+        const authorIDText = rawBlock.match(/pixiv\.net\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?users\/(\d+)/i)?.[1]
+        const authorNameHTML = rawBlock.match(
+          /<(?:a|span)\b[^>]*class=["'][^"']*(?:aiwsp__user-name|am__work__user-name)[^"']*["'][^>]*>([\s\S]*?)<\/(?:a|span)>/i
+        )?.[1] ?? ""
+
+        if (idText && imageURL) {
+          const id = Number(idText)
+          if (Number.isFinite(id)) {
+            const thumbURL = derivePixivThumbUrl(imageURL) ?? imageURL
+            const artwork: PixivisionArtwork = {
+              id,
+              title: pixivisionHTMLToText(titleHTML) || `作品 ${id}`,
+              imageURL,
+              thumbURL,
+              authorID: authorIDText ? Number(authorIDText) : undefined,
+              authorName: authorNameHTML ? pixivisionHTMLToText(authorNameHTML) : undefined,
+            }
+            if (!seenArtworks.has(id)) {
+              seenArtworks.add(id)
+              artworks.push(artwork)
+            }
+            blocks.push({
+              type: "illust",
+              artwork,
+            })
+          }
+        }
+      } else if (blockType === "article_card") {
+        const idText = rawBlock.match(/href=["'](?:https?:\/\/www\.pixivision\.net)?\/zh\/a\/(\d+)["']/i)?.[1]
+        const imageURL =
+          matchAttribute(rawBlock.match(/<img\b[^>]*>/i)?.[0] ?? "", "src") ||
+          matchBackgroundImageURL(rawBlock)
+        const titleHTML =
+          rawBlock.match(/class=["'][^"']*arcsp__title[^"']*["'][^>]*>[\s\S]*?<h2\b[^>]*>([\s\S]*?)<\/h2>/i)?.[1] ??
+          rawBlock.match(/<h2\b[^>]*>([\s\S]*?)<\/h2>/i)?.[1] ?? ""
+        const itemDate = matchAttribute(
+          rawBlock.match(/<time\b[^>]*>/i)?.[0] ?? "",
+          "datetime"
+        )
+        const categoryHTML = rawBlock.match(
+          /<span\b[^>]*class=["'][^"']*(?:arcsp__thumbnail-label|thumbnail-label|_category-label)[^"']*["'][^>]*>([\s\S]*?)<\/span>/i
+        )?.[1] ?? ""
+        const cardTags = extractCardTags(rawBlock)
+
+        if (idText && imageURL && titleHTML) {
+          const id = Number(idText)
+          if (Number.isFinite(id) && id !== articleID) {
+            const article: PixivisionArticle = {
+              id,
+              title: pixivisionHTMLToText(titleHTML),
+              imageURL,
+              date: itemDate,
+              category: pixivisionHTMLToText(categoryHTML) || "特辑",
+              tags: cardTags.length > 0 ? cardTags : undefined,
+            }
+            if (!seenEmbeddedArticles.has(id)) {
+              seenEmbeddedArticles.add(id)
+              embeddedArticles.push(article)
+            }
+            blocks.push({
+              type: "article_card",
+              article,
+            })
+          }
+        }
+      } else if (blockType === "profile") {
+        const nameText = pixivisionHTMLToText(
+          rawBlock.match(/<div\b[^>]*class=["'][^"']*profile-name[^"']*["'][^>]*>([\s\S]*?)<\/div>/i)?.[1] ?? ""
+        )
+        const avatarURL = matchAttribute(
+          rawBlock.match(/<img\b[^>]*class=["'][^"']*profile-icon[^"']*["'][^>]*>/i)?.[0] ?? "",
+          "src"
+        )
+        const descText = pixivisionHTMLToParagraphText(
+          rawBlock.match(/<div\b[^>]*class=["'][^"']*profile-description[^"']*["'][^>]*>([\s\S]*?)<\/div>/i)?.[1] ?? ""
+        )
+        const profileLinks: { title: string; url: string }[] = []
+        const linkMatches = rawBlock.matchAll(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)
+        for (const lm of linkMatches) {
+          const lTitle = pixivisionHTMLToText(lm[2])
+          const lUrl = lm[1]
+          if (lTitle && lUrl) {
+            profileLinks.push({ title: lTitle, url: lUrl })
+          }
+        }
+        if (nameText || descText) {
+          blocks.push({
+            type: "profile",
+            profile: {
+              name: nameText || "创作者",
+              avatarURL: avatarURL || undefined,
+              description: descText,
+              links: profileLinks.length > 0 ? profileLinks : undefined,
+            },
+          })
+        }
+      } else if (blockType === "question") {
+        const qText = pixivisionHTMLToParagraphText(
+          rawBlock.match(/<div\b[^>]*class=["'][^"']*question[^"']*["'][^>]*>([\s\S]*?)<\/div>/i)?.[1] ?? rawBlock
+        )
+        if (qText) {
+          pendingQuestion = qText
+        }
+      } else if (blockType === "answer") {
+        const aText = pixivisionHTMLToParagraphText(
+          rawBlock.match(/<div\b[^>]*class=["'][^"']*answer-text[^"']*["'][^>]*>([\s\S]*?)<\/div>/i)?.[1] ?? rawBlock
+        )
+        const avatarURL =
+          matchBackgroundImageURL(rawBlock) ||
+          matchAttribute(rawBlock.match(/<img\b[^>]*>/i)?.[0] ?? "", "src")
+        if (aText) {
+          if (pendingQuestion) {
+            blocks.push({
+              type: "qa",
+              question: pendingQuestion,
+              answer: aText,
+              answerAvatarURL: avatarURL || undefined,
+            })
+            pendingQuestion = null
+          } else {
+            blocks.push({
+              type: "paragraph",
+              text: aText,
+            })
+          }
+        }
+      } else if (blockType === "quote") {
+        const quoteBody = pixivisionHTMLToParagraphText(
+          rawBlock.match(/<div\b[^>]*class=["'][^"']*fab__quote__body[^"']*["'][^>]*>([\s\S]*?)<\/div>/i)?.[1] ?? ""
+        )
+        const quoteSource = pixivisionHTMLToText(
+          rawBlock.match(/<div\b[^>]*class=["'][^"']*fab__quote__source[^"']*["'][^>]*>([\s\S]*?)<\/div>/i)?.[1] ?? ""
+        )
+        if (quoteBody) {
+          blocks.push({
+            type: "quote",
+            text: quoteBody,
+            source: quoteSource || undefined,
+          })
+        }
+      } else if (blockType === "link") {
+        const commentBody = pixivisionHTMLToParagraphText(
+          rawBlock.match(/<div\b[^>]*class=["'][^"']*comment-content[^"']*["'][^>]*>([\s\S]*?)<\/div>/i)?.[1] ?? ""
+        )
+        if (commentBody) {
+          blocks.push({
+            type: "comment",
+            text: commentBody,
+          })
+        }
+      } else if (blockType === "movie") {
+        const videoSrc = matchAttribute(
+          rawBlock.match(/<iframe\b[^>]*>/i)?.[0] ?? "",
+          "src"
+        )
+        if (videoSrc) {
+          blocks.push({
+            type: "movie",
+            videoURL: videoSrc,
+          })
+        }
+      } else if (blockType === "image") {
+        const src = matchAttribute(
+          rawBlock.match(/<img\b[^>]*>/i)?.[0] ?? "",
+          "src"
+        )
+        const caption = pixivisionHTMLToText(
+          rawBlock.match(/<figcaption\b[^>]*>([\s\S]*?)<\/figcaption>/i)?.[1] ?? ""
+        )
+        if (src) {
+          blocks.push({
+            type: "image",
+            src,
+            caption: caption || undefined,
+          })
+        }
+      } else if (blockType === "caption") {
+        const capText = pixivisionHTMLToText(rawBlock)
+        if (capText) {
+          blocks.push({
+            type: "caption",
+            text: capText,
+          })
+        }
+      } else if (blockType === "credit") {
+        const creditText = pixivisionHTMLToText(rawBlock)
+        if (creditText) {
+          blocks.push({
+            type: "credit",
+            text: creditText,
+          })
+        }
+      } else if (blockType === "paragraph") {
+        const pText = pixivisionHTMLToParagraphText(rawBlock)
+        if (pText && !isPixivSignupPromo(pText)) {
+          blocks.push({
+            type: "paragraph",
+            text: pText,
+          })
+        }
+      }
+      }
+    }
+
+    if (pendingQuestion) {
+      blocks.push({
+        type: "paragraph",
+        text: pendingQuestion,
+      })
+      pendingQuestion = null
+    }
+  }
+
+  // 4.3 降级兼容：极少数极老旧特辑若未解析出 blocks，使用正则表达式直接扫描
+  if (blocks.length === 0 && artworks.length === 0) {
+    const fallbackArtworkPattern =
+      /<div\b[^>]*class=["'][^"']*_feature-article-body__pixiv_illust[^"']*["'][^>]*>([\s\S]*?)(?=<div\b[^>]*class=["'][^"']*_feature-article-body__pixiv_illust|<div\b[^>]*class=["'][^"']*_feature-article-body__heading|<\/article>)/gi
+    let fallbackArtMatch: RegExpExecArray | null
+    while ((fallbackArtMatch = fallbackArtworkPattern.exec(html)) != null) {
+      const block = fallbackArtMatch[1]
+      const idText = block.match(/pixiv\.net\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?artworks\/(\d+)/i)?.[1]
+      const imageURL = matchAttribute(
+        block.match(/(?:aiwsp__main|am__work__main)[\s\S]*?<img\b[^>]*>/i)?.[0] ?? "",
+        "src"
+      )
+      const titleHTML = block.match(
+        /<h[23]\b[^>]*class=["'][^"']*(?:aiwsp__title|am__work__title)[^"']*["'][^>]*>([\s\S]*?)<\/h[23]>/i
+      )?.[1] ?? ""
+      const authorIDText = block.match(/pixiv\.net\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?users\/(\d+)/i)?.[1]
+      const authorNameHTML = block.match(
+        /<(?:a|span)\b[^>]*class=["'][^"']*(?:aiwsp__user-name|am__work__user-name)[^"']*["'][^>]*>([\s\S]*?)<\/(?:a|span)>/i
+      )?.[1] ?? ""
+
+      if (!idText || !imageURL) continue
+      const id = Number(idText)
+      if (!Number.isFinite(id) || artworks.some((item) => item.id === id)) continue
+
+      const thumbURL = derivePixivThumbUrl(imageURL) ?? imageURL
+      const artwork: PixivisionArtwork = {
+        id,
+        title: pixivisionHTMLToText(titleHTML) || `作品 ${id}`,
+        imageURL,
+        thumbURL,
+        authorID: authorIDText ? Number(authorIDText) : undefined,
+        authorName: authorNameHTML ? pixivisionHTMLToText(authorNameHTML) : undefined,
+      }
+      artworks.push(artwork)
+      blocks.push({ type: "illust", artwork })
+    }
+  }
+
+  // 5. 解析底部相关推荐分组 (Related Articles)
   const relatedSections: PixivisionRelatedSection[] = []
   const sectionBlockPattern =
     /<div\b[^>]*class=["'][^"']*(?:amsp__related-articles|_related-articles)[^"']*["'][^>]*data-gtm-category=["']([^"']*)["'][^>]*>([\s\S]*?)<\/ul>/gi
@@ -605,7 +897,7 @@ export function parsePixivisionDetailPage(
     }
   }
 
-  if (!title || (artworks.length === 0 && embeddedArticles.length === 0)) {
+  if (!title || (artworks.length === 0 && embeddedArticles.length === 0 && blocks.length === 0)) {
     throw new PixivError(404, "特辑内容不完整或已下架")
   }
   return {
@@ -620,6 +912,8 @@ export function parsePixivisionDetailPage(
     artworks,
     embeddedArticles,
     relatedSections: relatedSections.length > 0 ? relatedSections : undefined,
+    tableOfContents: tableOfContents.length > 0 ? tableOfContents : undefined,
+    blocks: blocks.length > 0 ? blocks : undefined,
   }
 }
 
