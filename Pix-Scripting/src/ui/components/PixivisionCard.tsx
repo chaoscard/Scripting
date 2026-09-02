@@ -104,14 +104,22 @@ export function PixivisionCard(props: {
             frame={{ maxWidth: "infinity", alignment: "leading" }}
           >
             <HStack spacing={6} padding={{ horizontal: 6, bottom: 4 }}>
-              {article.tags.map((tag) => (
-                <TagChip
-                  key={tag}
-                  name={tag}
-                  value={`pixivision-tag:${encodeURIComponent(tag)}`}
-                  compact={true}
-                />
-              ))}
+              {article.tags.map((tag) => {
+                const tagName = typeof tag === "string" ? tag : tag.name
+                const tagId = typeof tag === "string" ? undefined : tag.id
+                const route = tagId
+                  ? `pixivision-tag:${tagId}?name=${encodeURIComponent(tagName)}`
+                  : `pixivision-tag:${encodeURIComponent(tagName)}`
+                return (
+                  <TagChip
+                    key={`${tagId ?? tagName}`}
+                    name={tagName}
+                    tagName={tagName}
+                    value={route}
+                    compact={true}
+                  />
+                )
+              })}
             </HStack>
           </ScrollView>
         ) : null}

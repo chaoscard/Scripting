@@ -83,7 +83,12 @@ export interface PixivisionArticle {
   imageURL: string
   date: string
   category: string
-  tags?: string[]
+  tags?: PixivisionTag[]
+}
+
+export interface PixivisionRelatedSection {
+  title: string
+  articles: PixivisionArticle[]
 }
 
 export interface PixivisionArtwork {
@@ -107,6 +112,7 @@ export interface PixivisionDetail {
   tags: PixivisionTag[]
   artworks: PixivisionArtwork[]
   embeddedArticles: PixivisionArticle[]
+  relatedSections?: PixivisionRelatedSection[]
 }
 
 export interface PixivPage<T> {

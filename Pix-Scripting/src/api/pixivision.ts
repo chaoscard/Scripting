@@ -1,9 +1,11 @@
-import { apiGetPublicText, PixivError } from "./client"
+import { apiGetPublicJson, apiGetPublicText, PixivError } from "./client"
 import type {
+  PixivIllustration,
   PixivPage,
   PixivisionArticle,
   PixivisionArtwork,
   PixivisionDetail,
+  PixivisionRelatedSection,
   PixivisionTag,
 } from "../types"
 
@@ -11,8 +13,6 @@ const PIXIVISION_HOME_URL = "https://www.pixivision.net/zh/"
 const PIXIVISION_ORIGIN = "https://www.pixivision.net"
 const PIXIVISION_ALLOWED_ORIGINS = ["https://www.pixivision.net", "https://pixivision.net"]
 const PIXIVISION_PAGE_SIZE = 20
-const PIXIVISION_AJAX_PATH = "/pixivisionsp/zh/ajax-api/index"
-const PIXIVISION_TAG_AJAX_PATH = "/pixivisionsp/zh/ajax-api/tag"
 const PIXIVISION_USER_AGENT =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/26.6 PixivIOSApp/8.7.3"
 
@@ -58,14 +58,13 @@ export async function nextPixivision(
   _accessToken?: string
 ): Promise<PixivPage<PixivisionArticle>> {
   const safeURL = normalizePixivisionURL(nextURL)
-  const page = Number(safeURL.match(/[?&]page=(\d+)/i)?.[1] ?? "2")
+  const page = Number(safeURL.match(/[?&]p(?:age)?=(\d+)/i)?.[1] ?? "2")
   const response = await apiGetPublicText(
     safeURL,
     PIXIVISION_ALLOWED_ORIGINS,
-    "application/json, text/javascript, */*; q=0.01",
+    "text/html, application/json, */*",
     {
       ...pixivisionHeaders(PIXIVISION_HOME_URL),
-      "X-Requested-With": "XMLHttpRequest",
     }
   )
   let html = response
@@ -79,39 +78,44 @@ export async function nextPixivision(
 }
 
 export async function pixivisionByTag(
-  tag: string,
+  tagOrId: string | number,
   page = 1,
   _accessToken?: string
 ): Promise<PixivPage<PixivisionArticle>> {
-  const tagUrl = `${PIXIVISION_ORIGIN}/zh/t/${encodeURIComponent(tag)}`
-  if (page <= 1) {
-    const html = await apiGetPublicText(
-      tagUrl,
-      PIXIVISION_ALLOWED_ORIGINS,
-      "text/html",
-      pixivisionHeaders(PIXIVISION_HOME_URL)
-    )
-    return parsePixivisionTagPage(html, tag, 1)
+  const raw = String(tagOrId).trim()
+  const queryKey = raw.includes("?name=") ? raw.split("?name=")[0] : raw
+  const isNumericId = /^\d+$/.test(queryKey)
+
+  let url: string
+  let referer: string
+  if (isNumericId) {
+    url = page <= 1
+      ? `${PIXIVISION_ORIGIN}/zh/t/${queryKey}`
+      : `${PIXIVISION_ORIGIN}/zh/t/${queryKey}?p=${page}`
+    referer = `${PIXIVISION_ORIGIN}/zh/t/${queryKey}`
+  } else {
+    url = page <= 1
+      ? `${PIXIVISION_ORIGIN}/zh/s/?q=${encodeURIComponent(queryKey)}`
+      : `${PIXIVISION_ORIGIN}/zh/s/?q=${encodeURIComponent(queryKey)}&p=${page}`
+    referer = `${PIXIVISION_ORIGIN}/zh/s/?q=${encodeURIComponent(queryKey)}`
   }
 
-  const ajaxUrl = `${PIXIVISION_ORIGIN}${PIXIVISION_TAG_AJAX_PATH}?tag=${encodeURIComponent(tag)}&page=${page}&per_page=${PIXIVISION_PAGE_SIZE}`
-  const response = await apiGetPublicText(
-    ajaxUrl,
+  const html = await apiGetPublicText(
+    normalizePixivisionURL(url),
     PIXIVISION_ALLOWED_ORIGINS,
-    "application/json, text/javascript, */*; q=0.01",
-    {
-      ...pixivisionHeaders(tagUrl),
-      "X-Requested-With": "XMLHttpRequest",
-    }
+    "text/html",
+    pixivisionHeaders(referer)
   )
-  let html = response
-  try {
-    const json = JSON.parse(response)
-    html = typeof json?.body?.html === "string" ? json.body.html : response
-  } catch {
-    // 兼容服务端直接返回 HTML 的情况
+  const parsed = parsePixivisionPage(html, page)
+  return {
+    items: parsed.items,
+    nextURL:
+      parsed.items.length > 0
+        ? isNumericId
+          ? `${PIXIVISION_ORIGIN}/zh/t/${queryKey}?p=${page + 1}`
+          : `${PIXIVISION_ORIGIN}/zh/s/?q=${encodeURIComponent(queryKey)}&p=${page + 1}`
+        : null,
   }
-  return parsePixivisionTagPage(html, tag, page)
 }
 
 export async function pixivisionDetail(
@@ -126,6 +130,63 @@ export async function pixivisionDetail(
     pixivisionHeaders(PIXIVISION_HOME_URL)
   )
   return parsePixivisionDetailPage(html, articleID)
+}
+
+// 获取公开 Web 作品元数据（无需登录，快速获取确切真实物理宽高与大图地址）
+export async function fetchPublicWebIllustDetail(id: number): Promise<PixivIllustration | null> {
+  try {
+    const url = `https://www.pixiv.net/ajax/illust/${id}`
+    const json = await apiGetPublicJson<any>(
+      url,
+      ["https://www.pixiv.net", "https://pixiv.net"],
+      {
+        Referer: "https://www.pixiv.net/",
+        "User-Agent": PIXIVISION_USER_AGENT,
+      }
+    )
+    const b = json?.body
+    if (!b || !b.width || !b.height) return null
+    return {
+      id,
+      title: b.illustTitle || b.title || `作品 ${id}`,
+      type: b.illustType === 2 ? "ugoira" : b.illustType === 1 ? "manga" : "illust",
+      image_urls: {
+        square_medium: b.urls?.thumb ?? b.urls?.small ?? "",
+        medium: b.urls?.small ?? b.urls?.regular ?? "",
+        large: b.urls?.regular ?? b.urls?.original ?? "",
+      },
+      caption: b.description ?? "",
+      user: {
+        id: Number(b.userId) || 0,
+        name: b.userName || "",
+        account: b.userAccount || "",
+        profile_image_urls: {
+          medium: b.profileImageUrl || "",
+        },
+        is_followed: false,
+      },
+      tags: Array.isArray(b.tags?.tags)
+        ? b.tags.tags.map((t: any) => ({ name: t.tag, translated_name: t.translation?.en ?? null }))
+        : [],
+      create_date: b.createDate ?? "",
+      page_count: b.pageCount ?? 1,
+      width: Number(b.width) || 0,
+      height: Number(b.height) || 0,
+      x_restrict: b.xRestrict ?? 0,
+      series: b.seriesNavData ? { id: b.seriesNavData.seriesId, title: b.seriesNavData.title } : null,
+      meta_single_page: b.urls?.original ? { original_image_url: b.urls.original } : {},
+      meta_pages: [],
+      total_view: b.viewCount ?? 0,
+      total_bookmarks: b.bookmarkCount ?? 0,
+      is_bookmarked: false,
+      is_muted: false,
+      total_comments: b.commentCount ?? 0,
+      illust_ai_type: b.aiType ?? 0,
+      comment_access_control: 0,
+    }
+  } catch {
+    return null
+  }
 }
 
 function extractCardImageURL(card: string): string {
@@ -148,14 +209,21 @@ function extractCardImageURL(card: string): string {
   return ""
 }
 
-function extractCardTags(card: string): string[] {
-  const tags: string[] = []
-  const tagPattern = /<a\b[^>]*class=["'][^"']*(?:_tag-item|tag-label|arcsp__tag)[^"']*["'][^>]*>([\s\S]*?)<\/a>/gi
+function extractCardTags(card: string): PixivisionTag[] {
+  const tags: PixivisionTag[] = []
+  const seen = new Set<string>()
+  const tagPattern =
+    /<a\b[^>]*href=["'](?:\/zh\/t\/|https?:\/\/www\.pixivision\.net\/zh\/t\/)(\d+)[^"']*["'][^>]*>([\s\S]*?)<\/a>/gi
   let match: RegExpExecArray | null
   while ((match = tagPattern.exec(card)) != null) {
-    const tagText = pixivisionHTMLToText(match[1])
-    if (tagText && !tags.includes(tagText)) {
-      tags.push(tagText)
+    const id = Number(match[1])
+    const tagText = pixivisionHTMLToText(match[2])
+    if (tagText && !seen.has(tagText)) {
+      seen.add(tagText)
+      tags.push({
+        id: Number.isFinite(id) ? id : undefined,
+        name: tagText,
+      })
     }
   }
   return tags
@@ -247,24 +315,14 @@ export function parsePixivisionTagPage(
 }
 
 function buildPixivisionPageURL(page: number): string {
-  return `${PIXIVISION_ORIGIN}${PIXIVISION_AJAX_PATH}?page=${page}&per_page=${PIXIVISION_PAGE_SIZE}`
+  return `${PIXIVISION_ORIGIN}/zh/?p=${page}`
 }
 
 function buildPixivisionTagPageURL(tag: string, page: number): string {
-  return `${PIXIVISION_ORIGIN}${PIXIVISION_TAG_AJAX_PATH}?tag=${encodeURIComponent(tag)}&page=${page}&per_page=${PIXIVISION_PAGE_SIZE}`
-}
-
-function parseArtworkDimensions(url: string): { width?: number; height?: number } {
-  // 匹配类似 /c/768x1200_80/ 或 /c/540x540_70/ 中的宽高
-  const match = url.match(/\/c\/(\d+)x(\d+)(?:_\d+)?\//i)
-  if (match) {
-    const width = Number(match[1])
-    const height = Number(match[2])
-    if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
-      return { width, height }
-    }
-  }
-  return {}
+  const isNumeric = /^\d+$/.test(tag)
+  return isNumeric
+    ? `${PIXIVISION_ORIGIN}/zh/t/${tag}?p=${page}`
+    : `${PIXIVISION_ORIGIN}/zh/s/?q=${encodeURIComponent(tag)}&p=${page}`
 }
 
 export function parsePixivisionDetailPage(
@@ -289,30 +347,52 @@ export function parsePixivisionDetailPage(
   const lead = leadBlock ? pixivisionHTMLToParagraphText(leadBlock) : undefined
 
   // 2. 解析正文描述
-  const descriptionBlock = html.match(
-    /<div\b[^>]*class=["'][^"']*amsp__description-text[^"']*["'][^>]*>([\s\S]*?)<\/div>\s*<\/div>/i
-  )?.[1] ?? html.match(
-    /<div\b[^>]*class=["'][^"']*_feature-article-body__paragraph[^"']*["'][^>]*>([\s\S]*?)(?=<div\b[^>]*class=["'][^"']*article-item|<\/article>)/i
-  )?.[1] ?? ""
+  const descriptionBlock =
+    html.match(
+      /<div\b[^>]*class=["'][^"']*(?:amsp__description-text|am__description-text)[^"']*["'][^>]*>([\s\S]*?)<\/div>/i
+    )?.[1] ??
+    html.match(
+      /<div\b[^>]*class=["'][^"']*(?:amsp__description|am__description)[^"']*["'][^>]*>([\s\S]*?)(?:<button|<\/div>)/i
+    )?.[1] ??
+    html.match(
+      /<div\b[^>]*class=["'][^"']*(?:fab__paragraph|fabsp__paragraph)[^"']*["'][^>]*>([\s\S]*?)<\/div>/i
+    )?.[1] ??
+    html.match(
+      /<div\b[^>]*class=["'][^"']*_feature-article-body__paragraph[^"']*["'][^>]*>([\s\S]*?)(?=<div\b[^>]*class=["'][^"']*(?:article-item|_feature-article-body__pixiv_illust)|<\/article>)/i
+    )?.[1] ??
+    ""
   const description = pixivisionHTMLToParagraphText(descriptionBlock)
 
-  // 3. 解析特辑标签
+  // 3. 解析特辑真实标签（限定在头部标签容器或底部标签块内，防止误扫描相关推荐模块的标题外链）
   const tags: PixivisionTag[] = []
   const seenTagNames = new Set<string>()
-  const tagListPattern = /<a\b[^>]*href=["'](?:\/zh\/t\/|https?:\/\/www\.pixivision\.net\/zh\/t\/)([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi
-  let tagMatch: RegExpExecArray | null
-  while ((tagMatch = tagListPattern.exec(html)) != null) {
-    const rawName = decodeURIComponent(tagMatch[1].trim())
-    const labelText = pixivisionHTMLToText(tagMatch[2]) || rawName
-    if (labelText && !seenTagNames.has(labelText)) {
-      seenTagNames.add(labelText)
-      tags.push({ name: labelText })
+  const tagContainerMatch =
+    html.match(/<ul\b[^>]*class=["'][^"']*am__header-tags[^"']*["'][^>]*>([\s\S]*?)<\/ul>/i) ||
+    html.match(/<div\b[^>]*class=["'][^"']*am__tags[^"']*["'][^>]*>([\s\S]*?)<\/div>/i) ||
+    html.match(/<ul\b[^>]*class=["'][^"']*_tag-list[^"']*["'][^>]*>([\s\S]*?)<\/ul>/i)
+
+  const tagSource = tagContainerMatch ? tagContainerMatch[1] : ""
+  if (tagSource) {
+    const tagListPattern =
+      /<a\b[^>]*href=["'](?:\/zh\/t\/|https?:\/\/www\.pixivision\.net\/zh\/t\/)(\d+)[^"']*["'][^>]*>([\s\S]*?)<\/a>/gi
+    let tagMatch: RegExpExecArray | null
+    while ((tagMatch = tagListPattern.exec(tagSource)) != null) {
+      const id = Number(tagMatch[1])
+      const labelText = pixivisionHTMLToText(tagMatch[2])
+      if (labelText && !seenTagNames.has(labelText)) {
+        seenTagNames.add(labelText)
+        tags.push({
+          id: Number.isFinite(id) ? id : undefined,
+          name: labelText,
+        })
+      }
     }
   }
 
   // 4. 解析正文插画
   const artworks: PixivisionArtwork[] = []
-  const artworkPattern = /<div\b[^>]*class=["'][^"']*_feature-article-body__pixiv_illust[^"']*["'][^>]*>([\s\S]*?)(?=<div\b[^>]*class=["'][^"']*_feature-article-body__pixiv_illust|<div\b[^>]*class=["'][^"']*_feature-article-body__heading|<\/article>)/gi
+  const artworkPattern =
+    /<div\b[^>]*class=["'][^"']*_feature-article-body__pixiv_illust[^"']*["'][^>]*>([\s\S]*?)(?=<div\b[^>]*class=["'][^"']*_feature-article-body__pixiv_illust|<div\b[^>]*class=["'][^"']*_feature-article-body__heading|<\/article>)/gi
   let artworkMatch: RegExpExecArray | null
   while ((artworkMatch = artworkPattern.exec(html)) != null) {
     const block = artworkMatch[1]
@@ -335,22 +415,19 @@ export function parsePixivisionDetailPage(
     const id = Number(idText)
     if (!Number.isFinite(id) || artworks.some((item) => item.id === id)) continue
 
-    const dimensions = parseArtworkDimensions(imageURL)
-
     artworks.push({
       id,
       title: pixivisionHTMLToText(titleHTML) || `作品 ${id}`,
       imageURL,
       authorID: authorIDText ? Number(authorIDText) : undefined,
       authorName: authorNameHTML ? pixivisionHTMLToText(authorNameHTML) : undefined,
-      width: dimensions.width,
-      height: dimensions.height,
     })
   }
 
-  // 5. 解析内嵌与推荐特辑
+  // 5. 解析正文中内嵌特辑卡片
   const embeddedArticles: PixivisionArticle[] = []
-  const embeddedPattern = /<div\b[^>]*class=["'][^"']*(?:_feature-article-body__article_card|_article-card-container|amsp__recommended-article)[^"']*["'][^>]*>([\s\S]*?)(?=<div\b[^>]*class=["'][^"']*(?:_feature-article-body__article_card|_article-card-container|amsp__recommended-article)|<div\b[^>]*class=["'][^"']*_feature-article-body__heading|<\/article>)/gi
+  const embeddedPattern =
+    /<div\b[^>]*class=["'][^"']*(?:_feature-article-body__article_card|_article-card-container|amsp__recommended-article)[^"']*["'][^>]*>([\s\S]*?)(?=<div\b[^>]*class=["'][^"']*(?:_feature-article-body__article_card|_article-card-container|amsp__recommended-article)|<div\b[^>]*class=["'][^"']*_feature-article-body__heading|<\/article>)/gi
   let embeddedMatch: RegExpExecArray | null
   while ((embeddedMatch = embeddedPattern.exec(html)) != null) {
     const block = embeddedMatch[1]
@@ -380,6 +457,77 @@ export function parsePixivisionDetailPage(
     })
   }
 
+  // 6. 解析底部相关推荐分组 (Related Articles)
+  const relatedSections: PixivisionRelatedSection[] = []
+  const sectionBlockPattern =
+    /<div\b[^>]*class=["'][^"']*(?:amsp__related-articles|_related-articles)[^"']*["'][^>]*data-gtm-category=["']([^"']*)["'][^>]*>([\s\S]*?)<\/ul>/gi
+  let sectionMatch: RegExpExecArray | null
+  while ((sectionMatch = sectionBlockPattern.exec(html)) != null) {
+    const block = sectionMatch[2]
+    const headingMatch =
+      block.match(/<div\b[^>]*class=["'][^"']*__heading[^"']*["'][^>]*>([\s\S]*?)<\/div>/i) ||
+      block.match(/<h[23]\b[^>]*class=["'][^"']*rla__heading[^"']*["'][^>]*>([\s\S]*?)<\/h[23]>/i) ||
+      block.match(/<h[23]\b[^>]*>([\s\S]*?)<\/h[23]>/i)
+    if (!headingMatch) continue
+
+    const headingHTML = headingMatch[1]
+    const sectionTitle = pixivisionHTMLToText(headingHTML)
+    if (!sectionTitle) continue
+
+    const sectionArticles: PixivisionArticle[] = []
+    const cardPattern =
+      /<(?:article|li)\b[^>]*class=["'][^"']*(?:_article-related-card|arrct|article-card)[^"']*["'][^>]*>([\s\S]*?)(?:<\/(?:article|li)>|$)/gi
+    let cardMatch: RegExpExecArray | null
+    while ((cardMatch = cardPattern.exec(block)) != null) {
+      const card = cardMatch[1]
+      const idText = card.match(/\/zh\/a\/(\d+)/i)?.[1]
+      if (!idText) continue
+      const id = Number(idText)
+      if (
+        !Number.isFinite(id) ||
+        id === articleID ||
+        sectionArticles.some((a) => a.id === id)
+      ) {
+        continue
+      }
+
+      const imageURL =
+        matchAttribute(card.match(/<img\b[^>]*>/i)?.[0] ?? "", "src") ||
+        matchAttribute(card.match(/<img\b[^>]*>/i)?.[0] ?? "", "data-src") ||
+        extractCardImageURL(card)
+
+      const titleHTML =
+        card.match(/<h[234]\b[^>]*>([\s\S]*?)<\/h[234]>/i)?.[1] ||
+        card.match(/class=["'][^"']*title[^"']*["'][^>]*>([\s\S]*?)<\/[a-z0-9]+>/i)?.[1] ||
+        matchAttribute(card.match(/<img\b[^>]*>/i)?.[0] ?? "", "alt")
+
+      const itemDate = matchAttribute(
+        card.match(/<time\b[^>]*>/i)?.[0] ?? "",
+        "datetime"
+      )
+      const categoryHTML = card.match(
+        /<span\b[^>]*class=["'][^"']*(?:thumbnail-label|_category-label)[^"']*["'][^>]*>([\s\S]*?)<\/span>/i
+      )?.[1]
+
+      if (imageURL && titleHTML) {
+        sectionArticles.push({
+          id,
+          title: pixivisionHTMLToText(titleHTML),
+          imageURL,
+          date: itemDate,
+          category: categoryHTML ? pixivisionHTMLToText(categoryHTML) : "特辑",
+        })
+      }
+    }
+
+    if (sectionArticles.length > 0) {
+      relatedSections.push({
+        title: sectionTitle,
+        articles: sectionArticles,
+      })
+    }
+  }
+
   if (!title || (artworks.length === 0 && embeddedArticles.length === 0)) {
     throw new PixivError(404, "特辑内容不完整或已下架")
   }
@@ -393,6 +541,7 @@ export function parsePixivisionDetailPage(
     tags,
     artworks,
     embeddedArticles,
+    relatedSections: relatedSections.length > 0 ? relatedSections : undefined,
   }
 }
 
@@ -459,6 +608,7 @@ function pixivisionHTMLToText(value: string): string {
 function pixivisionHTMLToParagraphText(value: string): string {
   return decodePixivisionEntities(
     value
+      .replace(/<button[\s\S]*?<\/button>/gi, "")
       .replace(/<br\s*\/?>(?:\r?\n)?/gi, "\n")
       .replace(/<\/(div|p|li|h[1-6])>/gi, "\n")
       .replace(/<[^>]+>/g, "")

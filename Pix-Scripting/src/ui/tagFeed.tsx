@@ -182,20 +182,37 @@ function TagNovelFeed(props: { tag: string }) {
 }
 
 function TagPixivisionFeed(props: { tag: string }) {
-  const { tag } = props
+  const { tag: rawTag } = props
+
+  // 解析 tag 参数：可能格式为 "1200?name=可丽饼" 或 "1200" 或 "可丽饼"
+  let queryKey = rawTag
+  let displayName = ""
+  if (rawTag.includes("?name=")) {
+    const [idPart, namePart] = rawTag.split("?name=")
+    queryKey = idPart
+    try {
+      displayName = decodeURIComponent(namePart)
+    } catch {
+      displayName = namePart
+    }
+  } else if (!/^\d+$/.test(rawTag)) {
+    displayName = rawTag
+  }
+
+  const navTitle = displayName ? `#${displayName} - 特辑` : `#特辑`
 
   const paged = usePagedList<PixivisionArticle>({
-    first: () => pixivisionByTag(tag, 1),
+    first: () => pixivisionByTag(queryKey, 1),
     more: (nextURL) => {
-      const page = Number(nextURL?.match(/[?&]page=(\d+)/i)?.[1] ?? "2")
-      return pixivisionByTag(tag, page)
+      const page = Number(nextURL?.match(/[?&]p(?:age)?=(\d+)/i)?.[1] ?? "2")
+      return pixivisionByTag(queryKey, page)
     },
-    deps: [tag],
+    deps: [rawTag],
   })
 
   return (
     <RefreshableScrollView
-      navigationTitle={`#${tag} - 特辑`}
+      navigationTitle={navTitle}
       navigationBarTitleDisplayMode="inline"
       refreshable={paged.refresh}
     >

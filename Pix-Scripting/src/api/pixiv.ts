@@ -121,6 +121,7 @@ export {
   nextPixivision,
   pixivisionByTag,
   pixivisionDetail,
+  fetchPublicWebIllustDetail,
   parsePixivisionPage,
   parsePixivisionTagPage,
   parsePixivisionDetailPage,

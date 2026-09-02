@@ -15,7 +15,7 @@ import {
   useState,
   VStack,
 } from "scripting"
-import { illustrationDetail, pixivisionDetail } from "../api/pixiv"
+import { fetchPublicWebIllustDetail, illustrationDetail, pixivisionDetail } from "../api/pixiv"
 import { session } from "../api/session"
 import { cacheIllust, getCachedIllust } from "../store/illustCache"
 import { renderDestination } from "./routes"
@@ -49,13 +49,23 @@ export function PixivisionDetailView(props: { articleID: number }) {
   const hydrateArtwork = useCallback(async (id: number) => {
     if (hydratingSetRef.current.has(id)) return
     const cached = getCachedIllust(id)
-    if (cached) {
+    if (cached && cached.width > 0 && cached.height > 0) {
       setHydratedMap((prev) => (prev[id] ? prev : { ...prev, [id]: cached }))
       return
     }
     hydratingSetRef.current.add(id)
     try {
-      const full = await session.call((token) => illustrationDetail(id, token))
+      let full: PixivIllustration | null = null
+      if (session.userID) {
+        try {
+          full = await session.call((token) => illustrationDetail(id, token))
+        } catch {
+          // 回退到公开 Web 接口
+        }
+      }
+      if (!full) {
+        full = await fetchPublicWebIllustDetail(id)
+      }
       if (full) {
         cacheIllust(full)
         setHydratedMap((prev) => ({ ...prev, [id]: full }))
@@ -67,31 +77,6 @@ export function PixivisionDetailView(props: { articleID: number }) {
     }
   }, [])
 
-  const hydrateAllArtworks = useCallback(async (artworks: PixivisionArtwork[]) => {
-    const idsToFetch = artworks
-      .map((a) => a.id)
-      .filter((id) => !getCachedIllust(id))
-
-    if (idsToFetch.length === 0) return
-
-    await Promise.allSettled(
-      idsToFetch.map(async (id) => {
-        if (hydratingSetRef.current.has(id)) return
-        hydratingSetRef.current.add(id)
-        try {
-          const full = await session.call((token) => illustrationDetail(id, token))
-          if (full) {
-            cacheIllust(full)
-            setHydratedMap((prev) => ({ ...prev, [id]: full }))
-          }
-        } catch {
-        } finally {
-          hydratingSetRef.current.delete(id)
-        }
-      })
-    )
-  }, [])
-
   async function load() {
     const g = guard()
     setLoading(true)
@@ -99,20 +84,48 @@ export function PixivisionDetailView(props: { articleID: number }) {
     try {
       const value = await pixivisionDetail(articleID)
       if (!g.isCurrent()) return
-      setDetail(value)
 
-      // 1. 预先填充已有本地缓存的作品（使用真实原始分辨率）
+      // 1. 预先填充已有本地缓存的作品（使用真实原始分辨率，与 Hero 卡片保持一致）
       const initialMap: Record<number, PixivIllustration> = {}
       for (const item of value.artworks) {
         const cached = getCachedIllust(item.id)
-        if (cached) initialMap[item.id] = cached
-      }
-      if (Object.keys(initialMap).length > 0) {
-        setHydratedMap(initialMap)
+        if (cached && cached.width > 0 && cached.height > 0) {
+          initialMap[item.id] = cached
+        }
       }
 
-      // 2. 异步并发拉取所有作品的原始官方详情（获取真实原始分辨率）
-      void hydrateAllArtworks(value.artworks)
+      // 2. 并发预取所有未缓存作品的真实物理宽高与大图元数据（确保首帧画出正确比例的框）
+      const idsToFetch = value.artworks
+        .map((a) => a.id)
+        .filter((id) => !initialMap[id])
+
+      if (idsToFetch.length > 0) {
+        const results = await Promise.allSettled(
+          idsToFetch.map(async (id) => {
+            if (session.userID) {
+              try {
+                const full = await session.call((token) => illustrationDetail(id, token))
+                if (full) return full
+              } catch {
+                // 回退到公开 Web 接口
+              }
+            }
+            return fetchPublicWebIllustDetail(id)
+          })
+        )
+        if (!g.isCurrent()) return
+
+        for (let i = 0; i < idsToFetch.length; i++) {
+          const res = results[i]
+          if (res.status === "fulfilled" && res.value) {
+            cacheIllust(res.value)
+            initialMap[idsToFetch[i]] = res.value
+          }
+        }
+      }
+
+      setHydratedMap(initialMap)
+      setDetail(value)
     } catch (err: any) {
       if (g.isCurrent()) setError(err?.message ?? "加载失败")
     } finally {
@@ -156,10 +169,15 @@ export function PixivisionDetailView(props: { articleID: number }) {
       <VStack
         alignment="leading"
         spacing={14}
-        padding={{ horizontal: FLOW_HORIZONTAL_PADDING, top: 12, bottom: 32 }}
+        padding={{ top: 12, bottom: 32 }}
       >
         {/* 1. 头部信息 */}
-        <VStack alignment="leading" spacing={8} frame={{ maxWidth: "infinity" }}>
+        <VStack
+          alignment="leading"
+          spacing={8}
+          padding={{ horizontal: FLOW_HORIZONTAL_PADDING }}
+          frame={{ maxWidth: "infinity" }}
+        >
           <HStack spacing={8} frame={{ maxWidth: "infinity" }}>
             <Text
               font="subheadline"
@@ -186,44 +204,57 @@ export function PixivisionDetailView(props: { articleID: number }) {
 
         {/* 2. 简介（复用图片详情页 ExpandableIntroduction） */}
         {detail.lead ? (
-          <ExpandableIntroduction
-            title="编辑导语"
-            caption={detail.lead}
-            routeDestination={renderDestination}
-          />
+          <VStack padding={{ horizontal: FLOW_HORIZONTAL_PADDING }} frame={{ maxWidth: "infinity" }}>
+            <ExpandableIntroduction
+              title="编辑导语"
+              caption={detail.lead}
+              routeDestination={renderDestination}
+            />
+          </VStack>
         ) : null}
 
         {detail.description && detail.description !== detail.lead ? (
-          <ExpandableIntroduction
-            title="简介"
-            caption={detail.description}
-            routeDestination={renderDestination}
-          />
+          <VStack padding={{ horizontal: FLOW_HORIZONTAL_PADDING }} frame={{ maxWidth: "infinity" }}>
+            <ExpandableIntroduction
+              title="简介"
+              caption={detail.description}
+              routeDestination={renderDestination}
+            />
+          </VStack>
         ) : null}
 
-        {/* 3. 标签（复用图片详情页 FlowLayout 流式排版） */}
+        {/* 3. 标签（只展示纯净的文章真实标签） */}
         {Array.isArray(detail.tags) && detail.tags.length > 0 ? (
-          <VStack alignment="leading" spacing={6}>
+          <VStack
+            alignment="leading"
+            spacing={6}
+            padding={{ horizontal: FLOW_HORIZONTAL_PADDING }}
+          >
             <Text font="subheadline" fontWeight="semibold" foregroundStyle="secondaryLabel">
               标签
             </Text>
             <FlowLayout spacing={6}>
-              {detail.tags.map((tag) => (
-                <TagChip
-                  key={tag.name}
-                  name={tag.name}
-                  tagName={tag.name}
-                  value={`pixivision-tag:${encodeURIComponent(tag.name)}`}
-                  compact
-                />
-              ))}
+              {detail.tags.map((tag) => {
+                const route = tag.id
+                  ? `pixivision-tag:${tag.id}?name=${encodeURIComponent(tag.name)}`
+                  : `pixivision-tag:${encodeURIComponent(tag.name)}`
+                return (
+                  <TagChip
+                    key={`${tag.id ?? tag.name}`}
+                    name={tag.name}
+                    tagName={tag.name}
+                    value={route}
+                    compact
+                  />
+                )
+              })}
             </FlowLayout>
           </VStack>
         ) : null}
 
-        {/* 4. 正文插画列表 */}
+        {/* 4. 正文插画列表（完全遵循 WaterfallView 中 hero 卡片的容器与外框规范） */}
         {detail.artworks.length > 0 ? (
-          <VStack alignment="leading" spacing={8} padding={{ top: 4 }}>
+          <VStack alignment="leading" spacing={12} padding={{ top: 4 }}>
             {detail.artworks.map((artwork, index) => {
               const hydrated = hydratedMap[artwork.id]
               const illust = hydrated ?? buildArtworkSkeletonIllust(artwork)
@@ -232,7 +263,8 @@ export function PixivisionDetailView(props: { articleID: number }) {
                   key={artwork.id}
                   alignment="leading"
                   spacing={6}
-                  frame={{ maxWidth: "infinity" }}
+                  padding={{ horizontal: FLOW_HORIZONTAL_PADDING }}
+                  frame={{ width: Device.screen.width }}
                 >
                   <IllustCard
                     hero={true}
@@ -261,17 +293,17 @@ export function PixivisionDetailView(props: { articleID: number }) {
           </VStack>
         ) : null}
 
-        {/* 5. 相关特辑推荐 */}
+        {/* 5. 正文内嵌特辑 */}
         {detail.embeddedArticles && detail.embeddedArticles.length > 0 ? (
-          <VStack alignment="leading" spacing={12} padding={{ top: 16 }}>
+          <VStack alignment="leading" spacing={12} padding={{ horizontal: FLOW_HORIZONTAL_PADDING, top: 16 }}>
             <HStack spacing={6} alignment="center">
               <Image
-                systemName="sparkles.rectangle.stack"
+                systemName="doc.text.image"
                 font="headline"
                 foregroundStyle="#0096FA"
               />
               <Text font="headline" fontWeight="bold">
-                相关特辑
+                推荐阅读
               </Text>
             </HStack>
             <LazyVStack alignment="leading" spacing={8} frame={{ maxWidth: "infinity" }}>
@@ -279,6 +311,41 @@ export function PixivisionDetailView(props: { articleID: number }) {
                 <PixivisionCard key={article.id} article={article} />
               ))}
             </LazyVStack>
+          </VStack>
+        ) : null}
+
+        {/* 6. 底部相关推荐分组 (Related Articles) */}
+        {detail.relatedSections && detail.relatedSections.length > 0 ? (
+          <VStack alignment="leading" spacing={20} padding={{ horizontal: FLOW_HORIZONTAL_PADDING, top: 16 }}>
+            {detail.relatedSections.map((section, sIdx) => {
+              const isLike = section.title.includes("喜欢")
+              const iconName = isLike ? "heart.fill" : "sparkles.rectangle.stack.fill"
+              const iconColor = isLike ? "#FF453A" : "#0096FA"
+              return (
+                <VStack
+                  key={`${section.title}-${sIdx}`}
+                  alignment="leading"
+                  spacing={10}
+                  frame={{ maxWidth: "infinity" }}
+                >
+                  <HStack spacing={6} alignment="center">
+                    <Image
+                      systemName={iconName}
+                      font="headline"
+                      foregroundStyle={iconColor}
+                    />
+                    <Text font="headline" fontWeight="bold">
+                      {section.title}
+                    </Text>
+                  </HStack>
+                  <LazyVStack alignment="leading" spacing={8} frame={{ maxWidth: "infinity" }}>
+                    {section.articles.map((article) => (
+                      <PixivisionCard key={`${section.title}-${article.id}`} article={article} />
+                    ))}
+                  </LazyVStack>
+                </VStack>
+              )
+            })}
           </VStack>
         ) : null}
       </VStack>
@@ -309,8 +376,8 @@ function buildArtworkSkeletonIllust(artwork: PixivisionArtwork): PixivIllustrati
     tags: [],
     create_date: "",
     page_count: 1,
-    width: 0,
-    height: 0,
+    width: artwork.width ?? 0,
+    height: artwork.height ?? 0,
     x_restrict: 0,
     series: null,
     meta_single_page: {},
