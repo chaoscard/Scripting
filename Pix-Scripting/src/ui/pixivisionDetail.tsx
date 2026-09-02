@@ -5,6 +5,7 @@ import {
   HStack,
   Image,
   LazyVStack,
+  Menu,
   NavigationLink,
   ScrollView,
   ScrollViewProxy,
@@ -23,17 +24,21 @@ import { cacheIllust, getCachedIllust } from "../store/illustCache"
 import { cachedFilePath, derivePixivThumbUrl, loadImage } from "../image/imageLoader"
 import { renderDestination } from "./routes"
 import { useAsyncGuard } from "./hooks"
-import type { PixivIllustration, PixivisionArtwork, PixivisionDetail } from "../types"
+import type { PixivIllustration, PixivisionArticle, PixivisionArtwork, PixivisionDetail } from "../types"
 import {
   ErrorView,
   ExpandableIntroduction,
   formatDate,
   IllustCard,
+  LinkedDescription,
   LoadingView,
   PixivisionCard,
+  presentExternalURL,
+  routeForDescriptionLink,
   TagChip,
 } from "./components"
 import { AvatarImage, CachedImage } from "./components/CachedImage"
+import { requestPixivRoute } from "./routeNavigation"
 
 const FLOW_HORIZONTAL_PADDING = 12
 
@@ -60,24 +65,24 @@ export function PixivisionDetailView(props: { articleID: number }) {
     })
   }, [])
 
-  const handleOpenToc = useCallback(async () => {
-    if (!detail?.tableOfContents || detail.tableOfContents.length === 0) return
-    const index = await Dialog.actionSheet({
-      title: "特辑目录",
-      cancelButton: true,
-      actions: detail.tableOfContents.map((item, idx) => ({
-        label: `${idx + 1}. ${item.title}`,
-      })),
-    })
-    if (index != null && detail.tableOfContents[index]) {
-      const targetId = detail.tableOfContents[index].id
-      if (targetId) {
-        setTimeout(() => {
-          scrollToTarget(targetId)
-        }, 80)
+  const handlePixivisionLink = useCallback((rawUrl: string) => {
+    const trimmed = rawUrl.trim()
+    if (!trimmed) return
+    const target = routeForDescriptionLink(trimmed)
+    if (target) {
+      if (target.startsWith("http")) {
+        void presentExternalURL(target)
+      } else {
+        requestPixivRoute(target)
       }
+    } else if (/^https?:\/\//i.test(trimmed)) {
+      void presentExternalURL(trimmed)
+    } else if (trimmed.startsWith("/")) {
+      void presentExternalURL(`https://www.pixivision.net${trimmed}`)
+    } else {
+      requestPixivRoute(trimmed)
     }
-  }, [detail?.tableOfContents, scrollToTarget])
+  }, [])
 
   const hydrateArtwork = useCallback(async (id: number) => {
     if (hydratingSetRef.current.has(id)) return
@@ -129,30 +134,70 @@ export function PixivisionDetailView(props: { articleID: number }) {
         }
       }
 
-      // 2. 毫秒级缩略图推导与尺寸测算
+      // 2. 毫秒级缩略图推导与尺寸测算（插画作品与特辑文章卡片并行测算，实现先画框后绘图）
       const unmeasuredArtworks = value.artworks.filter(
         (a) => !initialMap[a.id] && (!a.width || !a.height || a.width <= 0 || a.height <= 0)
       )
 
+      const allArticles: PixivisionArticle[] = [
+        ...value.embeddedArticles,
+        ...(value.blocks?.filter((b): b is { type: "article_card"; article: PixivisionArticle } => b.type === "article_card").map((b) => b.article) ?? []),
+        ...(value.relatedSections?.flatMap((s) => s.articles) ?? []),
+      ]
+      const unmeasuredArticles = allArticles.filter(
+        (a) => (!a.width || !a.height || a.width <= 0 || a.height <= 0) && Boolean(a.imageURL)
+      )
+
+      const measurePromises: Promise<any>[] = []
+
       if (unmeasuredArtworks.length > 0) {
-        await Promise.allSettled(
-          unmeasuredArtworks.map(async (art) => {
-            const thumbUrl = art.thumbURL || derivePixivThumbUrl(art.imageURL)
-            if (!thumbUrl) return
-            const filePath = cachedFilePath(thumbUrl) ?? (await loadImage(thumbUrl, -1000))
-            if (filePath) {
-              try {
-                const img = UIImage.fromFile(filePath)
-                if (img && img.width > 0 && img.height > 0) {
-                  art.width = img.width
-                  art.height = img.height
+        measurePromises.push(
+          Promise.allSettled(
+            unmeasuredArtworks.map(async (art) => {
+              const thumbUrl = art.thumbURL || derivePixivThumbUrl(art.imageURL)
+              if (!thumbUrl) return
+              const filePath = cachedFilePath(thumbUrl) ?? (await loadImage(thumbUrl, -1000))
+              if (filePath) {
+                try {
+                  const img = UIImage.fromFile(filePath)
+                  if (img && img.width > 0 && img.height > 0) {
+                    art.width = img.width
+                    art.height = img.height
+                  }
+                } catch {
+                  // 忽略解码异常
                 }
-              } catch {
-                // 忽略解码异常
               }
-            }
-          })
+            })
+          )
         )
+      }
+
+      if (unmeasuredArticles.length > 0) {
+        measurePromises.push(
+          Promise.allSettled(
+            unmeasuredArticles.map(async (art) => {
+              const thumbUrl = art.thumbURL || derivePixivThumbUrl(art.imageURL) || art.imageURL
+              if (!thumbUrl) return
+              const filePath = cachedFilePath(thumbUrl) ?? (await loadImage(thumbUrl, -1000))
+              if (filePath) {
+                try {
+                  const img = UIImage.fromFile(filePath)
+                  if (img && img.width > 0 && img.height > 0) {
+                    art.width = img.width
+                    art.height = img.height
+                  }
+                } catch {
+                  // 忽略解码异常
+                }
+              }
+            })
+          )
+        )
+      }
+
+      if (measurePromises.length > 0) {
+        await Promise.allSettled(measurePromises)
       }
 
       if (!g.isCurrent()) return
@@ -207,9 +252,19 @@ export function PixivisionDetailView(props: { articleID: number }) {
               topBarTrailing: (
                 <HStack spacing={12}>
                   {detail.tableOfContents && detail.tableOfContents.length > 0 ? (
-                    <Button key="toc" action={handleOpenToc}>
-                      <Image systemName="list.bullet" />
-                    </Button>
+                    <Menu key="toc-menu" label={<Image systemName="list.bullet" />}>
+                      {detail.tableOfContents.map((item, idx) => (
+                        <Button
+                          key={item.id || `toc-${idx}`}
+                          title={`${idx + 1}. ${item.title}`}
+                          action={() => {
+                            if (item.id) {
+                              scrollToTarget(item.id)
+                            }
+                          }}
+                        />
+                      ))}
+                    </Menu>
                   ) : null}
                   <Button key="share" action={handleShare}>
                     <Image systemName="square.and.arrow.up" />
@@ -431,13 +486,11 @@ export function PixivisionDetailView(props: { articleID: number }) {
                           padding={{ horizontal: FLOW_HORIZONTAL_PADDING, vertical: 2 }}
                           frame={{ maxWidth: "infinity", alignment: "leading" }}
                         >
-                          <Text
+                          <LinkedDescription
+                            html={block.text}
                             font="body"
                             lineSpacing={5}
-                            multilineTextAlignment="leading"
-                          >
-                            {block.text}
-                          </Text>
+                          />
                         </VStack>
                       )
                     case "quote":
@@ -459,9 +512,11 @@ export function PixivisionDetailView(props: { articleID: number }) {
                               clipShape={{ type: "rect", cornerRadius: 2 }}
                             />
                             <VStack alignment="leading" spacing={4} frame={{ maxWidth: "infinity" }}>
-                              <Text font="subheadline" lineSpacing={4}>
-                                {block.text}
-                              </Text>
+                              <LinkedDescription
+                                html={block.text}
+                                font="subheadline"
+                                lineSpacing={4}
+                              />
                               {block.source ? (
                                 <Text font="caption" foregroundStyle="secondaryLabel">
                                   —— {block.source}
@@ -491,9 +546,11 @@ export function PixivisionDetailView(props: { articleID: number }) {
                                 读者来信
                               </Text>
                             </HStack>
-                            <Text font="subheadline" lineSpacing={4}>
-                              {block.text}
-                            </Text>
+                            <LinkedDescription
+                              html={block.text}
+                              font="subheadline"
+                              lineSpacing={4}
+                            />
                           </VStack>
                         </VStack>
                       )
@@ -522,16 +579,19 @@ export function PixivisionDetailView(props: { articleID: number }) {
                                 </Text>
                               </VStack>
                             </HStack>
-                            <Text font="subheadline" lineSpacing={4} foregroundStyle="secondaryLabel">
-                              {block.profile.description}
-                            </Text>
+                            <LinkedDescription
+                              html={block.profile.description}
+                              font="subheadline"
+                              foregroundStyle="secondaryLabel"
+                              lineSpacing={4}
+                            />
                             {block.profile.links && block.profile.links.length > 0 ? (
                               <HStack spacing={8}>
                                 {block.profile.links.map((link) => (
                                   <Button
                                     key={link.url}
                                     action={() => {
-                                      void Safari.openURL(link.url)
+                                      handlePixivisionLink(link.url)
                                     }}
                                     buttonStyle="bordered"
                                     controlSize="small"
@@ -571,13 +631,13 @@ export function PixivisionDetailView(props: { articleID: number }) {
                           </HStack>
                           <HStack spacing={10} alignment="top">
                             <AvatarImage url={block.answerAvatarURL ?? null} size={32} />
-                            <Text
-                              font="body"
-                              lineSpacing={5}
-                              multilineTextAlignment="leading"
-                            >
-                              {block.answer}
-                            </Text>
+                            <VStack alignment="leading" frame={{ maxWidth: "infinity" }}>
+                              <LinkedDescription
+                                html={block.answer}
+                                font="body"
+                                lineSpacing={5}
+                              />
+                            </VStack>
                           </HStack>
                         </VStack>
                       )
@@ -605,15 +665,15 @@ export function PixivisionDetailView(props: { articleID: number }) {
                             }}
                           />
                           {artwork.comment ? (
-                            <Text
-                              font="caption"
-                              foregroundStyle="secondaryLabel"
-                              padding={{ horizontal: 6 }}
-                              lineLimit={3}
-                              multilineTextAlignment="leading"
-                            >
-                              {artwork.comment}
-                            </Text>
+                            <VStack padding={{ horizontal: 6 }} frame={{ maxWidth: "infinity", alignment: "leading" }}>
+                              <LinkedDescription
+                                html={artwork.comment}
+                                font="caption"
+                                foregroundStyle="secondaryLabel"
+                                lineLimit={3}
+                                lineSpacing={3}
+                              />
+                            </VStack>
                           ) : null}
                         </VStack>
                       )
@@ -635,11 +695,12 @@ export function PixivisionDetailView(props: { articleID: number }) {
                           alignment="center"
                           spacing={4}
                           padding={{ horizontal: FLOW_HORIZONTAL_PADDING, vertical: 6 }}
-                          frame={{ maxWidth: "infinity" }}
+                          frame={{ maxWidth: Device.screen.width - 24 }}
                         >
                           <CachedImage
                             url={block.src}
                             cornerRadius={10}
+                            useIntrinsicAspectRatio={true}
                             contentMode="fit"
                             frame={{ maxWidth: Device.screen.width - 24 }}
                           />
@@ -659,7 +720,7 @@ export function PixivisionDetailView(props: { articleID: number }) {
                         >
                           <Button
                             action={() => {
-                              void Safari.openURL(block.videoURL)
+                              handlePixivisionLink(block.videoURL)
                             }}
                             buttonStyle="plain"
                           >
@@ -749,15 +810,15 @@ export function PixivisionDetailView(props: { articleID: number }) {
                             }}
                           />
                           {artwork.comment ? (
-                            <Text
-                              font="caption"
-                              foregroundStyle="secondaryLabel"
-                              padding={{ horizontal: 6 }}
-                              lineLimit={3}
-                              multilineTextAlignment="leading"
-                            >
-                              {artwork.comment}
-                            </Text>
+                            <VStack padding={{ horizontal: 6 }} frame={{ maxWidth: "infinity", alignment: "leading" }}>
+                              <LinkedDescription
+                                html={artwork.comment}
+                                font="caption"
+                                foregroundStyle="secondaryLabel"
+                                lineLimit={3}
+                                lineSpacing={3}
+                              />
+                            </VStack>
                           ) : null}
                         </VStack>
                       )

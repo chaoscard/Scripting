@@ -283,13 +283,20 @@ export function routeForDescriptionLink(value: string): string | null {
     }
   }
 
-  // 6. Pixivision 官方文章：pixivision.net/zh/a/123 或 pixivision.net/a/123
+  // 6. Pixivision 官方文章与标签：pixivision.net/zh/a/123 或 pixivision.net/a/123 或 /t/123
   const pixivisionMatch = decoded.match(
     new RegExp(`^(?:https?:\\/\\/(?:www\\.)?pixivision\\.net)?\\/?${LANG_PREFIX}a\\/(\\d+)(?:[/?#].*)?$`, "i")
   )
   if (pixivisionMatch) {
     const id = Number(pixivisionMatch[1])
     if (Number.isFinite(id) && id > 0) return `pixivision:${id}`
+  }
+
+  const pixivisionTagMatch = decoded.match(
+    new RegExp(`^(?:https?:\\/\\/(?:www\\.)?pixivision\\.net)?\\/?${LANG_PREFIX}t\\/([^/?#]+)(?:[/?#].*)?$`, "i")
+  )
+  if (pixivisionTagMatch) {
+    return `pixivision-tag:${pixivisionTagMatch[1]}`
   }
 
   // 7. uid: 123, pid: 123, nid: 123

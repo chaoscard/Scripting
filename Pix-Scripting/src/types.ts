@@ -81,9 +81,12 @@ export interface PixivisionArticle {
   id: number
   title: string
   imageURL: string
+  thumbURL?: string
   date: string
   category: string
   tags?: PixivisionTag[]
+  width?: number
+  height?: number
 }
 
 export interface PixivisionRelatedSection {

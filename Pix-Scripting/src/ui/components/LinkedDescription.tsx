@@ -24,6 +24,7 @@ export function LinkedDescription(props: {
   nativePlainText?: boolean
   foregroundStyle?: any
   lineLimit?: number
+  lineSpacing?: number
   font?: any
 }) {
   const segments = useMemo(() => descriptionSegments(props.html), [props.html])
@@ -67,11 +68,11 @@ export function LinkedDescription(props: {
       paragraphStyle: {
         alignment: "left",
         lineBreakMode: "byCharWrapping",
-        lineSpacing: 4,
+        lineSpacing: props.lineSpacing ?? 4,
       },
       content: items,
     }
-  }, [segments, props.routeDestination, props.foregroundStyle, props.font])
+  }, [segments, props.routeDestination, props.foregroundStyle, props.font, props.lineSpacing])
 
   return (
     <Text
@@ -110,8 +111,10 @@ function descriptionSegments(html: string): DescriptionSegment[] {
       htmlFragmentToPlainText(prepared.slice(cursor, match.index))
     )
     const href = decodeDescriptionLink(match[2])
-    const label = htmlToPlainText(match[3]) || href
-    segments.push({ label, href })
+    const label = htmlToPlainText(match[3])
+    if (label) {
+      segments.push({ label, href })
+    }
     cursor = match.index + match[0].length
   }
   appendDescriptionTextSegments(segments, htmlFragmentToPlainText(prepared.slice(cursor)))

@@ -211,6 +211,16 @@ export async function fetchPublicWebIllustDetail(id: number): Promise<PixivIllus
   }
 }
 
+function parseArticleDimensions(imageURL: string): { width?: number; height?: number } {
+  const match = imageURL.match(/\/c\/(\d+)x(\d+)/)
+  if (match) {
+    const w = Number(match[1])
+    const h = Number(match[2])
+    if (w > 0 && h > 0) return { width: w, height: h }
+  }
+  return {}
+}
+
 function extractCardImageURL(card: string): string {
   const bgMatch = card.match(
     /background-image\s*:\s*url\(\s*['"]?(https?:\/\/[^'")\s]+)['"]?\s*\)/i
@@ -277,13 +287,17 @@ export function parsePixivisionPage(
       const id = Number(idText)
       if (Number.isFinite(id)) {
         seenIDs.add(id)
+        const dims = parseArticleDimensions(imageURL)
         items.push({
           id,
           title: pixivisionHTMLToText(titleHTML),
           imageURL,
+          thumbURL: derivePixivThumbUrl(imageURL) ?? imageURL,
           date,
           category: pixivisionHTMLToText(categoryHTML) || "特辑",
           tags: tags.length > 0 ? tags : undefined,
+          width: dims.width,
+          height: dims.height,
         })
       }
     }
@@ -308,13 +322,17 @@ export function parsePixivisionPage(
     const id = Number(idText)
     if (!Number.isFinite(id) || seenIDs.has(id)) continue
     seenIDs.add(id)
+    const dims = parseArticleDimensions(imageURL)
     items.push({
       id,
       title: pixivisionHTMLToText(titleHTML),
       imageURL,
+      thumbURL: derivePixivThumbUrl(imageURL) ?? imageURL,
       date,
       category: pixivisionHTMLToText(categoryHTML) || "特辑",
       tags: tags.length > 0 ? tags : undefined,
+      width: dims.width,
+      height: dims.height,
     })
   }
 
@@ -571,13 +589,17 @@ export function parsePixivisionDetailPage(
         if (idText && imageURL && titleHTML) {
           const id = Number(idText)
           if (Number.isFinite(id) && id !== articleID) {
+            const dims = parseArticleDimensions(imageURL)
             const article: PixivisionArticle = {
               id,
               title: pixivisionHTMLToText(titleHTML),
               imageURL,
+              thumbURL: derivePixivThumbUrl(imageURL) ?? imageURL,
               date: itemDate,
               category: pixivisionHTMLToText(categoryHTML) || "特辑",
               tags: cardTags.length > 0 ? cardTags : undefined,
+              width: dims.width,
+              height: dims.height,
             }
             if (!seenEmbeddedArticles.has(id)) {
               seenEmbeddedArticles.add(id)
@@ -874,12 +896,16 @@ export function parsePixivisionDetailPage(
       )?.[1]
 
       if (imageURL && titleHTML) {
+        const dims = parseArticleDimensions(imageURL)
         sectionArticles.push({
           id,
           title: pixivisionHTMLToText(titleHTML),
           imageURL,
+          thumbURL: derivePixivThumbUrl(imageURL) ?? imageURL,
           date: itemDate,
           category: categoryHTML ? pixivisionHTMLToText(categoryHTML) : "特辑",
+          width: dims.width,
+          height: dims.height,
         })
       }
     }
@@ -978,13 +1004,13 @@ function pixivisionHTMLToText(value: string): string {
 }
 
 function pixivisionHTMLToParagraphText(value: string): string {
-  return decodePixivisionEntities(
-    value
-      .replace(/<button[\s\S]*?<\/button>/gi, "")
-      .replace(/<br\s*\/?>(?:\r?\n)?/gi, "\n")
-      .replace(/<\/(div|p|li|h[1-6])>/gi, "\n")
-      .replace(/<[^>]+>/g, "")
-  )
+  const stripped = value
+    .replace(/<button[\s\S]*?<\/button>/gi, "")
+    .replace(/<br\s*\/?>(?:\r?\n)?/gi, "\n")
+    .replace(/<\/(div|p|li|h[1-6])>/gi, "\n")
+    .replace(/<(?!(\/?a\b))[^>]+>/gi, "")
+    .replace(/<a\b[^>]*>\s*<\/a>/gi, "")
+  return decodePixivisionEntities(stripped)
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim()

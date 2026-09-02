@@ -16,7 +16,9 @@ const FLOW_HORIZONTAL_PADDING = 12
 const HERO_CARD_WIDTH = Math.floor(
   Device.screen.width - FLOW_HORIZONTAL_PADDING * 2
 )
-const IMAGE_RATIO = 1200 / 630
+const DEFAULT_ARTICLE_RATIO = 1200 / 630
+const MIN_ARTICLE_RATIO = 0.5
+const MAX_ARTICLE_RATIO = 2.5
 
 export function PixivisionCard(props: {
   article: PixivisionArticle
@@ -24,10 +26,15 @@ export function PixivisionCard(props: {
   priority?: number
 }) {
   const { article, onAppear, priority } = props
+  const rawRatio =
+    article.width && article.height && article.width > 0 && article.height > 0
+      ? article.width / article.height
+      : DEFAULT_ARTICLE_RATIO
+  const imageRatio = Math.min(Math.max(rawRatio, MIN_ARTICLE_RATIO), MAX_ARTICLE_RATIO)
   const cardFrame = { width: HERO_CARD_WIDTH }
   const imageFrame = {
     width: HERO_CARD_WIDTH,
-    height: HERO_CARD_WIDTH / IMAGE_RATIO,
+    height: HERO_CARD_WIDTH / imageRatio,
   }
 
   return (
@@ -41,7 +48,7 @@ export function PixivisionCard(props: {
         glassEffect={{ type: "rect", cornerRadius: 16 }}
         shadow={{ color: "#0000000F", radius: 20, y: 10 }}
       >
-        {/* 1. 封面图片区（完全遵循 IllustCard hero 布局规范） */}
+        {/* 1. 封面图片区（完全遵循先画框后绘图规范，支持自适应比例与零布局跳动） */}
         <ZStack alignment="bottomTrailing" frame={cardFrame}>
           <NavigationLink value={`pixivision:${article.id}`} frame={cardFrame}>
             <ZStack alignment="topLeading" frame={cardFrame}>
@@ -53,7 +60,9 @@ export function PixivisionCard(props: {
               >
                 <CachedImage
                   url={article.imageURL}
-                  aspectRatioValue={IMAGE_RATIO}
+                  previewUrl={article.thumbURL}
+                  aspectRatioValue={imageRatio}
+                  useIntrinsicAspectRatio={true}
                   contentMode="fit"
                   cornerRadius={12}
                   frame={imageFrame}

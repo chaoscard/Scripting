@@ -497,6 +497,14 @@ export function derivePixivThumbUrl(url: string | null | undefined): string | nu
   if (url.includes("/img-master/")) {
     return url.replace("/img-master/", "/c/540x540_70/img-master/")
   }
+  // 替换已有的 /c/... 裁剪/缩放前缀（针对 imgaz 图）
+  if (/\/c\/[^\/]+\/imgaz\//.test(url)) {
+    return url.replace(/\/c\/[^\/]+\/imgaz\//, "/c/540x540_70/imgaz/")
+  }
+  // 无 /c/ 前缀的 imgaz 图（如专栏封面、文章配图）
+  if (url.includes("/imgaz/")) {
+    return url.replace("/imgaz/", "/c/540x540_70/imgaz/")
+  }
   return url
 }
 

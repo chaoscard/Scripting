@@ -57,11 +57,11 @@ export function normalizeRoute(rawRoute: string): string {
   if (artworkMatch) {
     return `illust:${artworkMatch[1]}`
   }
-  const pixivisionMatch = decoded.match(/pixivision\.net\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?a\/(\d+)/)
+  const pixivisionMatch = decoded.match(/(?:pixivision\.net)?\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?a\/(\d+)/)
   if (pixivisionMatch) {
     return `pixivision:${pixivisionMatch[1]}`
   }
-  const pixivisionTagMatch = decoded.match(/pixivision\.net\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?t\/([^/?#]+)/)
+  const pixivisionTagMatch = decoded.match(/(?:pixivision\.net)?\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?t\/([^/?#]+)/)
   if (pixivisionTagMatch) {
     return `pixivision-tag:${pixivisionTagMatch[1]}`
   }
