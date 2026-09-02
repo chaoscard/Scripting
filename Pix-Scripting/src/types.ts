@@ -109,6 +109,13 @@ export interface PixivisionArtwork {
   width?: number
   height?: number
   comment?: string
+  draftImages?: {
+    imageURL: string
+    thumbURL?: string
+    width?: number
+    height?: number
+    caption?: string
+  }[]
 }
 
 export interface PixivisionTocItem {
@@ -133,7 +140,17 @@ export type PixivisionBodyBlock =
   | { type: "article_card"; article: PixivisionArticle }
   | { type: "profile"; profile: PixivisionProfile }
   | { type: "qa"; question: string; answer: string; answerAvatarURL?: string }
-  | { type: "image"; src: string; caption?: string }
+  | {
+      type: "image"
+      src: string
+      caption?: string
+      thumbURL?: string
+      width?: number
+      height?: number
+      linkURL?: string
+      associatedArtworkID?: number
+      galleryPageIndex?: number
+    }
   | { type: "movie"; videoURL: string }
   | { type: "caption"; text: string }
   | { type: "credit"; text: string }

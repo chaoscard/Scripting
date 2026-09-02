@@ -2,10 +2,12 @@ import {
   Button,
   Device,
   FlowLayout,
+  Group,
   HStack,
   Image,
   LazyVStack,
   Menu,
+  Navigation,
   NavigationLink,
   ScrollView,
   ScrollViewProxy,
@@ -17,14 +19,17 @@ import {
   useRef,
   useState,
   VStack,
+  ZStack,
 } from "scripting"
 import { fetchPublicWebIllustDetail, illustrationDetail, pixivisionDetail } from "../api/pixiv"
 import { session } from "../api/session"
 import { cacheIllust, getCachedIllust } from "../store/illustCache"
 import { cachedFilePath, derivePixivThumbUrl, loadImage } from "../image/imageLoader"
+import { fetchImageBinaryWithRetry, saveImageToPixivAlbum } from "../downloader"
 import { renderDestination } from "./routes"
 import { useAsyncGuard } from "./hooks"
-import type { PixivIllustration, PixivisionArticle, PixivisionArtwork, PixivisionDetail } from "../types"
+import { IllustGalleryView } from "./IllustGalleryView"
+import type { PixivIllustration, PixivisionArticle, PixivisionArtwork, PixivisionBodyBlock, PixivisionDetail } from "../types"
 import {
   ErrorView,
   ExpandableIntroduction,
@@ -40,7 +45,12 @@ import {
 import { AvatarImage, CachedImage } from "./components/CachedImage"
 import { requestPixivRoute } from "./routeNavigation"
 
+declare const Pasteboard: any
+
 const FLOW_HORIZONTAL_PADDING = 12
+const HERO_CARD_WIDTH = Math.floor(Device.screen.width - FLOW_HORIZONTAL_PADDING * 2)
+const MIN_FLOW_IMAGE_RATIO = 1 / 4
+const MAX_FLOW_IMAGE_RATIO = 2.5
 
 export function PixivisionDetailView(props: { articleID: number }) {
   const { articleID } = props
@@ -105,6 +115,25 @@ export function PixivisionDetailView(props: { articleID: number }) {
         full = await fetchPublicWebIllustDetail(id)
       }
       if (full) {
+        const art = detail?.artworks.find((a) => a.id === id)
+        if (art?.draftImages && art.draftImages.length > 0) {
+          const draftPages = art.draftImages.map((d) => {
+            const dThumb = d.thumbURL || derivePixivThumbUrl(d.imageURL) || d.imageURL
+            return {
+              image_urls: {
+                square_medium: dThumb,
+                medium: dThumb,
+                large: d.imageURL,
+                original: d.imageURL,
+              },
+            }
+          })
+          full.meta_pages = [
+            ...(full.meta_pages && full.meta_pages.length > 0 ? full.meta_pages : [{ image_urls: full.image_urls }]),
+            ...draftPages,
+          ]
+          full.page_count = full.meta_pages.length
+        }
         cacheIllust(full)
         setHydratedMap((prev) => ({ ...prev, [id]: full }))
       }
@@ -113,7 +142,73 @@ export function PixivisionDetailView(props: { articleID: number }) {
     } finally {
       hydratingSetRef.current.delete(id)
     }
-  }, [])
+  }, [detail])
+
+  const openGalleryForBlock = useCallback(
+    (block: Extract<PixivisionBodyBlock, { type: "image" }>) => {
+      let targetIllust: PixivIllustration | null = null
+      let targetPageIndex = 0
+
+      if (block.associatedArtworkID && detail) {
+        const artwork = detail.artworks.find((a) => a.id === block.associatedArtworkID)
+        if (artwork) {
+          const hydrated = hydratedMap[artwork.id]
+          targetIllust = hydrated ?? buildArtworkSkeletonIllust(artwork)
+          targetPageIndex = block.galleryPageIndex ?? 0
+        }
+      }
+
+      if (!targetIllust) {
+        const width = block.width && block.width > 0 ? block.width : 1200
+        const height = block.height && block.height > 0 ? block.height : 800
+        const thumb = block.thumbURL || derivePixivThumbUrl(block.src) || block.src
+        targetIllust = {
+          id: -Math.floor(Math.random() * 1000000) - 1,
+          title: block.caption || detail?.title || "特辑图片",
+          type: "illust",
+          image_urls: {
+            square_medium: thumb,
+            medium: thumb,
+            large: block.src,
+            original: block.src,
+          },
+          caption: block.caption ?? "",
+          user: {
+            id: 0,
+            name: detail?.title ?? "Pixivision",
+            account: "",
+            profile_image_urls: {
+              medium: "",
+            },
+            is_followed: false,
+          },
+          tags: [],
+          create_date: "",
+          page_count: 1,
+          width,
+          height,
+          x_restrict: 0,
+          series: null,
+          meta_single_page: {},
+          meta_pages: [],
+          total_view: 0,
+          total_bookmarks: 0,
+          is_bookmarked: false,
+          is_muted: false,
+          total_comments: 0,
+          illust_ai_type: 0,
+          comment_access_control: 0,
+        }
+        targetPageIndex = 0
+      }
+
+      void Navigation.present({
+        element: <IllustGalleryView illust={targetIllust} initialPageIndex={targetPageIndex} />,
+        modalPresentationStyle: "fullScreen",
+      })
+    },
+    [detail, hydratedMap]
+  )
 
   async function load() {
     const g = guard()
@@ -134,7 +229,7 @@ export function PixivisionDetailView(props: { articleID: number }) {
         }
       }
 
-      // 2. 毫秒级缩略图推导与尺寸测算（插画作品与特辑文章卡片并行测算，实现先画框后绘图）
+      // 2. 毫秒级缩略图推导与尺寸测算（插画作品、正文图片/草稿与特辑文章卡片并行测算，实现先画框后绘图）
       const unmeasuredArtworks = value.artworks.filter(
         (a) => !initialMap[a.id] && (!a.width || !a.height || a.width <= 0 || a.height <= 0)
       )
@@ -147,6 +242,10 @@ export function PixivisionDetailView(props: { articleID: number }) {
       const unmeasuredArticles = allArticles.filter(
         (a) => (!a.width || !a.height || a.width <= 0 || a.height <= 0) && Boolean(a.imageURL)
       )
+
+      const unmeasuredImageBlocks = (value.blocks ?? [])
+        .filter((b): b is Extract<PixivisionBodyBlock, { type: "image" }> => b.type === "image")
+        .filter((b) => (!b.width || !b.height || b.width <= 0 || b.height <= 0) && Boolean(b.src))
 
       const measurePromises: Promise<any>[] = []
 
@@ -196,12 +295,60 @@ export function PixivisionDetailView(props: { articleID: number }) {
         )
       }
 
+      if (unmeasuredImageBlocks.length > 0) {
+        measurePromises.push(
+          Promise.allSettled(
+            unmeasuredImageBlocks.map(async (block) => {
+              const thumbUrl = block.thumbURL || derivePixivThumbUrl(block.src) || block.src
+              if (!thumbUrl) return
+              const filePath = cachedFilePath(thumbUrl) ?? (await loadImage(thumbUrl, -1000))
+              if (filePath) {
+                try {
+                  const img = UIImage.fromFile(filePath)
+                  if (img && img.width > 0 && img.height > 0) {
+                    block.width = img.width
+                    block.height = img.height
+                  }
+                } catch {
+                  // 忽略解码异常
+                }
+              }
+            })
+          )
+        )
+      }
+
       if (measurePromises.length > 0) {
         await Promise.allSettled(measurePromises)
       }
 
       if (!g.isCurrent()) return
-      setHydratedMap(initialMap)
+
+      // 将测算出的图片尺寸同步至作品的 draftImages
+      for (const art of value.artworks) {
+        if (art.draftImages && art.draftImages.length > 0) {
+          for (const d of art.draftImages) {
+            const matched = unmeasuredImageBlocks.find((b) => b.src === d.imageURL)
+            if (matched && matched.width && matched.height) {
+              d.width = matched.width
+              d.height = matched.height
+            }
+          }
+        }
+      }
+
+      for (const item of value.artworks) {
+        const cached = getCachedIllust(item.id)
+        if (item.draftImages && item.draftImages.length > 0) {
+          initialMap[item.id] = buildArtworkSkeletonIllust(item)
+        } else if (cached && cached.width > 0 && cached.height > 0) {
+          initialMap[item.id] = cached
+          item.width = cached.width
+          item.height = cached.height
+        } else if (!initialMap[item.id]) {
+          initialMap[item.id] = buildArtworkSkeletonIllust(item)
+        }
+      }
       setDetail(value)
     } catch (err: any) {
       if (g.isCurrent()) setError(err?.message ?? "加载失败")
@@ -688,29 +835,113 @@ export function PixivisionDetailView(props: { articleID: number }) {
                           <PixivisionCard article={block.article} />
                         </VStack>
                       )
-                    case "image":
+                    case "image": {
+                      const rawRatio =
+                        block.width && block.height && block.height > 0
+                          ? block.width / block.height
+                          : 1
+                      const imageRatio = Math.min(Math.max(rawRatio, MIN_FLOW_IMAGE_RATIO), MAX_FLOW_IMAGE_RATIO)
+                      const cardFrame = { width: HERO_CARD_WIDTH }
+                      const imageFrame = { width: HERO_CARD_WIDTH, height: HERO_CARD_WIDTH / imageRatio }
+
+                      const handleImageTap = () => {
+                        if (block.linkURL) {
+                          handlePixivisionLink(block.linkURL)
+                        } else {
+                          openGalleryForBlock(block)
+                        }
+                      }
+
                       return (
                         <VStack
                           key={`img-${idx}`}
-                          alignment="center"
-                          spacing={4}
-                          padding={{ horizontal: FLOW_HORIZONTAL_PADDING, vertical: 6 }}
-                          frame={{ maxWidth: Device.screen.width - 24 }}
+                          alignment="leading"
+                          spacing={6}
+                          padding={{ horizontal: FLOW_HORIZONTAL_PADDING }}
+                          frame={{ width: Device.screen.width }}
                         >
-                          <CachedImage
-                            url={block.src}
-                            cornerRadius={10}
-                            useIntrinsicAspectRatio={true}
-                            contentMode="fit"
-                            frame={{ maxWidth: Device.screen.width - 24 }}
-                          />
+                          <VStack
+                            alignment="leading"
+                            spacing={0}
+                            frame={cardFrame}
+                            padding={6}
+                            glassEffect={{ type: "rect", cornerRadius: 16 }}
+                            shadow={{ color: "#0000000F", radius: 20, y: 10 }}
+                          >
+                            <ZStack alignment="bottomTrailing" frame={cardFrame}>
+                              <Button
+                                action={handleImageTap}
+                                buttonStyle="plain"
+                                frame={cardFrame}
+                                contextMenu={{
+                                  menuItems: (
+                                    <Group>
+                                      <Button
+                                        title="保存至相册"
+                                        systemImage="square.and.arrow.down"
+                                        action={async () => {
+                                          const cached = cachedFilePath(block.src) || cachedFilePath(block.thumbURL ?? "")
+                                          const fileName = `pixivision_${detail?.id ?? "image"}_${idx}.jpg`
+                                          if (cached) {
+                                            await saveImageToPixivAlbum(cached, fileName)
+                                          } else {
+                                            const data = await fetchImageBinaryWithRetry(block.src)
+                                            if (data) {
+                                              await saveImageToPixivAlbum(data, fileName)
+                                            }
+                                          }
+                                        }}
+                                      />
+                                      <Button
+                                        title="复制图片链接"
+                                        systemImage="doc.on.doc"
+                                        action={() => {
+                                          void Pasteboard.setString(block.src)
+                                        }}
+                                      />
+                                      {block.linkURL ? (
+                                        <Button
+                                          title="打开链接"
+                                          systemImage="arrow.up.right"
+                                          action={() => {
+                                            handlePixivisionLink(block.linkURL!)
+                                          }}
+                                        />
+                                      ) : null}
+                                    </Group>
+                                  ),
+                                }}
+                              >
+                                <ZStack alignment="topLeading" frame={cardFrame}>
+                                  <ZStack
+                                    alignment="bottomLeading"
+                                    frame={imageFrame}
+                                    clipShape={{ type: "rect", cornerRadius: 12 }}
+                                    clipped={true}
+                                  >
+                                    <CachedImage
+                                      url={block.src}
+                                      previewUrl={block.thumbURL}
+                                      aspectRatioValue={imageRatio}
+                                      contentMode="fit"
+                                      cornerRadius={12}
+                                      frame={imageFrame}
+                                    />
+                                  </ZStack>
+                                </ZStack>
+                              </Button>
+                            </ZStack>
+                          </VStack>
                           {block.caption ? (
-                            <Text font="caption" foregroundStyle="secondaryLabel" multilineTextAlignment="center">
-                              {block.caption}
-                            </Text>
+                            <VStack padding={{ horizontal: 6 }} frame={{ maxWidth: "infinity", alignment: "leading" }}>
+                              <Text font="caption" foregroundStyle="secondaryLabel" lineLimit={3} lineSpacing={3}>
+                                {block.caption}
+                              </Text>
+                            </VStack>
                           ) : null}
                         </VStack>
                       )
+                    }
                     case "movie":
                       return (
                         <VStack
@@ -939,7 +1170,32 @@ export function PixivisionDetailView(props: { articleID: number }) {
 
 function buildArtworkSkeletonIllust(artwork: PixivisionArtwork): PixivIllustration {
   const thumb = artwork.thumbURL || derivePixivThumbUrl(artwork.imageURL) || artwork.imageURL
-  return {
+  const hasDrafts = Boolean(artwork.draftImages && artwork.draftImages.length > 0)
+  const metaPages = hasDrafts
+    ? [
+        {
+          image_urls: {
+            square_medium: thumb,
+            medium: thumb,
+            large: artwork.imageURL,
+            original: artwork.imageURL,
+          },
+        },
+        ...artwork.draftImages!.map((d) => {
+          const dThumb = d.thumbURL || derivePixivThumbUrl(d.imageURL) || d.imageURL
+          return {
+            image_urls: {
+              square_medium: dThumb,
+              medium: dThumb,
+              large: d.imageURL,
+              original: d.imageURL,
+            },
+          }
+        }),
+      ]
+    : []
+
+  const illust: PixivIllustration = {
     id: artwork.id,
     title: artwork.title,
     type: "illust",
@@ -961,13 +1217,13 @@ function buildArtworkSkeletonIllust(artwork: PixivisionArtwork): PixivIllustrati
     },
     tags: [],
     create_date: "",
-    page_count: 1,
+    page_count: hasDrafts ? 1 + artwork.draftImages!.length : 1,
     width: artwork.width ?? 0,
     height: artwork.height ?? 0,
     x_restrict: 0,
     series: null,
     meta_single_page: {},
-    meta_pages: [],
+    meta_pages: metaPages,
     total_view: 0,
     total_bookmarks: 0,
     is_bookmarked: false,
@@ -976,6 +1232,8 @@ function buildArtworkSkeletonIllust(artwork: PixivisionArtwork): PixivIllustrati
     illust_ai_type: 0,
     comment_access_control: 0,
   }
+  cacheIllust(illust)
+  return illust
 }
 
 function formatPixivisionDate(value: string): string {

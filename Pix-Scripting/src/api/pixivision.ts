@@ -478,6 +478,7 @@ export function parsePixivisionDetailPage(
     let blockMatch: RegExpExecArray | null
     let pendingQuestion: string | null = null
     let inSignupPromoSection = false
+    let currentArtwork: PixivisionArtwork | null = null
 
     while ((blockMatch = blockPattern.exec(bodySlice)) != null) {
       const rawBlock = blockMatch[1]
@@ -505,6 +506,7 @@ export function parsePixivisionDetailPage(
           inSignupPromoSection = false
         }
         if (headingText) {
+          currentArtwork = null
           blocks.push({
             type: "heading",
             id: idAttr || undefined,
@@ -563,6 +565,7 @@ export function parsePixivisionDetailPage(
               seenArtworks.add(id)
               artworks.push(artwork)
             }
+            currentArtwork = artwork
             blocks.push({
               type: "illust",
               artwork,
@@ -715,11 +718,41 @@ export function parsePixivisionDetailPage(
         const caption = pixivisionHTMLToText(
           rawBlock.match(/<figcaption\b[^>]*>([\s\S]*?)<\/figcaption>/i)?.[1] ?? ""
         )
+        const linkURL = matchAttribute(
+          rawBlock.match(/<a\b[^>]*>/i)?.[0] ?? "",
+          "href"
+        )
         if (src) {
+          const dims = parseArticleDimensions(src)
+          const thumbURL = derivePixivThumbUrl(src) ?? src
+
+          let associatedArtworkID: number | undefined
+          let galleryPageIndex: number | undefined
+
+          // 若处于某个特定作品段落内且非外链 Banner，将该图片归为该作品的独家草稿/过程图
+          if (currentArtwork && !linkURL) {
+            currentArtwork.draftImages = currentArtwork.draftImages || []
+            currentArtwork.draftImages.push({
+              imageURL: src,
+              thumbURL,
+              width: dims.width,
+              height: dims.height,
+              caption: caption || undefined,
+            })
+            associatedArtworkID = currentArtwork.id
+            galleryPageIndex = currentArtwork.draftImages.length // 1-based index（0 为原作品）
+          }
+
           blocks.push({
             type: "image",
             src,
+            thumbURL,
             caption: caption || undefined,
+            width: dims.width,
+            height: dims.height,
+            linkURL: linkURL || undefined,
+            associatedArtworkID,
+            galleryPageIndex,
           })
         }
       } else if (blockType === "caption") {

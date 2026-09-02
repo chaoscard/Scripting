@@ -219,6 +219,15 @@ export function IllustDetailView(props: { illustID: number }) {
         )
         return
       }
+      const existingCached = getCachedIllust(detail.id)
+      if (
+        existingCached?.meta_pages &&
+        existingCached.meta_pages.length > 1 &&
+        (!detail.meta_pages || detail.meta_pages.length <= 1)
+      ) {
+        detail.meta_pages = existingCached.meta_pages
+        detail.page_count = existingCached.page_count
+      }
       setIllust(detail)
       setBookmarked(detail.is_bookmarked)
       setFollowed(detail.user.is_followed ?? false)
