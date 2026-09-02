@@ -208,6 +208,7 @@ function TagPixivisionFeed(props: { tag: string }) {
       return pixivisionByTag(queryKey, page)
     },
     deps: [rawTag],
+    requiresAuth: false,
   })
 
   return (

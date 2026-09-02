@@ -117,7 +117,11 @@ function formBody(values: Record<string, string>): string {
 async function parseError(data: Data | null): Promise<string> {
   if (!data) return ""
   try {
-    const json = JSON.parse(data.toRawString() ?? "")
+    const raw = data.toRawString() ?? ""
+    if (raw.trim().startsWith("<") || /<!DOCTYPE/i.test(raw)) {
+      return "" // 过滤 HTML 错误页（如 404/Cloudflare），避免向 UI 抛出原始 HTML 代码
+    }
+    const json = JSON.parse(raw)
     const err = json?.error
     if (err?.user_message) return err.user_message
     if (err?.message) return err.message
@@ -125,6 +129,7 @@ async function parseError(data: Data | null): Promise<string> {
   } catch {
     try {
       const text = data.toRawString()?.slice(0, 200) ?? ""
+      if (text.trim().startsWith("<") || /<!DOCTYPE/i.test(text)) return ""
       return text || ""
     } catch {
       // ignore

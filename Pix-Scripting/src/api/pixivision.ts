@@ -110,23 +110,30 @@ export async function pixivisionByTag(
     referer = `${PIXIVISION_ORIGIN}/zh/s/?q=${encodeURIComponent(queryKey)}`
   }
 
-  const html = await apiGetPublicText(
-    normalizePixivisionURL(url),
-    PIXIVISION_ALLOWED_ORIGINS,
-    "text/html",
-    pixivisionHeaders(referer)
-  )
-  const parsed = parsePixivisionPage(html, page)
-  return {
-    items: parsed.items,
-    nextURL:
-      parsed.items.length > 0
-        ? isNumericId
-          ? `${PIXIVISION_ORIGIN}/zh/t/${queryKey}?p=${page + 1}`
-          : isCategory
-            ? `${PIXIVISION_ORIGIN}/zh/c/${categorySlug}?p=${page + 1}`
-            : `${PIXIVISION_ORIGIN}/zh/s/?q=${encodeURIComponent(queryKey)}&p=${page + 1}`
-        : null,
+  try {
+    const html = await apiGetPublicText(
+      normalizePixivisionURL(url),
+      PIXIVISION_ALLOWED_ORIGINS,
+      "text/html",
+      pixivisionHeaders(referer)
+    )
+    const parsed = parsePixivisionPage(html, page)
+    return {
+      items: parsed.items,
+      nextURL:
+        parsed.items.length >= PIXIVISION_PAGE_SIZE
+          ? isNumericId
+            ? `${PIXIVISION_ORIGIN}/zh/t/${queryKey}?p=${page + 1}`
+            : isCategory
+              ? `${PIXIVISION_ORIGIN}/zh/c/${categorySlug}?p=${page + 1}`
+              : `${PIXIVISION_ORIGIN}/zh/s/?q=${encodeURIComponent(queryKey)}&p=${page + 1}`
+          : null,
+    }
+  } catch (err: any) {
+    if (err instanceof PixivError && err.status === 404) {
+      return { items: [], nextURL: null }
+    }
+    throw err
   }
 }
 
@@ -310,7 +317,7 @@ export function parsePixivisionPage(
 
   return {
     items,
-    nextURL: items.length > 0 ? buildPixivisionPageURL(page + 1) : null,
+    nextURL: items.length >= PIXIVISION_PAGE_SIZE ? buildPixivisionPageURL(page + 1) : null,
   }
 }
 
@@ -322,7 +329,7 @@ export function parsePixivisionTagPage(
   const result = parsePixivisionPage(html, page)
   return {
     items: result.items,
-    nextURL: result.items.length > 0 ? buildPixivisionTagPageURL(tag, page + 1) : null,
+    nextURL: result.items.length >= PIXIVISION_PAGE_SIZE ? buildPixivisionTagPageURL(tag, page + 1) : null,
   }
 }
 
@@ -552,11 +559,7 @@ export function parsePixivisionDetailPage(
       const idText = card.match(/\/zh\/a\/(\d+)/i)?.[1]
       if (!idText) continue
       const id = Number(idText)
-      if (
-        !Number.isFinite(id) ||
-        id === articleID ||
-        sectionArticles.some((a) => a.id === id)
-      ) {
+      if (!Number.isFinite(id) || sectionArticles.some((a) => a.id === id)) {
         continue
       }
 

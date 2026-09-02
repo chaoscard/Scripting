@@ -15,7 +15,7 @@ import {
   useState,
   VStack,
 } from "scripting"
-import { fetchPublicWebIllustDetail, illustrationDetail, pixivisionByTag, pixivisionDetail } from "../api/pixiv"
+import { fetchPublicWebIllustDetail, illustrationDetail, pixivisionDetail } from "../api/pixiv"
 import { session } from "../api/session"
 import { cacheIllust, getCachedIllust } from "../store/illustCache"
 import { cachedFilePath, derivePixivThumbUrl, loadImage } from "../image/imageLoader"
@@ -28,7 +28,6 @@ import {
   formatDate,
   IllustCard,
   LoadingView,
-  LoadMoreTrigger,
   PixivisionCard,
   TagChip,
 } from "./components"
@@ -41,46 +40,12 @@ export function PixivisionDetailView(props: { articleID: number }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [hydratedMap, setHydratedMap] = useState<Record<number, PixivIllustration>>({})
-  const [extraArticles, setExtraArticles] = useState<PixivisionArticle[]>([])
-  const [extraPage, setExtraPage] = useState(2)
-  const [loadingMore, setLoadingMore] = useState(false)
-  const [hasMore, setHasMore] = useState(true)
   const guard = useAsyncGuard()
   const hydratingSetRef = useRef<Set<number>>(new Set())
 
   const handleShare = useCallback(async () => {
     await ShareSheet.present([`https://www.pixivision.net/zh/a/${articleID}`])
   }, [articleID])
-
-  const handleLoadMoreCategory = useCallback(async () => {
-    if (loadingMore || !hasMore || !detail) return
-    const catSlug = detail.categorySlug || (detail.category === "漫画" ? "manga" : "illustration")
-    setLoadingMore(true)
-    try {
-      const paged = await pixivisionByTag(catSlug, extraPage)
-      if (paged.items.length > 0) {
-        setExtraArticles((prev) => {
-          const seen = new Set<number>([
-            articleID,
-            ...detail.artworks.map((a) => a.id),
-            ...(detail.embeddedArticles?.map((a) => a.id) ?? []),
-            ...(detail.relatedSections?.flatMap((s) => s.articles.map((a) => a.id)) ?? []),
-            ...prev.map((a) => a.id),
-          ])
-          const nextNew = paged.items.filter((item) => !seen.has(item.id))
-          return [...prev, ...nextNew]
-        })
-        setExtraPage((p) => p + 1)
-        setHasMore(Boolean(paged.nextURL))
-      } else {
-        setHasMore(false)
-      }
-    } catch {
-      setHasMore(false)
-    } finally {
-      setLoadingMore(false)
-    }
-  }, [loadingMore, hasMore, detail, extraPage, articleID])
 
   const hydrateArtwork = useCallback(async (id: number) => {
     if (hydratingSetRef.current.has(id)) return
@@ -306,6 +271,7 @@ export function PixivisionDetailView(props: { articleID: number }) {
                 >
                   <IllustCard
                     hero={true}
+                    compact={true}
                     illust={illust}
                     priority={index}
                     onAppear={() => {
@@ -377,10 +343,6 @@ export function PixivisionDetailView(props: { articleID: number }) {
                   ? "#FF9500"
                   : "#0096FA"
 
-              const sectionArticles = isCategoryLatest
-                ? [...section.articles, ...extraArticles]
-                : section.articles
-
               return (
                 <VStack
                   key={`${section.title}-${sIdx}`}
@@ -424,17 +386,9 @@ export function PixivisionDetailView(props: { articleID: number }) {
                     ) : null}
                   </HStack>
                   <LazyVStack alignment="leading" spacing={8} frame={{ maxWidth: "infinity" }}>
-                    {sectionArticles.map((article) => (
+                    {section.articles.map((article) => (
                       <PixivisionCard key={`${section.title}-${article.id}`} article={article} />
                     ))}
-                    {isCategoryLatest && sectionArticles.length > 0 ? (
-                      <LoadMoreTrigger
-                        anchor={sectionArticles[sectionArticles.length - 1].id}
-                        onLoadMore={handleLoadMoreCategory}
-                        hasMore={hasMore}
-                        isLoading={loadingMore}
-                      />
-                    ) : null}
                   </LazyVStack>
                 </VStack>
               )
