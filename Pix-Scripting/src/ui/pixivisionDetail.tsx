@@ -15,18 +15,20 @@ import {
   useState,
   VStack,
 } from "scripting"
-import { fetchPublicWebIllustDetail, illustrationDetail, pixivisionDetail } from "../api/pixiv"
+import { fetchPublicWebIllustDetail, illustrationDetail, pixivisionByTag, pixivisionDetail } from "../api/pixiv"
 import { session } from "../api/session"
 import { cacheIllust, getCachedIllust } from "../store/illustCache"
+import { cachedFilePath, derivePixivThumbUrl, loadImage } from "../image/imageLoader"
 import { renderDestination } from "./routes"
 import { useAsyncGuard } from "./hooks"
-import type { PixivIllustration, PixivisionArtwork, PixivisionDetail } from "../types"
+import type { PixivIllustration, PixivisionArticle, PixivisionArtwork, PixivisionDetail } from "../types"
 import {
   ErrorView,
   ExpandableIntroduction,
   formatDate,
   IllustCard,
   LoadingView,
+  LoadMoreTrigger,
   PixivisionCard,
   TagChip,
 } from "./components"
@@ -39,12 +41,46 @@ export function PixivisionDetailView(props: { articleID: number }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [hydratedMap, setHydratedMap] = useState<Record<number, PixivIllustration>>({})
+  const [extraArticles, setExtraArticles] = useState<PixivisionArticle[]>([])
+  const [extraPage, setExtraPage] = useState(2)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(true)
   const guard = useAsyncGuard()
   const hydratingSetRef = useRef<Set<number>>(new Set())
 
   const handleShare = useCallback(async () => {
     await ShareSheet.present([`https://www.pixivision.net/zh/a/${articleID}`])
   }, [articleID])
+
+  const handleLoadMoreCategory = useCallback(async () => {
+    if (loadingMore || !hasMore || !detail) return
+    const catSlug = detail.categorySlug || (detail.category === "漫画" ? "manga" : "illustration")
+    setLoadingMore(true)
+    try {
+      const paged = await pixivisionByTag(catSlug, extraPage)
+      if (paged.items.length > 0) {
+        setExtraArticles((prev) => {
+          const seen = new Set<number>([
+            articleID,
+            ...detail.artworks.map((a) => a.id),
+            ...(detail.embeddedArticles?.map((a) => a.id) ?? []),
+            ...(detail.relatedSections?.flatMap((s) => s.articles.map((a) => a.id)) ?? []),
+            ...prev.map((a) => a.id),
+          ])
+          const nextNew = paged.items.filter((item) => !seen.has(item.id))
+          return [...prev, ...nextNew]
+        })
+        setExtraPage((p) => p + 1)
+        setHasMore(Boolean(paged.nextURL))
+      } else {
+        setHasMore(false)
+      }
+    } catch {
+      setHasMore(false)
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [loadingMore, hasMore, detail, extraPage, articleID])
 
   const hydrateArtwork = useCallback(async (id: number) => {
     if (hydratingSetRef.current.has(id)) return
@@ -85,45 +121,47 @@ export function PixivisionDetailView(props: { articleID: number }) {
       const value = await pixivisionDetail(articleID)
       if (!g.isCurrent()) return
 
-      // 1. 预先填充已有本地缓存的作品（使用真实原始分辨率，与 Hero 卡片保持一致）
+      // 1. 预先填充已有本地缓存的作品
       const initialMap: Record<number, PixivIllustration> = {}
       for (const item of value.artworks) {
         const cached = getCachedIllust(item.id)
         if (cached && cached.width > 0 && cached.height > 0) {
           initialMap[item.id] = cached
+          item.width = cached.width
+          item.height = cached.height
         }
       }
 
-      // 2. 并发预取所有未缓存作品的真实物理宽高与大图元数据（确保首帧画出正确比例的框）
-      const idsToFetch = value.artworks
-        .map((a) => a.id)
-        .filter((id) => !initialMap[id])
+      // 2. 毫秒级缩略图推导与尺寸测算：
+      // 并发下载轻量等比例缩略图（~20KB）并测算物理宽高，使首帧即可绘制精确外框，
+      // 并将缩略图即刻预热至磁盘，让卡片首帧立即可见模糊底图，彻底消除全屏阻塞与外框跳变。
+      const unmeasuredArtworks = value.artworks.filter(
+        (a) => !initialMap[a.id] && (!a.width || !a.height || a.width <= 0 || a.height <= 0)
+      )
 
-      if (idsToFetch.length > 0) {
-        const results = await Promise.allSettled(
-          idsToFetch.map(async (id) => {
-            if (session.userID) {
+      if (unmeasuredArtworks.length > 0) {
+        await Promise.allSettled(
+          unmeasuredArtworks.map(async (art) => {
+            const thumbUrl = art.thumbURL || derivePixivThumbUrl(art.imageURL)
+            if (!thumbUrl) return
+            // 优先检查本地磁盘缓存；未命中则最高优先级并发拉取缩略图
+            const filePath = cachedFilePath(thumbUrl) ?? (await loadImage(thumbUrl, -1000))
+            if (filePath) {
               try {
-                const full = await session.call((token) => illustrationDetail(id, token))
-                if (full) return full
+                const img = UIImage.fromFile(filePath)
+                if (img && img.width > 0 && img.height > 0) {
+                  art.width = img.width
+                  art.height = img.height
+                }
               } catch {
-                // 回退到公开 Web 接口
+                // 忽略解码异常
               }
             }
-            return fetchPublicWebIllustDetail(id)
           })
         )
-        if (!g.isCurrent()) return
-
-        for (let i = 0; i < idsToFetch.length; i++) {
-          const res = results[i]
-          if (res.status === "fulfilled" && res.value) {
-            cacheIllust(res.value)
-            initialMap[idsToFetch[i]] = res.value
-          }
-        }
       }
 
+      if (!g.isCurrent()) return
       setHydratedMap(initialMap)
       setDetail(value)
     } catch (err: any) {
@@ -318,30 +356,85 @@ export function PixivisionDetailView(props: { articleID: number }) {
         {detail.relatedSections && detail.relatedSections.length > 0 ? (
           <VStack alignment="leading" spacing={20} padding={{ horizontal: FLOW_HORIZONTAL_PADDING, top: 16 }}>
             {detail.relatedSections.map((section, sIdx) => {
-              const isLike = section.title.includes("喜欢")
-              const iconName = isLike ? "heart.fill" : "sparkles.rectangle.stack.fill"
-              const iconColor = isLike ? "#FF453A" : "#0096FA"
+              const isLike = section.title.includes("喜欢") || section.title.includes("也喜欢")
+              const isRanking =
+                section.title.includes("排行") ||
+                section.title.includes("榜") ||
+                section.title.toLowerCase().includes("ranking")
+              const isCategoryLatest =
+                section.isCategoryLatest ||
+                sIdx === (detail.relatedSections?.length ?? 1) - 1 ||
+                section.title.includes("插画相关") ||
+                section.title.includes("漫画相关")
+              const iconName = isLike
+                ? "heart.fill"
+                : isRanking
+                  ? "trophy.fill"
+                  : "sparkles.rectangle.stack.fill"
+              const iconColor = isLike
+                ? "#FF453A"
+                : isRanking
+                  ? "#FF9500"
+                  : "#0096FA"
+
+              const sectionArticles = isCategoryLatest
+                ? [...section.articles, ...extraArticles]
+                : section.articles
+
               return (
                 <VStack
                   key={`${section.title}-${sIdx}`}
                   alignment="leading"
                   spacing={10}
-                  frame={{ maxWidth: "infinity" }}
+                  frame={{ maxWidth: "infinity", alignment: "leading" }}
                 >
-                  <HStack spacing={6} alignment="center">
+                  <HStack
+                    spacing={6}
+                    alignment="center"
+                    frame={{ maxWidth: "infinity", alignment: "leading" }}
+                  >
                     <Image
                       systemName={iconName}
                       font="headline"
                       foregroundStyle={iconColor}
                     />
-                    <Text font="headline" fontWeight="bold">
+                    <Text
+                      font="headline"
+                      fontWeight="bold"
+                      multilineTextAlignment="leading"
+                    >
                       {section.title}
                     </Text>
+                    {section.moreRoute ? (
+                      <>
+                        <Spacer />
+                        <NavigationLink value={section.moreRoute}>
+                          <HStack spacing={2} alignment="center">
+                            <Text font="subheadline" foregroundStyle="secondaryLabel">
+                              查看更多
+                            </Text>
+                            <Image
+                              systemName="chevron.right"
+                              font="caption"
+                              foregroundStyle="tertiaryLabel"
+                            />
+                          </HStack>
+                        </NavigationLink>
+                      </>
+                    ) : null}
                   </HStack>
                   <LazyVStack alignment="leading" spacing={8} frame={{ maxWidth: "infinity" }}>
-                    {section.articles.map((article) => (
+                    {sectionArticles.map((article) => (
                       <PixivisionCard key={`${section.title}-${article.id}`} article={article} />
                     ))}
+                    {isCategoryLatest && sectionArticles.length > 0 ? (
+                      <LoadMoreTrigger
+                        anchor={sectionArticles[sectionArticles.length - 1].id}
+                        onLoadMore={handleLoadMoreCategory}
+                        hasMore={hasMore}
+                        isLoading={loadingMore}
+                      />
+                    ) : null}
                   </LazyVStack>
                 </VStack>
               )
@@ -354,14 +447,16 @@ export function PixivisionDetailView(props: { articleID: number }) {
 }
 
 function buildArtworkSkeletonIllust(artwork: PixivisionArtwork): PixivIllustration {
+  const thumb = artwork.thumbURL || derivePixivThumbUrl(artwork.imageURL) || artwork.imageURL
   return {
     id: artwork.id,
     title: artwork.title,
     type: "illust",
     image_urls: {
-      square_medium: artwork.imageURL,
-      medium: artwork.imageURL,
+      square_medium: thumb,
+      medium: thumb,
       large: artwork.imageURL,
+      original: artwork.imageURL,
     },
     caption: artwork.comment ?? "",
     user: {

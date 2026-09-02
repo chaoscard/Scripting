@@ -89,12 +89,18 @@ export interface PixivisionArticle {
 export interface PixivisionRelatedSection {
   title: string
   articles: PixivisionArticle[]
+  tagId?: number
+  tagName?: string
+  moreRoute?: string
+  isCategoryLatest?: boolean
+  categorySlug?: string
 }
 
 export interface PixivisionArtwork {
   id: number
   title: string
   imageURL: string
+  thumbURL?: string
   authorName?: string
   authorID?: number
   width?: number
@@ -107,6 +113,7 @@ export interface PixivisionDetail {
   title: string
   date: string
   category: string
+  categorySlug?: string
   lead?: string
   description: string
   tags: PixivisionTag[]

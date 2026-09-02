@@ -1,4 +1,5 @@
 import { apiGetPublicJson, apiGetPublicText, PixivError } from "./client"
+import { derivePixivThumbUrl } from "../image/imageLoader"
 import type {
   PixivIllustration,
   PixivPage,
@@ -85,6 +86,10 @@ export async function pixivisionByTag(
   const raw = String(tagOrId).trim()
   const queryKey = raw.includes("?name=") ? raw.split("?name=")[0] : raw
   const isNumericId = /^\d+$/.test(queryKey)
+  const isCategory =
+    queryKey.startsWith("c/") ||
+    ["illustration", "manga", "cosplay", "special"].includes(queryKey.toLowerCase())
+  const categorySlug = queryKey.startsWith("c/") ? queryKey.slice(2) : queryKey
 
   let url: string
   let referer: string
@@ -93,6 +98,11 @@ export async function pixivisionByTag(
       ? `${PIXIVISION_ORIGIN}/zh/t/${queryKey}`
       : `${PIXIVISION_ORIGIN}/zh/t/${queryKey}?p=${page}`
     referer = `${PIXIVISION_ORIGIN}/zh/t/${queryKey}`
+  } else if (isCategory) {
+    url = page <= 1
+      ? `${PIXIVISION_ORIGIN}/zh/c/${categorySlug}`
+      : `${PIXIVISION_ORIGIN}/zh/c/${categorySlug}?p=${page}`
+    referer = `${PIXIVISION_ORIGIN}/zh/c/${categorySlug}`
   } else {
     url = page <= 1
       ? `${PIXIVISION_ORIGIN}/zh/s/?q=${encodeURIComponent(queryKey)}`
@@ -113,7 +123,9 @@ export async function pixivisionByTag(
       parsed.items.length > 0
         ? isNumericId
           ? `${PIXIVISION_ORIGIN}/zh/t/${queryKey}?p=${page + 1}`
-          : `${PIXIVISION_ORIGIN}/zh/s/?q=${encodeURIComponent(queryKey)}&p=${page + 1}`
+          : isCategory
+            ? `${PIXIVISION_ORIGIN}/zh/c/${categorySlug}?p=${page + 1}`
+            : `${PIXIVISION_ORIGIN}/zh/s/?q=${encodeURIComponent(queryKey)}&p=${page + 1}`
         : null,
   }
 }
@@ -336,9 +348,14 @@ export function parsePixivisionDetailPage(
     html.match(/<time\b[^>]*class=["'][^"']*[_ ]date[^"']*["'][^>]*>/i)?.[0] ?? "",
     "datetime"
   )
+  const categoryMatch =
+    html.match(/<span\b[^>]*class=["'][^"']*_category-label[^"']*["'][^>]*>[\s\S]*?href=["'](?:\/zh\/c\/|https?:\/\/www\.pixivision\.net\/zh\/c\/)([^"']+)["']/i) ||
+    html.match(/<a\b[^>]*href=["'](?:\/zh\/c\/|https?:\/\/www\.pixivision\.net\/zh\/c\/)([^"']+)["']/i)
+  const categorySlug = categoryMatch ? categoryMatch[1].trim() : undefined
   const category = pixivisionHTMLToText(
     html.match(/<span\b[^>]*class=["'][^"']*_category-label[^"']*["'][^>]*>([\s\S]*?)<\/span>/i)?.[1] ?? ""
   )
+  const mainCategorySlug = categorySlug || (category === "漫画" ? "manga" : "illustration")
 
   // 1. 解析编辑导语 (Lead text)
   const leadBlock = html.match(
@@ -415,10 +432,12 @@ export function parsePixivisionDetailPage(
     const id = Number(idText)
     if (!Number.isFinite(id) || artworks.some((item) => item.id === id)) continue
 
+    const thumbURL = derivePixivThumbUrl(imageURL) ?? imageURL
     artworks.push({
       id,
       title: pixivisionHTMLToText(titleHTML) || `作品 ${id}`,
       imageURL,
+      thumbURL,
       authorID: authorIDText ? Number(authorIDText) : undefined,
       authorName: authorNameHTML ? pixivisionHTMLToText(authorNameHTML) : undefined,
     })
@@ -463,6 +482,8 @@ export function parsePixivisionDetailPage(
     /<div\b[^>]*class=["'][^"']*(?:amsp__related-articles|_related-articles)[^"']*["'][^>]*data-gtm-category=["']([^"']*)["'][^>]*>([\s\S]*?)<\/ul>/gi
   let sectionMatch: RegExpExecArray | null
   while ((sectionMatch = sectionBlockPattern.exec(html)) != null) {
+    const gtmCategory = sectionMatch[1] || ""
+
     const block = sectionMatch[2]
     const headingMatch =
       block.match(/<div\b[^>]*class=["'][^"']*__heading[^"']*["'][^>]*>([\s\S]*?)<\/div>/i) ||
@@ -471,8 +492,56 @@ export function parsePixivisionDetailPage(
     if (!headingMatch) continue
 
     const headingHTML = headingMatch[1]
-    const sectionTitle = pixivisionHTMLToText(headingHTML)
+
+    // 提取分类 slug（如 /zh/c/illustration）
+    const sectionCatMatch =
+      headingHTML.match(/href=["'](?:\/zh\/c\/|https?:\/\/www\.pixivision\.net\/zh\/c\/)([^"']+)["']/i) ||
+      (!headingHTML.includes("/zh/t/") ? headingHTML.match(/data-gtm-label=["']([^"']+)["']/i) : null)
+    const sectionCatSlug = sectionCatMatch ? sectionCatMatch[1].trim() : undefined
+
+    // 提取关联标签 ID 与标签名
+    const tagMatch =
+      headingHTML.match(/href=["'](?:\/zh\/t\/|https?:\/\/www\.pixivision\.net\/zh\/t\/)(\d+)[^"']*["']/i) ||
+      block.match(/class=["'][^"']*amsp__show-more-button[^"']*["'][^>]*href=["'](?:\/zh\/t\/|https?:\/\/www\.pixivision\.net\/zh\/t\/)(\d+)[^"']*["']/i)
+    const tagId = tagMatch && Number.isFinite(Number(tagMatch[1])) ? Number(tagMatch[1]) : undefined
+
+    const tagNameMatch =
+      headingHTML.match(/class=["'][^"']*_article-heading-tag-name[^"']*["'][^>]*>([\s\S]*?)<\/span>/i) ||
+      (tagMatch ? headingHTML.match(/data-gtm-label=["']([^"']+)["']/i) : null)
+    const tagName = tagNameMatch ? pixivisionHTMLToText(tagNameMatch[1]) : undefined
+
+    // 格式化标签名称：在标签前增加 # 号（例如 "喜欢#点心的人也喜欢这些"、"#点心相关最新文章"）
+    const headingHTMLWithHash = headingHTML.replace(
+      /<span\b[^>]*class=["'][^"']*_article-heading-tag-name[^"']*["'][^>]*>([\s\S]*?)<\/span>/gi,
+      "#$1"
+    )
+    let sectionTitle = pixivisionHTMLToText(headingHTMLWithHash)
+    if (tagName && sectionTitle.includes(tagName) && !sectionTitle.includes(`#${tagName}`)) {
+      sectionTitle = sectionTitle.replace(tagName, `#${tagName}`)
+    }
     if (!sectionTitle) continue
+
+    const isLike = sectionTitle.includes("喜欢") || sectionTitle.includes("也喜欢")
+    const isCategoryLatest =
+      gtmCategory === "Article Latest" ||
+      Boolean(sectionCatSlug) ||
+      sectionTitle.includes("插画相关") ||
+      sectionTitle.includes("漫画相关")
+
+    let moreRoute: string | undefined
+    if (isLike) {
+      if (tagId != null && Number.isFinite(tagId)) {
+        moreRoute = tagName
+          ? `pixivision-tag:${tagId}?name=${encodeURIComponent(tagName)}`
+          : `pixivision-tag:${tagId}`
+      } else if (tagName) {
+        moreRoute = `pixivision-tag:${encodeURIComponent(tagName)}`
+      }
+    } else if (isCategoryLatest) {
+      const catSlug = sectionCatSlug || mainCategorySlug
+      const catDisplayName = catSlug === "illustration" ? "插画" : catSlug === "manga" ? "漫画" : catSlug === "cosplay" ? "Cosplay" : catSlug
+      moreRoute = `pixivision-tag:c/${catSlug}?name=${encodeURIComponent(catDisplayName)}`
+    }
 
     const sectionArticles: PixivisionArticle[] = []
     const cardPattern =
@@ -524,6 +593,11 @@ export function parsePixivisionDetailPage(
       relatedSections.push({
         title: sectionTitle,
         articles: sectionArticles,
+        tagId,
+        tagName,
+        moreRoute,
+        isCategoryLatest,
+        categorySlug: isCategoryLatest ? (sectionCatSlug || mainCategorySlug) : undefined,
       })
     }
   }
@@ -536,6 +610,7 @@ export function parsePixivisionDetailPage(
     title,
     date,
     category: category || "特辑",
+    categorySlug: mainCategorySlug,
     lead: lead || undefined,
     description,
     tags,

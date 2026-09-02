@@ -483,6 +483,23 @@ export function clearCache(): void {
   notifyImageCacheChanged()
 }
 
+// 从基准 URL 推导 Pixiv 等比例中等缩略图（540x540_70，保留与原图 100% 一致的物理纵横比）：
+export function derivePixivThumbUrl(url: string | null | undefined): string | null {
+  if (!url) return null
+  if (!url.includes("pximg.net")) return url
+  // 若已经是 540x540 或 240x240 等等比例缩略图直接复用
+  if (url.includes("/c/540x540") || url.includes("/c/240x240")) return url
+  // 替换已有的 /c/... 裁剪/缩放前缀
+  if (/\/c\/[^\/]+\/img-master\//.test(url)) {
+    return url.replace(/\/c\/[^\/]+\/img-master\//, "/c/540x540_70/img-master/")
+  }
+  // 无 /c/ 前缀的 master 图
+  if (url.includes("/img-master/")) {
+    return url.replace("/img-master/", "/c/540x540_70/img-master/")
+  }
+  return url
+}
+
 // 从基准 URL 推导指定页的 URL（Pixiv 文件名页号格式 _p0/_p1/...）。
 // 覆盖 app API 的 detail 对部分漫画不返回 meta_pages（只有第一页 URL）的情况：
 // 用第一页 URL 替换页号即可得到其余页。
@@ -615,6 +632,9 @@ export function cardThumbUrlOf(
   }
   if (selectedQuality === "large") {
     return i.image_urls?.large ?? i.image_urls?.medium ?? i.image_urls?.square_medium ?? null
+  }
+  if (quality === "medium") {
+    return i.image_urls?.medium ?? i.image_urls?.large ?? i.image_urls?.square_medium ?? null
   }
   const ratio = i.width && i.height ? i.width / i.height : 1
   const preferLarge = ratio < 1 / 2
