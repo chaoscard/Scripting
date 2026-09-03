@@ -32,6 +32,7 @@ import {
   updateSettings,
   type AmbientAlgorithm,
   type NovelReaderExperimentalAlgorithm,
+  type GeminiMotionSpeed,
   type LaunchPage,
   type WidgetDefaultSource,
 } from "../store/settings"
@@ -514,6 +515,32 @@ export function SettingsView() {
                     <Text tag="medium">中</Text>
                     <Text tag="high">高</Text>
                   </Picker>
+                  {settings.experimentalImmersionAlgorithm === "geminiA" ||
+                  settings.experimentalImmersionAlgorithm === "geminiB" ||
+                  settings.novelReaderExperimentalAlgorithm === "geminiA" ||
+                  settings.novelReaderExperimentalAlgorithm === "geminiB" ? (
+                    <Picker
+                      title="Gemini 动效流速"
+                      value={settings.geminiCustomParamsEnabled ? "custom" : settings.geminiMotionSpeed}
+                      onChanged={(value: string) => {
+                        if (value === "custom") {
+                          update({ geminiCustomParamsEnabled: true })
+                        } else {
+                          update({
+                            geminiCustomParamsEnabled: false,
+                            geminiMotionSpeed: value as GeminiMotionSpeed,
+                          })
+                        }
+                      }}
+                    >
+                      <Text tag="fast">轻快活跃</Text>
+                      <Text tag="official">官方深沉</Text>
+                      <Text tag="calm">静谧从容</Text>
+                      {settings.geminiCustomParamsEnabled ? (
+                        <Text tag="custom">自定义</Text>
+                      ) : null}
+                    </Picker>
+                  ) : null}
                 </>
               ) : null}
             </>
@@ -1186,7 +1213,7 @@ export function SettingsView() {
                 <Spacer />
                 {!expanded.debug ? (
                   <Text font="footnote" foregroundStyle="tertiaryLabel">
-                    12 项参数
+                    {settings.geminiCustomParamsEnabled ? "22 项参数 (含Gemini)" : "12 项参数"}
                   </Text>
                 ) : null}
               </HStack>
@@ -1300,6 +1327,105 @@ export function SettingsView() {
               max={10000}
               onSave={(val) => update({ launchAnimationDuration: val })}
             />
+            <Toggle
+              title="启用自定义 Gemini 物理参数"
+              value={settings.geminiCustomParamsEnabled}
+              onChanged={(val) => update({ geminiCustomParamsEnabled: val })}
+            />
+            {settings.geminiCustomParamsEnabled ? (
+              <>
+                <AdvancedNumberRow
+                  title="Gemini 换色周期"
+                  unit="ms"
+                  value={settings.geminiTransitionIntervalMs}
+                  defaultValue={2000}
+                  min={500}
+                  max={10000}
+                  onSave={(val) => update({ geminiTransitionIntervalMs: val })}
+                />
+                <AdvancedNumberRow
+                  title="Gemini 插值时长"
+                  unit="ms"
+                  value={settings.geminiTransitionDurationMs}
+                  defaultValue={1800}
+                  min={300}
+                  max={9000}
+                  onSave={(val) => update({ geminiTransitionDurationMs: val })}
+                />
+                <AdvancedNumberRow
+                  title="Gemini 旋转周期"
+                  unit="s"
+                  value={settings.geminiRotationPeriodSec}
+                  defaultValue={7}
+                  min={0}
+                  max={60}
+                  onSave={(val) => update({ geminiRotationPeriodSec: val })}
+                />
+                <AdvancedNumberRow
+                  title="Gemini 摆动周期"
+                  unit="ms"
+                  value={settings.geminiSwingDurationMs}
+                  defaultValue={3800}
+                  min={1000}
+                  max={15000}
+                  onSave={(val) => update({ geminiSwingDurationMs: val })}
+                />
+                <AdvancedNumberRow
+                  title="Gemini 垂直质心"
+                  unit="pt"
+                  value={settings.geminiCenterOffsetY}
+                  defaultValue={-200}
+                  min={-350}
+                  max={-50}
+                  onSave={(val) => update({ geminiCenterOffsetY: val })}
+                />
+                <AdvancedNumberRow
+                  title="Gemini 两翼外展"
+                  unit="pt"
+                  value={settings.geminiWingOffsetX}
+                  defaultValue={95}
+                  min={30}
+                  max={200}
+                  onSave={(val) => update({ geminiWingOffsetX: val })}
+                />
+                <AdvancedNumberRow
+                  title="Gemini 摆动幅度"
+                  unit="pt"
+                  value={settings.geminiSwingDistance}
+                  defaultValue={40}
+                  min={5}
+                  max={120}
+                  onSave={(val) => update({ geminiSwingDistance: val })}
+                />
+                <AdvancedNumberRow
+                  title="Gemini 弥散模糊"
+                  unit="pt"
+                  value={settings.geminiBlurRadius}
+                  defaultValue={100}
+                  min={30}
+                  max={200}
+                  onSave={(val) => update({ geminiBlurRadius: val })}
+                />
+                <AdvancedNumberRow
+                  title="Gemini 能量提亮"
+                  unit="%"
+                  value={settings.geminiLuminousBoostRatio}
+                  defaultValue={25}
+                  min={0}
+                  max={100}
+                  onSave={(val) => update({ geminiLuminousBoostRatio: val })}
+                />
+                <AdvancedNumberRow
+                  title="Gemini 浅色浓度"
+                  unit="%"
+                  value={settings.geminiLightModeAlphaRatio}
+                  defaultValue={52}
+                  min={10}
+                  max={100}
+                  onSave={(val) => update({ geminiLightModeAlphaRatio: val })}
+                />
+              </>
+            ) : null}
           </DisclosureGroup>
         </Section>
       ) : null}

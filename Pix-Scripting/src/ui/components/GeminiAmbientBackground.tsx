@@ -6,7 +6,11 @@ import {
   useEffect,
   useState,
 } from "scripting"
-import type { AmbientIntensity } from "../../store/settings"
+import {
+  loadSettings,
+  onSettingsChanged,
+  type AmbientIntensity,
+} from "../../store/settings"
 
 export interface GeminiAmbientBackgroundProps {
   /**
@@ -24,21 +28,21 @@ export interface GeminiAmbientBackgroundProps {
   intensity: AmbientIntensity
 }
 
-// 官方 5 色调色环定义（深色模式：深度压暗保底，防止过曝；浅色模式：柔和水彩粉彩）
+// 官方 Gemini 色调调色环定义（融合 Google 蓝 #4285f4、罗兰紫 #9059ff、星云粉 #f772bb、冰川青 #06b6d4）
 const GEMINI_B_PALETTE_DARK: readonly Color[] = [
-  "#581c87" as Color, // 1. 紫晶洋红
-  "#78350f" as Color, // 2. 暖暗琥珀
-  "#064e3b" as Color, // 3. 暗夜翡翠
-  "#1e3a8a" as Color, // 4. 皇家深海蓝
-  "#0e7490" as Color, // 5. 深邃天青
+  "#4285f4" as Color, // 1. Google 科技天蓝
+  "#9059ff" as Color, // 2. Gemini 标志罗兰紫
+  "#f772bb" as Color, // 3. 星云柔品红
+  "#06b6d4" as Color, // 4. 深邃冰川青
+  "#7c3aed" as Color, // 5. 暗夜深空紫
 ]
 
 const GEMINI_B_PALETTE_LIGHT: readonly Color[] = [
-  "#c084fc" as Color, // 1. 柔紫晶
-  "#fbbf24" as Color, // 2. 暖金珀
-  "#34d399" as Color, // 3. 翡翠青
-  "#60a5fa" as Color, // 4. 晴空蓝
-  "#38bdf8" as Color, // 5. 冰川青
+  "#3b82f6" as Color, // 1. 科技湛蓝
+  "#8b5cf6" as Color, // 2. 鲜明罗兰紫
+  "#ec4899" as Color, // 3. 鲜润星云粉
+  "#06b6d4" as Color, // 4. 晶莹深天青
+  "#a855f7" as Color, // 5. 水晶亮紫
 ]
 
 function toOpaqueColor(color: Color): Color {
@@ -130,16 +134,98 @@ function buildHarmonicAccentColor(baseColor: Color, isDark: boolean): Color {
   return `rgb(${nr}, ${ng}, ${nb})` as Color
 }
 
+function buildLuminousCoreColor(c1: Color, c2: Color, isDark: boolean, boostRatio: number = 0.25): Color {
+  const rgb1 = parseRgb(c1)
+  const rgb2 = parseRgb(c2)
+  if (!rgb1 && !rgb2) return c1
+  const r1 = rgb1 ? rgb1[0] : 120
+  const g1 = rgb1 ? rgb1[1] : 120
+  const b1 = rgb1 ? rgb1[2] : 120
+  const r2 = rgb2 ? rgb2[0] : r1
+  const g2 = rgb2 ? rgb2[1] : g1
+  const b2 = rgb2 ? rgb2[2] : b1
+  const midR = Math.round((r1 + r2) / 2)
+  const midG = Math.round((g1 + g2) / 2)
+  const midB = Math.round((b1 + b2) / 2)
+  const [h, s, l] = rgbToHsl(midR, midG, midB)
+  const targetL = isDark
+    ? Math.min(0.78, l * (1 + boostRatio * 1.4) + boostRatio * 0.4)
+    : Math.max(0.44, Math.min(0.82, l * 0.95 + boostRatio * 0.2))
+  const targetS = isDark
+    ? Math.min(0.95, s * (1 + boostRatio * 0.5) + 0.05)
+    : Math.min(0.95, Math.max(0.60, s * 1.25))
+  const [nr, ng, nb] = hslToRgb(h, targetS, targetL)
+  return `rgb(${nr}, ${ng}, ${nb})` as Color
+}
+
 export function GeminiAmbientBackground(props: GeminiAmbientBackgroundProps) {
-  // 克制透明度：深色模式 0.33，明亮模式 0.24
+  const [settings, setSettings] = useState(() => loadSettings())
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      setSettings(loadSettings())
+    })
+  }, [])
+
+  // 1. 综合物理参数计算（预设联动 vs 高级自定义）
+  const custom = settings.geminiCustomParamsEnabled
+  const speed = settings.geminiMotionSpeed
+
+  const intervalMs = custom
+    ? settings.geminiTransitionIntervalMs
+    : speed === "official"
+      ? 3500
+      : speed === "calm"
+        ? 5000
+        : 2000
+
+  const durationMs = custom
+    ? Math.min(settings.geminiTransitionDurationMs, Math.max(300, intervalMs - 50))
+    : speed === "official"
+      ? 3000
+      : speed === "calm"
+        ? 4400
+        : 1800
+
+  const rotLeftSec = custom
+    ? settings.geminiRotationPeriodSec
+    : speed === "official"
+      ? 8.5
+      : speed === "calm"
+        ? 14
+        : 7
+
+  const rotRightSec = rotLeftSec > 0 ? (custom ? rotLeftSec * 1.2 : rotLeftSec * 1.2) : 0
+
+  const swingBaseMs = custom
+    ? settings.geminiSwingDurationMs
+    : speed === "official"
+      ? 5200
+      : speed === "calm"
+        ? 7000
+        : 3800
+
+  const swingLeftXSec = swingBaseMs / 1000
+  const swingLeftYSec = (swingBaseMs * 0.78) / 1000
+  const swingRightXSec = (swingBaseMs * 1.15) / 1000
+  const swingRightYSec = (swingBaseMs * 0.88) / 1000
+
+  const centerOffsetY = custom ? settings.geminiCenterOffsetY : -200
+  const wingOffsetX = custom ? settings.geminiWingOffsetX : 95
+  const swingDist = custom ? settings.geminiSwingDistance : speed === "calm" ? 35 : 40
+  const blurRadius = custom ? settings.geminiBlurRadius : speed === "calm" ? 110 : 95
+  const luminousBoost = (custom ? settings.geminiLuminousBoostRatio : 25) / 100
+  const lightAlphaRatio = (custom ? settings.geminiLightModeAlphaRatio : 52) / 100
+
+  // 浅色模式专属对比度增强
   const intensityAlpha =
     props.intensity === "high"
-      ? props.isDark ? 0.42 : 0.32
+      ? props.isDark ? 0.42 : lightAlphaRatio * 1.25
       : props.intensity === "low"
-        ? props.isDark ? 0.24 : 0.16
-        : props.isDark ? 0.33 : 0.24
+        ? props.isDark ? 0.24 : lightAlphaRatio * 0.75
+        : props.isDark ? 0.33 : lightAlphaRatio
 
-  // 1. 构建色彩流转调色环（实色化处理，彻底剥离双重 Alpha 衰减）
+  // 2. 构建色彩流转调色环（实色化处理，彻底剥离双重 Alpha 衰减）
   const bPalette = props.isDark ? GEMINI_B_PALETTE_DARK : GEMINI_B_PALETTE_LIGHT
   
   const rawPrimary = toOpaqueColor(props.primaryColor)
@@ -159,7 +245,7 @@ export function GeminiAmbientBackground(props: GeminiAmbientBackgroundProps) {
   const activePalette = props.variant === "geminiB" ? bPalette : aPalette
   const paletteLen = activePalette.length
 
-  // 2. 状态机：每 2.4 秒平滑随机流转左右双主色（绝不撞色，每次步进必定换色）
+  // 3. 状态机：平滑随机流转左右双主色
   const [leftIndex, setLeftIndex] = useState(0)
   const [rightIndex, setRightIndex] = useState(1)
 
@@ -170,7 +256,7 @@ export function GeminiAmbientBackground(props: GeminiAmbientBackgroundProps) {
     const scheduleNext = () => {
       timerId = setTimeout(() => {
         if (!active) return
-        void withAnimation(Animation.smooth({ duration: 2.2 }), () => {
+        void withAnimation(Animation.smooth({ duration: durationMs / 1000 }), () => {
           setLeftIndex((currLeft) => {
             const availableLeft: number[] = []
             for (let i = 0; i < paletteLen; i++) {
@@ -196,7 +282,7 @@ export function GeminiAmbientBackground(props: GeminiAmbientBackgroundProps) {
           })
         })
         scheduleNext()
-      }, 2400)
+      }, intervalMs)
     }
 
     scheduleNext()
@@ -207,56 +293,88 @@ export function GeminiAmbientBackground(props: GeminiAmbientBackgroundProps) {
         clearTimeout(timerId)
       }
     }
-  }, [paletteLen])
+  }, [paletteLen, intervalMs, durationMs])
 
-  // 3. 当前时刻的双主色（左侧与右侧双色温对流）
+  // 4. 当前时刻的双主色与 3 阶中心微提亮流光渐变（实现 Gemini 官方 Gradient Flow & Luminous Core）
   const leftColor = activePalette[leftIndex % paletteLen] ?? activePalette[0]!
+  const leftGradColor = activePalette[(leftIndex + 2) % paletteLen] ?? activePalette[(leftIndex + 1) % paletteLen] ?? activePalette[0]!
+  const leftCoreColor = buildLuminousCoreColor(leftColor, leftGradColor, props.isDark, luminousBoost)
+
   const rightColor = activePalette[rightIndex % paletteLen] ?? (activePalette[1] ?? activePalette[0]!)
+  const rightGradColor = activePalette[(rightIndex + 2) % paletteLen] ?? activePalette[(rightIndex + 1) % paletteLen] ?? activePalette[0]!
+  const rightCoreColor = buildLuminousCoreColor(rightColor, rightGradColor, props.isDark, luminousBoost)
 
   return (
     <ZStack frame={{ maxWidth: "infinity", maxHeight: "infinity" }} ignoresSafeArea={true}>
       {/* 1. 深空/曜石黑基底 */}
       <Rectangle fill={props.bgColor} ignoresSafeArea={true} />
 
-      {/* 2. 左上满宽极光漫射场（Left Sky Nebula Field）：安全布局尺寸 + scaleEffect 矩阵缩放，绝不撑大布局树 */}
+      {/* 2. 左上 3 阶对角流光场（Left 3-Stop Gradient Nebula） */}
       <Ellipse
-        fill={leftColor}
+        fill={{
+          colors: [leftColor, leftCoreColor, leftGradColor],
+          startPoint: "topLeading",
+          endPoint: "bottomTrailing",
+        }}
         frame={{ width: 280, height: 260 }}
-        scaleEffect={{ x: 2.1, y: 1.7 }}
-        offset={{ x: -75, y: -310 }}
-        blur={{ radius: 100, opaque: false }}
+        clockHandRotationEffect={rotLeftSec > 0 ? (rotLeftSec as any) : undefined}
+        scaleEffect={{ x: 2.1, y: 1.8 }}
+        offset={{ x: -wingOffsetX, y: centerOffsetY - 10 }}
+        blur={{ radius: blurRadius, opaque: false }}
         opacity={intensityAlpha}
-        swingAnimation={{
-          x: { duration: 5.0, distance: 45 },
-          y: { duration: 3.8, distance: 35 },
-        }}
+        swingAnimation={
+          swingDist > 0
+            ? {
+                x: { duration: swingLeftXSec, distance: swingDist },
+                y: { duration: swingLeftYSec, distance: Math.round(swingDist * 0.75) },
+              }
+            : undefined
+        }
       />
 
-      {/* 3. 右上满宽极光漫射场（Right Sky Nebula Field）：逆向缓慢推拉，与左侧交融过渡 */}
+      {/* 3. 右上 3 阶对角流光场（Right 3-Stop Gradient Nebula） */}
       <Ellipse
-        fill={rightColor}
-        frame={{ width: 290, height: 270 }}
-        scaleEffect={{ x: 2.1, y: 1.7 }}
-        offset={{ x: 75, y: -290 }}
-        blur={{ radius: 110, opaque: false }}
-        opacity={intensityAlpha * 0.95}
-        swingAnimation={{
-          x: { duration: 5.6, distance: -50 },
-          y: { duration: 4.2, distance: 30 },
+        fill={{
+          colors: [rightColor, rightCoreColor, rightGradColor],
+          startPoint: "topTrailing",
+          endPoint: "bottomLeading",
         }}
+        frame={{ width: 290, height: 270 }}
+        clockHandRotationEffect={rotRightSec > 0 ? (rotRightSec as any) : undefined}
+        scaleEffect={{ x: 2.1, y: 1.8 }}
+        offset={{ x: wingOffsetX, y: centerOffsetY + 10 }}
+        blur={{ radius: Math.round(blurRadius * 1.08), opaque: false }}
+        opacity={intensityAlpha * 0.95}
+        swingAnimation={
+          swingDist > 0
+            ? {
+                x: { duration: swingRightXSec, distance: -Math.round(swingDist * 1.1) },
+                y: { duration: swingRightYSec, distance: Math.round(swingDist * 0.7) },
+              }
+            : undefined
+        }
       />
 
-      {/* 4. 纵向自然衰减遮罩（在页面 35%~40% 高度极其平滑地隐入纯黑底色） */}
+      {/* 4. 纵向自然衰减遮罩（在页面 24%~30% 高度极其平滑地隐入纯净底色） */}
       <Rectangle
         fill={{
-          colors: [
-            "clear" as Color,
-            "clear" as Color,
-            "clear" as Color,
-            (props.isDark ? "#00000066" : "#ffffff66") as Color,
-            (props.bgColor + "ee") as Color,
-            props.bgColor,
-          ],
+          colors: props.isDark
+            ? [
+                "clear" as Color,
+                "clear" as Color,
+                "#00000033" as Color,
+                "#00000088" as Color,
+                (props.bgColor + "ee") as Color,
+                props.bgColor,
+              ]
+            : [
+                "clear" as Color,
+                "clear" as Color,
+                (props.bgColor + "33") as Color,
+                (props.bgColor + "99") as Color,
+                (props.bgColor + "ee") as Color,
+                props.bgColor,
+              ],
           startPoint: "top",
           endPoint: "bottom",
         }}

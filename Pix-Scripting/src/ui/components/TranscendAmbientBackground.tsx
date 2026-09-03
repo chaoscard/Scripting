@@ -21,7 +21,11 @@ export interface TranscendAmbientBackgroundProps {
 
 export function TranscendAmbientBackground(props: TranscendAmbientBackgroundProps) {
   const intensityAlpha =
-    props.intensity === "high" ? 0.88 : props.intensity === "low" ? 0.42 : 0.65
+    props.intensity === "high"
+      ? props.isDark ? 0.88 : 0.95
+      : props.intensity === "low"
+        ? props.isDark ? 0.42 : 0.58
+        : props.isDark ? 0.65 : 0.80
 
   return (
     <ZStack ignoresSafeArea={true}>
@@ -119,16 +123,24 @@ export function TranscendAmbientBackground(props: TranscendAmbientBackgroundProp
         }}
       />
 
-      {/* 6. 纵向柔化遮罩与渐层融合层 */}
+      {/* 6. 纵向柔化遮罩与渐层融合层（去雾化设计，彻底消除浅色白雾） */}
       <Rectangle
         fill={{
-          colors: [
-            "clear" as Color,
-            "clear" as Color,
-            (props.isDark ? "#00000018" : "#ffffff18") as Color,
-            (props.bgColor + "bb") as Color,
-            props.bgColor,
-          ],
+          colors: props.isDark
+            ? [
+                "clear" as Color,
+                "clear" as Color,
+                "#00000018" as Color,
+                (props.bgColor + "bb") as Color,
+                props.bgColor,
+              ]
+            : [
+                "clear" as Color,
+                "clear" as Color,
+                (props.bgColor + "22") as Color,
+                (props.bgColor + "bb") as Color,
+                props.bgColor,
+              ],
           startPoint: "top",
           endPoint: "bottom",
         }}

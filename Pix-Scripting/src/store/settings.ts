@@ -12,6 +12,7 @@ export type WatchlistSortOrder = "asc" | "desc"
 export type AmbientIntensity = "low" | "medium" | "high"
 export type AmbientAlgorithm = "classic" | "explore" | "ultimate" | "transcend" | "geminiA" | "geminiB"
 export type NovelReaderExperimentalAlgorithm = "off" | "classic" | "explore" | "ultimate" | "transcend" | "geminiA" | "geminiB"
+export type GeminiMotionSpeed = "fast" | "official" | "calm"
 export type LaunchPage = "discovery" | "ranking" | "following"
 export type ImageBatchConcurrency = number
 export type AITranslateConcurrency = number
@@ -106,6 +107,18 @@ export interface AppSettings {
   experimentalImmersionIntensity: AmbientIntensity
   experimentalImmersionAlgorithm: AmbientAlgorithm
   novelReaderExperimentalAlgorithm: NovelReaderExperimentalAlgorithm
+  geminiMotionSpeed: GeminiMotionSpeed
+  geminiCustomParamsEnabled: boolean
+  geminiTransitionIntervalMs: number
+  geminiTransitionDurationMs: number
+  geminiRotationPeriodSec: number
+  geminiSwingDurationMs: number
+  geminiCenterOffsetY: number
+  geminiWingOffsetX: number
+  geminiSwingDistance: number
+  geminiBlurRadius: number
+  geminiLuminousBoostRatio: number
+  geminiLightModeAlphaRatio: number
   watchlistSortOrder: WatchlistSortOrder
   longPressBookmarkAction: "off" | "follow" | "detail"
   closeButtonAction: CloseButtonAction
@@ -167,6 +180,18 @@ const DEFAULT_SETTINGS: AppSettings = {
   experimentalImmersionIntensity: "medium",
   experimentalImmersionAlgorithm: "classic",
   novelReaderExperimentalAlgorithm: "off",
+  geminiMotionSpeed: "official",
+  geminiCustomParamsEnabled: false,
+  geminiTransitionIntervalMs: 2000,
+  geminiTransitionDurationMs: 1800,
+  geminiRotationPeriodSec: 7,
+  geminiSwingDurationMs: 3800,
+  geminiCenterOffsetY: -200,
+  geminiWingOffsetX: 95,
+  geminiSwingDistance: 40,
+  geminiBlurRadius: 100,
+  geminiLuminousBoostRatio: 25,
+  geminiLightModeAlphaRatio: 52,
   watchlistSortOrder: "asc",
   longPressBookmarkAction: "off",
   closeButtonAction: "minimize",
@@ -232,6 +257,11 @@ const DOWNLOAD_STORAGE_MODE_VALUES: readonly DownloadStorageMode[] = ["local", "
 const LONG_PRESS_ACTION_VALUES: readonly AppSettings["longPressBookmarkAction"][] = ["off", "follow", "detail"]
 const CLOSE_BUTTON_ACTION_VALUES: readonly CloseButtonAction[] = ["minimize", "exit"]
 const AMBIENT_INTENSITY_VALUES: readonly AmbientIntensity[] = ["low", "medium", "high"]
+const GEMINI_MOTION_SPEED_VALUES: readonly GeminiMotionSpeed[] = [
+  "fast",
+  "official",
+  "calm",
+]
 const AMBIENT_ALGORITHM_VALUES: readonly AmbientAlgorithm[] = [
   "classic",
   "explore",
@@ -374,6 +404,76 @@ function parseWidgetReloadInterval(value: unknown): number {
   return DEFAULT_SETTINGS.widgetReloadIntervalMinutes
 }
 
+function parseGeminiTransitionInterval(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.max(500, Math.min(10000, Math.round(value)))
+  }
+  return DEFAULT_SETTINGS.geminiTransitionIntervalMs
+}
+
+function parseGeminiTransitionDuration(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.max(300, Math.min(9000, Math.round(value)))
+  }
+  return DEFAULT_SETTINGS.geminiTransitionDurationMs
+}
+
+function parseGeminiRotationPeriod(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.max(0, Math.min(60, Math.round(value * 10) / 10))
+  }
+  return DEFAULT_SETTINGS.geminiRotationPeriodSec
+}
+
+function parseGeminiSwingDuration(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.max(1000, Math.min(15000, Math.round(value)))
+  }
+  return DEFAULT_SETTINGS.geminiSwingDurationMs
+}
+
+function parseGeminiCenterOffsetY(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.max(-350, Math.min(-50, Math.round(value)))
+  }
+  return DEFAULT_SETTINGS.geminiCenterOffsetY
+}
+
+function parseGeminiWingOffsetX(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.max(30, Math.min(200, Math.round(value)))
+  }
+  return DEFAULT_SETTINGS.geminiWingOffsetX
+}
+
+function parseGeminiSwingDistance(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.max(5, Math.min(120, Math.round(value)))
+  }
+  return DEFAULT_SETTINGS.geminiSwingDistance
+}
+
+function parseGeminiBlurRadius(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.max(30, Math.min(200, Math.round(value)))
+  }
+  return DEFAULT_SETTINGS.geminiBlurRadius
+}
+
+function parseGeminiLuminousBoostRatio(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.max(0, Math.min(100, Math.round(value)))
+  }
+  return DEFAULT_SETTINGS.geminiLuminousBoostRatio
+}
+
+function parseGeminiLightModeAlphaRatio(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.max(10, Math.min(100, Math.round(value)))
+  }
+  return DEFAULT_SETTINGS.geminiLightModeAlphaRatio
+}
+
 function parseStringArray(value: unknown, fallback: string[]): string[] {
   if (Array.isArray(value)) {
     return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
@@ -429,6 +529,20 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
     )
       ? stored.novelReaderExperimentalAlgorithm
       : DEFAULT_SETTINGS.novelReaderExperimentalAlgorithm,
+    geminiMotionSpeed: isOneOf(stored?.geminiMotionSpeed, GEMINI_MOTION_SPEED_VALUES)
+      ? stored.geminiMotionSpeed
+      : DEFAULT_SETTINGS.geminiMotionSpeed,
+    geminiCustomParamsEnabled: boolOr(stored?.geminiCustomParamsEnabled, DEFAULT_SETTINGS.geminiCustomParamsEnabled),
+    geminiTransitionIntervalMs: parseGeminiTransitionInterval(stored?.geminiTransitionIntervalMs),
+    geminiTransitionDurationMs: parseGeminiTransitionDuration(stored?.geminiTransitionDurationMs),
+    geminiRotationPeriodSec: parseGeminiRotationPeriod(stored?.geminiRotationPeriodSec),
+    geminiSwingDurationMs: parseGeminiSwingDuration(stored?.geminiSwingDurationMs),
+    geminiCenterOffsetY: parseGeminiCenterOffsetY(stored?.geminiCenterOffsetY),
+    geminiWingOffsetX: parseGeminiWingOffsetX(stored?.geminiWingOffsetX),
+    geminiSwingDistance: parseGeminiSwingDistance(stored?.geminiSwingDistance),
+    geminiBlurRadius: parseGeminiBlurRadius(stored?.geminiBlurRadius),
+    geminiLuminousBoostRatio: parseGeminiLuminousBoostRatio(stored?.geminiLuminousBoostRatio),
+    geminiLightModeAlphaRatio: parseGeminiLightModeAlphaRatio(stored?.geminiLightModeAlphaRatio),
     watchlistSortOrder: isOneOf(stored?.watchlistSortOrder, WATCHLIST_SORT_VALUES)
       ? stored.watchlistSortOrder
       : DEFAULT_SETTINGS.watchlistSortOrder,

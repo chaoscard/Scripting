@@ -543,44 +543,44 @@ function buildIllustPalette(
   isDark: boolean,
   intensity: AmbientIntensity
 ): IllustAmbientPalette {
-  // 1. 经典算法色彩 (Classic - 完全保持原有渲染参数与色彩)
+  // 1. 经典算法色彩 (Classic - 浅色水彩浓郁优化)
   const [tR, tG, tB] = boostVibrancy(tRaw[0], tRaw[1], tRaw[2], isDark, intensity)
   const [dR, dG, dB] = boostVibrancy(dRaw[0], dRaw[1], dRaw[2], isDark, intensity)
-  let topAlpha = 0.54
-  let midAlpha = 0.28
-  let bgAlpha = 0.10
+  let topAlpha = isDark ? 0.54 : 0.68
+  let midAlpha = isDark ? 0.28 : 0.38
+  let bgAlpha = isDark ? 0.10 : 0.14
   if (intensity === "low") {
-    topAlpha = 0.46
-    midAlpha = 0.24
-    bgAlpha = 0.08
+    topAlpha = isDark ? 0.46 : 0.54
+    midAlpha = isDark ? 0.24 : 0.28
+    bgAlpha = isDark ? 0.08 : 0.10
   } else if (intensity === "high") {
-    topAlpha = isDark ? 0.66 : 0.64
-    midAlpha = isDark ? 0.36 : 0.34
-    bgAlpha = 0.14
+    topAlpha = isDark ? 0.66 : 0.80
+    midAlpha = isDark ? 0.36 : 0.48
+    bgAlpha = isDark ? 0.14 : 0.18
   }
 
-  // 2. 探索算法色彩 (Explore - 极光双焦点与感知明度自适应)
+  // 2. 探索算法色彩 (Explore - 浅色水彩通透增强)
   const [expTR, expTG, expTB] = adaptPerceptualColor(tRaw[0], tRaw[1], tRaw[2], isDark, intensity)
   const [expDR, expDG, expDB] = adaptPerceptualColor(dRaw[0], dRaw[1], dRaw[2], isDark, intensity)
   const [expAR, expAG, expAB] = adaptPerceptualColor(aRaw[0], aRaw[1], aRaw[2], isDark, intensity)
 
-  let expAccentAlpha = isDark ? 0.52 : 0.44
-  let expTopAlpha = isDark ? 0.58 : 0.50
-  let expMidAlpha = isDark ? 0.24 : 0.18
+  let expAccentAlpha = isDark ? 0.52 : 0.64
+  let expTopAlpha = isDark ? 0.58 : 0.70
+  let expMidAlpha = isDark ? 0.24 : 0.32
   let expBgAlpha = 0.00
   if (intensity === "low") {
-    expAccentAlpha = isDark ? 0.32 : 0.24
-    expTopAlpha = isDark ? 0.38 : 0.30
-    expMidAlpha = isDark ? 0.14 : 0.10
+    expAccentAlpha = isDark ? 0.32 : 0.44
+    expTopAlpha = isDark ? 0.38 : 0.50
+    expMidAlpha = isDark ? 0.14 : 0.20
     expBgAlpha = 0.00
   } else if (intensity === "high") {
-    expAccentAlpha = isDark ? 0.70 : 0.60
-    expTopAlpha = isDark ? 0.76 : 0.68
-    expMidAlpha = isDark ? 0.38 : 0.30
-    expBgAlpha = isDark ? 0.04 : 0.02
+    expAccentAlpha = isDark ? 0.70 : 0.82
+    expTopAlpha = isDark ? 0.76 : 0.88
+    expMidAlpha = isDark ? 0.38 : 0.46
+    expBgAlpha = isDark ? 0.04 : 0.04
   }
 
-  // 3. 极致算法色彩 (Ultimate - 空间四象限物理光影 + 棱镜色散流光)
+  // 3. 极致算法色彩 (Ultimate - 空间四象限物理光影 + 浅色去雾)
   const [ultLeadR, ultLeadG, ultLeadB] = adaptUltimatePerceptualColor(tlRaw[0], tlRaw[1], tlRaw[2], isDark, intensity, "leading")
   const [ultPrismR, ultPrismG, ultPrismB] = adaptUltimatePerceptualColor(prismRaw[0], prismRaw[1], prismRaw[2], isDark, intensity, "prism")
   const [ultTrailR, ultTrailG, ultTrailB] = adaptUltimatePerceptualColor(trRaw[0], trRaw[1], trRaw[2], isDark, intensity, "trailing")
@@ -591,26 +591,26 @@ function buildIllustPalette(
   const [ultPrismCoreR, ultPrismCoreG, ultPrismCoreB] = adaptUltimateCoreColor(prismRaw[0], prismRaw[1], prismRaw[2], isDark)
   const [ultTrailCoreR, ultTrailCoreG, ultTrailCoreB] = adaptUltimateCoreColor(trRaw[0], trRaw[1], trRaw[2], isDark)
 
-  let ultLeadAlpha = isDark ? 0.62 : 0.54
-  let ultPrismAlpha = isDark ? 0.52 : 0.44
-  let ultTrailAlpha = isDark ? 0.46 : 0.38
-  let ultMidAlpha = isDark ? 0.20 : 0.14
+  let ultLeadAlpha = isDark ? 0.62 : 0.76
+  let ultPrismAlpha = isDark ? 0.52 : 0.66
+  let ultTrailAlpha = isDark ? 0.46 : 0.58
+  let ultMidAlpha = isDark ? 0.20 : 0.26
   let ultBgAlpha = 0.00
-  let ultCoreAlpha = isDark ? 0.68 : 0.58
+  let ultCoreAlpha = isDark ? 0.68 : 0.75
   if (intensity === "low") {
-    ultLeadAlpha = isDark ? 0.42 : 0.34
-    ultPrismAlpha = isDark ? 0.34 : 0.26
-    ultTrailAlpha = isDark ? 0.28 : 0.20
-    ultMidAlpha = isDark ? 0.12 : 0.08
+    ultLeadAlpha = isDark ? 0.42 : 0.52
+    ultPrismAlpha = isDark ? 0.34 : 0.42
+    ultTrailAlpha = isDark ? 0.28 : 0.36
+    ultMidAlpha = isDark ? 0.12 : 0.16
     ultBgAlpha = 0.00
-    ultCoreAlpha = isDark ? 0.44 : 0.36
+    ultCoreAlpha = isDark ? 0.44 : 0.50
   } else if (intensity === "high") {
-    ultLeadAlpha = isDark ? 0.80 : 0.72
-    ultPrismAlpha = isDark ? 0.70 : 0.60
-    ultTrailAlpha = isDark ? 0.62 : 0.52
-    ultMidAlpha = isDark ? 0.34 : 0.26
-    ultBgAlpha = isDark ? 0.03 : 0.01
-    ultCoreAlpha = isDark ? 0.88 : 0.78
+    ultLeadAlpha = isDark ? 0.80 : 0.90
+    ultPrismAlpha = isDark ? 0.70 : 0.80
+    ultTrailAlpha = isDark ? 0.62 : 0.72
+    ultMidAlpha = isDark ? 0.34 : 0.40
+    ultBgAlpha = isDark ? 0.03 : 0.03
+    ultCoreAlpha = isDark ? 0.88 : 0.92
   }
 
   return {
