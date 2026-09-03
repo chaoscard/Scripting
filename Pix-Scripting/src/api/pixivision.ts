@@ -1,5 +1,5 @@
 import { apiGetPublicJson, apiGetPublicText, PixivError } from "./client"
-import { derivePixivThumbUrl } from "../image/imageLoader"
+import { derivePixivThumbUrl, recordPixivisionCoverUrl } from "../image/imageLoader"
 import type {
   PixivIllustration,
   PixivPage,
@@ -380,6 +380,14 @@ export function parsePixivisionDetailPage(
     html.match(/<time\b[^>]*class=["'][^"']*[_ ]date[^"']*["'][^>]*>/i)?.[0] ?? "",
     "datetime"
   )
+  const rawThumbnailURL =
+    html.match(/<meta\b[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i)?.[1] ||
+    html.match(/<meta\b[^>]*name=["']twitter:image["'][^>]*content=["']([^"']+)["']/i)?.[1] ||
+    html.match(/<div\b[^>]*class=["'][^"']*(?:am__main-visual|amsp__main-visual|_main-visual)[^"']*["'][^>]*>[\s\S]*?<img\b[^>]*src=["']([^"']+)["']/i)?.[1]
+  const thumbnailURL = rawThumbnailURL ? rawThumbnailURL.trim() : undefined
+  if (thumbnailURL) {
+    recordPixivisionCoverUrl(articleID, thumbnailURL)
+  }
   const categoryMatch =
     html.match(/<span\b[^>]*class=["'][^"']*_category-label[^"']*["'][^>]*>[\s\S]*?href=["'](?:\/zh\/c\/|https?:\/\/www\.pixivision\.net\/zh\/c\/)([^"']+)["']/i) ||
     html.match(/<a\b[^>]*href=["'](?:\/zh\/c\/|https?:\/\/www\.pixivision\.net\/zh\/c\/)([^"']+)["']/i)
@@ -965,6 +973,7 @@ export function parsePixivisionDetailPage(
     date,
     category: category || "特辑",
     categorySlug: mainCategorySlug,
+    thumbnailURL,
     lead: lead || undefined,
     description,
     tags,

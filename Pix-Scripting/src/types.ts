@@ -162,6 +162,7 @@ export interface PixivisionDetail {
   date: string
   category: string
   categorySlug?: string
+  thumbnailURL?: string
   lead?: string
   description: string
   tags: PixivisionTag[]

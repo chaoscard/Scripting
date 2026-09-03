@@ -12,7 +12,7 @@ import { getWidgetSourceForFamily, loadSettings } from "./settings"
 import { pixivWidgetPath } from "./dataDirectory"
 import { writeDataSafely, writeTextSafely, recoverFile } from "./safeFile"
 import { cacheIllust, getCachedIllust } from "./illustCache"
-import { cacheFilePath } from "../image/imageLoader"
+import { cacheFilePath, recordPixivisionCoverUrl } from "../image/imageLoader"
 import type { PixivIllustration, PixivisionArticle } from "../types"
 
 export interface WidgetArtwork {
@@ -651,6 +651,9 @@ export function seedPixivisionFromWidgetPool(id: number): void {
   if (!found) return
 
   const remoteUrl = found.remoteImageUrl || ""
+  if (remoteUrl) {
+    recordPixivisionCoverUrl(id, remoteUrl)
+  }
   if (remoteUrl && found.localImagePath && FileManager.existsSync(found.localImagePath)) {
     try {
       const appCachePath = cacheFilePath(remoteUrl)

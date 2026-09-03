@@ -843,3 +843,16 @@ export function resolveIllustUnderlayUrl(
   return i.extra_preview_url || thumbUrl || null
 }
 
+const pixivisionCoverMap = new Map<number, string>()
+
+export function recordPixivisionCoverUrl(articleId: number, url: string): void {
+  if (articleId > 0 && url) {
+    pixivisionCoverMap.set(articleId, url)
+  }
+}
+
+export function getPixivisionCoverUrl(articleId: number): string | null {
+  return pixivisionCoverMap.get(articleId) ?? null
+}
+
+

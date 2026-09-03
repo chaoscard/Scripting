@@ -10,6 +10,7 @@ import {
 } from "scripting"
 import { CachedImage } from "./CachedImage"
 import { TagChip } from "./TagChip"
+import { recordPixivisionCoverUrl } from "../../image/imageLoader"
 import type { PixivisionArticle } from "../../types"
 
 const FLOW_HORIZONTAL_PADDING = 12
@@ -24,6 +25,9 @@ export function PixivisionCard(props: {
   priority?: number
 }) {
   const { article, onAppear, priority } = props
+  if (article.id && article.imageURL) {
+    recordPixivisionCoverUrl(article.id, article.imageURL)
+  }
   // 遵循 Pixivision 官方标准卡片设计规范：所有特辑封面统一采用官方标准横幅比例（1200/630），
   // 非标封面自动居中裁切填充（object-fit: cover），确保信息流卡片高度规整一致且零排版跳变
   const imageRatio = DEFAULT_ARTICLE_RATIO

@@ -9,6 +9,7 @@ import {
   Menu,
   Navigation,
   NavigationLink,
+  Rectangle,
   ScrollView,
   ScrollViewProxy,
   ScrollViewReader,
@@ -16,18 +17,20 @@ import {
   Text,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
+  type VirtualNode,
   VStack,
   ZStack,
 } from "scripting"
 import { fetchPublicWebIllustDetail, illustrationDetail, pixivisionDetail } from "../api/pixiv"
 import { session } from "../api/session"
 import { cacheIllust, getCachedIllust } from "../store/illustCache"
-import { cachedFilePath, derivePixivThumbUrl, loadImage } from "../image/imageLoader"
+import { cachedFilePath, derivePixivThumbUrl, getPixivisionCoverUrl, loadImage } from "../image/imageLoader"
 import { fetchImageBinaryWithRetry, saveImageToPixivAlbum } from "../downloader"
 import { renderDestination } from "./routes"
-import { useAsyncGuard } from "./hooks"
+import { useAsyncGuard, useExperimentalAmbientPalette } from "./hooks"
 import { IllustGalleryView } from "./IllustGalleryView"
 import type { PixivIllustration, PixivisionArticle, PixivisionArtwork, PixivisionBodyBlock, PixivisionDetail } from "../types"
 import {
@@ -52,6 +55,10 @@ const HERO_CARD_WIDTH = Math.floor(Device.screen.width - FLOW_HORIZONTAL_PADDING
 const MIN_FLOW_IMAGE_RATIO = 1 / 4
 const MAX_FLOW_IMAGE_RATIO = 2.5
 
+function isVirtualNode(v: unknown): v is VirtualNode {
+  return !!v && typeof v === "object" && ("render" in v || "isInternal" in v || "props" in v)
+}
+
 export function PixivisionDetailView(props: { articleID: number }) {
   const { articleID } = props
   const [detail, setDetail] = useState<PixivisionDetail | null>(null)
@@ -63,6 +70,23 @@ export function PixivisionDetailView(props: { articleID: number }) {
   const guard = useAsyncGuard()
   const hydratingSetRef = useRef<Set<number>>(new Set())
   const proxyRef = useRef<ScrollViewProxy | null>(null)
+
+  // 按照探索推荐页沉浸逻辑：从第一张图片提取色调，绝不侵入顶栏背景
+  // 1. 优先取文章自身封面/首图
+  // 2. 其次取正文中展示的第一幅插画作品大图
+  // 3. 再次取正文第一个插图块
+  // 4. 若上述均未就绪（如初次进入骨架屏时期），取点击卡片时缓存的封面图
+  const firstImageUrl = useMemo(() => {
+    if (detail?.thumbnailURL) return detail.thumbnailURL
+    if (detail?.artworks?.[0]?.imageURL) return detail.artworks[0].imageURL
+    const firstBlockImage = detail?.blocks?.find(
+      (b): b is Extract<PixivisionBodyBlock, { type: "image" }> => b.type === "image"
+    )
+    if (firstBlockImage?.src) return firstBlockImage.src
+    return getPixivisionCoverUrl(articleID)
+  }, [detail, articleID])
+
+  const { ambientBackground } = useExperimentalAmbientPalette(firstImageUrl)
 
   const handleShare = useCallback(async () => {
     await ShareSheet.present([`https://www.pixivision.net/zh/a/${articleID}`])
@@ -367,26 +391,46 @@ export function PixivisionDetailView(props: { articleID: number }) {
 
   if (loading) {
     return (
-      <ScrollView navigationTitle="特辑详情" navigationBarTitleDisplayMode="inline">
-        <LoadingView />
-      </ScrollView>
+      <ZStack>
+        {isVirtualNode(ambientBackground) ? (
+          ambientBackground
+        ) : (
+          <Rectangle fill={ambientBackground ?? "clear"} ignoresSafeArea={true} />
+        )}
+        <ScrollView navigationTitle="特辑详情" navigationBarTitleDisplayMode="inline">
+          <LoadingView />
+        </ScrollView>
+      </ZStack>
     )
   }
 
   if (error || !detail) {
     return (
-      <ScrollView navigationTitle="特辑详情" navigationBarTitleDisplayMode="inline">
-        <ErrorView message={error ?? "特辑不存在或已下架"} onRetry={load} />
-      </ScrollView>
+      <ZStack>
+        {isVirtualNode(ambientBackground) ? (
+          ambientBackground
+        ) : (
+          <Rectangle fill={ambientBackground ?? "clear"} ignoresSafeArea={true} />
+        )}
+        <ScrollView navigationTitle="特辑详情" navigationBarTitleDisplayMode="inline">
+          <ErrorView message={error ?? "特辑不存在或已下架"} onRetry={load} />
+        </ScrollView>
+      </ZStack>
     )
   }
 
   return (
-    <ScrollViewReader>
-      {(proxy) => {
-        proxyRef.current = proxy
-        return (
-          <ScrollView
+    <ZStack>
+      {isVirtualNode(ambientBackground) ? (
+        ambientBackground
+      ) : (
+        <Rectangle fill={ambientBackground ?? "clear"} ignoresSafeArea={true} />
+      )}
+      <ScrollViewReader>
+        {(proxy) => {
+          proxyRef.current = proxy
+          return (
+            <ScrollView
             scrollPosition={{
               value: scrollTargetId,
               onChanged: (newId) => {
@@ -1168,6 +1212,7 @@ export function PixivisionDetailView(props: { articleID: number }) {
         )
       }}
     </ScrollViewReader>
+    </ZStack>
   )
 }
 

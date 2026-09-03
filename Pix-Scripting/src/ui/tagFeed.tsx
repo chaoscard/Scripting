@@ -209,12 +209,18 @@ function TagPixivisionFeed(props: { tag: string }) {
     },
     deps: [rawTag],
     requiresAuth: false,
+    onBatchPublished: (_, pendingItems) =>
+      prefetch(pendingItems.slice(0, currentBatchSize()).map((item) => item.imageURL)).cancel,
   })
+
+  const firstImageUrl = paged.items[0]?.imageURL ?? null
+  const { ambientBackground } = useExperimentalAmbientPalette(firstImageUrl)
 
   return (
     <RefreshableScrollView
       navigationTitle={navTitle}
       navigationBarTitleDisplayMode="inline"
+      background={ambientBackground}
       refreshable={paged.refresh}
     >
       <VStack alignment="leading" spacing={8} padding={{ top: 8, bottom: 28 }}>
