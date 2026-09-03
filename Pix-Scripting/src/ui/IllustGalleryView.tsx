@@ -31,6 +31,7 @@ import {
   downloadIllustToAlbum,
   fetchImageBinaryWithRetry,
   saveImageToPixivAlbum,
+  withAlbumKeepAlive,
 } from "../downloader"
 import {
   getDetailImageQuality,
@@ -470,21 +471,28 @@ export function IllustGalleryView(props: {
 
   async function handleDownloadSingle(pageIdx: number) {
     if (downloading) return
+    void Haptics.transient()
     setDownloading(true)
     try {
-      const quality = getDownloadImageQuality()
-      const url = imageUrlOf(illust, pageIdx, quality)
-      if (!url) return
-      const fileName = `pixiv_${illust.id}_p${pageIdx + 1}`
-      const cached = cachedFilePath(url)
-      if (cached) {
-        await saveImageToPixivAlbum(cached, fileName)
-      } else {
-        const data = await fetchImageBinaryWithRetry(url)
-        if (data) {
-          await saveImageToPixivAlbum(data, fileName)
+      await withAlbumKeepAlive(async () => {
+        const quality = getDownloadImageQuality()
+        const url = imageUrlOf(illust, pageIdx, quality)
+        if (!url) return
+        const fileName = `pixiv_${illust.id}_p${pageIdx + 1}`
+        const cached = cachedFilePath(url)
+        let ok = false
+        if (cached) {
+          ok = await saveImageToPixivAlbum(cached, fileName)
+        } else {
+          const data = await fetchImageBinaryWithRetry(url)
+          if (data) {
+            ok = await saveImageToPixivAlbum(data, fileName)
+          }
         }
-      }
+        if (ok) {
+          void Haptics.transient()
+        }
+      })
     } catch (err: any) {
       console.log("handleDownloadSingle error:", err?.message ?? err)
     } finally {
@@ -494,9 +502,13 @@ export function IllustGalleryView(props: {
 
   async function handleDownloadAll() {
     if (downloading) return
+    void Haptics.transient()
     setDownloading(true)
     try {
-      await downloadIllustToAlbum(illust, getDownloadImageQuality())
+      const ok = await downloadIllustToAlbum(illust, getDownloadImageQuality())
+      if (ok) {
+        void Haptics.transient()
+      }
     } catch (err: any) {
       console.log("handleDownloadAll error:", err?.message ?? err)
     } finally {

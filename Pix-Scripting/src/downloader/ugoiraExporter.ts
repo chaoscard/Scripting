@@ -1,5 +1,5 @@
 import { buildUgoira, prepareUgoira } from "../ugoira/ugoira"
-import { saveImageToPixivAlbum, saveVideoToPixivAlbum } from "./photoAlbum"
+import { saveImageToPixivAlbum, saveVideoToPixivAlbum, withAlbumKeepAlive } from "./photoAlbum"
 import { getCategoryDirectory, sanitizeFileName } from "./directoryResolver"
 import { notifyDownloadFilesChanged } from "./downloadFileManager"
 import { loadSettings, type UgoiraExportFormat } from "../store/settings"
@@ -23,44 +23,46 @@ export async function exportUgoiraToAlbum(
   onProgress?: (msg: string) => void,
   formatOverride?: UgoiraExportFormat
 ): Promise<UgoiraExportResult> {
-  const format: UgoiraExportFormat = formatOverride ?? loadSettings().ugoiraExportFormat ?? "mp4"
-  try {
-    const author = illust.user?.name || "Unknown"
-    const safeTitle = sanitizeFileName(`${illust.title}_${author}_${illust.id}`)
+  return withAlbumKeepAlive(async () => {
+    const format: UgoiraExportFormat = formatOverride ?? loadSettings().ugoiraExportFormat ?? "mp4"
+    try {
+      const author = illust.user?.name || "Unknown"
+      const safeTitle = sanitizeFileName(`${illust.title}_${author}_${illust.id}`)
 
-    if (format === "gif") {
-      onProgress?.("正在通过 FFmpeg 合成高质量 GIF 动图...")
-      const ugoiraRes = await buildUgoira(illust.id, "gif")
-      if (!ugoiraRes || !ugoiraRes.mp4Path) {
-        return { success: false, mp4Path: null, format: "gif", error: "GIF 动图合成失败" }
-      }
+      if (format === "gif") {
+        onProgress?.("正在通过 FFmpeg 合成高质量 GIF 动图...")
+        const ugoiraRes = await buildUgoira(illust.id, "gif")
+        if (!ugoiraRes || !ugoiraRes.mp4Path) {
+          return { success: false, mp4Path: null, format: "gif", error: "GIF 动图合成失败" }
+        }
 
-      onProgress?.("正在保存 GIF 至相簿...")
-      const fileName = `${safeTitle}.gif`
-      const saved = await saveImageToPixivAlbum(ugoiraRes.mp4Path, fileName)
-      if (!saved) {
-        return { success: false, mp4Path: ugoiraRes.mp4Path, format: "gif", error: "保存相册失败" }
-      }
-      return { success: true, mp4Path: ugoiraRes.mp4Path, format: "gif", savedPath: ugoiraRes.mp4Path }
-    } else {
-      onProgress?.("正在通过 FFmpeg 合成高清 MP4 视频...")
-      const ugoiraRes = await buildUgoira(illust.id, "mp4")
-      if (!ugoiraRes || !ugoiraRes.mp4Path) {
-        return { success: false, mp4Path: null, format: "mp4", error: "MP4 视频合成失败" }
-      }
+        onProgress?.("正在保存 GIF 至相簿...")
+        const fileName = `${safeTitle}.gif`
+        const saved = await saveImageToPixivAlbum(ugoiraRes.mp4Path, fileName)
+        if (!saved) {
+          return { success: false, mp4Path: ugoiraRes.mp4Path, format: "gif", error: "保存相册失败" }
+        }
+        return { success: true, mp4Path: ugoiraRes.mp4Path, format: "gif", savedPath: ugoiraRes.mp4Path }
+      } else {
+        onProgress?.("正在通过 FFmpeg 合成高清 MP4 视频...")
+        const ugoiraRes = await buildUgoira(illust.id, "mp4")
+        if (!ugoiraRes || !ugoiraRes.mp4Path) {
+          return { success: false, mp4Path: null, format: "mp4", error: "MP4 视频合成失败" }
+        }
 
-      onProgress?.("正在保存 MP4 至相簿...")
-      const fileName = `${safeTitle}.mp4`
-      const saved = await saveVideoToPixivAlbum(ugoiraRes.mp4Path, fileName)
-      if (!saved) {
-        return { success: false, mp4Path: ugoiraRes.mp4Path, format: "mp4", error: "保存相册失败" }
+        onProgress?.("正在保存 MP4 至相簿...")
+        const fileName = `${safeTitle}.mp4`
+        const saved = await saveVideoToPixivAlbum(ugoiraRes.mp4Path, fileName)
+        if (!saved) {
+          return { success: false, mp4Path: ugoiraRes.mp4Path, format: "mp4", error: "保存相册失败" }
+        }
+        return { success: true, mp4Path: ugoiraRes.mp4Path, format: "mp4", savedPath: ugoiraRes.mp4Path }
       }
-      return { success: true, mp4Path: ugoiraRes.mp4Path, format: "mp4", savedPath: ugoiraRes.mp4Path }
+    } catch (err: any) {
+      console.log("exportUgoiraToAlbum error:", err?.message ?? err)
+      return { success: false, mp4Path: null, format, error: err?.message ?? String(err) }
     }
-  } catch (err: any) {
-    console.log("exportUgoiraToAlbum error:", err?.message ?? err)
-    return { success: false, mp4Path: null, format, error: err?.message ?? String(err) }
-  }
+  })
 }
 
 /**

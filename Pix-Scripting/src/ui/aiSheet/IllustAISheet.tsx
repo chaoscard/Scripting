@@ -32,7 +32,7 @@ import {
   streamVisionTranslateImage,
   streamTranslateText,
 } from "../../api/aiService"
-import { saveImageToPixivAlbum } from "../../downloader/photoAlbum"
+import { saveImageToPixivAlbum, withAlbumKeepAlive } from "../../downloader/photoAlbum"
 import { CachedImage, ErrorView } from "../components"
 import { cachedFilePath, imageUrlOf, loadImage, pageThumbUrlOf } from "../../image/imageLoader"
 import { loadSettings } from "../../store/settings"
@@ -768,43 +768,44 @@ export function IllustAISheet(props: {
     try {
       setDownloading(true)
       let savedCount = 0
+      await withAlbumKeepAlive(async () => {
+        if (mode === "vision") {
+          for (let idx = 0; idx < pageCount; idx++) {
+            const cache = pageCaches[idx]
+            if (cache?.generatedImageBase64) {
+              const data = Data.fromBase64String(cache.generatedImageBase64)
+              if (data) {
+                const fileName = `${illust.id}_p${idx}_ai_gen.jpg`
+                const ok = await saveImageToPixivAlbum(data, fileName)
+                if (ok) savedCount++
+              }
+            }
+          }
+        } else if (mode === "ocr") {
+          // 保存所有已翻译/已渲染的 Canvas 截图
+          for (let idx = 0; idx < pageCount; idx++) {
+            const cache = pageCaches[idx]
+            if (!cache?.imageFilePath && !cache?.bubbles?.length) continue
 
-      if (mode === "vision") {
-        for (let idx = 0; idx < pageCount; idx++) {
-          const cache = pageCaches[idx]
-          if (cache?.generatedImageBase64) {
-            const data = Data.fromBase64String(cache.generatedImageBase64)
-            if (data) {
-              const fileName = `${illust.id}_p${idx}_ai_gen.jpg`
-              const ok = await saveImageToPixivAlbum(data, fileName)
+            const fileName = `${illust.id}_p${idx}_ocr.jpg`
+            let imageToSave: Data | string | null = null
+
+            const screenshot = canvasScreenshotRefs.current[idx]?.screenshot()
+            if (screenshot) {
+              imageToSave = Data.fromJPEG(screenshot, 0.95) || Data.fromPNG(screenshot)
+            }
+
+            if (!imageToSave && cache.imageFilePath) {
+              imageToSave = cache.imageFilePath
+            }
+
+            if (imageToSave) {
+              const ok = await saveImageToPixivAlbum(imageToSave, fileName)
               if (ok) savedCount++
             }
           }
         }
-      } else if (mode === "ocr") {
-        // 保存所有已翻译/已渲染的 Canvas 截图
-        for (let idx = 0; idx < pageCount; idx++) {
-          const cache = pageCaches[idx]
-          if (!cache?.imageFilePath && !cache?.bubbles?.length) continue
-
-          const fileName = `${illust.id}_p${idx}_ocr.jpg`
-          let imageToSave: Data | string | null = null
-
-          const screenshot = canvasScreenshotRefs.current[idx]?.screenshot()
-          if (screenshot) {
-            imageToSave = Data.fromJPEG(screenshot, 0.95) || Data.fromPNG(screenshot)
-          }
-
-          if (!imageToSave && cache.imageFilePath) {
-            imageToSave = cache.imageFilePath
-          }
-
-          if (imageToSave) {
-            const ok = await saveImageToPixivAlbum(imageToSave, fileName)
-            if (ok) savedCount++
-          }
-        }
-      }
+      })
 
       if (savedCount > 0) {
         void Haptics.transient(0.8, 0.8)

@@ -21,7 +21,7 @@ import { CachedImage, presentExternalURL, routeForDescriptionLink } from "./comp
 import { session } from "../api/session"
 import { illustrationDetail } from "../api/pixiv"
 import { imageUrlOf, pageThumbUrlOf, cachedFilePath, loadImage } from "../image/imageLoader"
-import { saveImageToPixivAlbum } from "../downloader/photoAlbum"
+import { saveImageToPixivAlbum, withAlbumKeepAlive } from "../downloader/photoAlbum"
 import type { PixivIllustration, TextEmbeddedImage } from "../types"
 import {
   calculateLineSpacing,
@@ -402,12 +402,14 @@ function NovelUploadedImageItemView(props: {
 
   const handleSaveToAlbum = useCallback(async () => {
     if (!url) return
-    const path = await loadImage(url, -1000)
-    if (!path) return
-    const success = await saveImageToPixivAlbum(path)
-    if (success) {
-      void Dialog.alert({ title: "已保存", message: "插图已成功保存至系统相簿" })
-    }
+    await withAlbumKeepAlive(async () => {
+      const path = await loadImage(url, -1000)
+      if (!path) return
+      const success = await saveImageToPixivAlbum(path)
+      if (success) {
+        void Dialog.alert({ title: "已保存", message: "插图已成功保存至系统相簿" })
+      }
+    })
   }, [url])
 
   if (!url) {
@@ -575,16 +577,18 @@ function NovelPixivImageItemView(props: {
                       title="保存插画至相簿"
                       systemImage="square.and.arrow.down"
                       action={async () => {
-                        const path = await loadImage(highResUrl, -1000)
-                        if (path) {
-                          const success = await saveImageToPixivAlbum(path)
-                          if (success) {
-                            void Dialog.alert({
-                              title: "已保存",
-                              message: "插画原图已成功保存至系统相簿",
-                            })
+                        await withAlbumKeepAlive(async () => {
+                          const path = await loadImage(highResUrl, -1000)
+                          if (path) {
+                            const success = await saveImageToPixivAlbum(path)
+                            if (success) {
+                              void Dialog.alert({
+                                title: "已保存",
+                                message: "插画原图已成功保存至系统相簿",
+                              })
+                            }
                           }
-                        }
+                        })
                       }}
                     />
                   </Group>

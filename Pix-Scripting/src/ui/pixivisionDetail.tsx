@@ -28,7 +28,7 @@ import { fetchPublicWebIllustDetail, illustrationDetail, pixivisionDetail } from
 import { session } from "../api/session"
 import { cacheIllust, getCachedIllust } from "../store/illustCache"
 import { cachedFilePath, derivePixivThumbUrl, getPixivisionCoverUrl, loadImage } from "../image/imageLoader"
-import { fetchImageBinaryWithRetry, saveImageToPixivAlbum } from "../downloader"
+import { fetchImageBinaryWithRetry, saveImageToPixivAlbum, withAlbumKeepAlive } from "../downloader"
 import { renderDestination } from "./routes"
 import { useAsyncGuard, useExperimentalAmbientPalette } from "./hooks"
 import { IllustGalleryView } from "./IllustGalleryView"
@@ -927,16 +927,23 @@ export function PixivisionDetailView(props: { articleID: number }) {
                                         title="保存至相册"
                                         systemImage="square.and.arrow.down"
                                         action={async () => {
-                                          const cached = cachedFilePath(block.src) || cachedFilePath(block.thumbURL ?? "")
-                                          const fileName = `pixivision_${detail?.id ?? "image"}_${idx}.jpg`
-                                          if (cached) {
-                                            await saveImageToPixivAlbum(cached, fileName)
-                                          } else {
-                                            const data = await fetchImageBinaryWithRetry(block.src)
-                                            if (data) {
-                                              await saveImageToPixivAlbum(data, fileName)
+                                          void Haptics.transient()
+                                          await withAlbumKeepAlive(async () => {
+                                            const cached = cachedFilePath(block.src) || cachedFilePath(block.thumbURL ?? "")
+                                            const fileName = `pixivision_${detail?.id ?? "image"}_${idx}.jpg`
+                                            let ok = false
+                                            if (cached) {
+                                              ok = await saveImageToPixivAlbum(cached, fileName)
+                                            } else {
+                                              const data = await fetchImageBinaryWithRetry(block.src)
+                                              if (data) {
+                                                ok = await saveImageToPixivAlbum(data, fileName)
+                                              }
                                             }
-                                          }
+                                            if (ok) {
+                                              void Haptics.transient()
+                                            }
+                                          })
                                         }}
                                       />
                                       <Button
