@@ -27,6 +27,7 @@ import {
   DownloadCreatorsListView,
 } from "./downloadManager"
 import { seedIllustFromWidgetPool, seedPixivisionFromWidgetPool } from "../store/widgetStore"
+import { seedIllustFromPixivCache } from "../image/imageLoader"
 
 // 解析与规范化各类路由格式（支持 URL 编码如 %3A、纯数字 ID、Pixiv 网页链接等）
 export function normalizeRoute(rawRoute: string): string {
@@ -107,6 +108,7 @@ export function renderDestination(rawPage: string) {
     const id = parseID(page, "illust:")
     if (id != null) {
       seedIllustFromWidgetPool(id)
+      seedIllustFromPixivCache(id)
       return <IllustDetailView key={`illust-${id}-${++routeNavigationSeq}`} illustID={id} />
     }
   }

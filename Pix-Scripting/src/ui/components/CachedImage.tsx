@@ -146,6 +146,7 @@ export function CachedImage(props: {
   contentMode?: "fit" | "fill"
   centerCropSquare?: boolean
   centerCropAspect?: number
+  cropAnchor?: "center" | "top"
   useIntrinsicAspectRatio?: boolean
   disableFadeIn?: boolean
   frame?: any // 覆盖默认整宽 frame（如固定尺寸缩略图）
@@ -162,6 +163,7 @@ export function CachedImage(props: {
     contentMode = "fill",
     centerCropSquare = false,
     centerCropAspect,
+    cropAnchor = "center",
     useIntrinsicAspectRatio = false,
     disableFadeIn = false,
     frame,
@@ -269,9 +271,10 @@ export function CachedImage(props: {
         const image = UIImage.fromFile(path)
         if (!image || image.width <= 0 || image.height <= 0) return null
         const side = Math.min(image.width, image.height)
+        const cropY = cropAnchor === "top" ? 0 : (image.height - side) / 2
         return image.croppedTo({
           x: (image.width - side) / 2,
-          y: (image.height - side) / 2,
+          y: cropY,
           width: side,
           height: side,
         })
@@ -284,7 +287,7 @@ export function CachedImage(props: {
         const image = UIImage.fromFile(path)
         if (!image || image.width <= 0 || image.height <= 0) return null
         const currentAspect = image.width / image.height
-        // 若图片纵横比与目标纵横比差异大于 1%，则进行居中裁切
+        // 若图片纵横比与目标纵横比差异大于 1%，则进行裁切
         if (Math.abs(currentAspect - centerCropAspect) > 0.01) {
           if (currentAspect > centerCropAspect) {
             // 图片更宽（例如超宽横图封面），截取横向正中间部分
@@ -296,11 +299,12 @@ export function CachedImage(props: {
               height: image.height,
             })
           } else {
-            // 图片更高，截取纵向正中间部分
+            // 图片更高，根据 cropAnchor 截取顶部（y=0）或居中部分
             const targetHeight = image.width / centerCropAspect
+            const cropY = cropAnchor === "top" ? 0 : (image.height - targetHeight) / 2
             return image.croppedTo({
               x: 0,
-              y: (image.height - targetHeight) / 2,
+              y: cropY,
               width: image.width,
               height: targetHeight,
             })
@@ -311,7 +315,7 @@ export function CachedImage(props: {
       }
     }
     return null
-  }, [path, centerCropSquare, centerCropAspect])
+  }, [path, centerCropSquare, centerCropAspect, cropAnchor])
 
   const previewBlurredImage = useMemo(() => {
     if (!showBlurPreview || !previewPath) return null
@@ -321,9 +325,10 @@ export function CachedImage(props: {
       let targetImg = image
       if (centerCropSquare) {
         const side = Math.min(image.width, image.height)
+        const cropY = cropAnchor === "top" ? 0 : (image.height - side) / 2
         const cropped = image.croppedTo({
           x: (image.width - side) / 2,
-          y: (image.height - side) / 2,
+          y: cropY,
           width: side,
           height: side,
         })
@@ -342,9 +347,10 @@ export function CachedImage(props: {
             if (cropped) targetImg = cropped
           } else {
             const targetHeight = image.width / centerCropAspect
+            const cropY = cropAnchor === "top" ? 0 : (image.height - targetHeight) / 2
             const cropped = image.croppedTo({
               x: 0,
-              y: (image.height - targetHeight) / 2,
+              y: cropY,
               width: image.width,
               height: targetHeight,
             })
@@ -356,7 +362,7 @@ export function CachedImage(props: {
     } catch {
       return null
     }
-  }, [showBlurPreview, previewPath, centerCropSquare, centerCropAspect, blurPreviewRadius])
+  }, [showBlurPreview, previewPath, centerCropSquare, centerCropAspect, cropAnchor, blurPreviewRadius])
 
   const underlayCroppedImage = useMemo(() => {
     if (!underlayPath) return null
@@ -365,9 +371,10 @@ export function CachedImage(props: {
         const image = UIImage.fromFile(underlayPath)
         if (!image || image.width <= 0 || image.height <= 0) return null
         const side = Math.min(image.width, image.height)
+        const cropY = cropAnchor === "top" ? 0 : (image.height - side) / 2
         return image.croppedTo({
           x: (image.width - side) / 2,
-          y: (image.height - side) / 2,
+          y: cropY,
           width: side,
           height: side,
         })
@@ -391,9 +398,10 @@ export function CachedImage(props: {
             })
           } else {
             const targetHeight = image.width / centerCropAspect
+            const cropY = cropAnchor === "top" ? 0 : (image.height - targetHeight) / 2
             return image.croppedTo({
               x: 0,
-              y: (image.height - targetHeight) / 2,
+              y: cropY,
               width: image.width,
               height: targetHeight,
             })
@@ -404,11 +412,11 @@ export function CachedImage(props: {
       }
     }
     return null
-  }, [underlayPath, centerCropSquare, centerCropAspect])
+  }, [underlayPath, centerCropSquare, centerCropAspect, cropAnchor])
 
-  // 优先使用已就绪的图片文件（高清大图优先，缩略图即时兜底）提取真实物理宽高比，
+  // 优先使用已就绪的图片文件（高清大图优先，垫底大图次之，缩略图即时兜底）提取真实物理宽高比，
   // 确保多页作品各页在缩略图就绪的瞬间即可提前校准为真实比例，彻底消除大图下载完成时的二次外框尺寸跳变（Zero Layout Shift）：
-  const activeMeasurePath = path ?? previewPath
+  const activeMeasurePath = path ?? underlayPath ?? previewPath
   const intrinsicAspect = useMemo(() => {
     if (!activeMeasurePath || !useIntrinsicAspectRatio) return null
     try {

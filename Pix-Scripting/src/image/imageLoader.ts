@@ -1,5 +1,6 @@
 import { downloadBinary } from "../api/client"
-import { getFeedImageQuality, getHeroImageQuality, loadSettings } from "../store/settings"
+import { getDetailImageQuality, getFeedImageQuality, getHeroImageQuality, loadSettings } from "../store/settings"
+import { getCachedIllust } from "../store/illustCache"
 import { pixivDataPath } from "../store/dataDirectory"
 import { recoverFile, writeDataSafely, writeTextSafely } from "../store/safeFile"
 import { enforceUgoiraCacheLimit } from "../ugoira/ugoira"
@@ -745,5 +746,100 @@ export function upgradeHighQualityCoverUrl(
   }
 
   return upgraded
+}
+
+/**
+ * 跨页面同规格大图复用与缓存穿透机制：
+ * 当从特辑等外部信息流进入详情页且要求“大图画质”时，检查本地是否已存在该作品的大图级别缓存（如特辑大图）。
+ * 若已存在，将其直接链接/复用给详情页目标大图 URL，避免同规格图片因 URL 细微差异产生二次网络下载与闪屏。
+ */
+export function seedIllustDetailFromCache(
+  i: {
+    id: number
+    image_urls?: PixivImageUrls | { square_medium?: string; medium?: string; large?: string; original?: string }
+    extra_preview_url?: string
+    meta_pages?: { image_urls: PixivImageUrls }[]
+  } | null | undefined,
+  quality: "large" | "original"
+): void {
+  if (!i || quality !== "large") return
+  const targetUrl = imageUrlOf(i as any, 0, "large")
+  if (!targetUrl) return
+
+  const targetPath = cacheFilePath(targetUrl)
+  if (FileManager.existsSync(targetPath)) return
+
+  // 寻找候选大图来源（特辑大图 > 去前缀大图 > medium）
+  const candidateUrls = [
+    i.extra_preview_url,
+    upgradeHighQualityCoverUrl(i.image_urls?.large),
+    i.image_urls?.large,
+    upgradeHighQualityCoverUrl(i.image_urls?.medium),
+  ].filter((u): u is string => Boolean(u && u !== targetUrl))
+
+  for (const candUrl of candidateUrls) {
+    const candPath = cachedFilePath(candUrl)
+    if (candPath) {
+      try {
+        FileManager.copyFileSync(candPath, targetPath)
+        const meta = loadMeta()
+        const stat = FileManager.statSync(targetPath)
+        touch(meta, cacheKey(targetUrl), targetUrl, stat.size)
+        saveMetaDeferred(meta)
+        break
+      } catch {}
+    }
+  }
+}
+
+/**
+ * 从本地已有缓存（如特辑大图、其它规格大图）向主站标准大图同步预热缓存：
+ * 在进入 illust 详情页路由时同步调用，确保详情页挂载首帧即命中磁盘大图，
+ * 彻底消除进页后的重复下载、URL突变与排版闪动。
+ */
+export function seedIllustFromPixivCache(illustID: number): void {
+  if (!illustID || typeof illustID !== "number") return
+  const illust = getCachedIllust(illustID)
+  if (!illust) return
+
+  const detailQuality = getDetailImageQuality()
+  seedIllustDetailFromCache(illust, detailQuality)
+}
+
+/**
+ * 智能解析当前作品最佳可用垫底图 URL：
+ * 优先返回本地已命中磁盘缓存的最高规格图片（特辑大图 > master1200大图 > 缩略图），
+ * 确保详情页在首帧挂载时无论大图或原图下载与否，均能立刻获得清晰底图垫底，杜绝空白与闪屏。
+ */
+export function resolveIllustUnderlayUrl(
+  i: {
+    image_urls?: PixivImageUrls | { square_medium?: string; medium?: string; large?: string; original?: string }
+    extra_preview_url?: string
+    meta_pages?: { image_urls: PixivImageUrls }[]
+    meta_single_page?: { original_image_url?: string }
+  } | null | undefined,
+  pageIndex = 0
+): string | null {
+  if (!i) return null
+
+  // 1. 若本地已缓存了该作品的特辑高清大图，优先使用特辑大图垫底
+  if (pageIndex === 0 && i.extra_preview_url && cachedFilePath(i.extra_preview_url)) {
+    return i.extra_preview_url
+  }
+
+  // 2. 若本地已缓存了对应页的大图，优先使用大图垫底
+  const largeUrl = imageUrlOf(i as any, pageIndex, "large")
+  if (largeUrl && cachedFilePath(largeUrl)) {
+    return largeUrl
+  }
+
+  // 3. 检查是否有保持原比例的中等缩略图已缓存
+  const thumbUrl = pageThumbUrlOf(i, pageIndex)
+  if (thumbUrl && cachedFilePath(thumbUrl)) {
+    return thumbUrl
+  }
+
+  // 4. 未命中本地缓存时回退候选
+  return i.extra_preview_url || thumbUrl || null
 }
 

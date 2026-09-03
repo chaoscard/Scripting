@@ -134,6 +134,9 @@ export function PixivisionDetailView(props: { articleID: number }) {
           ]
           full.page_count = full.meta_pages.length
         }
+        if (art?.imageURL) {
+          full.extra_preview_url = art.imageURL
+        }
         cacheIllust(full)
         setHydratedMap((prev) => ({ ...prev, [id]: full }))
       }
@@ -1195,6 +1198,21 @@ function buildArtworkSkeletonIllust(artwork: PixivisionArtwork): PixivIllustrati
       ]
     : []
 
+  let artWidth = artwork.width ?? 0
+  let artHeight = artwork.height ?? 0
+  if (artWidth <= 0 || artHeight <= 0) {
+    const cached = cachedFilePath(artwork.imageURL)
+    if (cached) {
+      try {
+        const img = UIImage.fromFile(cached)
+        if (img && img.width > 0 && img.height > 0) {
+          artWidth = img.width
+          artHeight = img.height
+        }
+      } catch {}
+    }
+  }
+
   const illust: PixivIllustration = {
     id: artwork.id,
     title: artwork.title,
@@ -1218,8 +1236,8 @@ function buildArtworkSkeletonIllust(artwork: PixivisionArtwork): PixivIllustrati
     tags: [],
     create_date: "",
     page_count: hasDrafts ? 1 + artwork.draftImages!.length : 1,
-    width: artwork.width ?? 0,
-    height: artwork.height ?? 0,
+    width: artWidth,
+    height: artHeight,
     x_restrict: 0,
     series: null,
     meta_single_page: {},
@@ -1231,6 +1249,7 @@ function buildArtworkSkeletonIllust(artwork: PixivisionArtwork): PixivIllustrati
     total_comments: 0,
     illust_ai_type: 0,
     comment_access_control: 0,
+    extra_preview_url: artwork.imageURL,
   }
   cacheIllust(illust)
   return illust

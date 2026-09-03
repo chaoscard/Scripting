@@ -17,8 +17,6 @@ const HERO_CARD_WIDTH = Math.floor(
   Device.screen.width - FLOW_HORIZONTAL_PADDING * 2
 )
 const DEFAULT_ARTICLE_RATIO = 1200 / 630
-const MIN_ARTICLE_RATIO = 0.5
-const MAX_ARTICLE_RATIO = 2.5
 
 export function PixivisionCard(props: {
   article: PixivisionArticle
@@ -26,15 +24,13 @@ export function PixivisionCard(props: {
   priority?: number
 }) {
   const { article, onAppear, priority } = props
-  const rawRatio =
-    article.width && article.height && article.width > 0 && article.height > 0
-      ? article.width / article.height
-      : DEFAULT_ARTICLE_RATIO
-  const imageRatio = Math.min(Math.max(rawRatio, MIN_ARTICLE_RATIO), MAX_ARTICLE_RATIO)
+  // 遵循 Pixivision 官方标准卡片设计规范：所有特辑封面统一采用官方标准横幅比例（1200/630），
+  // 非标封面自动居中裁切填充（object-fit: cover），确保信息流卡片高度规整一致且零排版跳变
+  const imageRatio = DEFAULT_ARTICLE_RATIO
   const cardFrame = { width: HERO_CARD_WIDTH }
   const imageFrame = {
     width: HERO_CARD_WIDTH,
-    height: HERO_CARD_WIDTH / imageRatio,
+    height: Math.round(HERO_CARD_WIDTH / imageRatio),
   }
 
   return (
@@ -53,7 +49,7 @@ export function PixivisionCard(props: {
           <NavigationLink value={`pixivision:${article.id}`} frame={cardFrame}>
             <ZStack alignment="topLeading" frame={cardFrame}>
               <ZStack
-                alignment="bottomLeading"
+                alignment="topLeading"
                 frame={imageFrame}
                 clipShape={{ type: "rect", cornerRadius: 12 }}
                 clipped={true}
@@ -62,8 +58,9 @@ export function PixivisionCard(props: {
                   url={article.imageURL}
                   previewUrl={article.thumbURL}
                   aspectRatioValue={imageRatio}
-                  useIntrinsicAspectRatio={true}
-                  contentMode="fit"
+                  centerCropAspect={imageRatio}
+                  cropAnchor="top"
+                  contentMode="fill"
                   cornerRadius={12}
                   frame={imageFrame}
                   priority={priority}

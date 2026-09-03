@@ -70,6 +70,7 @@ export interface PixivIllustration {
   illust_ai_type: number
   total_comments: number
   comment_access_control: number
+  extra_preview_url?: string
 }
 
 export interface PixivisionTag {

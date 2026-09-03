@@ -43,7 +43,16 @@ import {
   exportUgoiraZip,
   saveImageToPixivAlbum,
 } from "../downloader"
-import { cachedFilePath, cardThumbUrlOf, imageUrlOf, loadImage, pageThumbUrlOf, prefetch } from "../image/imageLoader"
+import {
+  cachedFilePath,
+  cardThumbUrlOf,
+  imageUrlOf,
+  loadImage,
+  pageThumbUrlOf,
+  prefetch,
+  resolveIllustUnderlayUrl,
+  seedIllustDetailFromCache,
+} from "../image/imageLoader"
 import {
   extractIllustAmbientPalette,
   getCachedIllustAmbientPalette,
@@ -129,7 +138,13 @@ export function IllustDetailView(props: { illustID: number }) {
   const { illustID } = props
   const colorScheme = useColorScheme()
   const isDark = colorScheme === "dark"
-  const [illust, setIllust] = useState<PixivIllustration | null>(() => getCachedIllust(illustID))
+  const [illust, setIllust] = useState<PixivIllustration | null>(() => {
+    const cached = getCachedIllust(illustID)
+    if (cached) {
+      seedIllustDetailFromCache(cached, getDetailImageQuality())
+    }
+    return cached
+  })
   const [ambientEnabled, setAmbientEnabled] = useState(
     () => loadSettings().ambientImmersion
   )
@@ -228,6 +243,27 @@ export function IllustDetailView(props: { illustID: number }) {
         detail.meta_pages = existingCached.meta_pages
         detail.page_count = existingCached.page_count
       }
+      if (existingCached?.extra_preview_url && !detail.extra_preview_url) {
+        detail.extra_preview_url = existingCached.extra_preview_url
+      }
+      // 保持当前已就绪展示的大图 URL 稳定：
+      // 当选择大图画质且进页时已有可用的高清大图展示时，保持第 0 页大图 URL 引用不变，
+      // 杜绝因主站 API 返回微小 URL 差异触发二次网络下载与视图销毁闪烁
+      if (quality === "large") {
+        const currentHeroUrl =
+          existingCached?.extra_preview_url && cachedFilePath(existingCached.extra_preview_url)
+            ? existingCached.extra_preview_url
+            : existingCached?.image_urls?.large && cachedFilePath(existingCached.image_urls.large)
+              ? existingCached.image_urls.large
+              : null
+        if (currentHeroUrl) {
+          detail.image_urls.large = currentHeroUrl
+          if (detail.meta_pages && detail.meta_pages.length > 0 && detail.meta_pages[0]?.image_urls) {
+            detail.meta_pages[0].image_urls.large = currentHeroUrl
+          }
+        }
+      }
+      seedIllustDetailFromCache(detail, quality)
       setIllust(detail)
       setBookmarked(detail.is_bookmarked)
       setFollowed(detail.user.is_followed ?? false)
@@ -273,6 +309,7 @@ export function IllustDetailView(props: { illustID: number }) {
   useEffect(() => {
     const cached = getCachedIllust(illustID)
     if (cached) {
+      seedIllustDetailFromCache(cached, quality)
       load(false)
     } else {
       setIllust(null)
@@ -411,6 +448,18 @@ export function IllustDetailView(props: { illustID: number }) {
   const pageAspect = useMemo(() => {
     if (current.width && current.height && current.width > 0 && current.height > 0) {
       return current.width / current.height
+    }
+    const underlay0 = resolveIllustUnderlayUrl(current, 0)
+    if (underlay0) {
+      const cached = cachedFilePath(underlay0)
+      if (cached) {
+        try {
+          const img = UIImage.fromFile(cached)
+          if (img && img.width > 0 && img.height > 0) {
+            return img.width / img.height
+          }
+        } catch {}
+      }
     }
     const thumb0 = pageThumbUrlOf(current, 0)
     if (thumb0) {
@@ -926,7 +975,7 @@ export function IllustDetailView(props: { illustID: number }) {
                   <CachedImage
                     key={`illust-page-${current.id}-${idx}`}
                     url={url}
-                    previewUrl={preview}
+                    previewUrl={(idx === 0 ? current.extra_preview_url : null) || preview}
                     aspectRatioValue={pageAspect}
                     useIntrinsicAspectRatio={true}
                     cornerRadius={cornerRadii}
@@ -943,7 +992,7 @@ export function IllustDetailView(props: { illustID: number }) {
             <CachedImage
               key={`illust-single-${current.id}`}
               url={pageURLs[0] ?? null}
-              previewUrl={pageThumbUrlOf(current, 0)}
+              previewUrl={current.extra_preview_url || pageThumbUrlOf(current, 0)}
               aspectRatioValue={pageAspect}
               useIntrinsicAspectRatio={true}
               cornerRadius={8}
