@@ -92,6 +92,7 @@ export function SettingsView() {
   const [syncingWebCookie, setSyncingWebCookie] = useState(false)
   const [widgetRefreshed, setWidgetRefreshed] = useTimedFlag()
   const [, setWebCookieVersion] = useState(0)
+  const [experimentalImmersionKey, setExperimentalImmersionKey] = useState(0)
 
   const [expanded, setExpanded] = useState<SectionExpandedState>(DEFAULT_EXPANDED_STATE)
 
@@ -171,6 +172,7 @@ export function SettingsView() {
     const next = resetSettings()
     setSettings(next)
     setSettingsReset()
+    setExperimentalImmersionKey((k) => k + 1)
   }
 
   function clearAllCaches() {
@@ -449,18 +451,27 @@ export function SettingsView() {
                 <Text tag="high">高</Text>
               </Picker>
               <Toggle
+                key={`experimental-immersion-${experimentalImmersionKey}`}
                 title="实验性沉浸效果"
                 value={settings.experimentalImmersion}
                 onChanged={async (value) => {
                   if (value) {
-                    const confirmed = await Dialog.confirm({
-                      title: "提示",
-                      message: "此功能可能会导致发热和崩溃",
-                      confirmLabel: "确认开启",
-                      cancelLabel: "取消",
-                    })
+                    let confirmed = false
+                    try {
+                      confirmed = await Dialog.confirm({
+                        title: "提示",
+                        message: "此功能可能会导致发热和崩溃",
+                        confirmLabel: "确认开启",
+                        cancelLabel: "取消",
+                      })
+                    } catch {
+                      confirmed = false
+                    }
                     if (confirmed) {
                       update({ experimentalImmersion: true })
+                    } else {
+                      setExperimentalImmersionKey((k) => k + 1)
+                      update({ experimentalImmersion: false })
                     }
                   } else {
                     update({ experimentalImmersion: false })
