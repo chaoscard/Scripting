@@ -28,54 +28,54 @@ export function TranscendAmbientBackground(props: TranscendAmbientBackgroundProp
       {/* 1. 基础深空 / 凝霜基底 */}
       <Rectangle fill={props.bgColor} ignoresSafeArea={true} />
 
-      {/* 2. 极光流球 1：左上微区主光斑（紧靠左上角） */}
+      {/* 2. 极光流球 1：左上与状态栏主光斑 */}
       <Circle
         fill={props.leadColor}
-        frame={{ width: 250, height: 250 }}
-        offset={{ x: -110, y: -210 }}
+        frame={{ width: 280, height: 280 }}
+        offset={{ x: -90, y: -330 }}
         blur={{ radius: 50, opaque: false }}
         opacity={intensityAlpha * 0.88}
         swingAnimation={{
           x: { duration: 4.2, distance: 95 },
-          y: { duration: 3.2, distance: 70 },
+          y: { duration: 3.2, distance: 60 },
         }}
       />
       {props.leadCoreColor ? (
         <Circle
           fill={props.leadCoreColor}
           frame={{ width: 95, height: 95 }}
-          offset={{ x: -110, y: -210 }}
+          offset={{ x: -90, y: -330 }}
           blur={{ radius: 20, opaque: false }}
           opacity={intensityAlpha * 0.85}
           swingAnimation={{
             x: { duration: 4.2, distance: 95 },
-            y: { duration: 3.2, distance: 70 },
+            y: { duration: 3.2, distance: 60 },
           }}
         />
       ) : null}
 
-      {/* 3. 极光流球 2：右上棱镜色散光斑（紧靠右侧边缘） */}
+      {/* 3. 极光流球 2：右上与状态栏右侧棱镜色散光斑 */}
       <Circle
         fill={props.prismColor}
-        frame={{ width: 260, height: 260 }}
-        offset={{ x: 125, y: -110 }}
+        frame={{ width: 280, height: 280 }}
+        offset={{ x: 105, y: -250 }}
         blur={{ radius: 55, opaque: false }}
         opacity={intensityAlpha * 0.82}
         swingAnimation={{
           x: { duration: 4.8, distance: -105 },
-          y: { duration: 3.6, distance: 75 },
+          y: { duration: 3.6, distance: 65 },
         }}
       />
       {props.prismCoreColor ? (
         <Circle
           fill={props.prismCoreColor}
           frame={{ width: 100, height: 100 }}
-          offset={{ x: 125, y: -110 }}
+          offset={{ x: 105, y: -250 }}
           blur={{ radius: 22, opaque: false }}
           opacity={intensityAlpha * 0.80}
           swingAnimation={{
             x: { duration: 4.8, distance: -105 },
-            y: { duration: 3.6, distance: 75 },
+            y: { duration: 3.6, distance: 65 },
           }}
         />
       ) : null}

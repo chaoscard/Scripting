@@ -86,6 +86,13 @@ export function RefreshableScrollView(props: {
     }, 120)
   }, [])
 
+  const activeToolbarBackground = props.toolbarBackground ?? "clear"
+  const activeToolbarBackgroundVisibility =
+    props.toolbarBackgroundVisibility ?? {
+      visibility: "hidden" as const,
+      bars: ["navigationBar" as const],
+    }
+
   return (
     <ZStack>
       {isVirtualNode(props.background) ? (
@@ -110,8 +117,8 @@ export function RefreshableScrollView(props: {
               onSubmit={props.onSubmit}
               submitLabel={props.submitLabel}
               ignoresSafeArea={props.ignoresSafeArea}
-              toolbarBackground={props.toolbarBackground}
-              toolbarBackgroundVisibility={props.toolbarBackgroundVisibility}
+              toolbarBackground={activeToolbarBackground}
+              toolbarBackgroundVisibility={activeToolbarBackgroundVisibility}
             >
               <VStack
                 key={REFRESH_TOP_KEY}

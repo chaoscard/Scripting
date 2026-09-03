@@ -30,6 +30,8 @@ import {
   onSettingsChanged,
   resetSettings,
   updateSettings,
+  type AmbientAlgorithm,
+  type NovelReaderExperimentalAlgorithm,
   type LaunchPage,
   type WidgetDefaultSource,
 } from "../store/settings"
@@ -471,7 +473,7 @@ export function SettingsView() {
                     value={settings.experimentalImmersionAlgorithm}
                     onChanged={(value: string) =>
                       update({
-                        experimentalImmersionAlgorithm: value as "classic" | "explore" | "ultimate" | "transcend",
+                        experimentalImmersionAlgorithm: value as AmbientAlgorithm,
                       })
                     }
                   >
@@ -479,13 +481,15 @@ export function SettingsView() {
                     <Text tag="explore">探索</Text>
                     <Text tag="ultimate">极致</Text>
                     <Text tag="transcend">超越</Text>
+                    <Text tag="geminiA">Gemini A</Text>
+                    <Text tag="geminiB">Gemini B</Text>
                   </Picker>
                   <Picker
                     title="小说正文实验性算法"
                     value={settings.novelReaderExperimentalAlgorithm}
                     onChanged={(value: string) =>
                       update({
-                        novelReaderExperimentalAlgorithm: value as "off" | "classic" | "explore" | "ultimate" | "transcend",
+                        novelReaderExperimentalAlgorithm: value as NovelReaderExperimentalAlgorithm,
                       })
                     }
                   >
@@ -494,6 +498,8 @@ export function SettingsView() {
                     <Text tag="explore">探索</Text>
                     <Text tag="ultimate">极致</Text>
                     <Text tag="transcend">超越</Text>
+                    <Text tag="geminiA">Gemini A</Text>
+                    <Text tag="geminiB">Gemini B</Text>
                   </Picker>
                   <Picker
                     title="实验性沉浸效果强度"
@@ -527,7 +533,7 @@ export function SettingsView() {
               <Spacer />
               {!expanded.features ? (
                 <Text font="footnote" foregroundStyle="tertiaryLabel">
-                  {settings.launchPage === "discovery" ? "探索" : settings.launchPage === "ranking" ? "排行" : "关注"}
+                  展开
                 </Text>
               ) : null}
             </HStack>

@@ -27,6 +27,7 @@ import {
   type UserAmbientPalette,
 } from "../image/colorExtractor"
 import { TranscendAmbientBackground } from "./components/TranscendAmbientBackground"
+import { GeminiAmbientBackground } from "./components/GeminiAmbientBackground"
 
 // 触底回弹缓冲：由调试设置配置（默认 400ms），确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
 export function paginationFeedbackDuration(): number {
@@ -180,6 +181,28 @@ export function useExperimentalAmbientPalette(imageUrl: string | null | undefine
   const ambientBackground = useMemo(() => {
     if (!ambientEnabled || !effectivePalette) return undefined
 
+    if (ambientAlgorithm === "geminiA" || ambientAlgorithm === "geminiB") {
+      const primary = effectivePalette.ultimateLeadingColor ?? effectivePalette.topColor
+      const secondary = effectivePalette.ultimatePrismColor ?? effectivePalette.exploreAccentColor ?? effectivePalette.topColor
+      const tertiary = effectivePalette.ultimateMidColor ?? effectivePalette.midColor
+      const accent = effectivePalette.exploreAccentColor ?? effectivePalette.ultimateTrailingColor
+      const core = effectivePalette.ultimateLeadingCoreColor
+      const bg = effectivePalette.ultimateBgColor ?? effectivePalette.backgroundColor
+      return (
+        <GeminiAmbientBackground
+          variant={ambientAlgorithm}
+          primaryColor={primary}
+          secondaryColor={secondary}
+          tertiaryColor={tertiary}
+          accentColor={accent}
+          coreColor={core}
+          bgColor={bg}
+          isDark={isDark}
+          intensity={ambientIntensity}
+        />
+      )
+    }
+
     if (ambientAlgorithm === "transcend") {
       const lead = effectivePalette.ultimateLeadingColor ?? effectivePalette.topColor
       const prism = effectivePalette.ultimatePrismColor ?? effectivePalette.topColor
@@ -242,7 +265,10 @@ export function useExperimentalAmbientPalette(imageUrl: string | null | undefine
 
   const topColor =
     ambientEnabled && effectivePalette
-      ? ambientAlgorithm === "transcend" || ambientAlgorithm === "ultimate"
+      ? ambientAlgorithm === "transcend" ||
+        ambientAlgorithm === "ultimate" ||
+        ambientAlgorithm === "geminiA" ||
+        ambientAlgorithm === "geminiB"
         ? (effectivePalette.ultimateLeadingColor ?? effectivePalette.topColor)
         : ambientAlgorithm === "explore"
           ? (effectivePalette.exploreTopColor ?? effectivePalette.topColor)
@@ -340,6 +366,28 @@ export function useNovelExperimentalAmbientPalette(imageUrl: string | null | und
   const ambientBackground = useMemo(() => {
     if (!ambientEnabled || !effectivePalette || novelAlgorithm === "off") return undefined
 
+    if (novelAlgorithm === "geminiA" || novelAlgorithm === "geminiB") {
+      const primary = effectivePalette.ultimateLeadingColor ?? effectivePalette.topColor
+      const secondary = effectivePalette.ultimatePrismColor ?? effectivePalette.exploreAccentColor ?? effectivePalette.topColor
+      const tertiary = effectivePalette.ultimateMidColor ?? effectivePalette.midColor
+      const accent = effectivePalette.exploreAccentColor ?? effectivePalette.ultimateTrailingColor
+      const core = effectivePalette.ultimateLeadingCoreColor
+      const bg = effectivePalette.ultimateBgColor ?? effectivePalette.backgroundColor
+      return (
+        <GeminiAmbientBackground
+          variant={novelAlgorithm}
+          primaryColor={primary}
+          secondaryColor={secondary}
+          tertiaryColor={tertiary}
+          accentColor={accent}
+          coreColor={core}
+          bgColor={bg}
+          isDark={isDark}
+          intensity={ambientIntensity}
+        />
+      )
+    }
+
     if (novelAlgorithm === "transcend") {
       const lead = effectivePalette.ultimateLeadingColor ?? effectivePalette.topColor
       const prism = effectivePalette.ultimatePrismColor ?? effectivePalette.topColor
@@ -402,7 +450,10 @@ export function useNovelExperimentalAmbientPalette(imageUrl: string | null | und
 
   const topColor =
     ambientEnabled && effectivePalette && novelAlgorithm !== "off"
-      ? novelAlgorithm === "transcend" || novelAlgorithm === "ultimate"
+      ? novelAlgorithm === "transcend" ||
+        novelAlgorithm === "ultimate" ||
+        novelAlgorithm === "geminiA" ||
+        novelAlgorithm === "geminiB"
         ? (effectivePalette.ultimateLeadingColor ?? effectivePalette.topColor)
         : novelAlgorithm === "explore"
           ? (effectivePalette.exploreTopColor ?? effectivePalette.topColor)
