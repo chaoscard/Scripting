@@ -37,6 +37,10 @@ import {
   type SortMode,
   type StorageOverview,
 } from "../downloader/downloadFileManager"
+import {
+  DownloadTaskManager,
+  type DownloadTaskItem,
+} from "../downloader/downloadTaskManager"
 import { appToolbar } from "./components"
 import { destinationElement } from "./routes"
 
@@ -47,6 +51,7 @@ import { destinationElement } from "./routes"
 export function DownloadManagerView(props: { onClose?: () => void }) {
   const [overview, setOverview] = useState<StorageOverview | null>(null)
   const [cleaning, setCleaning] = useState(false)
+  const [activeTasksCount, setActiveTasksCount] = useState(0)
 
   async function loadOverviewData(forceRefresh = false) {
     try {
@@ -57,13 +62,27 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
     }
   }
 
+  function updateTasksCount() {
+    const active = DownloadTaskManager.getAllTasks().filter(
+      (t) => t.status === "running" || t.status === "queued" || t.status === "paused"
+    )
+    setActiveTasksCount(active.length)
+  }
+
   useEffect(() => {
     loadOverviewData(false)
-    const unsubscribe = addDownloadFilesChangeListener(() => {
+    updateTasksCount()
+
+    const unsubFiles = addDownloadFilesChangeListener(() => {
       void loadOverviewData(false)
     })
+    const unsubTasks = DownloadTaskManager.addListener(() => {
+      updateTasksCount()
+    })
+
     return () => {
-      unsubscribe()
+      unsubFiles()
+      unsubTasks()
     }
   }, [])
 
@@ -71,7 +90,7 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
     setCleaning(true)
     try {
       const freed = await cleanTempCache()
-      await loadOverviewData()
+      await loadOverviewData(true)
       if (typeof Dialog !== "undefined" && typeof Dialog.alert === "function") {
         void Dialog.alert({
           title: "清理完成",
@@ -93,15 +112,34 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
     }
   }
 
-  const cleanBtn = (
+  // 右上角工具栏：任务队列专属入口（list.clipboard）+ 清理临时缓存垃圾桶
+  const topTrailingControls = [
+    <NavigationLink
+      key="task-queue-btn"
+      value="downloadTasks"
+    >
+      <HStack spacing={4} alignment="center">
+        <Image
+          systemName={activeTasksCount > 0 ? "list.clipboard.fill" : "list.clipboard"}
+          foregroundStyle={activeTasksCount > 0 ? "tintColor" : "label"}
+          font="headline"
+        />
+        {activeTasksCount > 0 ? (
+          <Text font="caption" fontWeight="bold" foregroundStyle="tintColor">
+            {String(activeTasksCount)}
+          </Text>
+        ) : null}
+      </HStack>
+    </NavigationLink>,
     <Button
+      key="clean-btn"
       action={handleCleanTemp}
       disabled={cleaning}
       foregroundStyle="systemRed"
     >
       <Image systemName="trash" foregroundStyle="systemRed" />
-    </Button>
-  )
+    </Button>,
+  ]
 
   return (
     <List
@@ -110,14 +148,16 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
       navigationDestination={destinationElement}
       onAppear={() => {
         void loadOverviewData(false)
+        updateTasksCount()
       }}
       refreshable={async () => {
         await loadOverviewData(true)
+        updateTasksCount()
       }}
       toolbar={
         props.onClose
-          ? appToolbar(props.onClose, "下载与文件管理", cleanBtn)
-          : { topBarTrailing: [cleanBtn] }
+          ? appToolbar(props.onClose, "下载与文件管理", topTrailingControls[0])
+          : { topBarTrailing: topTrailingControls }
       }
     >
       {/* 存储统计卡片 */}
@@ -167,7 +207,7 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
           <DownloadCategoryRow
             icon="photo.fill"
             iconColor="#0096FA"
-            title="插画 (Illustrations)"
+            title="插画"
             subtitle={
               overview
                 ? `${overview.illustrationsCount} 个文件 • ${formatBytes(overview.illustrationsSize)}`
@@ -180,7 +220,7 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
           <DownloadCategoryRow
             icon="play.circle.fill"
             iconColor="#FF9500"
-            title="动图 (Ugoira)"
+            title="动图"
             subtitle={
               overview
                 ? `${overview.ugoiraCount} 个文件 • ${formatBytes(overview.ugoiraSize)}`
@@ -193,7 +233,7 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
           <DownloadCategoryRow
             icon="photo.on.rectangle.fill"
             iconColor="#34C759"
-            title="漫画 (Manga)"
+            title="漫画"
             subtitle={
               overview
                 ? `${overview.mangaCount} 个文件 • ${formatBytes(overview.mangaSize)}`
@@ -206,7 +246,7 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
           <DownloadCategoryRow
             icon="book.fill"
             iconColor="#AF52DE"
-            title="小说 (Novels)"
+            title="小说"
             subtitle={
               overview
                 ? `${overview.novelsCount} 个文件 • ${formatBytes(overview.novelsSize)}`
@@ -219,7 +259,7 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
           <DownloadCategoryRow
             icon="person.2.fill"
             iconColor="#FF2D55"
-            title="创作者归档 (Creators)"
+            title="创作者归档"
             subtitle={
               overview
                 ? `${overview.creatorsCount} 位创作者 • ${formatBytes(overview.creatorsSize)}`
@@ -275,7 +315,328 @@ function DownloadCategoryRow(props: {
 }
 
 // ============================================================================
-// 2. 三级文件列表页：详细文件列表 (DownloadDetailListView)
+// 1.1 二级页面：下载任务队列管理器 (DownloadTasksView)
+// ============================================================================
+
+export function DownloadTasksView(props: { onClose?: () => void }) {
+  const [tasks, setTasks] = useState<DownloadTaskItem[]>([])
+
+  function loadTasks() {
+    setTasks(DownloadTaskManager.getAllTasks())
+  }
+
+  useEffect(() => {
+    loadTasks()
+    const unsubscribe = DownloadTaskManager.addListener(() => {
+      loadTasks()
+    })
+    return () => {
+      unsubscribe()
+    }
+  }, [])
+
+  const activeTasks = useMemo(() => {
+    return tasks.filter(
+      (t) => t.status === "running" || t.status === "queued" || t.status === "paused"
+    )
+  }, [tasks])
+
+  const historyTasks = useMemo(() => {
+    return tasks.filter(
+      (t) => t.status === "completed" || t.status === "failed" || t.status === "canceled"
+    )
+  }, [tasks])
+
+  const menuToolbar = (
+    <Menu
+      key="task-opts-menu"
+      label={<Image systemName="ellipsis.circle" />}
+    >
+      <Group>
+        <Button
+          title="暂停全部进行中任务"
+          systemImage="pause.fill"
+          disabled={activeTasks.filter((t) => t.status === "running" || t.status === "queued").length === 0}
+          action={() => {
+            activeTasks.forEach((t) => {
+              if (t.status === "running" || t.status === "queued") {
+                void DownloadTaskManager.pauseTask(t.id)
+              }
+            })
+          }}
+        />
+        <Button
+          title="恢复全部暂停任务"
+          systemImage="play.fill"
+          disabled={tasks.filter((t) => t.status === "paused").length === 0}
+          action={() => {
+            tasks
+              .filter((t) => t.status === "paused")
+              .forEach((t) => {
+                void DownloadTaskManager.resumeTask(t.id)
+              })
+          }}
+        />
+        <Button
+          title="清空已完成记录"
+          systemImage="trash"
+          disabled={historyTasks.length === 0}
+          action={() => {
+            DownloadTaskManager.clearCompletedTasks()
+          }}
+        />
+      </Group>
+    </Menu>
+  )
+
+  return (
+    <List
+      navigationTitle="下载任务"
+      navigationBarTitleDisplayMode="inline"
+      onAppear={loadTasks}
+      refreshable={async () => {
+        loadTasks()
+      }}
+      toolbar={
+        props.onClose
+          ? appToolbar(props.onClose, "下载任务", menuToolbar)
+          : { topBarTrailing: [menuToolbar] }
+      }
+    >
+      {tasks.length === 0 ? (
+        <Section>
+          <VStack
+            alignment="center"
+            spacing={10}
+            padding={{ vertical: 36, horizontal: 20 }}
+            frame={{ maxWidth: "infinity" }}
+          >
+            <Image
+              systemName="list.clipboard"
+              font="largeTitle"
+              foregroundStyle="secondaryLabel"
+            />
+            <Text font="headline" fontWeight="medium" foregroundStyle="secondaryLabel" multilineTextAlignment="center">
+              暂无下载任务
+            </Text>
+          </VStack>
+        </Section>
+      ) : null}
+
+      {activeTasks.length > 0 ? (
+        <Section header={<Text>进行中 ({activeTasks.length})</Text>}>
+          {activeTasks.map((t) => (
+            <DownloadTaskCardRow key={t.id} task={t} />
+          ))}
+        </Section>
+      ) : null}
+
+      {historyTasks.length > 0 ? (
+        <Section
+          header={
+            <HStack>
+              <Text>已完成与历史记录 ({historyTasks.length})</Text>
+              <Spacer />
+              <Button
+                title="清空"
+                controlSize="mini"
+                buttonStyle="plain"
+                foregroundStyle="secondaryLabel"
+                action={() => DownloadTaskManager.clearCompletedTasks()}
+              />
+            </HStack>
+          }
+        >
+          {historyTasks.map((t) => (
+            <DownloadTaskCardRow key={t.id} task={t} />
+          ))}
+        </Section>
+      ) : null}
+    </List>
+  )
+}
+
+function DownloadTaskCardRow(props: { task: DownloadTaskItem }) {
+  const { task } = props
+  const isRunning = task.status === "running"
+  const isPaused = task.status === "paused"
+  const isQueued = task.status === "queued"
+  const isCompleted = task.status === "completed"
+  const isFailed = task.status === "failed"
+  const isCanceled = task.status === "canceled"
+
+  const iconColor = isCompleted
+    ? "systemGreen"
+    : isFailed
+    ? "systemRed"
+    : isPaused
+    ? "systemOrange"
+    : isRunning
+    ? "systemBlue"
+    : "secondaryLabel"
+
+  const percentVal = Math.max(0, Math.min(100, Math.round(task.progress * 100)))
+
+  return (
+    <VStack spacing={8} padding={{ vertical: 4 }}>
+      {/* 1. 顶行：图标 + 主副标题 + 状态字 */}
+      <HStack spacing={10} alignment="center">
+        <Image
+          systemName={task.categoryIcon}
+          foregroundStyle={iconColor as any}
+          font="title3"
+          frame={{ width: 28 }}
+        />
+        <VStack alignment="leading" spacing={2} frame={{ maxWidth: "infinity" }}>
+          <Text font="headline" fontWeight="medium" lineLimit={1}>
+            {task.title}
+          </Text>
+          {task.subtitle ? (
+            <Text font="caption" foregroundStyle="secondaryLabel" lineLimit={1}>
+              {task.subtitle}
+            </Text>
+          ) : null}
+        </VStack>
+
+        <Spacer />
+
+        <VStack alignment="trailing" spacing={2}>
+          <Text
+            font="subheadline"
+            fontWeight="bold"
+            foregroundStyle={iconColor as any}
+          >
+            {isCompleted
+              ? "已完成"
+              : isFailed
+              ? "失败"
+              : isPaused
+              ? "已暂停"
+              : isQueued
+              ? "排队中"
+              : isCanceled
+              ? "已取消"
+              : `${percentVal}%`}
+          </Text>
+          {task.total > 0 && !isCompleted ? (
+            <Text font="caption2" foregroundStyle="secondaryLabel">
+              {task.current}/{task.total}
+            </Text>
+          ) : null}
+        </VStack>
+      </HStack>
+
+      {/* 2. 中行：系统原生进度指示条 */}
+      {!isCompleted && !isCanceled ? (
+        <ProgressView value={Math.max(0, Math.min(1, task.progress))} total={1.0} />
+      ) : null}
+
+      {/* 3. 底行：状态详情与交互控制按钮 */}
+      <HStack alignment="center" spacing={8}>
+        <Text font="caption" foregroundStyle="secondaryLabel" lineLimit={1}>
+          {task.statusText || (isCompleted ? "下载已完成" : isPaused ? "已暂停" : "处理中…")}
+        </Text>
+        <Spacer />
+
+        <HStack spacing={6}>
+          {isRunning ? (
+            <Button
+              title="暂停"
+              systemImage="pause.fill"
+              controlSize="small"
+              buttonStyle="bordered"
+              buttonBorderShape="capsule"
+              action={() => {
+                void DownloadTaskManager.pauseTask(task.id)
+              }}
+            />
+          ) : null}
+
+          {isPaused ? (
+            <Button
+              title="继续"
+              systemImage="play.fill"
+              controlSize="small"
+              buttonStyle="borderedProminent"
+              buttonBorderShape="capsule"
+              action={() => {
+                void DownloadTaskManager.resumeTask(task.id)
+              }}
+            />
+          ) : null}
+
+          {isQueued ? (
+            <Button
+              title="暂停"
+              systemImage="pause.fill"
+              controlSize="small"
+              buttonStyle="bordered"
+              buttonBorderShape="capsule"
+              action={() => {
+                void DownloadTaskManager.pauseTask(task.id)
+              }}
+            />
+          ) : null}
+
+          {isFailed ? (
+            <Button
+              title="重试"
+              systemImage="arrow.clockwise"
+              controlSize="small"
+              buttonStyle="bordered"
+              buttonBorderShape="capsule"
+              action={() => {
+                void DownloadTaskManager.retryTask(task.id)
+              }}
+            />
+          ) : null}
+
+          {isRunning || isPaused || isQueued ? (
+            <Button
+              title="取消"
+              systemImage="xmark"
+              controlSize="small"
+              buttonStyle="bordered"
+              buttonBorderShape="capsule"
+              role="destructive"
+              action={() => {
+                void DownloadTaskManager.cancelTask(task.id)
+              }}
+            />
+          ) : null}
+
+          {isCompleted && task.outputPath ? (
+            <HStack spacing={4}>
+              <Button
+                title="预览"
+                systemImage="eye"
+                controlSize="small"
+                buttonStyle="bordered"
+                buttonBorderShape="capsule"
+                action={() => {
+                  void previewFileQuickLook(task.outputPath!)
+                }}
+              />
+              <Button
+                title="分享"
+                systemImage="square.and.arrow.up"
+                controlSize="small"
+                buttonStyle="bordered"
+                buttonBorderShape="capsule"
+                action={() => {
+                  void shareFilesSystem([task.outputPath!])
+                }}
+              />
+            </HStack>
+          ) : null}
+        </HStack>
+      </HStack>
+    </VStack>
+  )
+}
+
+// ============================================================================
+// 2. 三级文件列表页：详细文件列表 (DownloadDetailListView) - 0.8.166 原版恢复
 // ============================================================================
 
 export function DownloadDetailListView(props: {
@@ -550,9 +911,14 @@ export function DownloadDetailListView(props: {
         }
       >
         {files.length === 0 && !loading ? (
-          <VStack alignment="center" spacing={8} padding={{ vertical: 24 }}>
+          <VStack
+            alignment="center"
+            spacing={8}
+            padding={{ vertical: 28 }}
+            frame={{ maxWidth: "infinity" }}
+          >
             <Image systemName="folder.badge.questionmark" font="largeTitle" foregroundStyle="secondaryLabel" />
-            <Text font="subheadline" foregroundStyle="secondaryLabel">
+            <Text font="subheadline" foregroundStyle="secondaryLabel" multilineTextAlignment="center">
               {searchQuery ? "未找到匹配的文件" : "当前分类暂无已下载文件"}
             </Text>
           </VStack>
@@ -744,7 +1110,7 @@ function FileRowItem(props: {
 }
 
 // ============================================================================
-// 3. 创作者专区列表页 (DownloadCreatorsListView)
+// 3. 创作者专区列表页 (DownloadCreatorsListView) - 0.8.166 原版恢复
 // ============================================================================
 
 export function DownloadCreatorsListView(props: { onClose?: () => void }) {
@@ -813,7 +1179,7 @@ export function DownloadCreatorsListView(props: { onClose?: () => void }) {
       searchable={{
         value: searchQuery,
         onChanged: setSearchQuery,
-        prompt: "搜索创作者名称或 UID…",
+        prompt: "搜索画师或创作者名称…",
       }}
       toolbar={{
         topBarTrailing: [
@@ -823,22 +1189,22 @@ export function DownloadCreatorsListView(props: { onClose?: () => void }) {
             systemImage="arrow.up.arrow.down"
           >
             <Button
-              title="占用大小（从大到小）"
+              title="占用空间（从大到小）"
               systemImage={sortMode === "size_desc" ? "checkmark" : "arrow.down"}
               action={() => setSortMode("size_desc")}
             />
             <Button
-              title="占用大小（从小到大）"
+              title="占用空间（从小到大）"
               systemImage={sortMode === "size_asc" ? "checkmark" : "arrow.up"}
               action={() => setSortMode("size_asc")}
             />
             <Button
-              title="创作者名称（A → Z）"
+              title="创作者名（A → Z）"
               systemImage={sortMode === "name_asc" ? "checkmark" : "textformat.abc"}
               action={() => setSortMode("name_asc")}
             />
             <Button
-              title="创作者名称（Z → A）"
+              title="创作者名（Z → A）"
               systemImage={sortMode === "name_desc" ? "checkmark" : "textformat.abc"}
               action={() => setSortMode("name_desc")}
             />
@@ -856,17 +1222,22 @@ export function DownloadCreatorsListView(props: { onClose?: () => void }) {
         }
       >
         {creators.length === 0 && !loading ? (
-          <VStack alignment="center" spacing={8} padding={{ vertical: 24 }}>
-            <Image systemName="person.crop.circle.badge.questionmark" font="largeTitle" foregroundStyle="secondaryLabel" />
-            <Text font="subheadline" foregroundStyle="secondaryLabel">
-              {searchQuery ? "未找到匹配的创作者" : "暂无创作者归档文件"}
+          <VStack
+            alignment="center"
+            spacing={8}
+            padding={{ vertical: 28 }}
+            frame={{ maxWidth: "infinity" }}
+          >
+            <Image systemName="person.2.slash" font="largeTitle" foregroundStyle="secondaryLabel" />
+            <Text font="subheadline" foregroundStyle="secondaryLabel" multilineTextAlignment="center">
+              {searchQuery ? "未找到匹配的创作者" : "暂无创作者归档"}
             </Text>
           </VStack>
         ) : (
           creators.map((creator) => (
             <NavigationLink
               key={creator.id}
-              value={`downloadCreator:${creator.id}`}
+              value={`downloadCreator:${creator.name}`}
             >
               <HStack
                 alignment="center"
@@ -877,23 +1248,22 @@ export function DownloadCreatorsListView(props: { onClose?: () => void }) {
                   actions: [
                     <Button
                       key="del"
-                      title="删除归档"
+                      title="删除全部"
                       systemImage="trash"
                       role="destructive"
-                      action={() => handleDeleteCreator(creator)}
+                      action={() => void handleDeleteCreator(creator)}
                     />,
                   ],
                 }}
               >
                 <Image
-                  systemName="person.2.fill"
+                  systemName="folder.fill.badge.person.crop"
                   foregroundStyle="#FF2D55"
                   font="title3"
                   frame={{ width: 28 }}
                 />
-
-                <VStack alignment="leading" spacing={3} frame={{ maxWidth: "infinity" }}>
-                  <Text font="body" fontWeight="medium" lineLimit={1}>
+                <VStack alignment="leading" spacing={3}>
+                  <Text font="body" fontWeight="medium">
                     {creator.name}
                   </Text>
                   <HStack alignment="center" spacing={6}>
@@ -914,5 +1284,21 @@ export function DownloadCreatorsListView(props: { onClose?: () => void }) {
         )}
       </Section>
     </List>
+  )
+}
+
+// ============================================================================
+// 4. 单个创作者内部文件列表页 (DownloadCreatorDetailView)
+// ============================================================================
+
+export function DownloadCreatorDetailView(props: {
+  creatorFolder: string
+  onClose?: () => void
+}) {
+  return (
+    <DownloadDetailListView
+      creatorFolder={props.creatorFolder}
+      title={props.creatorFolder}
+    />
   )
 }

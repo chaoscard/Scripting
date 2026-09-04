@@ -11,6 +11,7 @@ import { notifyDownloadFilesChanged } from "./downloadFileManager"
 import { publishPreparedFile } from "../store/safeFile"
 import { htmlToPlainText } from "../ui/components/formatUtils"
 import type { MangaChapterItem, MangaPageItem } from "./epubExporter"
+import type { TaskControlToken } from "./downloadTaskManager"
 
 export type { MangaChapterItem, MangaPageItem }
 
@@ -30,6 +31,8 @@ export interface MangaCbzOptions {
   targetDir?: string
   customFileName?: string
   onProgress?: (msg: string, current: number, total: number) => void
+  token?: TaskControlToken
+  taskId?: string
 }
 
 function escapeXml(unsafe: string): string {
@@ -43,7 +46,7 @@ function escapeXml(unsafe: string): string {
 }
 
 /**
- * 导出漫画为行业标准 CBZ 格式（支持 ComicInfo 2.0 规范、章节书签与确切结果报告）
+ * 导出漫画为行业标准 CBZ 格式（支持 ComicInfo 2.0 规范、章节书签与确切结果报告，支持断点续传）
  */
 export async function exportMangaToCbz(options: MangaCbzOptions): Promise<ExportResult> {
   const {
@@ -62,9 +65,15 @@ export async function exportMangaToCbz(options: MangaCbzOptions): Promise<Export
     targetDir: customTargetDir,
     customFileName,
     onProgress,
+    token,
+    taskId,
   } = options
 
-  const tempDir = `${getCategoryDirectory("temp")}/cbz_${id}_${Date.now()}`
+  if (token) await token.checkOrWait()
+
+  const tempDir = taskId
+    ? `${getCategoryDirectory("temp")}/tasks/${taskId}/cbz_workspace`
+    : `${getCategoryDirectory("temp")}/cbz_${id}_${Date.now()}`
   const tempZipPath = `${tempDir}.zip`
   const progressReporter = createThrottledProgress(onProgress, 80)
 
@@ -99,23 +108,21 @@ export async function exportMangaToCbz(options: MangaCbzOptions): Promise<Export
             globalIndex: p.pageIndex ?? globalCounter,
             pageInChap: pIdx + 1,
             url: p.url,
-            chapIndex: cIdx,
+            chapIndex: cIdx + 1,
             chapTitle,
             isChapFirstPage: pIdx === 0,
           }
         })
-        if (pageList.length > 0) {
-          normalizedChapters.push({
-            id: c.id,
-            title: chapTitle,
-            pages: pageList,
-          })
-        }
+        normalizedChapters.push({
+          id: c.id,
+          title: chapTitle,
+          pages: pageList,
+        })
       })
     } else if (pages && pages.length > 0) {
-      let currentChapTitle = pages[0].chapterTitle || title || "单篇"
+      let currentChapTitle = pages[0]?.chapterTitle || title || "正文"
       let currentChapPages: NormalizedPage[] = []
-      let currentChapIdx = 0
+      let currentChapIdx = 1
 
       pages.forEach((p, idx) => {
         const pChapTitle = p.chapterTitle || title || "单篇"
@@ -158,7 +165,7 @@ export async function exportMangaToCbz(options: MangaCbzOptions): Promise<Export
       }
     }
 
-    // 2. 并发下载漫画页面原图并提取宽高与尺寸
+    // 2. 并发下载漫画页面原图并提取宽高与尺寸（支持断点续传检查点）
     progressReporter.notify(`下载漫画原图 (共 ${allPagesToDownload.length} 页)...`, 0, allPagesToDownload.length)
     const downloadedPagesMap = new Map<number, {
       index: number
@@ -172,47 +179,75 @@ export async function exportMangaToCbz(options: MangaCbzOptions): Promise<Export
     }>()
     const failedPages: number[] = []
 
-    await runConcurrentTasks(allPagesToDownload, 4, async (p, idx) => {
-      const pageNum = p.globalIndex
-      const data = await fetchImageBinaryWithRetry(p.url)
-      if (data) {
+    await runConcurrentTasks(
+      allPagesToDownload,
+      4,
+      async (p, idx) => {
+        if (token) await token.checkOrWait()
+        const pageNum = p.globalIndex
         const paddedNum = String(pageNum).padStart(allPagesToDownload.length >= 1000 ? 4 : 3, "0")
         const ext = p.url.includes(".png") ? "png" : "jpg"
         const fileName = `page_${paddedNum}.${ext}`
         const filePath = `${tempDir}/${fileName}`
-        FileManager.writeAsDataSync(filePath, data)
 
-        let width = 0
-        let height = 0
-        try {
-          const uiImg = UIImage.fromFile(filePath)
-          if (uiImg && uiImg.width > 0 && uiImg.height > 0) {
-            const scale = uiImg.scale || 1
-            width = Math.round(uiImg.width * scale)
-            height = Math.round(uiImg.height * scale)
+        // 检查点断点续传：若磁盘已有完整文件则跳过下载
+        let hasLocalFile = false
+        if (FileManager.existsSync(filePath)) {
+          const stat = FileManager.statSync(filePath)
+          if (stat && stat.size > 0) {
+            hasLocalFile = true
           }
-        } catch {}
+        }
 
-        let fileSize = 0
-        try {
-          fileSize = (data as any)?.length || FileManager.statSync(filePath)?.size || 0
-        } catch {}
+        let isSuccess = false
+        let data: Data | null = null
 
-        downloadedPagesMap.set(pageNum, {
-          index: pageNum,
-          fileName,
-          filePath,
-          width,
-          height,
-          fileSize,
-          chapTitle: p.chapTitle,
-          isChapFirstPage: p.isChapFirstPage,
-        })
-      } else {
-        failedPages.push(pageNum)
-      }
-      progressReporter.notify(`下载漫画原图 (${idx + 1}/${allPagesToDownload.length})`, idx + 1, allPagesToDownload.length)
-    })
+        if (hasLocalFile) {
+          isSuccess = true
+        } else {
+          data = await fetchImageBinaryWithRetry(p.url, 1, token)
+          if (data) {
+            FileManager.writeAsDataSync(filePath, data)
+            isSuccess = true
+          }
+        }
+
+        if (isSuccess) {
+          let width = 0
+          let height = 0
+          try {
+            const uiImg = UIImage.fromFile(filePath)
+            if (uiImg && uiImg.width > 0 && uiImg.height > 0) {
+              const scale = uiImg.scale || 1
+              width = Math.round(uiImg.width * scale)
+              height = Math.round(uiImg.height * scale)
+            }
+          } catch {}
+
+          let fileSize = 0
+          try {
+            fileSize = (data as any)?.length || FileManager.statSync(filePath)?.size || 0
+          } catch {}
+
+          downloadedPagesMap.set(pageNum, {
+            index: pageNum,
+            fileName,
+            filePath,
+            width,
+            height,
+            fileSize,
+            chapTitle: p.chapTitle,
+            isChapFirstPage: p.isChapFirstPage,
+          })
+        } else {
+          failedPages.push(pageNum)
+        }
+        progressReporter.notify(`下载漫画原图 (${idx + 1}/${allPagesToDownload.length})`, idx + 1, allPagesToDownload.length)
+      },
+      token
+    )
+
+    if (token) await token.checkOrWait()
 
     const downloadedCount = downloadedPagesMap.size
     failedPages.sort((a, b) => a - b)

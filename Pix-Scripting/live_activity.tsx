@@ -11,9 +11,12 @@ import {
   Image,
   Spacer,
   ProgressView,
+  Button,
 } from "scripting"
+import { PauseDownloadIntent, ResumeDownloadIntent, CancelDownloadIntent } from "./app_intents"
 
 export type TaskLiveActivityState = {
+  taskId?: string
   title: string
   subtitle?: string
   statusText: string
@@ -22,12 +25,14 @@ export type TaskLiveActivityState = {
   total: number
   isDone?: boolean
   isError?: boolean
+  isPaused?: boolean
   categoryIcon?: string
 }
 
 function LockScreenContentView(state: TaskLiveActivityState) {
   const isDone = Boolean(state.isDone)
   const isError = Boolean(state.isError)
+  const isPaused = Boolean(state.isPaused)
   const percentVal = Math.max(0, Math.min(100, Math.round((state.progress || 0) * 100)))
   const percentText = `${percentVal}%`
 
@@ -35,12 +40,16 @@ function LockScreenContentView(state: TaskLiveActivityState) {
     ? "checkmark.circle.fill"
     : isError
     ? "exclamationmark.triangle.fill"
+    : isPaused
+    ? "pause.circle.fill"
     : state.categoryIcon || "arrow.down.circle.fill"
 
   const tintColor = isDone
     ? "systemGreen"
     : isError
     ? "systemRed"
+    : isPaused
+    ? "systemOrange"
     : "systemBlue"
 
   const cleanSubtitle = state.subtitle ? state.subtitle.replace(/^用户[:：]\s*/, "") : ""
@@ -48,8 +57,8 @@ function LockScreenContentView(state: TaskLiveActivityState) {
 
   return (
     <VStack
-      spacing={6}
-      padding={{ horizontal: 12, vertical: 8 }}
+      spacing={8}
+      padding={{ horizontal: 14, vertical: 10 }}
     >
       {/* 1. 顶行：左侧图标 + 主副标题；右侧醒目大号百分比与数字 */}
       <HStack spacing={8}>
@@ -68,9 +77,17 @@ function LockScreenContentView(state: TaskLiveActivityState) {
           <Text
             font="title3"
             fontWeight="bold"
-            foregroundStyle={isDone ? "systemGreen" : isError ? "systemRed" : "tintColor"}
+            foregroundStyle={
+              isDone
+                ? "systemGreen"
+                : isError
+                ? "systemRed"
+                : isPaused
+                ? "systemOrange"
+                : "tintColor"
+            }
           >
-            {isDone ? "完成" : isError ? "失败" : percentText}
+            {isDone ? "完成" : isError ? "失败" : isPaused ? "已暂停" : percentText}
           </Text>
           {state.total > 0 && !isDone ? (
             <Text font="caption2" foregroundStyle="secondaryLabel">
@@ -83,12 +100,45 @@ function LockScreenContentView(state: TaskLiveActivityState) {
       {/* 2. 中行：系统原生进度指示条 */}
       <ProgressView value={Math.max(0, Math.min(1, state.progress || 0))} total={1.0} />
 
-      {/* 3. 底行：实时动态状态文字 */}
-      <HStack>
+      {/* 3. 底行：实时动态状态文字 + 交互控制按钮 */}
+      <HStack spacing={10}>
         <Text font="caption" foregroundStyle="secondaryLabel" lineLimit={1}>
-          {state.statusText || (isDone ? "全部任务处理完毕" : "正在处理…")}
+          {state.statusText || (isDone ? "全部任务处理完毕" : isPaused ? "任务已暂停" : "正在处理…")}
         </Text>
         <Spacer />
+
+        {!isDone && !isError && state.taskId ? (
+          <HStack spacing={6}>
+            {isPaused ? (
+              <Button
+                title="继续"
+                systemImage="play.fill"
+                intent={ResumeDownloadIntent(state.taskId)}
+                buttonStyle="borderedProminent"
+                buttonBorderShape="capsule"
+                controlSize="small"
+              />
+            ) : (
+              <Button
+                title="暂停"
+                systemImage="pause.fill"
+                intent={PauseDownloadIntent(state.taskId)}
+                buttonStyle="bordered"
+                buttonBorderShape="capsule"
+                controlSize="small"
+              />
+            )}
+            <Button
+              title="取消"
+              systemImage="xmark"
+              intent={CancelDownloadIntent(state.taskId)}
+              buttonStyle="bordered"
+              buttonBorderShape="capsule"
+              controlSize="small"
+              role="destructive"
+            />
+          </HStack>
+        ) : null}
       </HStack>
     </VStack>
   )
@@ -97,6 +147,7 @@ function LockScreenContentView(state: TaskLiveActivityState) {
 const builder: LiveActivityUIBuilder<TaskLiveActivityState> = (state) => {
   const isDone = Boolean(state.isDone)
   const isError = Boolean(state.isError)
+  const isPaused = Boolean(state.isPaused)
   const percentVal = Math.max(0, Math.min(100, Math.round((state.progress || 0) * 100)))
   const percentText = `${percentVal}%`
 
@@ -104,12 +155,16 @@ const builder: LiveActivityUIBuilder<TaskLiveActivityState> = (state) => {
     ? "checkmark.circle.fill"
     : isError
     ? "exclamationmark.triangle.fill"
+    : isPaused
+    ? "pause.circle.fill"
     : state.categoryIcon || "arrow.down.circle.fill"
 
   const iconColor = isDone
     ? "systemGreen"
     : isError
     ? "systemRed"
+    : isPaused
+    ? "systemOrange"
     : "systemBlue"
 
   return (
@@ -119,7 +174,7 @@ const builder: LiveActivityUIBuilder<TaskLiveActivityState> = (state) => {
         <HStack spacing={4}>
           <Image systemName={iconName} foregroundStyle={iconColor} font="subheadline" />
           <Text font="caption2" fontWeight="semibold">
-            {isDone ? "完成" : isError ? "错误" : percentText}
+            {isDone ? "完成" : isError ? "错误" : isPaused ? "暂停" : percentText}
           </Text>
         </HStack>
       }
@@ -156,9 +211,17 @@ const builder: LiveActivityUIBuilder<TaskLiveActivityState> = (state) => {
           <Text
             font="title3"
             fontWeight="bold"
-            foregroundStyle={isDone ? "systemGreen" : isError ? "systemRed" : "tintColor"}
+            foregroundStyle={
+              isDone
+                ? "systemGreen"
+                : isError
+                ? "systemRed"
+                : isPaused
+                ? "systemOrange"
+                : "tintColor"
+            }
           >
-            {isDone ? "100%" : isError ? "失败" : percentText}
+            {isDone ? "100%" : isError ? "失败" : isPaused ? "暂停" : percentText}
           </Text>
           {state.total > 0 && !isDone ? (
             <Text font="caption2" foregroundStyle="secondaryLabel">
@@ -168,13 +231,45 @@ const builder: LiveActivityUIBuilder<TaskLiveActivityState> = (state) => {
         </VStack>
       </LiveActivityUIExpandedTrailing>
       <LiveActivityUIExpandedBottom>
-        <VStack spacing={4}>
+        <VStack spacing={6}>
           <ProgressView value={Math.max(0, Math.min(1, state.progress || 0))} total={1.0} />
           <HStack>
             <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={1}>
-              {state.statusText || (isDone ? "任务已完成" : "正在处理…")}
+              {state.statusText || (isDone ? "任务已完成" : isPaused ? "已暂停" : "正在处理…")}
             </Text>
             <Spacer />
+            {!isDone && !isError && state.taskId ? (
+              <HStack spacing={6}>
+                {isPaused ? (
+                  <Button
+                    title="继续"
+                    systemImage="play.fill"
+                    intent={ResumeDownloadIntent(state.taskId)}
+                    buttonStyle="borderedProminent"
+                    buttonBorderShape="capsule"
+                    controlSize="mini"
+                  />
+                ) : (
+                  <Button
+                    title="暂停"
+                    systemImage="pause.fill"
+                    intent={PauseDownloadIntent(state.taskId)}
+                    buttonStyle="bordered"
+                    buttonBorderShape="capsule"
+                    controlSize="mini"
+                  />
+                )}
+                <Button
+                  title="取消"
+                  systemImage="xmark"
+                  intent={CancelDownloadIntent(state.taskId)}
+                  buttonStyle="bordered"
+                  buttonBorderShape="capsule"
+                  controlSize="mini"
+                  role="destructive"
+                />
+              </HStack>
+            ) : null}
           </HStack>
         </VStack>
       </LiveActivityUIExpandedBottom>

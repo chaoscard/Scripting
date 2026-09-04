@@ -20,6 +20,7 @@ export interface BackgroundTaskHandle {
     current: number
     total?: number
     statusText: string
+    isPaused?: boolean
   }) => void
   finish: (options: {
     success: boolean
@@ -67,6 +68,7 @@ export async function beginBackgroundTask(
     try {
       liveActivityInstance = PixivTaskLiveActivity()
       const initialState: TaskLiveActivityState = {
+        taskId,
         title: options.title,
         subtitle: options.subtitle,
         statusText: options.initialStatus || "正在准备任务…",
@@ -76,6 +78,7 @@ export async function beginBackgroundTask(
         categoryIcon: options.categoryIcon || "arrow.down.circle.fill",
         isDone: false,
         isError: false,
+        isPaused: false,
       }
       await liveActivityInstance.start(initialState)
     } catch (err: any) {
@@ -89,6 +92,7 @@ export async function beginBackgroundTask(
     current: number
     total?: number
     statusText: string
+    isPaused?: boolean
   }) => {
     if (isFinished) return
     if (progressOptions.total && progressOptions.total > 0) {
@@ -98,8 +102,8 @@ export async function beginBackgroundTask(
     const progressVal = Math.max(0, Math.min(1, currentTotal > 0 ? currentCount / currentTotal : 0))
 
     const now = Date.now()
-    // 防抖限频：至少间隔 80ms 更新一次 LiveActivity
-    if (now - lastUpdateTime < 80 && currentCount < currentTotal) {
+    // 防抖限频：非状态切换且小于 80ms 时防抖
+    if (progressOptions.isPaused === undefined && now - lastUpdateTime < 80 && currentCount < currentTotal) {
       return
     }
     lastUpdateTime = now
@@ -107,6 +111,7 @@ export async function beginBackgroundTask(
     if (liveActivityInstance) {
       try {
         liveActivityInstance.update({
+          taskId,
           title: options.title,
           subtitle: options.subtitle,
           statusText: progressOptions.statusText,
@@ -116,6 +121,7 @@ export async function beginBackgroundTask(
           categoryIcon: options.categoryIcon || "arrow.down.circle.fill",
           isDone: false,
           isError: false,
+          isPaused: Boolean(progressOptions.isPaused),
         })
       } catch (err: any) {
         console.log("LiveActivity update error:", err?.message ?? err)
@@ -139,6 +145,7 @@ export async function beginBackgroundTask(
     if (liveActivityInstance) {
       try {
         const finalState: TaskLiveActivityState = {
+          taskId,
           title: finishOptions.detailTitle || options.title,
           subtitle: options.subtitle,
           statusText: finishOptions.summary,
@@ -148,6 +155,7 @@ export async function beginBackgroundTask(
           categoryIcon: options.categoryIcon || "arrow.down.circle.fill",
           isDone: finishOptions.success,
           isError: !finishOptions.success,
+          isPaused: false,
         }
         await liveActivityInstance.end(finalState, {
           dismissTimeInterval: finishOptions.success ? 4 : 8,

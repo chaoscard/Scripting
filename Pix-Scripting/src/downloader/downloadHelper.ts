@@ -2,6 +2,7 @@ import { downloadBinary } from "../api/client"
 import { imageUrlOf } from "../image/imageLoader"
 import { getDownloadImageQuality, loadSettings, type DownloadImageQuality } from "../store/settings"
 import type { PixivIllustration } from "../types"
+import type { TaskControlToken } from "./downloadTaskManager"
 
 /**
  * 获取下载使用的图片 URL（严格遵循设置中的 downloadImageQuality）
@@ -16,13 +17,16 @@ export function getDownloadImageUrl(
 }
 
 /**
- * 安全下载二进制图片，带有一次自动重试
+ * 安全下载二进制图片，带有一次自动重试与可选取消控制
  */
 export async function fetchImageBinaryWithRetry(
   url: string,
-  retryCount = 1
+  retryCount = 1,
+  token?: TaskControlToken
 ): Promise<Data | null> {
   if (!url) return null
+  if (token) await token.checkOrWait()
+
   try {
     const data = await downloadBinary(url)
     if (data) return data
@@ -30,10 +34,13 @@ export async function fetchImageBinaryWithRetry(
     console.log("fetchImageBinary error (retrying):", url.slice(0, 80), err?.message ?? err)
   }
 
+  if (token) await token.checkOrWait()
+
   if (retryCount > 0) {
     await new Promise<void>((resolve) => {
       setTimeout(resolve, 600)
     })
+    if (token) await token.checkOrWait()
     try {
       const data = await downloadBinary(url)
       if (data) return data
@@ -124,12 +131,13 @@ export function createThrottledProgress(
 }
 
 /**
- * 受控并发执行器（集成微任务切片出让）
+ * 受控并发执行器（集成微任务切片出让与可控令牌检查）
  */
 export async function runConcurrentTasks<T, R>(
   items: T[],
   limit: number,
-  task: (item: T, index: number) => Promise<R>
+  task: (item: T, index: number) => Promise<R>,
+  token?: TaskControlToken
 ): Promise<R[]> {
   const results: R[] = new Array(items.length)
   let currentIndex = 0
@@ -137,11 +145,17 @@ export async function runConcurrentTasks<T, R>(
 
   async function worker(): Promise<void> {
     while (currentIndex < items.length) {
+      if (token) {
+        await token.checkOrWait()
+      }
       const index = currentIndex++
       try {
         results[index] = await task(items[index], index)
       } catch (e: any) {
         console.log(`Task at index ${index} failed:`, e?.message ?? e)
+      }
+      if (token) {
+        await token.checkOrWait()
       }
       // 每次完成一个任务主动出让一下微任务，防止多个 Worker 密集回调挤占主线程
       await yieldToMainThread()

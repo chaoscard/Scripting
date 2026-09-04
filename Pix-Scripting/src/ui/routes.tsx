@@ -23,6 +23,7 @@ import { AboutView } from "./about"
 import { RankingCustomPickerView, type CustomRankingPickerKind } from "./rankingCustomPicker"
 import {
   DownloadManagerView,
+  DownloadTasksView,
   DownloadDetailListView,
   DownloadCreatorsListView,
 } from "./downloadManager"
@@ -206,6 +207,7 @@ export function renderDestination(rawPage: string) {
     }
   }
   if (page === "downloadManager") return <DownloadManagerView />
+  if (page === "downloadTasks") return <DownloadTasksView />
   if (page === "downloadCreators") return <DownloadCreatorsListView />
   if (page.startsWith("downloadCreator:")) {
     const folder = page.slice("downloadCreator:".length)

@@ -2,6 +2,7 @@ import { getDownloadImageQuality, loadSettings, type DownloadImageQuality } from
 import { cachedFilePath, imageUrlOf } from "../image/imageLoader"
 import { fetchImageBinaryWithRetry, runConcurrentTasks } from "./downloadHelper"
 import type { PixivIllustration } from "../types"
+import type { TaskControlToken } from "./downloadTaskManager"
 
 /**
  * 相册保存专用后台保活引用计数管理器
@@ -238,9 +239,11 @@ export async function saveVideoToPixivAlbum(
 export async function downloadIllustToAlbum(
   illust: PixivIllustration,
   downloadQuality?: DownloadImageQuality,
-  onProgress?: (current: number, total: number) => void
+  onProgress?: (current: number, total: number) => void,
+  token?: TaskControlToken
 ): Promise<boolean> {
   return withAlbumKeepAlive(async () => {
+    if (token) await token.checkOrWait()
     const quality = downloadQuality ?? getDownloadImageQuality()
     const pageCount = Math.max(1, illust.page_count || illust.meta_pages?.length || 1)
     const tasks: { pageIndex: number; url: string }[] = []
@@ -255,25 +258,31 @@ export async function downloadIllustToAlbum(
     if (tasks.length === 0) return false
 
     let successCount = 0
-    await runConcurrentTasks(tasks, 3, async (task) => {
-      const fileName = `pixiv_${illust.id}_p${task.pageIndex}`
-      try {
-        const cached = cachedFilePath(task.url)
-        if (cached) {
-          const ok = await saveImageToPixivAlbum(cached, fileName)
-          if (ok) successCount++
-        } else {
-          const data = await fetchImageBinaryWithRetry(task.url)
-          if (data) {
-            const ok = await saveImageToPixivAlbum(data, fileName)
+    await runConcurrentTasks(
+      tasks,
+      3,
+      async (task) => {
+        if (token) await token.checkOrWait()
+        const fileName = `pixiv_${illust.id}_p${task.pageIndex}`
+        try {
+          const cached = cachedFilePath(task.url)
+          if (cached) {
+            const ok = await saveImageToPixivAlbum(cached, fileName)
             if (ok) successCount++
+          } else {
+            const data = await fetchImageBinaryWithRetry(task.url, 1, token)
+            if (data) {
+              const ok = await saveImageToPixivAlbum(data, fileName)
+              if (ok) successCount++
+            }
           }
+        } catch (err: any) {
+          console.log(`downloadIllustToAlbum error for page ${task.pageIndex}:`, err?.message ?? err)
         }
-      } catch (err: any) {
-        console.log(`downloadIllustToAlbum error for page ${task.pageIndex}:`, err?.message ?? err)
-      }
-      onProgress?.(task.pageIndex, tasks.length)
-    })
+        onProgress?.(task.pageIndex, tasks.length)
+      },
+      token
+    )
 
     return successCount > 0
   })
