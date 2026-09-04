@@ -336,6 +336,41 @@ export function calculateDirStats(dir: string): { totalSize: number; fileCount: 
 }
 
 /**
+ * 穿透聚合指定分类的总统计：包含根分类目录，以及所有创作者专属目录下的对应分类子目录
+ */
+function calculateCategoryAggregatedStats(
+  root: string,
+  category: "Illustrations" | "Ugoira" | "Manga" | "Novels"
+): { totalSize: number; fileCount: number } {
+  let totalSize = 0
+  let fileCount = 0
+
+  // 1. 扫描根分类目录
+  const rootDir = `${root}/${category}`
+  const rootStats = calculateDirStats(rootDir)
+  totalSize += rootStats.totalSize
+  fileCount += rootStats.fileCount
+
+  // 2. 深入遍历每个创作者专属目录下的对应分类子目录
+  const creatorsDir = `${root}/Creators`
+  if (FileManager.existsSync(creatorsDir)) {
+    try {
+      const creatorFolders = FileManager.readDirectorySync(creatorsDir, false)
+      for (const cf of creatorFolders) {
+        const cfSub = `${creatorsDir}/${cf}/${category}`
+        if (FileManager.existsSync(cfSub)) {
+          const subStats = calculateDirStats(cfSub)
+          totalSize += subStats.totalSize
+          fileCount += subStats.fileCount
+        }
+      }
+    } catch {}
+  }
+
+  return { totalSize, fileCount }
+}
+
+/**
  * 获取全局存储概览（各分类统计、占用大小与文件数，支持脏标记缓存命中）
  */
 export async function getStorageOverview(forceRefresh = false): Promise<StorageOverview> {
@@ -351,26 +386,33 @@ export async function getStorageOverview(forceRefresh = false): Promise<StorageO
   const creatorsDir = `${root}/Creators`
   const tempDir = getCategoryDirectory("temp")
 
-  const illStats = calculateDirStats(illDir)
-  const ugStats = calculateDirStats(ugDir)
-  const mangaStats = calculateDirStats(mangaDir)
-  const novelStats = calculateDirStats(novelDir)
+  // 1. 物理目录实际占用统计（防重复累加物理存储）
+  const illPhysicalStats = calculateDirStats(illDir)
+  const ugPhysicalStats = calculateDirStats(ugDir)
+  const mangaPhysicalStats = calculateDirStats(mangaDir)
+  const novelPhysicalStats = calculateDirStats(novelDir)
   const creatorsStats = calculateDirStats(creatorsDir)
   const tempStats = calculateDirStats(tempDir)
 
   const totalSize =
-    illStats.totalSize +
-    ugStats.totalSize +
-    mangaStats.totalSize +
-    novelStats.totalSize +
+    illPhysicalStats.totalSize +
+    ugPhysicalStats.totalSize +
+    mangaPhysicalStats.totalSize +
+    novelPhysicalStats.totalSize +
     creatorsStats.totalSize
 
   const totalFilesCount =
-    illStats.fileCount +
-    ugStats.fileCount +
-    mangaStats.fileCount +
-    novelStats.fileCount +
+    illPhysicalStats.fileCount +
+    ugPhysicalStats.fileCount +
+    mangaPhysicalStats.fileCount +
+    novelPhysicalStats.fileCount +
     creatorsStats.fileCount
+
+  // 2. 穿透聚合各分类统计（根目录 + 所有画师对应分类子目录，保证内外口径一致）
+  const illStats = calculateCategoryAggregatedStats(root, "Illustrations")
+  const ugStats = calculateCategoryAggregatedStats(root, "Ugoira")
+  const mangaStats = calculateCategoryAggregatedStats(root, "Manga")
+  const novelStats = calculateCategoryAggregatedStats(root, "Novels")
 
   let creatorFolderCount = 0
   if (FileManager.existsSync(creatorsDir)) {

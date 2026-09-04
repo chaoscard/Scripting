@@ -27,6 +27,7 @@ export interface BackgroundTaskHandle {
     summary: string
     errorMessage?: string
     detailTitle?: string
+    isCanceled?: boolean
   }) => Promise<void>
 }
 
@@ -63,6 +64,7 @@ export async function beginBackgroundTask(
   let currentCount = 0
   let isFinished = false
   let lastUpdateTime = 0
+  let isCurrentlyPaused = false
 
   if (settings.enableLiveActivity) {
     try {
@@ -101,6 +103,10 @@ export async function beginBackgroundTask(
     currentCount = Math.max(0, progressOptions.current)
     const progressVal = Math.max(0, Math.min(1, currentTotal > 0 ? currentCount / currentTotal : 0))
 
+    if (progressOptions.isPaused !== undefined) {
+      isCurrentlyPaused = Boolean(progressOptions.isPaused)
+    }
+
     const now = Date.now()
     // 防抖限频：非状态切换且小于 80ms 时防抖
     if (progressOptions.isPaused === undefined && now - lastUpdateTime < 80 && currentCount < currentTotal) {
@@ -114,14 +120,14 @@ export async function beginBackgroundTask(
           taskId,
           title: options.title,
           subtitle: options.subtitle,
-          statusText: progressOptions.statusText,
+          statusText: isCurrentlyPaused ? "任务已暂停" : progressOptions.statusText,
           progress: progressVal,
           current: currentCount,
           total: currentTotal,
           categoryIcon: options.categoryIcon || "arrow.down.circle.fill",
           isDone: false,
           isError: false,
-          isPaused: Boolean(progressOptions.isPaused),
+          isPaused: isCurrentlyPaused,
         })
       } catch (err: any) {
         console.log("LiveActivity update error:", err?.message ?? err)
@@ -135,13 +141,15 @@ export async function beginBackgroundTask(
     summary: string
     errorMessage?: string
     detailTitle?: string
+    isCanceled?: boolean
   }) => {
     if (isFinished) return
     isFinished = true
 
     const currentSettings = loadSettings()
+    const isCanceled = Boolean(finishOptions.isCanceled)
 
-    // 4.1 结束灵动岛实时活动
+    // 4.1 结束灵动岛实时活动：取消时立即销毁(0秒)；成功保留4秒；真错误保留6秒
     if (liveActivityInstance) {
       try {
         const finalState: TaskLiveActivityState = {
@@ -154,11 +162,11 @@ export async function beginBackgroundTask(
           total: currentTotal,
           categoryIcon: options.categoryIcon || "arrow.down.circle.fill",
           isDone: finishOptions.success,
-          isError: !finishOptions.success,
+          isError: !finishOptions.success && !isCanceled,
           isPaused: false,
         }
         await liveActivityInstance.end(finalState, {
-          dismissTimeInterval: finishOptions.success ? 4 : 8,
+          dismissTimeInterval: isCanceled ? 0 : finishOptions.success ? 4 : 6,
         })
       } catch (err: any) {
         console.log("LiveActivity end error:", err?.message ?? err)
@@ -166,8 +174,8 @@ export async function beginBackgroundTask(
       liveActivityInstance = null
     }
 
-    // 4.2 发送本地通知与震动反馈
-    if (currentSettings.enableTaskNotification) {
+    // 4.2 发送本地通知与震动反馈（主动取消不打扰、不误报失败）
+    if (currentSettings.enableTaskNotification && !isCanceled) {
       try {
         const notifyTitle = finishOptions.success
           ? `✅ ${options.title}完成`
@@ -185,16 +193,18 @@ export async function beginBackgroundTask(
       }
     }
 
-    // 触感反馈
-    try {
-      if (typeof HapticFeedback !== "undefined") {
-        if (finishOptions.success) {
-          HapticFeedback.notificationSuccess()
-        } else {
-          HapticFeedback.notificationError()
+    // 触感反馈（取消不触发错误触感）
+    if (!isCanceled) {
+      try {
+        if (typeof HapticFeedback !== "undefined") {
+          if (finishOptions.success) {
+            HapticFeedback.notificationSuccess()
+          } else {
+            HapticFeedback.notificationError()
+          }
         }
-      }
-    } catch {}
+      } catch {}
+    }
 
     // 4.3 释放后台保活
     if (isKeptAlive) {

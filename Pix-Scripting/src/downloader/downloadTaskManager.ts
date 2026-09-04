@@ -226,6 +226,7 @@ class DownloadTaskManagerImpl {
     return this.taskOrder
       .map((id) => this.tasks.get(id)?.item)
       .filter((it): it is DownloadTaskItem => Boolean(it))
+      .map((it) => ({ ...it }))
   }
 
   /**
@@ -342,8 +343,11 @@ class DownloadTaskManagerImpl {
     if (!record || !record.runner) return
 
     this.activeTaskId = nextId
-    record.item.status = "running"
-    record.item.statusText = "正在准备…"
+    record.item = {
+      ...record.item,
+      status: "running",
+      statusText: "正在准备…",
+    }
     this.notify()
 
     const saveManifestFn = () => {
@@ -366,13 +370,31 @@ class DownloadTaskManagerImpl {
     // 包装进度同步器
     const wrappedHandle: BackgroundTaskHandle = {
       taskId: record.item.id,
-      updateProgress: ({ current, total, statusText }) => {
+      updateProgress: ({ current, total, statusText, isPaused }) => {
         if (record.item.status !== "running" && record.item.status !== "paused") return
-        record.item.current = current
-        if (total && total > 0) record.item.total = total
-        record.item.progress = Math.max(0, Math.min(1, record.item.total > 0 ? current / record.item.total : 0))
-        record.item.statusText = statusText
-        bgHandle.updateProgress({ current, total: record.item.total, statusText })
+        
+        // 状态锁保护：如果任务已处于暂停或令牌已暂停，禁止并发回调冲刷为运行态
+        const isCurrentlyPaused =
+          record.item.status === "paused" || record.token.isPaused || Boolean(isPaused)
+        const finalStatusText = isCurrentlyPaused ? "任务已暂停" : statusText
+
+        const newTotal = total && total > 0 ? total : record.item.total
+        const newCurrent = Math.max(0, current)
+        const newProgress = Math.max(0, Math.min(1, newTotal > 0 ? newCurrent / newTotal : 0))
+        record.item = {
+          ...record.item,
+          current: newCurrent,
+          total: newTotal,
+          progress: newProgress,
+          statusText: finalStatusText,
+          status: isCurrentlyPaused ? "paused" : record.item.status,
+        }
+        bgHandle.updateProgress({
+          current: newCurrent,
+          total: newTotal,
+          statusText: finalStatusText,
+          isPaused: isCurrentlyPaused,
+        })
         this.notify()
       },
       finish: async (opts) => {
@@ -388,12 +410,15 @@ class DownloadTaskManagerImpl {
         saveManifestFn
       )
 
-      record.item.status = "completed"
-      record.item.progress = 1.0
-      record.item.current = record.item.total
-      record.item.finishTime = Date.now()
-      record.item.outputPath = result.outputPath
-      record.item.statusText = result.summary || "下载完成"
+      record.item = {
+        ...record.item,
+        status: "completed",
+        progress: 1.0,
+        current: record.item.total,
+        finishTime: Date.now(),
+        outputPath: result.outputPath,
+        statusText: result.summary || "下载完成",
+      }
 
       await bgHandle.finish({
         success: true,
@@ -406,21 +431,32 @@ class DownloadTaskManagerImpl {
       notifyDownloadFilesChanged()
     } catch (err: any) {
       if (err instanceof TaskAbortError || record.token.isCancelled) {
-        record.item.status = "canceled"
-        record.item.statusText = "任务已取消"
+        record.item = {
+          ...record.item,
+          status: "canceled",
+          statusText: "任务已取消",
+        }
         await bgHandle.finish({
           success: false,
+          isCanceled: true,
           summary: "下载已取消",
         })
         this.cleanupTaskDir(record.item.id)
       } else if (err instanceof TaskPauseError || record.token.isPaused) {
-        record.item.status = "paused"
-        record.item.statusText = "已暂停"
+        record.item = {
+          ...record.item,
+          status: "paused",
+          statusText: "已暂停",
+        }
         // 暂停时不清理临时目录，保留 manifest 便于断点恢复
       } else {
-        record.item.status = "failed"
-        record.item.errorMessage = err?.message || String(err)
-        record.item.statusText = `错误: ${record.item.errorMessage}`
+        const errorMsg = err?.message || String(err)
+        record.item = {
+          ...record.item,
+          status: "failed",
+          errorMessage: errorMsg,
+          statusText: `错误: ${errorMsg}`,
+        }
         await bgHandle.finish({
           success: false,
           summary: record.item.statusText,
@@ -444,21 +480,28 @@ class DownloadTaskManagerImpl {
     if (!record) return false
 
     if (record.item.status === "running") {
-      record.item.status = "paused"
-      record.item.statusText = "已暂停"
+      record.item = {
+        ...record.item,
+        status: "paused",
+        statusText: "已暂停",
+      }
       record.token.pause()
       if (record.bgHandle) {
         record.bgHandle.updateProgress({
           current: record.item.current,
           total: record.item.total,
           statusText: "任务已暂停",
+          isPaused: true,
         })
       }
       this.notify()
       return true
     } else if (record.item.status === "queued") {
-      record.item.status = "paused"
-      record.item.statusText = "已暂停"
+      record.item = {
+        ...record.item,
+        status: "paused",
+        statusText: "已暂停",
+      }
       this.notify()
       return true
     }
@@ -476,15 +519,29 @@ class DownloadTaskManagerImpl {
 
     if (record.item.status === "paused") {
       if (record.token.isPaused) {
-        record.item.status = "running"
-        record.item.statusText = "继续下载中…"
+        record.item = {
+          ...record.item,
+          status: "running",
+          statusText: "继续下载中…",
+        }
         record.token.resume()
+        if (record.bgHandle) {
+          record.bgHandle.updateProgress({
+            current: record.item.current,
+            total: record.item.total,
+            statusText: "继续下载中…",
+            isPaused: false,
+          })
+        }
         this.notify()
         return true
       } else {
         // 从挂起队列重新入队调度
-        record.item.status = "queued"
-        record.item.statusText = "排队中…"
+        record.item = {
+          ...record.item,
+          status: "queued",
+          statusText: "排队中…",
+        }
         this.notify()
         this.scheduleNext()
         return true
@@ -504,12 +561,25 @@ class DownloadTaskManagerImpl {
 
     record.token.cancel()
     if (record.item.status === "running") {
-      record.item.status = "canceled"
-      record.item.statusText = "正在取消…"
+      record.item = {
+        ...record.item,
+        status: "canceled",
+        statusText: "正在取消…",
+      }
       this.notify()
     } else {
-      record.item.status = "canceled"
-      record.item.statusText = "已取消"
+      record.item = {
+        ...record.item,
+        status: "canceled",
+        statusText: "已取消",
+      }
+      if (record.bgHandle) {
+        void record.bgHandle.finish({
+          success: false,
+          isCanceled: true,
+          summary: "下载已取消",
+        })
+      }
       this.cleanupTaskDir(targetId)
       this.notify()
       if (this.activeTaskId === targetId) {
@@ -527,9 +597,12 @@ class DownloadTaskManagerImpl {
     const record = this.tasks.get(taskId)
     if (!record || !record.runner) return false
 
-    record.item.status = "queued"
-    record.item.statusText = "排队中…"
-    record.item.errorMessage = undefined
+    record.item = {
+      ...record.item,
+      status: "queued",
+      statusText: "排队中…",
+      errorMessage: undefined,
+    }
     record.token = new TaskControlToken()
     this.notify()
     this.scheduleNext()
@@ -570,3 +643,16 @@ class DownloadTaskManagerImpl {
 }
 
 export const DownloadTaskManager = new DownloadTaskManagerImpl()
+
+// 注册 AppIntent 交互桥接处理器，实现灵动岛/锁屏与任务管理器零延迟解耦直连
+try {
+  const { registerTaskActionHandler } = require("../../app_intents")
+  if (typeof registerTaskActionHandler === "function") {
+    registerTaskActionHandler(async (action: string, taskId?: string) => {
+      if (action === "pause") return DownloadTaskManager.pauseTask(taskId)
+      if (action === "resume") return DownloadTaskManager.resumeTask(taskId)
+      if (action === "cancel") return DownloadTaskManager.cancelTask(taskId)
+      return false
+    })
+  }
+} catch {}

@@ -70,7 +70,8 @@ export async function exportUgoiraToAlbum(
  */
 export async function exportUgoiraZip(
   illust: PixivIllustration,
-  onProgress?: (msg: string) => void
+  onProgress?: (msg: string) => void,
+  targetDirOverride?: string
 ): Promise<UgoiraExportResult> {
   const tempDir = `${getCategoryDirectory("temp")}/zip_ugoira_${illust.id}_${Date.now()}`
   const tempZipPath = `${tempDir}.zip`
@@ -84,7 +85,7 @@ export async function exportUgoiraZip(
 
     const author = illust.user?.name || "Unknown"
     const safeTitle = sanitizeFileName(`${illust.title}_${author}_${illust.id}`)
-    const targetDir = getCategoryDirectory("ugoira")
+    const targetDir = targetDirOverride || getCategoryDirectory("ugoira")
     if (!FileManager.existsSync(targetDir)) {
       try { FileManager.createDirectorySync(targetDir, true) } catch {}
     }

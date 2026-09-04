@@ -77,7 +77,7 @@ async function main() {
 
     await Navigation.present({
       element: <RootView />,
-      modalPresentationStyle: "overFullScreen",
+      modalPresentationStyle: "fullScreen",
     })
     stopSyncScheduler()
     abortAllAITasks()

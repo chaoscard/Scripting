@@ -10,7 +10,7 @@ import { session } from "../api/session"
 import { imageUrlOf } from "../image/imageLoader"
 import { getDownloadImageQuality, loadSettings } from "../store/settings"
 import { buildUgoira } from "../ugoira/ugoira"
-import { exportUgoiraToAlbum } from "./ugoiraExporter"
+import { exportUgoiraToAlbum, exportUgoiraZip } from "./ugoiraExporter"
 import { exportMangaToCbz } from "./cbzExporter"
 import {
   cleanTemporaryPath,
@@ -370,6 +370,64 @@ export async function exportAuthorUgoiraToFiles(
         }
 
         const summary = `已成功将 ${successCount}/${totalCount} 部动图导出至 Ugoira 文件夹。`
+        resolve({ successCount, totalCount })
+        return { summary }
+      },
+    }).catch(reject)
+  })
+}
+
+/**
+ * 批量将画师全量动图以原始 ZIP 帧包（包含每帧图像与完整 info.json 延迟数据）导出至画师专属 Ugoira 存储目录
+ */
+export async function exportAuthorUgoiraZipToFiles(
+  authorName: string,
+  authorId: number,
+  ugoiras: PixivIllustration[],
+  onProgress?: (msg: string, current: number, total: number) => void
+): Promise<{ successCount: number; totalCount: number }> {
+  const safeAuthorName = sanitizeFileName(authorName || `User_${authorId}`)
+  const targetDir = getAuthorDownloadDirectory(safeAuthorName, authorId, "ugoira")
+  const ugoiraList = ugoiras.filter((it) => it.type === "ugoira")
+  const taskId = `author_ugoira_zip_${Date.now()}`
+
+  return new Promise<{ successCount: number; totalCount: number }>((resolve, reject) => {
+    void DownloadTaskManager.submitTask({
+      taskId,
+      type: "ugoira_export",
+      title: "导出用户动图全集 (原始ZIP)",
+      subtitle: `用户: ${safeAuthorName}`,
+      total: ugoiraList.length,
+      categoryIcon: "doc.zipper",
+      runner: async (token, task, manifest, saveManifest) => {
+        let successCount = manifest.completedIndices.length
+        const totalCount = ugoiraList.length
+
+        for (let i = 0; i < ugoiraList.length; i++) {
+          await token.checkOrWait()
+          if (manifest.completedIndices.includes(i)) {
+            continue
+          }
+
+          const item = ugoiraList[i]
+          const statusMsg = `正在打包动图帧包 (${i + 1}/${totalCount}): ${item.title}`
+          onProgress?.(statusMsg, i + 1, totalCount)
+          task.updateProgress({ current: i + 1, total: totalCount, statusText: statusMsg })
+
+          try {
+            const res = await exportUgoiraZip(item, undefined, targetDir)
+            if (res.success) {
+              successCount++
+              manifest.completedIndices.push(i)
+              saveManifest()
+            }
+          } catch (ugErr: any) {
+            console.log(`exportAuthorUgoiraZipToFiles failed for ${item.id}:`, ugErr?.message ?? ugErr)
+          }
+          await yieldToMainThread()
+        }
+
+        const summary = `已成功将 ${successCount}/${totalCount} 部动图原始 ZIP 帧包导出至画师 Ugoira 文件夹。`
         resolve({ successCount, totalCount })
         return { summary }
       },

@@ -277,7 +277,31 @@ const builder: LiveActivityUIBuilder<TaskLiveActivityState> = (state) => {
   )
 }
 
-export const PixivTaskLiveActivity = LiveActivity.register<TaskLiveActivityState>(
-  "PixivTaskLiveActivity",
-  builder
-)
+const GLOBAL_LIVE_ACTIVITY_FACTORY_KEY = "__PIXIV_TASK_LIVE_ACTIVITY_FACTORY__"
+declare const globalThis: any
+
+function getOrCreateLiveActivityFactory(): () => LiveActivity<TaskLiveActivityState> {
+  if (globalThis[GLOBAL_LIVE_ACTIVITY_FACTORY_KEY]) {
+    return globalThis[GLOBAL_LIVE_ACTIVITY_FACTORY_KEY]
+  }
+  try {
+    const factory = LiveActivity.register<TaskLiveActivityState>(
+      "PixivTaskLiveActivity",
+      builder
+    )
+    globalThis[GLOBAL_LIVE_ACTIVITY_FACTORY_KEY] = factory
+    return factory
+  } catch (err: any) {
+    console.log("LiveActivity.register caught warning:", err?.message ?? err)
+    return () => {
+      try {
+        if (globalThis[GLOBAL_LIVE_ACTIVITY_FACTORY_KEY]) {
+          return globalThis[GLOBAL_LIVE_ACTIVITY_FACTORY_KEY]()
+        }
+      } catch {}
+      return null as any
+    }
+  }
+}
+
+export const PixivTaskLiveActivity = getOrCreateLiveActivityFactory()

@@ -23,6 +23,7 @@ import {
   exportAuthorManga,
   exportAuthorNovels,
   exportAuthorUgoiraToFiles,
+  exportAuthorUgoiraZipToFiles,
   fetchAllUserIllustrations,
   fetchAllUserNovels,
 } from "../downloader"
@@ -386,9 +387,10 @@ export function UserDetailView(props: { userID: number }) {
         actions: [
           { label: `合成并保存至相簿 (${formatLabel})` },
           { label: `导出动图文件至 Ugoira 目录 (${formatLabel})` },
+          { label: "导出原始 ZIP 帧包至 Ugoira 目录" },
         ],
       })
-      if (choice !== 0 && choice !== 1) return
+      if (choice !== 0 && choice !== 1 && choice !== 2) return
 
       if (choice === 0) {
         const albumName = loadSettings().downloadPhotoAlbumName || "Pix-Scripting"
@@ -419,7 +421,7 @@ export function UserDetailView(props: { userID: number }) {
           setDownloading(false)
           setDownloadStatusText("")
         }
-      } else {
+      } else if (choice === 1) {
         const confirmed = await Dialog.confirm({
           title: "确认导出全部动图？",
           message: `将拉取用户「${detail.user.name}」全部动图并合成为 ${formatLabel} 文件，存入 Ugoira 独立目录中。`,
@@ -443,6 +445,34 @@ export function UserDetailView(props: { userID: number }) {
           })
         } catch (e: any) {
           void Dialog.alert({ title: "导出失败", message: e?.message ?? "导出动图时发生错误" })
+        } finally {
+          setDownloading(false)
+          setDownloadStatusText("")
+        }
+      } else {
+        const confirmed = await Dialog.confirm({
+          title: "确认导出原始 ZIP 帧包？",
+          message: `将拉取用户「${detail.user.name}」全部动图，分别打包为包含高清无损序列帧与完整延迟数据 (info.json) 的独立 ZIP 压缩包，存入画师专属 Ugoira 目录。`,
+          confirmLabel: "开始导出",
+          cancelLabel: "取消",
+        })
+        if (!confirmed) return
+
+        setDownloading(true)
+        try {
+          const list = await fetchAllUserIllustrations(userID, "illust", (msg) => setDownloadStatusText(msg))
+          const ugoiras = list.filter((it) => it.type === "ugoira")
+          if (ugoiras.length === 0) {
+            void Dialog.alert({ title: "提示", message: "该创作者未投稿动图作品" })
+            return
+          }
+          const result = await exportAuthorUgoiraZipToFiles(detail.user.name, userID, ugoiras, (msg) => setDownloadStatusText(msg))
+          void Dialog.alert({
+            title: "导出完成",
+            message: `已成功将 ${result.successCount} 部动图原始 ZIP 帧包导出至画师 Ugoira 文件夹，请在“下载与文件管理”中查看。`,
+          })
+        } catch (e: any) {
+          void Dialog.alert({ title: "导出失败", message: e?.message ?? "导出动图帧包时发生错误" })
         } finally {
           setDownloading(false)
           setDownloadStatusText("")
