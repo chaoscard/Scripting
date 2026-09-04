@@ -50,9 +50,11 @@ import {
   unblockUser,
 } from "../store/blocklist"
 import {
+  getUserFollowRestrict,
   isUserFollowed,
   onUserFollowChanged,
   recordUserFollowed,
+  type FollowRestrict,
 } from "../store/userFollow"
 import { useAsyncGuard, useUserAmbientPalette } from "./hooks"
 import type {
@@ -76,7 +78,10 @@ export function UserDetailView(props: { userID: number }) {
 
   const [detail, setDetail] = useState<PixivUserDetail | null>(null)
   const [webDetail, setWebDetail] = useState<PixivWebUserDetail | null>(null)
-  const [followed, setFollowed] = useState(false)
+  const [followed, setFollowed] = useState(() => isUserFollowed(userID) ?? false)
+  const [followRestrict, setFollowRestrict] = useState<FollowRestrict | null>(
+    () => getUserFollowRestrict(userID) ?? null
+  )
   const [detailError, setDetailError] = useState<string | null>(null)
   const [followBusy, setFollowBusy] = useState(false)
   const [showRelatedUsers, setShowRelatedUsers] = useState(false)
@@ -166,13 +171,14 @@ export function UserDetailView(props: { userID: number }) {
       if (!g.isCurrent()) return
       setDetail(result)
       setWebDetail(webResult)
+      const isFollowed = result.user.is_followed ?? false
       if (result.user?.id) {
-        recordUserFollowed(result.user.id, result.user.is_followed ?? false)
+        recordUserFollowed(result.user.id, isFollowed)
       }
       if (followStateVersion === followStateVersionRef.current) {
-        setFollowed(result.user.is_followed ?? false)
+        setFollowed(isFollowed)
       }
-      if (result.user.is_followed == null && !isOwnProfile) {
+      if (isFollowed && !isOwnProfile) {
         session
           .call((token) => followDetail(userID, token))
           .then((followDetail) => {
@@ -181,9 +187,18 @@ export function UserDetailView(props: { userID: number }) {
               followStateVersion === followStateVersionRef.current
             ) {
               setFollowed(followDetail.is_followed)
+              if (followDetail.is_followed) {
+                const rest = followDetail.restrict ?? "public"
+                setFollowRestrict(rest)
+                recordUserFollowed(userID, true, rest)
+              } else {
+                setFollowRestrict(null)
+              }
             }
           })
           .catch(() => {})
+      } else if (!isFollowed) {
+        setFollowRestrict(null)
       }
     } catch (error: any) {
       if (g.isCurrent()) setDetailError(error?.message ?? "加载失败")
@@ -192,10 +207,11 @@ export function UserDetailView(props: { userID: number }) {
 
 
   useEffect(() => {
-    return onUserFollowChanged((changedUserID, nextFollowed) => {
+    return onUserFollowChanged((changedUserID, nextFollowed, nextRestrict) => {
       if (changedUserID !== userID) return
       followStateVersionRef.current++
       setFollowed(nextFollowed)
+      setFollowRestrict(nextFollowed ? (nextRestrict ?? "public") : null)
       setEmptyKinds({})
       if (nextFollowed && baseKinds.length > 0) {
         setKind(baseKinds[0])
@@ -223,6 +239,7 @@ export function UserDetailView(props: { userID: number }) {
     try {
       await session.call((token) => followUser(userID, restrict, token))
       setFollowed(true)
+      setFollowRestrict(restrict)
       if (loadSettings().showRelatedUsersOnFollow) {
         setShowRelatedUsers(true)
       }
@@ -245,6 +262,7 @@ export function UserDetailView(props: { userID: number }) {
     try {
       await session.call((token) => unfollowUser(userID, token))
       setFollowed(false)
+      setFollowRestrict(null)
     } catch {
       // Keep the current UI state when the request fails.
     } finally {
@@ -583,18 +601,42 @@ export function UserDetailView(props: { userID: number }) {
               contextMenu={{
                 menuItems: (
                   <Group>
-                    <Button
-                      title={followed ? "设为私密关注" : "私密关注"}
-                      systemImage="lock"
-                      disabled={followBusy}
-                      action={() => void followWithVisibility("private")}
-                    />
+                    {followed ? (
+                      followRestrict === "private" ? (
+                        <Button
+                          title="设为公开关注"
+                          systemImage="globe"
+                          disabled={followBusy}
+                          action={() => void followWithVisibility("public")}
+                        />
+                      ) : (
+                        <Button
+                          title="设为私密关注"
+                          systemImage="lock"
+                          disabled={followBusy}
+                          action={() => void followWithVisibility("private")}
+                        />
+                      )
+                    ) : (
+                      <Button
+                        title="私密关注"
+                        systemImage="lock"
+                        disabled={followBusy}
+                        action={() => void followWithVisibility("private")}
+                      />
+                    )}
                   </Group>
                 ),
               }}
             >
               <Image
-                systemName={followed ? "person.fill.checkmark" : "person.badge.plus"}
+                systemName={
+                  followed
+                    ? (followRestrict === "private"
+                        ? "person.badge.shield.checkmark"
+                        : "person.fill.checkmark")
+                    : "person.badge.plus"
+                }
               />
             </Button>,
           ] : []),
@@ -642,12 +684,30 @@ export function UserDetailView(props: { userID: number }) {
             {!isOwnProfile ? (
               <Group>
                 <Divider />
-                <Button
-                  title={followed ? "设为私密关注" : "私密关注"}
-                  systemImage="lock"
-                  disabled={followBusy}
-                  action={() => void followWithVisibility("private")}
-                />
+                {followed ? (
+                  followRestrict === "private" ? (
+                    <Button
+                      title="设为公开关注"
+                      systemImage="globe"
+                      disabled={followBusy}
+                      action={() => void followWithVisibility("public")}
+                    />
+                  ) : (
+                    <Button
+                      title="设为私密关注"
+                      systemImage="lock"
+                      disabled={followBusy}
+                      action={() => void followWithVisibility("private")}
+                    />
+                  )
+                ) : (
+                  <Button
+                    title="私密关注"
+                    systemImage="lock"
+                    disabled={followBusy}
+                    action={() => void followWithVisibility("private")}
+                  />
+                )}
                 <Button
                   title={isUserBlocked(detail.user.id) ? "解除屏蔽用户" : "屏蔽用户"}
                   systemImage={

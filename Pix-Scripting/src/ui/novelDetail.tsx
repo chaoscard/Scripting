@@ -33,6 +33,7 @@ import {
   addNovelBookmark,
   addNovelMarker,
   deleteNovelMarker,
+  followDetail,
   followUser,
   nextNovels,
   novelBookmarkDetail,
@@ -67,9 +68,11 @@ import {
 } from "../store/novelProgress"
 import { getSeriesByWorkID, recordWorkSeriesAssociation } from "../store/seriesCache"
 import {
+  getUserFollowRestrict,
   isUserFollowed,
   onUserFollowChanged,
   recordUserFollowed,
+  type FollowRestrict,
 } from "../store/userFollow"
 import {
   getCachedNovelBookmark,
@@ -149,6 +152,7 @@ export function NovelDetailView(props: { novelID: number }) {
   const [bookmarkLongPressLocked, setBookmarkLongPressLocked] = useState(false)
   const [showBookmarkDetail, setShowBookmarkDetail] = useState(false)
   const [followed, setFollowed] = useState(false)
+  const [followRestrict, setFollowRestrict] = useState<FollowRestrict | null>(null)
   const [followLoading, setFollowLoading] = useState(false)
   const [showRelatedUsers, setShowRelatedUsers] = useState(false)
   const [showComments, setShowComments] = useState(false)
@@ -340,7 +344,27 @@ export function NovelDetailView(props: { novelID: number }) {
 
       setNovel(detail)
       setBookmarked(detail.is_bookmarked)
-      setFollowed(detail.user?.is_followed ?? false)
+      const isFollowed = detail.user?.is_followed ?? false
+      setFollowed(isFollowed)
+      if (isFollowed && detail.user?.id) {
+        session
+          .call((token) => followDetail(detail.user.id, token))
+          .then((d) => {
+            if (g.isCurrent()) {
+              setFollowed(d.is_followed)
+              if (d.is_followed) {
+                const rest = d.restrict ?? "public"
+                setFollowRestrict(rest)
+                recordUserFollowed(detail.user.id, true, rest)
+              } else {
+                setFollowRestrict(null)
+              }
+            }
+          })
+          .catch(() => {})
+      } else if (!isFollowed) {
+        setFollowRestrict(null)
+      }
       if (detail.series?.id) {
         recordWorkSeriesAssociation(
           detail.id,
@@ -431,9 +455,10 @@ export function NovelDetailView(props: { novelID: number }) {
   }, [])
 
   useEffect(() => {
-    return onUserFollowChanged((changedUserID, nextFollowed) => {
+    return onUserFollowChanged((changedUserID, nextFollowed, nextRestrict) => {
       if (changedUserID === novelRef.current?.user?.id) {
         setFollowed(nextFollowed)
+        setFollowRestrict(nextFollowed ? (nextRestrict ?? "public") : null)
       }
     })
   }, [])
@@ -538,6 +563,7 @@ export function NovelDetailView(props: { novelID: number }) {
     try {
       await session.call((token) => followUser(novel.user.id, restrict, token))
       setFollowed(true)
+      setFollowRestrict(restrict)
       if (loadSettings().showRelatedUsersOnFollow) {
         setShowRelatedUsers(true)
       }
@@ -559,6 +585,7 @@ export function NovelDetailView(props: { novelID: number }) {
     try {
       await session.call((token) => unfollowUser(novel.user.id, token))
       setFollowed(false)
+      setFollowRestrict(null)
     } catch {
       // ignore
     } finally {
@@ -1003,18 +1030,42 @@ export function NovelDetailView(props: { novelID: number }) {
                   contextMenu={{
                     menuItems: (
                       <Group>
-                        <Button
-                          title={followed ? "设为私密关注" : "私密关注"}
-                          systemImage="lock"
-                          disabled={followLoading}
-                          action={() => void followWithVisibility("private")}
-                        />
+                        {followed ? (
+                          followRestrict === "private" ? (
+                            <Button
+                              title="设为公开关注"
+                              systemImage="globe"
+                              disabled={followLoading}
+                              action={() => void followWithVisibility("public")}
+                            />
+                          ) : (
+                            <Button
+                              title="设为私密关注"
+                              systemImage="lock"
+                              disabled={followLoading}
+                              action={() => void followWithVisibility("private")}
+                            />
+                          )
+                        ) : (
+                          <Button
+                            title="私密关注"
+                            systemImage="lock"
+                            disabled={followLoading}
+                            action={() => void followWithVisibility("private")}
+                          />
+                        )}
                       </Group>
                     ),
                   }}
                 >
                   <Image
-                    systemName={followed ? "person.fill.checkmark" : "person.badge.plus"}
+                    systemName={
+                      followed
+                        ? (followRestrict === "private"
+                            ? "person.badge.shield.checkmark"
+                            : "person.fill.checkmark")
+                        : "person.badge.plus"
+                    }
                   />
                 </Button>,
                 <Menu label={<Image systemName="ellipsis.circle" />}>

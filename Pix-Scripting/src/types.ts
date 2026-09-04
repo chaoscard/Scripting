@@ -316,6 +316,7 @@ export interface PixivBookmarkTag {
 
 export interface PixivFollowDetail {
   is_followed: boolean
+  restrict?: "public" | "private"
 }
 
 export interface UgoiraFrame {

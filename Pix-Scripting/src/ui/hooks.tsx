@@ -17,7 +17,12 @@ import {
   onWatchlistChanged,
   recordNovelMarker,
 } from "../store/bookmarkSync"
-import { isUserFollowed, onUserFollowChanged } from "../store/userFollow"
+import {
+  getUserFollowRestrict,
+  isUserFollowed,
+  onUserFollowChanged,
+  type FollowRestrict,
+} from "../store/userFollow"
 import {
   extractIllustAmbientPalette,
   extractUserAmbientPalette,
@@ -1065,9 +1070,17 @@ export function useNovelBookmark(
 export function useUserFollow(
   userID: number,
   initialFollowed = false
-): [boolean, (followed: boolean) => void] {
+): [
+  boolean,
+  (followed: boolean) => void,
+  FollowRestrict | null,
+  (restrict: FollowRestrict | null) => void
+] {
   const [followed, setFollowed] = useState<boolean>(() => {
     return isUserFollowed(userID) ?? initialFollowed
+  })
+  const [followRestrict, setFollowRestrict] = useState<FollowRestrict | null>(() => {
+    return getUserFollowRestrict(userID) ?? null
   })
 
   useEffect(() => {
@@ -1075,14 +1088,19 @@ export function useUserFollow(
     if (cached !== undefined) {
       setFollowed(cached)
     }
-    return onUserFollowChanged((changedID, nextFollowed) => {
+    const cachedRestrict = getUserFollowRestrict(userID)
+    if (cachedRestrict !== undefined) {
+      setFollowRestrict(cachedRestrict)
+    }
+    return onUserFollowChanged((changedID, nextFollowed, nextRestrict) => {
       if (changedID === userID) {
         setFollowed(nextFollowed)
+        setFollowRestrict(nextFollowed ? (nextRestrict ?? "public") : null)
       }
     })
   }, [userID])
 
-  return [followed, setFollowed]
+  return [followed, setFollowed, followRestrict, setFollowRestrict]
 }
 
 /**

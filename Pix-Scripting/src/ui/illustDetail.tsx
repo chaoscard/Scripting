@@ -74,9 +74,11 @@ import {
   updateHistoryBookmark,
 } from "../store/history"
 import {
+  getUserFollowRestrict,
   isUserFollowed,
   onUserFollowChanged,
   recordUserFollowed,
+  type FollowRestrict,
 } from "../store/userFollow"
 import {
   cacheIllust,
@@ -174,7 +176,20 @@ export function IllustDetailView(props: { illustID: number }) {
   const [bookmarkLoading, setBookmarkLoading] = useState(false)
   const [bookmarkLongPressLocked, setBookmarkLongPressLocked] = useState(false)
   const [showBookmarkDetail, setShowBookmarkDetail] = useState(false)
-  const [followed, setFollowed] = useState(() => getCachedIllust(illustID)?.user?.is_followed ?? false)
+  const [followed, setFollowed] = useState(() => {
+    const cachedUser = getCachedIllust(illustID)?.user
+    if (cachedUser?.id != null) {
+      return isUserFollowed(cachedUser.id) ?? cachedUser.is_followed ?? false
+    }
+    return cachedUser?.is_followed ?? false
+  })
+  const [followRestrict, setFollowRestrict] = useState<FollowRestrict | null>(() => {
+    const cachedUser = getCachedIllust(illustID)?.user
+    if (cachedUser?.id != null) {
+      return getUserFollowRestrict(cachedUser.id) ?? null
+    }
+    return null
+  })
   const [followLoading, setFollowLoading] = useState(false)
   const [showRelatedUsers, setShowRelatedUsers] = useState(false)
   const [showComments, setShowComments] = useState(false)
@@ -266,7 +281,27 @@ export function IllustDetailView(props: { illustID: number }) {
       seedIllustDetailFromCache(detail, quality)
       setIllust(detail)
       setBookmarked(detail.is_bookmarked)
-      setFollowed(detail.user.is_followed ?? false)
+      const isFollowed = detail.user?.is_followed ?? false
+      setFollowed(isFollowed)
+      if (isFollowed && detail.user?.id) {
+        session
+          .call((token) => followDetail(detail.user.id, token))
+          .then((d) => {
+            if (g.isCurrent()) {
+              setFollowed(d.is_followed)
+              if (d.is_followed) {
+                const rest = d.restrict ?? "public"
+                setFollowRestrict(rest)
+                recordUserFollowed(detail.user.id, true, rest)
+              } else {
+                setFollowRestrict(null)
+              }
+            }
+          })
+          .catch(() => {})
+      } else if (!isFollowed) {
+        setFollowRestrict(null)
+      }
       // 本地浏览记录：同一实例只记一次（与 Hanairo 的 didRecordHistory 一致）
       if (recordedIDRef.current !== detail.id) {
         recordedIDRef.current = detail.id
@@ -324,9 +359,10 @@ export function IllustDetailView(props: { illustID: number }) {
   }, [illustID])
 
   useEffect(() => {
-    return onUserFollowChanged((changedUserID, nextFollowed) => {
+    return onUserFollowChanged((changedUserID, nextFollowed, nextRestrict) => {
       if (changedUserID === illustRef.current?.user.id) {
         setFollowed(nextFollowed)
+        setFollowRestrict(nextFollowed ? (nextRestrict ?? "public") : null)
       }
     })
   }, [])
@@ -674,6 +710,7 @@ export function IllustDetailView(props: { illustID: number }) {
     try {
       await session.call((token) => followUser(current.user.id, restrict, token))
       setFollowed(true)
+      setFollowRestrict(restrict)
       if (loadSettings().showRelatedUsersOnFollow) {
         setShowRelatedUsers(true)
       }
@@ -695,6 +732,7 @@ export function IllustDetailView(props: { illustID: number }) {
     try {
       await session.call((token) => unfollowUser(current.user.id, token))
       setFollowed(false)
+      setFollowRestrict(null)
     } catch {
       // ignore
     } finally {
@@ -777,18 +815,42 @@ export function IllustDetailView(props: { illustID: number }) {
             contextMenu={{
               menuItems: (
                 <Group>
-                  <Button
-                    title={followed ? "设为私密关注" : "私密关注"}
-                    systemImage="lock"
-                    disabled={followLoading}
-                    action={() => void followWithVisibility("private")}
-                  />
+                  {followed ? (
+                    followRestrict === "private" ? (
+                      <Button
+                        title="设为公开关注"
+                        systemImage="globe"
+                        disabled={followLoading}
+                        action={() => void followWithVisibility("public")}
+                      />
+                    ) : (
+                      <Button
+                        title="设为私密关注"
+                        systemImage="lock"
+                        disabled={followLoading}
+                        action={() => void followWithVisibility("private")}
+                      />
+                    )
+                  ) : (
+                    <Button
+                      title="私密关注"
+                      systemImage="lock"
+                      disabled={followLoading}
+                      action={() => void followWithVisibility("private")}
+                    />
+                  )}
                 </Group>
               ),
             }}
           >
             <Image
-              systemName={followed ? "person.fill.checkmark" : "person.badge.plus"}
+              systemName={
+                followed
+                  ? (followRestrict === "private"
+                      ? "person.badge.shield.checkmark"
+                      : "person.fill.checkmark")
+                  : "person.badge.plus"
+              }
             />
           </Button>,
           <Menu label={<Image systemName="ellipsis.circle" />}>

@@ -615,9 +615,11 @@ function CommentCard(props: {
             alignment="center"
             frame={{ maxWidth: "infinity", alignment: "leading" }}
           >
-            <Text font="caption" fontWeight="semibold">
-              {comment.user.name}
-            </Text>
+            <NavigationLink value={`user:${comment.user.id}`}>
+              <Text font="caption" fontWeight="semibold">
+                {comment.user.name}
+              </Text>
+            </NavigationLink>
             <Text font="caption2" foregroundStyle="secondaryLabel">
               {formatDate(comment.date)}
             </Text>
@@ -633,13 +635,15 @@ function CommentCard(props: {
 
           {/* 回复谁 */}
           {comment.parent_comment?.user ? (
-            <Text
-              font="caption2"
-              foregroundStyle="secondaryLabel"
-              frame={{ maxWidth: "infinity", alignment: "leading" }}
-            >
-              回复 @{comment.parent_comment.user.name}
-            </Text>
+            <NavigationLink value={`user:${comment.parent_comment.user.id}`}>
+              <Text
+                font="caption2"
+                foregroundStyle="secondaryLabel"
+                frame={{ maxWidth: "infinity", alignment: "leading" }}
+              >
+                回复 @{comment.parent_comment.user.name}
+              </Text>
+            </NavigationLink>
           ) : null}
 
           {/* 评论内容（富文本 Emoji 或 Stamp） */}
@@ -743,9 +747,11 @@ function SubCommentRow(props: {
             alignment="center"
             frame={{ maxWidth: "infinity", alignment: "leading" }}
           >
-            <Text font="caption2" fontWeight="semibold">
-              {comment.user.name}
-            </Text>
+            <NavigationLink value={`user:${comment.user.id}`}>
+              <Text font="caption2" fontWeight="semibold">
+                {comment.user.name}
+              </Text>
+            </NavigationLink>
             <Text font="caption2" foregroundStyle="secondaryLabel">
               {formatDate(comment.date)}
             </Text>
@@ -760,13 +766,15 @@ function SubCommentRow(props: {
           </HStack>
 
           {comment.parent_comment?.user ? (
-            <Text
-              font="caption2"
-              foregroundStyle="secondaryLabel"
-              frame={{ maxWidth: "infinity", alignment: "leading" }}
-            >
-              回复 @{comment.parent_comment.user.name}
-            </Text>
+            <NavigationLink value={`user:${comment.parent_comment.user.id}`}>
+              <Text
+                font="caption2"
+                foregroundStyle="secondaryLabel"
+                frame={{ maxWidth: "infinity", alignment: "leading" }}
+              >
+                回复 @{comment.parent_comment.user.name}
+              </Text>
+            </NavigationLink>
           ) : null}
 
           <CommentBody comment={comment} />

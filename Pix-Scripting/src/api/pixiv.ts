@@ -43,7 +43,7 @@ import type {
 import { API_BASE_URL } from "../config"
 import { isPixivCookieDomain, clearPixivWebCookies } from "./auth"
 import { session } from "./session"
-import { notifyUserFollowChanged } from "../store/userFollow"
+import { notifyUserFollowChanged, recordUserFollowed } from "../store/userFollow"
 import {
   notifyIllustBookmarkChanged,
   notifyNovelBookmarkChanged,
@@ -1001,7 +1001,13 @@ export async function followDetail(
     { user_id: String(userID) },
     accessToken
   )
-  return json?.follow_detail ?? { is_followed: false }
+  const detail = json?.follow_detail ?? { is_followed: false }
+  if (detail.is_followed) {
+    recordUserFollowed(userID, true, detail.restrict ?? "public")
+  } else {
+    recordUserFollowed(userID, false)
+  }
+  return detail
 }
 
 export async function followUser(
@@ -1014,7 +1020,7 @@ export async function followUser(
     { user_id: String(userID), restrict },
     accessToken
   )
-  notifyUserFollowChanged(userID, true)
+  notifyUserFollowChanged(userID, true, restrict)
 }
 
 export async function unfollowUser(

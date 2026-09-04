@@ -2,6 +2,7 @@ import {
   Button,
   Circle,
   Device,
+  Group,
   HStack,
   Image,
   NavigationLink,
@@ -86,7 +87,10 @@ export function ConnectionRow(props: {
   hideNovels?: boolean
 }) {
   const { preview, hideNovels = false, showFollowControl = true } = props
-  const [followed, setFollowed] = useUserFollow(preview.user.id, preview.user.is_followed ?? true)
+  const [followed, setFollowed, followRestrict, setFollowRestrict] = useUserFollow(
+    preview.user.id,
+    preview.user.is_followed ?? true
+  )
   const [followBusy, setFollowBusy] = useState(false)
   const [filterVersion, setFilterVersion] = useState(0)
 
@@ -115,6 +119,20 @@ export function ConnectionRow(props: {
     return getVisiblePreviewItems(preview, hideNovels, followed)
   }, [preview, hideNovels, followed, filterVersion])
 
+  async function followWithVisibility(restrict: "public" | "private") {
+    if (followBusy) return
+    setFollowBusy(true)
+    try {
+      await session.call((token) => followUser(preview.user.id, restrict, token))
+      setFollowed(true)
+      setFollowRestrict(restrict)
+    } catch {
+      // ignore
+    } finally {
+      setFollowBusy(false)
+    }
+  }
+
   async function toggleFollow() {
     if (followBusy) return
     setFollowBusy(true)
@@ -123,8 +141,10 @@ export function ConnectionRow(props: {
     try {
       if (nextFollowed) {
         await session.call((token) => followUser(preview.user.id, "public", token))
+        setFollowRestrict("public")
       } else {
         await session.call((token) => unfollowUser(preview.user.id, token))
+        setFollowRestrict(null)
       }
     } catch {
       setFollowed(!nextFollowed)
@@ -142,9 +162,18 @@ export function ConnectionRow(props: {
       glassEffectTransition="materialize"
       frame={{ maxWidth: "infinity" }}
     >
-      <HStack spacing={10} frame={{ maxWidth: "infinity" }}>
-        <NavigationLink value={`user:${preview.user.id}`}>
-          <HStack spacing={8}>
+      <HStack spacing={10} alignment="center" frame={{ maxWidth: "infinity" }}>
+        <NavigationLink
+          value={`user:${preview.user.id}`}
+          frame={{ maxWidth: "infinity", alignment: "leading" }}
+          contentShape="rect"
+        >
+          <HStack
+            spacing={8}
+            alignment="center"
+            frame={{ maxWidth: "infinity", alignment: "leading" }}
+            contentShape="rect"
+          >
             <ZStack frame={{ width: 38, height: 38 }}>
               <Circle
                 fill="rgba(255, 255, 255, 0.16)"
@@ -161,9 +190,9 @@ export function ConnectionRow(props: {
                 @{preview.user.account}
               </Text>
             </VStack>
+            <Spacer />
           </HStack>
         </NavigationLink>
-        <Spacer />
         {showFollowControl ? (
           <Button
             buttonStyle="glass"
@@ -172,9 +201,45 @@ export function ConnectionRow(props: {
             clipShape={{ type: "rect", cornerRadius: 19 }}
             contentShape="rect"
             action={toggleFollow}
+            contextMenu={{
+              menuItems: (
+                <Group>
+                  {followed ? (
+                    followRestrict === "private" ? (
+                      <Button
+                        title="设为公开关注"
+                        systemImage="globe"
+                        disabled={followBusy}
+                        action={() => void followWithVisibility("public")}
+                      />
+                    ) : (
+                      <Button
+                        title="设为私密关注"
+                        systemImage="lock"
+                        disabled={followBusy}
+                        action={() => void followWithVisibility("private")}
+                      />
+                    )
+                  ) : (
+                    <Button
+                      title="私密关注"
+                      systemImage="lock"
+                      disabled={followBusy}
+                      action={() => void followWithVisibility("private")}
+                    />
+                  )}
+                </Group>
+              ),
+            }}
           >
             <Image
-              systemName={followed ? "person.fill.checkmark" : "person.badge.plus"}
+              systemName={
+                followed
+                  ? (followRestrict === "private"
+                      ? "person.badge.shield.checkmark"
+                      : "person.fill.checkmark")
+                  : "person.badge.plus"
+              }
               font="body"
               foregroundStyle={followed ? "secondaryLabel" : "#007AFF"}
               frame={{ width: 38, height: 38 }}

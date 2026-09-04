@@ -60,12 +60,14 @@ export function RecommendedUsersSheet(props: {
   })
 
   return (
-    <NavigationStack navigationDestination={destinationElement}>
+    <NavigationStack
+      presentationDetents={["medium", "large"]}
+      presentationDragIndicator="visible"
+    >
       <VStack
-        navigationTitle=""
+        navigationTitle="推荐创作者"
         navigationBarTitleDisplayMode="inline"
-        presentationDetents={["medium", "large"]}
-        presentationDragIndicator="visible"
+        navigationDestination={destinationElement}
         toolbar={{
           topBarLeading: (
             <Button action={onClose}>

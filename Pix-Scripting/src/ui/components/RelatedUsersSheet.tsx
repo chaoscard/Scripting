@@ -65,12 +65,14 @@ export function RelatedUsersSheet(props: {
   }, [seedUserID])
 
   return (
-    <NavigationStack navigationDestination={destinationElement}>
+    <NavigationStack
+      presentationDetents={["medium", "large"]}
+      presentationDragIndicator="visible"
+    >
       <VStack
-        navigationTitle=""
+        navigationTitle={seedUserName ? `相似于 ${seedUserName}` : "相似创作者"}
         navigationBarTitleDisplayMode="inline"
-        presentationDetents={["medium", "large"]}
-        presentationDragIndicator="visible"
+        navigationDestination={destinationElement}
         toolbar={{
           topBarLeading: (
             <Button action={onClose}>
