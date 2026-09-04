@@ -48,6 +48,7 @@ import {
   NovelCard,
   RefreshableScrollView,
 } from "./components"
+import { requestPixivRoute } from "./routeNavigation"
 
 type Visibility = "public" | "private"
 type LibraryKind = "illustration" | "novel"
@@ -111,6 +112,13 @@ function libraryToolbar(props: {
           <Label tag="public" title="公开收藏" systemImage="globe" />
           <Label tag="private" title="私密收藏" systemImage="lock" />
         </Picker>
+        <Button
+          title="特辑收藏"
+          systemImage="rectangle.stack"
+          action={() => {
+            requestPixivRoute("pixivisionBookmarks")
+          }}
+        />
       </Menu>,
     ],
   }

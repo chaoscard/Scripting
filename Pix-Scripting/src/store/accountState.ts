@@ -6,6 +6,7 @@ import { clearSearchHistoryMemoryCache } from "./searchHistory"
 import { clearNovelProgressMemoryCache } from "./novelProgress"
 import { clearBlocklistMemoryCache } from "./blocklist"
 import { clearSeriesMemoryCache } from "./seriesCache"
+import { clearPixivisionBookmarksCache } from "./pixivisionBookmarks"
 
 /**
  * 当用户注销、切换账号或登录态变更时，集中清空内存中所有账号态缓存，
@@ -35,5 +36,8 @@ export function clearAllAccountStateCaches(): void {
   } catch {}
   try {
     clearSeriesMemoryCache()
+  } catch {}
+  try {
+    clearPixivisionBookmarksCache()
   } catch {}
 }

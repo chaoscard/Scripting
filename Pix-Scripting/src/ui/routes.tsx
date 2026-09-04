@@ -4,6 +4,7 @@ import { NavigationDestination, VStack } from "scripting"
 import { session } from "../api/session"
 import { IllustDetailView } from "./illustDetail"
 import { PixivisionDetailView } from "./pixivisionDetail"
+import { PixivisionBookmarksView } from "./pixivisionBookmarks"
 import { UserDetailView } from "./userDetail"
 import { NovelDetailView } from "./novelDetail"
 import { TagFeedView } from "./tagFeed"
@@ -152,6 +153,7 @@ export function renderDestination(rawPage: string) {
   if (page.startsWith("pixivision-tag:")) {
     return <TagFeedView tag={decodeTag(page.slice("pixivision-tag:".length))} kind="pixivision" />
   }
+  if (page === "pixivisionBookmarks") return <PixivisionBookmarksView />
   if (page === "novelBookmarks") return <NovelLibraryView />
   if (page === "library") return <LibraryView />
   if (page === "history") return <HistoryView />

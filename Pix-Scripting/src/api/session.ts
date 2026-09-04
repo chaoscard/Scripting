@@ -2,10 +2,13 @@ import type { AuthTokenResponse, AuthUser } from "../types"
 import {
   buildCredentialsFromResponse,
   clearCredentials,
+  loadAllStoredAccounts,
   loadCredentials,
   needsRefresh,
   refreshToken,
+  removeStoredAccount,
   saveCredentials,
+  type StoredAccountProfile,
   type StoredCredentials,
 } from "./auth"
 import { PixivError } from "./client"
@@ -209,11 +212,70 @@ export class Session {
     return response.access_token
   }
 
-  signOut(): void {
+  getAllAccounts(): StoredAccountProfile[] {
+    return loadAllStoredAccounts()
+  }
+
+  removeAccount(userId: string | number): void {
+    const uid = String(userId)
+    removeStoredAccount(uid)
+    if (this.userID && String(this.userID) === uid) {
+      this.signOut(true)
+    } else {
+      this.emitAuthChanged()
+    }
+  }
+
+  async switchAccount(userId: string | number): Promise<boolean> {
+    const uid = String(userId)
+    const all = loadAllStoredAccounts()
+    const target = all.find((a) => a.id === uid)
+    if (!target) return false
+
+    let newCreds: StoredCredentials | null = null
+    try {
+      const res = await this.dependencies.refreshToken(target.refreshToken)
+      newCreds = buildCredentialsFromResponse(res, target.webCookie)
+    } catch {
+      newCreds = {
+        accessToken: target.accessToken,
+        refreshToken: target.refreshToken,
+        expiresAt: target.expiresAt || Date.now() + 3600 * 1000,
+        user: {
+          id: target.id,
+          name: target.name,
+          account: target.account,
+          mail_address: target.mailAddress || "",
+          is_premium: Boolean(target.isPremium),
+          profile_image_urls: {
+            px_170x170: target.avatarUrl || "",
+          },
+        },
+        webCookie: target.webCookie,
+      }
+    }
+
+    if (newCreds) {
+      this.generation += 1
+      this.refreshing = null
+      this.creds = newCreds
+      this.dependencies.saveCredentials(newCreds)
+      clearAllAccountStateCaches()
+      this.emitAuthChanged()
+      return true
+    }
+    return false
+  }
+
+  signOut(removeCurrentFromPool = false): void {
+    const currentId = this.userID
     this.generation += 1
     this.refreshing = null
     this.creds = null
     this.dependencies.clearCredentials()
+    if (removeCurrentFromPool && currentId) {
+      removeStoredAccount(currentId)
+    }
     clearAllAccountStateCaches()
     this.emitAuthChanged()
   }

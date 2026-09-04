@@ -47,8 +47,14 @@ import {
 } from "./components"
 import { AvatarImage, CachedImage } from "./components/CachedImage"
 import { requestPixivRoute } from "./routeNavigation"
+import {
+  isPixivisionBookmarked,
+  onPixivisionBookmarksChanged,
+  togglePixivisionBookmark,
+} from "../store/pixivisionBookmarks"
 
 declare const Pasteboard: any
+declare const Haptics: any
 
 const FLOW_HORIZONTAL_PADDING = 12
 const HERO_CARD_WIDTH = Math.floor(Device.screen.width - FLOW_HORIZONTAL_PADDING * 2)
@@ -67,6 +73,7 @@ export function PixivisionDetailView(props: { articleID: number }) {
   const [hydratedMap, setHydratedMap] = useState<Record<number, PixivIllustration>>({})
   const [isTocExpanded, setIsTocExpanded] = useState(true)
   const [scrollTargetId, setScrollTargetId] = useState<string | null>(null)
+  const [bookmarked, setBookmarked] = useState<boolean>(() => isPixivisionBookmarked(articleID))
   const guard = useAsyncGuard()
   const hydratingSetRef = useRef<Set<number>>(new Set())
   const proxyRef = useRef<ScrollViewProxy | null>(null)
@@ -87,6 +94,13 @@ export function PixivisionDetailView(props: { articleID: number }) {
   }, [detail, articleID])
 
   const { ambientBackground } = useExperimentalAmbientPalette(firstImageUrl)
+
+  useEffect(() => {
+    setBookmarked(isPixivisionBookmarked(articleID))
+    return onPixivisionBookmarksChanged(() => {
+      setBookmarked(isPixivisionBookmarked(articleID))
+    })
+  }, [articleID])
 
   const handleShare = useCallback(async () => {
     await ShareSheet.present([`https://www.pixivision.net/zh/a/${articleID}`])
@@ -462,6 +476,31 @@ export function PixivisionDetailView(props: { articleID: number }) {
                   ) : null}
                   <Button key="share" action={handleShare}>
                     <Image systemName="square.and.arrow.up" />
+                  </Button>
+                  <Button
+                    key="bookmark"
+                    action={() => {
+                      try {
+                        void Haptics.transient()
+                      } catch {}
+                      if (!detail) return
+                      const next = togglePixivisionBookmark({
+                        id: articleID,
+                        title: detail.title,
+                        thumbnailURL: detail.thumbnailURL || firstImageUrl || undefined,
+                        category: detail.category,
+                        categoryLabel: detail.category,
+                        publishedAt: detail.date,
+                        tags: detail.tags ? detail.tags.map((t) => t.name) : undefined,
+                        bookmarkedAt: Date.now(),
+                      })
+                      setBookmarked(next)
+                    }}
+                  >
+                    <Image
+                      systemName={bookmarked ? "heart.fill" : "heart"}
+                      foregroundStyle={bookmarked ? "#FF2D55" : undefined}
+                    />
                   </Button>
                 </HStack>
               ),

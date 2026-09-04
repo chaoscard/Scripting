@@ -8,6 +8,7 @@ import {
   Label,
   LazyVStack,
   Menu,
+  NavigationLink,
   Picker,
   Spacer,
   Text,
@@ -119,6 +120,212 @@ export function trendingTagHeroUrl(tag: PixivTrendingTag): string | null {
     tag.novel?.image_urls?.medium ??
     null
   )
+}
+
+export type DirectRouteTarget = {
+  type: "illust" | "novel" | "user" | "pixivision" | "novelSeries" | "mangaSeries"
+  id: number
+  title: string
+  subtitle?: string
+  icon: string
+  color?: string
+}
+
+export function parseDirectRouteTargets(
+  input: string,
+  scope: SearchScope,
+  hideNovels?: boolean
+): DirectRouteTarget[] {
+  const trimmed = input.trim()
+  if (!trimmed) return []
+
+  // 1. 纯数字 ID 识别：按当前 scope 优先级排布，同时提供跨形态直达选项
+  if (/^\d+$/.test(trimmed)) {
+    const id = parseInt(trimmed, 10)
+    if (!id || id <= 0) return []
+    const targets: DirectRouteTarget[] = []
+
+    if (scope === "illust") {
+      targets.push({
+        type: "illust",
+        id,
+        title: `查看插画 / 漫画`,
+        subtitle: `PID: ${id}`,
+        icon: "photo.stack",
+        color: "#007AFF",
+      })
+      targets.push({
+        type: "user",
+        id,
+        title: `访问画师主页`,
+        subtitle: `UID: ${id}`,
+        icon: "person.circle",
+        color: "#34C759",
+      })
+      if (!hideNovels) {
+        targets.push({
+          type: "novel",
+          id,
+          title: `查看小说`,
+          subtitle: `UID: ${id}`,
+          icon: "book.closed",
+          color: "#FF9500",
+        })
+      }
+    } else if (scope === "novel") {
+      targets.push({
+        type: "novel",
+        id,
+        title: `查看小说`,
+        subtitle: `UID: ${id}`,
+        icon: "book.closed",
+        color: "#FF9500",
+      })
+      targets.push({
+        type: "illust",
+        id,
+        title: `查看插画 / 漫画`,
+        subtitle: `PID: ${id}`,
+        icon: "photo.stack",
+        color: "#007AFF",
+      })
+      targets.push({
+        type: "user",
+        id,
+        title: `访问画师主页`,
+        subtitle: `UID: ${id}`,
+        icon: "person.circle",
+        color: "#34C759",
+      })
+    } else {
+      targets.push({
+        type: "user",
+        id,
+        title: `访问画师主页`,
+        subtitle: `UID: ${id}`,
+        icon: "person.circle",
+        color: "#34C759",
+      })
+      targets.push({
+        type: "illust",
+        id,
+        title: `查看插画 / 漫画`,
+        subtitle: `PID: ${id}`,
+        icon: "photo.stack",
+        color: "#007AFF",
+      })
+      if (!hideNovels) {
+        targets.push({
+          type: "novel",
+          id,
+          title: `查看小说`,
+          subtitle: `UID: ${id}`,
+          icon: "book.closed",
+          color: "#FF9500",
+        })
+      }
+    }
+    return targets
+  }
+
+  // 2. Pixiv / Pixivision 网页链接精准识别
+  // 插画/漫画：pixiv.net/artworks/123456 或 pixiv.net/i/123456
+  const artworkMatch =
+    trimmed.match(/(?:pixiv\.net\/(?:[a-z]{2}\/)?(?:artworks|i)\/|artworks\/)(\d+)/i) ||
+    trimmed.match(/illust_id=(\d+)/i)
+  if (artworkMatch) {
+    const id = parseInt(artworkMatch[1], 10)
+    if (id > 0) {
+      return [
+        {
+          type: "illust",
+          id,
+          title: `直达插画 / 漫画详情`,
+          subtitle: `PID: ${id}`,
+          icon: "photo.stack",
+          color: "#007AFF",
+        },
+      ]
+    }
+  }
+
+  // 用户主页：pixiv.net/users/123456 或 pixiv.net/u/123456 或 member.php?id=123456
+  const userMatch =
+    trimmed.match(/(?:pixiv\.net\/(?:[a-z]{2}\/)?(?:users|u)\/|users\/)(\d+)/i) ||
+    trimmed.match(/member\.php\?id=(\d+)/i)
+  if (userMatch) {
+    const id = parseInt(userMatch[1], 10)
+    if (id > 0) {
+      return [
+        {
+          type: "user",
+          id,
+          title: `直达画师主页`,
+          subtitle: `UID: ${id}`,
+          icon: "person.circle",
+          color: "#34C759",
+        },
+      ]
+    }
+  }
+
+  // 小说系列：pixiv.net/novel/series/123456 或 novel/series.php?id=123456
+  const novelSeriesMatch =
+    trimmed.match(/novel\/series\/(\d+)/i) ||
+    trimmed.match(/novel\/series\.php\?id=(\d+)/i)
+  if (novelSeriesMatch) {
+    const id = parseInt(novelSeriesMatch[1], 10)
+    if (id > 0) {
+      return [
+        {
+          type: "novelSeries",
+          id,
+          title: `直达小说系列`,
+          subtitle: `UID: ${id}`,
+          icon: "books.vertical",
+          color: "#FF9500",
+        },
+      ]
+    }
+  }
+
+  // 小说详情：pixiv.net/novel/show.php?id=123456
+  const novelMatch = trimmed.match(/novel\/(?:show|show\.php\?id=)(\d+)/i) || trimmed.match(/novel_id=(\d+)/i)
+  if (novelMatch) {
+    const id = parseInt(novelMatch[1], 10)
+    if (id > 0) {
+      return [
+        {
+          type: "novel",
+          id,
+          title: `直达小说详情`,
+          subtitle: `UID: ${id}`,
+          icon: "book.closed",
+          color: "#FF9500",
+        },
+      ]
+    }
+  }
+
+  // 特辑：pixivision.net/.../a/123456
+  const pixivisionMatch = trimmed.match(/(?:pixivision\.net)?\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?a\/(\d+)/i)
+  if (pixivisionMatch) {
+    const id = parseInt(pixivisionMatch[1], 10)
+    if (id > 0) {
+      return [
+        {
+          type: "pixivision",
+          id,
+          title: `直达 Pixivision 特辑`,
+          subtitle: `ID: ${id}`,
+          icon: "rectangle.stack",
+          color: "#AF52DE",
+        },
+      ]
+    }
+  }
+
+  return []
 }
 
 function chunk<T>(array: T[], size: number): T[][] {
@@ -536,6 +743,15 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
   ])
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
 
+  const directTargets = useMemo(
+    () => parseDirectRouteTargets(query, scope, hideNovels),
+    [query, scope, hideNovels]
+  )
+  const submittedDirectTargets = useMemo(
+    () => parseDirectRouteTargets(submitted, scope, hideNovels),
+    [submitted, scope, hideNovels]
+  )
+
   // 是否处于搜索提示词展示态：输入框有内容，且处于输入或查看提示词状态（未提交或键盘激活中）
   const isSuggestingActive = query.trim().length > 0 && (!submitted || searchPresented)
 
@@ -619,21 +835,31 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
           onScopeChange={handleScopeChange}
         />
 
-          {/* 1. 搜索提示词：插画·漫画 / 小说展示官方标签提示词，用户展示用户卡片提示列表 */}
+          {/* 1. 搜索提示词与精准直达：插画·漫画 / 小说展示官方标签提示词，用户展示用户卡片提示列表 */}
           {isSuggestingActive ? (
-            scope === "user" ? (
-              <UserSuggestionsSection
-                items={userSuggestions}
-                loading={userSuggestionsLoading}
-                hideNovels={hideNovels}
-              />
-            ) : (
-              <TagSuggestionsSection
-                suggestions={tagSuggestions}
-                loading={tagSuggestionsLoading}
-                onSelect={submitSearch}
-              />
-            )
+            <VStack alignment="leading" spacing={8} frame={{ maxWidth: "infinity" }}>
+              {directTargets.length > 0 ? (
+                <DirectRouteSection
+                  targets={directTargets}
+                  onSelect={() => {
+                    addSearchHistory(query.trim(), scope)
+                  }}
+                />
+              ) : null}
+              {scope === "user" ? (
+                <UserSuggestionsSection
+                  items={userSuggestions}
+                  loading={userSuggestionsLoading}
+                  hideNovels={hideNovels}
+                />
+              ) : (
+                <TagSuggestionsSection
+                  suggestions={tagSuggestions}
+                  loading={tagSuggestionsLoading}
+                  onSelect={submitSearch}
+                />
+              )}
+            </VStack>
           ) : null}
 
           {/* 2. 键盘抬起/搜索框激活且无输入内容：隐藏热门标签与推荐用户，展示用户搜索历史 */}
@@ -723,6 +949,16 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
                   </HStack>
                 </Button>
               </HStack>
+
+              {/* 精准 ID / 链接直达目标卡片（即使在已搜索结果页也优先呈现直达） */}
+              {submittedDirectTargets.length > 0 ? (
+                <DirectRouteSection
+                  targets={submittedDirectTargets}
+                  onSelect={() => {
+                    addSearchHistory(submitted.trim(), scope)
+                  }}
+                />
+              ) : null}
 
               {activePaged.initialLoading ? (
                 <LoadingView />
@@ -831,6 +1067,86 @@ function SearchScopePicker(props: {
         </Text>
       ))}
     </Picker>
+  )
+}
+
+// -------------------- 精准 ID / 链接直达组件 --------------------
+
+function DirectRouteSection(props: {
+  targets: DirectRouteTarget[]
+  onSelect?: () => void
+}) {
+  const { targets, onSelect } = props
+  if (targets.length === 0) return null
+
+  return (
+    <VStack alignment="leading" spacing={8} padding={{ horizontal: 16, top: 4, bottom: 6 }} frame={{ maxWidth: "infinity" }}>
+      <HStack alignment="center" spacing={6}>
+        <Image systemName="bolt.fill" font="caption" foregroundStyle="#FF9500" />
+        <Text font="caption" fontWeight="semibold" foregroundStyle="secondaryLabel">
+          精准识别直达
+        </Text>
+      </HStack>
+      <VStack
+        spacing={0}
+        glassEffect={{ type: "rect", cornerRadius: 12 }}
+        clipShape={{ type: "rect", cornerRadius: 12 }}
+        frame={{ maxWidth: "infinity" }}
+      >
+        {targets.map((target, index) => {
+          const routeValue =
+            target.type === "novelSeries"
+              ? `novelSeries:${target.id}`
+              : target.type === "mangaSeries"
+                ? `mangaSeries:${target.id}`
+                : `${target.type}:${target.id}`
+
+          return (
+            <VStack key={`${target.type}-${target.id}`} spacing={0} frame={{ maxWidth: "infinity" }}>
+              {index > 0 ? <Divider /> : null}
+              <NavigationLink
+                value={routeValue}
+                frame={{ maxWidth: "infinity", alignment: "leading" }}
+                contentShape="rect"
+              >
+                <HStack
+                  alignment="center"
+                  spacing={12}
+                  padding={{ horizontal: 14, vertical: 11 }}
+                  frame={{ maxWidth: "infinity", alignment: "leading" }}
+                  contentShape="rect"
+                >
+                  <ZStack
+                    alignment="center"
+                    frame={{ width: 32, height: 32 }}
+                    glassEffect="circle"
+                    contentShape="circle"
+                  >
+                    <Image
+                      systemName={target.icon}
+                      font="body"
+                      foregroundStyle={(target.color ?? "#007AFF") as any}
+                    />
+                  </ZStack>
+                  <VStack alignment="leading" spacing={2}>
+                    <Text font="body" fontWeight="semibold" foregroundStyle="label" lineLimit={1}>
+                      {target.title}
+                    </Text>
+                    {target.subtitle ? (
+                      <Text font="caption" foregroundStyle="secondaryLabel" lineLimit={1}>
+                        {target.subtitle}
+                      </Text>
+                    ) : null}
+                  </VStack>
+                  <Spacer />
+                  <Image systemName="chevron.right" font="caption" foregroundStyle="tertiaryLabel" />
+                </HStack>
+              </NavigationLink>
+            </VStack>
+          )
+        })}
+      </VStack>
+    </VStack>
   )
 }
 

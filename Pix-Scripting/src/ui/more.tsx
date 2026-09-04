@@ -10,6 +10,7 @@ import {
   Spacer,
   Text,
   VirtualNode,
+  VStack,
   useEffect,
   useState,
   ZStack,
@@ -19,6 +20,10 @@ import { loadSettings, onSettingsChanged } from "../store/settings"
 import { appToolbar, AvatarImage } from "./components"
 import { destinationElement } from "./routes"
 import { useExperimentalAmbientPalette } from "./hooks"
+import { ReverseImageSearchSheet } from "./reverseImageSearchSheet"
+import { AccountSwitcherSheet } from "./accountSwitcherSheet"
+
+declare const Haptics: any
 
 function isVirtualNode(v: unknown): v is VirtualNode {
   return !!v && typeof v === "object" && ("render" in v || "isInternal" in v || "props" in v)
@@ -27,6 +32,7 @@ function isVirtualNode(v: unknown): v is VirtualNode {
 export function MoreView(props: { onClose: () => void }) {
   const user = session.user
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
+  const [activeSheet, setActiveSheet] = useState<"none" | "reverseSearch" | "accountSwitcher">("none")
   const avatarURL = user?.profile_image_urls?.px_170x170 ?? null
   const { ambientBackground } = useExperimentalAmbientPalette(avatarURL)
 
@@ -63,26 +69,56 @@ export function MoreView(props: { onClose: () => void }) {
         navigationBarTitleDisplayMode="inline"
         navigationDestination={destinationElement}
         scrollContentBackground={ambientBackground ? "hidden" : undefined}
+        sheet={{
+          isPresented: activeSheet !== "none",
+          onChanged: (val: boolean) => {
+            if (!val) setActiveSheet("none")
+          },
+          content:
+            activeSheet === "reverseSearch" ? (
+              <ReverseImageSearchSheet onClose={() => setActiveSheet("none")} />
+            ) : activeSheet === "accountSwitcher" ? (
+              <AccountSwitcherSheet onClose={() => setActiveSheet("none")} />
+            ) : (
+              <VStack />
+            ),
+        }}
         toolbar={appToolbar(
         props.onClose,
         "我的",
         [
+          <Button
+            key="reverse-search"
+            action={() => {
+              try {
+                void Haptics.transient()
+              } catch {}
+              setActiveSheet("reverseSearch")
+            }}
+          >
+            <Image systemName="photo.badge.magnifyingglass" />
+          </Button>,
           <NavigationLink
             key="downloads"
             value="downloadManager"
           >
             <Image systemName="arrow.down.circle" />
           </NavigationLink>,
-          <NavigationLink
+          <Button
             key="profile"
-            value={`user:${user.id}`}
             buttonStyle="glass"
             frame={{ width: 30, height: 30 }}
             clipShape={{ type: "rect", cornerRadius: 15 }}
             contentShape="rect"
+            action={() => {
+              try {
+                void Haptics.transient()
+              } catch {}
+              setActiveSheet("accountSwitcher")
+            }}
           >
             <AvatarImage url={avatarURL} size={28} />
-          </NavigationLink>,
+          </Button>,
         ]
       )}
     >
@@ -127,37 +163,19 @@ export function MoreView(props: { onClose: () => void }) {
         </NavigationLink>
         <Button
           buttonStyle="plain"
-          foregroundStyle="systemRed"
-          action={() => {}}
-          contextMenu={{
-            menuItems: (
-              <Group>
-                <Button
-                  title="确认注销登录"
-                  systemImage="rectangle.portrait.and.arrow.right"
-                  role="destructive"
-                  action={() => {
-                    session.signOut()
-                  }}
-                />
-              </Group>
-            ),
+          action={() => {
+            try {
+              void Haptics.transient()
+            } catch {}
+            setActiveSheet("accountSwitcher")
           }}
         >
-          <HStack spacing={12} frame={{ maxWidth: "infinity" }}>
-            <Image
-              systemName="rectangle.portrait.and.arrow.right"
-              frame={{ width: 24 }}
-            />
-            <Text font="body">注销</Text>
-            <Spacer />
-            <Image
-              systemName="chevron.right"
-              font="caption"
-              fontWeight="semibold"
-              foregroundStyle="systemRed"
-            />
-          </HStack>
+          <MoreRow
+            icon="person.2.circle.fill"
+            iconColor="#007AFF"
+            title="账号管理"
+            subtitle={`当前：${user.name} (@${user.account})`}
+          />
         </Button>
       </Section>
       </List>
@@ -169,15 +187,24 @@ function MoreRow(props: {
   icon: string
   iconColor?: any
   title: string
+  subtitle?: string
 }) {
   return (
-    <HStack spacing={12}>
+    <HStack spacing={12} alignment="center">
       <Image
         systemName={props.icon}
         foregroundStyle={props.iconColor}
         frame={{ width: 24 }}
       />
-      <Text font="body">{props.title}</Text>
+      <VStack alignment="leading" spacing={2}>
+        <Text font="body">{props.title}</Text>
+        {props.subtitle ? (
+          <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={1}>
+            {props.subtitle}
+          </Text>
+        ) : null}
+      </VStack>
+      {props.subtitle ? <Spacer /> : null}
     </HStack>
   )
 }

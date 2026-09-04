@@ -10,7 +10,78 @@ export interface StoredCredentials {
   webCookie?: string | null
 }
 
+export interface StoredAccountProfile {
+  id: string
+  name: string
+  account: string
+  avatarUrl?: string | null
+  mailAddress?: string
+  isPremium?: boolean
+  refreshToken: string
+  accessToken: string
+  expiresAt: number
+  webCookie?: string | null
+  lastActiveAt: number
+}
+
 const CREDENTIALS_KEY = "pixiv_credentials_v1"
+const MULTI_ACCOUNTS_KEY = "pixiv_multi_accounts_v1"
+
+export function loadAllStoredAccounts(): StoredAccountProfile[] {
+  try {
+    const raw = Keychain.get(MULTI_ACCOUNTS_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) {
+        return parsed.filter(
+          (a) => a && typeof a.id === "string" && a.id.length > 0 && typeof a.refreshToken === "string"
+        )
+      }
+    }
+  } catch (e: any) {
+    console.log("Keychain loadAllStoredAccounts error:", e?.message ?? e)
+  }
+  return []
+}
+
+export function saveAllStoredAccounts(accounts: StoredAccountProfile[]): void {
+  try {
+    Keychain.set(MULTI_ACCOUNTS_KEY, JSON.stringify(accounts))
+  } catch (e: any) {
+    console.log("Keychain saveAllStoredAccounts error:", e?.message ?? e)
+  }
+}
+
+export function upsertStoredAccount(creds: StoredCredentials): void {
+  if (!creds || !creds.user || !creds.user.id) return
+  const current = loadAllStoredAccounts()
+  const uid = String(creds.user.id)
+  const filtered = current.filter((a) => a.id !== uid)
+  const profile: StoredAccountProfile = {
+    id: uid,
+    name: creds.user.name,
+    account: creds.user.account,
+    avatarUrl:
+      creds.user.profile_image_urls?.px_170x170 ||
+      creds.user.profile_image_urls?.px_50x50 ||
+      null,
+    mailAddress: creds.user.mail_address,
+    isPremium: creds.user.is_premium,
+    refreshToken: creds.refreshToken,
+    accessToken: creds.accessToken,
+    expiresAt: creds.expiresAt,
+    webCookie: creds.webCookie ?? null,
+    lastActiveAt: Date.now(),
+  }
+  saveAllStoredAccounts([profile, ...filtered])
+}
+
+export function removeStoredAccount(userId: string | number): void {
+  const uid = String(userId)
+  const current = loadAllStoredAccounts()
+  const filtered = current.filter((a) => a.id !== uid)
+  saveAllStoredAccounts(filtered)
+}
 
 function base64URLEncode(data: Data): string {
   return data
@@ -92,6 +163,7 @@ export function saveCredentials(creds: StoredCredentials): void {
   const serialized = JSON.stringify(creds)
   try {
     Keychain.set(CREDENTIALS_KEY, serialized)
+    upsertStoredAccount(creds)
   } catch (e: any) {
     console.log("Keychain save error:", e?.message ?? e)
   }

@@ -75,6 +75,12 @@ export function pixivBlocklistDirectory(userId?: string | number | null): string
   return pixivCloudDirectory(`Blocklist/users/${uid}`)
 }
 
+// 特辑（Pixivision）收藏保存在 iCloud Documents，按账号隔离支持跨设备同步。
+export function pixivPixivisionBookmarkDirectory(userId?: string | number | null): string {
+  const uid = resolveEffectiveUID(userId)
+  return pixivCloudDirectory(`PixivisionBookmarks/users/${uid}`)
+}
+
 // 小说阅读器版式与背景保存在 iCloud Documents，多设备间无缝同步。
 export function pixivNovelReaderDirectory(): string {
   return pixivCloudDirectory("NovelReader")

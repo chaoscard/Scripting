@@ -162,6 +162,7 @@ export interface AppSettings {
   widgetSourceExtraLargeIpad: WidgetDefaultSource
   widgetPoolCapacity: WidgetPoolCapacity
   widgetReloadIntervalMinutes: WidgetReloadIntervalMinutes
+  sauceNaoApiKey: string
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -235,6 +236,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   widgetSourceExtraLargeIpad: "pixivision",
   widgetPoolCapacity: 30,
   widgetReloadIntervalMinutes: 60,
+  sauceNaoApiKey: "",
 }
 
 const KEY = "pixiv_settings_v1"

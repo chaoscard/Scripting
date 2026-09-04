@@ -7,12 +7,20 @@ import {
   pixivisionHome,
   nextPixivision,
   nextIllustrations,
+  addBookmark,
+  removeBookmark,
 } from "../api/pixiv"
 import { getWidgetSourceForFamily, loadSettings } from "./settings"
 import { pixivWidgetPath } from "./dataDirectory"
 import { writeDataSafely, writeTextSafely, recoverFile } from "./safeFile"
 import { cacheIllust, getCachedIllust } from "./illustCache"
 import { cacheFilePath, recordPixivisionCoverUrl } from "../image/imageLoader"
+import { isPixivisionBookmarked, togglePixivisionBookmark } from "./pixivisionBookmarks"
+import {
+  getCachedIllustBookmark,
+  recordIllustBookmark,
+  notifyIllustBookmarkChanged,
+} from "./bookmarkSync"
 import type { PixivIllustration, PixivisionArticle } from "../types"
 
 export interface WidgetArtwork {
@@ -28,6 +36,7 @@ export interface WidgetArtwork {
   sourceType: string
   route?: string
   updatedAt: number
+  bookmarked?: boolean
 }
 
 export interface WidgetPoolState {
@@ -437,6 +446,7 @@ export async function populateWidgetPool(
               sourceType: "pixivision",
               route: `pixivision:${article.id}`,
               updatedAt: Date.now(),
+              bookmarked: isPixivisionBookmarked(article.id),
             }
             newArtworks.push(art)
             existingIds.add(article.id)
@@ -478,6 +488,7 @@ export async function populateWidgetPool(
               sourceType: normalized,
               route: `illust:${item.id}`,
               updatedAt: Date.now(),
+              bookmarked: Boolean(item.is_bookmarked),
             }
             newArtworks.push(art)
             existingIds.add(item.id)
@@ -722,4 +733,71 @@ export function seedIllustFromWidgetPool(id: number): void {
     comment_access_control: 0,
   })
 }
+
+/**
+ * 判断小组件当前展示的作品/特辑是否已被收藏
+ */
+export function isWidgetArtworkBookmarked(artwork: WidgetArtwork | null): boolean {
+  if (!artwork || !artwork.id) return false
+  if (artwork.sourceType === "pixivision") {
+    return isPixivisionBookmarked(artwork.id)
+  }
+  const cached = getCachedIllustBookmark(artwork.id)
+  if (cached !== undefined) return cached
+  return Boolean(artwork.bookmarked)
+}
+
+/**
+ * 原地切换小组件中当前作品/特辑的收藏状态并静默持久化与同步
+ */
+export async function toggleWidgetArtworkBookmark(
+  param?: string,
+  artworkId?: number,
+  family?: string
+): Promise<boolean> {
+  const normalized = normalizeParameter(param, family)
+  const pool = loadWidgetPool(normalized, family)
+  let target = artworkId
+    ? pool.artworks.find((a) => a.id === artworkId)
+    : pool.artworks[pool.currentIndex]
+
+  if (!target && pool.artworks.length > 0) {
+    target = pool.artworks[0]
+  }
+  if (!target || !target.id) return false
+
+  const isPixivision = target.sourceType === "pixivision"
+  if (isPixivision) {
+    const nextBookmarked = togglePixivisionBookmark({
+      id: target.id,
+      title: target.title,
+      thumbnailURL: target.remoteImageUrl,
+      category: "特辑",
+      publishedAt: new Date().toISOString().slice(0, 10),
+      bookmarkedAt: Date.now(),
+    })
+    target.bookmarked = nextBookmarked
+    saveWidgetPool(pool, normalized, family)
+    return nextBookmarked
+  } else {
+    const currentlyBookmarked = isWidgetArtworkBookmarked(target)
+    const nextBookmarked = !currentlyBookmarked
+    target.bookmarked = nextBookmarked
+    recordIllustBookmark(target.id, nextBookmarked)
+    notifyIllustBookmarkChanged(target.id, nextBookmarked, "public")
+    saveWidgetPool(pool, normalized, family)
+
+    try {
+      if (nextBookmarked) {
+        await session.call((token) => addBookmark(target.id, "public", [], token))
+      } else {
+        await session.call((token) => removeBookmark(target.id, token))
+      }
+    } catch (e: any) {
+      console.log("toggleWidgetArtworkBookmark API error:", e?.message ?? e)
+    }
+    return nextBookmarked
+  }
+}
+
 

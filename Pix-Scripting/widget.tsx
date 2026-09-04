@@ -8,9 +8,13 @@ import {
   Widget,
   ZStack,
 } from "scripting"
-import { NextArtworkIntent } from "./app_intents"
+import { BookmarkArtworkIntent, NextArtworkIntent } from "./app_intents"
 import { loadSettings } from "./src/store/settings"
-import { getCurrentWidgetArtwork, type WidgetArtwork } from "./src/store/widgetStore"
+import {
+  getCurrentWidgetArtwork,
+  isWidgetArtworkBookmarked,
+  type WidgetArtwork,
+} from "./src/store/widgetStore"
 
 // 桌面小组件单图纯画框视图
 function PureArtworkWidgetView(props: {
@@ -27,6 +31,10 @@ function PureArtworkWidgetView(props: {
   const btnSize = isExtraLarge ? 52 : isLarge ? 46 : 38
   const paddingValue = isExtraLarge ? 18 : isLarge ? 16 : 12
   const iconFont = isExtraLarge ? "title2" : isLarge ? "title3" : "subheadline"
+
+  const isBookmarked = isWidgetArtworkBookmarked(artwork)
+  const isPixivision = artwork?.sourceType === "pixivision"
+  const bookmarkParam = artwork ? `${parameter}::${artwork.id}` : parameter
 
   const targetRoute =
     artwork?.route ||
@@ -45,8 +53,8 @@ function PureArtworkWidgetView(props: {
   return (
     <ZStack
       frame={size}
-      background={isTrans ? undefined : (isBlur ? undefined : "black")}
-      alignment="topTrailing"
+      background={isTrans ? undefined : isBlur ? undefined : "black"}
+      alignment="topLeading"
       widgetURL={runUrl}
     >
       {/* 纯图底层：通过 Link 包裹实现全图点击直达作品详情 */}
@@ -80,32 +88,66 @@ function PureArtworkWidgetView(props: {
       )}
 
       {/* 右上角独立按钮：加大一号微透圆形液态玻璃手动刷新按钮 (AppIntent 原地切图) */}
-      <Button
-        intent={NextArtworkIntent(parameter)}
-        buttonStyle="plain"
-        padding={paddingValue}
-      >
-        <ZStack
-          frame={{ width: btnSize, height: btnSize }}
-          background="#00000040"
-          clipShape="circle"
-          alignment="center"
-          shadow={{
-            color: "#00000038",
-            radius: 4,
-            x: 0,
-            y: 2,
-          }}
+      <ZStack alignment="topTrailing" frame={size}>
+        <Button
+          intent={NextArtworkIntent(parameter)}
+          buttonStyle="plain"
+          padding={paddingValue}
         >
-          <Image
-            systemName="arrow.clockwise"
-            font={iconFont}
-            fontWeight="bold"
-            foregroundStyle="white"
-            widgetAccentedRenderingMode="fullColor"
-          />
+          <ZStack
+            frame={{ width: btnSize, height: btnSize }}
+            background="#00000040"
+            clipShape="circle"
+            alignment="center"
+            shadow={{
+              color: "#00000038",
+              radius: 4,
+              x: 0,
+              y: 2,
+            }}
+          >
+            <Image
+              systemName="arrow.clockwise"
+              font={iconFont}
+              fontWeight="bold"
+              foregroundStyle="white"
+              widgetAccentedRenderingMode="fullColor"
+            />
+          </ZStack>
+        </Button>
+      </ZStack>
+
+      {/* 右下角独立按钮：微透圆形液态玻璃一键轻收藏按钮 (AppIntent 原地收藏 + 触觉反馈) */}
+      {artwork ? (
+        <ZStack alignment="bottomTrailing" frame={size}>
+          <Button
+            intent={BookmarkArtworkIntent(bookmarkParam)}
+            buttonStyle="plain"
+            padding={paddingValue}
+          >
+            <ZStack
+              frame={{ width: btnSize, height: btnSize }}
+              background="#00000040"
+              clipShape="circle"
+              alignment="center"
+              shadow={{
+                color: "#00000038",
+                radius: 4,
+                x: 0,
+                y: 2,
+              }}
+            >
+              <Image
+                systemName={isBookmarked ? "heart.fill" : "heart"}
+                font={iconFont}
+                fontWeight="bold"
+                foregroundStyle={isBookmarked ? "#FF2D55" : "white"}
+                widgetAccentedRenderingMode="fullColor"
+              />
+            </ZStack>
+          </Button>
         </ZStack>
-      </Button>
+      ) : null}
     </ZStack>
   )
 }

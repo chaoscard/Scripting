@@ -1,15 +1,43 @@
 import { AppIntentManager, AppIntentProtocol, Widget } from "scripting"
-import { advanceWidgetArtwork } from "./src/store/widgetStore"
+import { advanceWidgetArtwork, toggleWidgetArtworkBookmark } from "./src/store/widgetStore"
+
+declare const Haptics: any
 
 export const NextArtworkIntent = AppIntentManager.register({
   name: "PixivNextArtworkIntent",
   protocol: AppIntentProtocol.AppIntent,
   perform: async (param?: string) => {
     try {
+      try {
+        void Haptics.transient()
+      } catch {}
       await advanceWidgetArtwork(param)
       Widget.reloadAll()
     } catch (e: any) {
       console.log("NextArtworkIntent error:", e?.message ?? e)
+    }
+  },
+})
+
+export const BookmarkArtworkIntent = AppIntentManager.register({
+  name: "PixivBookmarkArtworkIntent",
+  protocol: AppIntentProtocol.AppIntent,
+  perform: async (param?: string) => {
+    try {
+      try {
+        void Haptics.transient(0.8, 0.8)
+      } catch {}
+      let poolParam = param || ""
+      let targetId: number | undefined = undefined
+      if (poolParam.includes("::")) {
+        const parts = poolParam.split("::")
+        poolParam = parts[0]
+        targetId = parseInt(parts[1], 10) || undefined
+      }
+      await toggleWidgetArtworkBookmark(poolParam, targetId)
+      Widget.reloadAll()
+    } catch (e: any) {
+      console.log("BookmarkArtworkIntent error:", e?.message ?? e)
     }
   },
 })
