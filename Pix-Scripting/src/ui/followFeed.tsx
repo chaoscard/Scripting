@@ -33,6 +33,7 @@ import {
 import { onWatchlistChanged } from "../store/bookmarkSync"
 import { recordWorkSeriesAssociation } from "../store/seriesCache"
 import { destinationElement } from "./routes"
+import { setActiveTabKind } from "./routeNavigation"
 import { useLatest, usePagedList, currentBatchSize, useExperimentalAmbientPalette } from "./hooks"
 import type {
   PixivIllustration,
@@ -61,6 +62,10 @@ export function FollowFeedView(props: {
   initialMode?: FollowMode
   onClose: () => void
 }) {
+  useEffect(() => {
+    setActiveTabKind("following")
+  }, [])
+
   const isLaunchTab = useRef(loadSettings().launchPage === "following").current
   const [activated, setActivated] = useState(isLaunchTab)
   const [mode, setMode] = useState<FollowMode>(props.initialMode ?? "following")

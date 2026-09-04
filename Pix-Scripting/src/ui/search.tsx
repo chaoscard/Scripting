@@ -53,6 +53,9 @@ import {
   isNovelContentVisible,
 } from "../store/contentFilter"
 import {
+  cacheIllust,
+} from "../store/illustCache"
+import {
   addSearchHistory,
   clearSearchHistory,
   getSearchHistory,
@@ -60,6 +63,10 @@ import {
   removeSearchHistory,
 } from "../store/searchHistory"
 import { destinationElement } from "./routes"
+import { requestPixivRoute, setActiveTabKind } from "./routeNavigation"
+
+declare const Pasteboard: any
+declare const HapticFeedback: any
 import {
   currentBatchSize,
   dedupeByID,
@@ -373,6 +380,10 @@ declare const Dialog: any
 declare const Animation: any
 
 export function SearchView(props: { onClose: () => void; active?: boolean }) {
+  useEffect(() => {
+    setActiveTabKind("search")
+  }, [])
+
   const [query, setQuery] = useState("")
   const [submitted, setSubmitted] = useState("")
   const [searchPresented, setSearchPresented] = useState(false)
@@ -534,6 +545,11 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
     try {
       const tags = await session.call((token) => trendingTags(token))
       setTrendingIllust(tags)
+      for (const t of tags) {
+        if (t.illust?.id && (t.illust as any).image_urls) {
+          cacheIllust(t.illust as any)
+        }
+      }
       const urls = tags
         .slice(0, 10)
         .flatMap((t) => [trendingTagHeroUrl(t), trendingTagThumbUrl(t)])
@@ -1465,12 +1481,45 @@ function TrendingHeroBanner(props: {
   const heroUrl = trendingTagHeroUrl(item)
   const bannerWidth = Math.max(0, Device.screen.width - 24)
   const bannerHeight = Math.floor(bannerWidth * (9 / 16))
+  const targetId = item.illust?.id ?? item.novel?.id
+  const targetType = item.novel ? "novel" : "illust"
+  const targetRoute = targetId ? `${targetType}:${targetId}` : ""
 
   return (
     <Button
       buttonStyle="plain"
       action={() => onSelect(item.tag)}
       frame={{ width: bannerWidth, height: bannerHeight }}
+      contextMenu={{
+        menuItems: (
+          <Group>
+            {targetRoute ? (
+              <Button
+                title={targetType === "novel" ? "查看小说" : "查看作品"}
+                systemImage={targetType === "novel" ? "book" : "photo"}
+                action={() => {
+                  if (item.illust?.id && (item.illust as any).image_urls) {
+                    cacheIllust(item.illust as any)
+                  }
+                  requestPixivRoute(targetRoute, "search")
+                }}
+              />
+            ) : null}
+            <Button
+              title="复制标签"
+              systemImage="doc.on.doc"
+              action={() => {
+                if (typeof Pasteboard !== "undefined") {
+                  void Pasteboard.setString(item.tag)
+                }
+                if (typeof HapticFeedback !== "undefined") {
+                  HapticFeedback.lightImpact()
+                }
+              }}
+            />
+          </Group>
+        ),
+      }}
     >
       <ZStack
         alignment="bottom"
@@ -1531,12 +1580,45 @@ function TrendingGridCard(props: {
 }) {
   const { item, side, onSelect } = props
   const thumbUrl = trendingTagThumbUrl(item)
+  const targetId = item.illust?.id ?? item.novel?.id
+  const targetType = item.novel ? "novel" : "illust"
+  const targetRoute = targetId ? `${targetType}:${targetId}` : ""
 
   return (
     <Button
       buttonStyle="plain"
       action={() => onSelect(item.tag)}
       frame={{ width: side, height: side }}
+      contextMenu={{
+        menuItems: (
+          <Group>
+            {targetRoute ? (
+              <Button
+                title={targetType === "novel" ? "查看小说" : "查看作品"}
+                systemImage={targetType === "novel" ? "book" : "photo"}
+                action={() => {
+                  if (item.illust?.id && (item.illust as any).image_urls) {
+                    cacheIllust(item.illust as any)
+                  }
+                  requestPixivRoute(targetRoute, "search")
+                }}
+              />
+            ) : null}
+            <Button
+              title="复制标签"
+              systemImage="doc.on.doc"
+              action={() => {
+                if (typeof Pasteboard !== "undefined") {
+                  void Pasteboard.setString(item.tag)
+                }
+                if (typeof HapticFeedback !== "undefined") {
+                  HapticFeedback.lightImpact()
+                }
+              }}
+            />
+          </Group>
+        ),
+      }}
     >
       <ZStack
         alignment="bottom"

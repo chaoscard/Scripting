@@ -30,6 +30,7 @@ import {
   isNovelContentVisible,
 } from "../store/contentFilter"
 import { destinationElement } from "./routes"
+import { setActiveTabKind } from "./routeNavigation"
 import { useLatest, usePagedList, currentBatchSize, useExperimentalAmbientPalette } from "./hooks"
 import type {
   PixivIllustration,
@@ -53,6 +54,10 @@ type FeedMode = Exclude<ExploreMode, "pixivision">
 type FeedKind = "illustration" | "manga" | "novel"
 
 export function DiscoveryView(props: { onClose: () => void }) {
+  useEffect(() => {
+    setActiveTabKind("discovery")
+  }, [])
+
   const isLaunchTab = useRef(loadSettings().launchPage === "discovery").current
   const [activated, setActivated] = useState(isLaunchTab)
   const [mode, setMode] = useState<ExploreMode>("recommended")

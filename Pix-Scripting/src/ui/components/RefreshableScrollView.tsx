@@ -94,7 +94,7 @@ export function RefreshableScrollView(props: {
     }
 
   return (
-    <ZStack>
+    <ZStack navigationDestination={props.navigationDestination}>
       <ZStack
         frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
         clipped={true}
@@ -117,7 +117,6 @@ export function RefreshableScrollView(props: {
               navigationTitle={props.navigationTitle}
               navigationBarTitleDisplayMode={props.navigationBarTitleDisplayMode}
               refreshable={handleRefresh}
-              navigationDestination={props.navigationDestination}
               searchable={props.searchable}
               searchSuggestions={props.searchSuggestions}
               onSubmit={props.onSubmit}

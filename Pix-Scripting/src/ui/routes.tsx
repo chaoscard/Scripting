@@ -102,8 +102,6 @@ function decodeTag(value: string): string {
   }
 }
 
-let routeNavigationSeq = 0
-
 export function renderDestination(rawPage: string) {
   const page = normalizeRoute(rawPage)
   if (page.startsWith("illust:")) {
@@ -111,7 +109,7 @@ export function renderDestination(rawPage: string) {
     if (id != null) {
       seedIllustFromWidgetPool(id)
       seedIllustFromPixivCache(id)
-      return <IllustDetailView key={`illust-${id}-${++routeNavigationSeq}`} illustID={id} />
+      return <IllustDetailView key={`illust-${id}`} illustID={id} />
     }
   }
   if (page.startsWith("pixivision:")) {

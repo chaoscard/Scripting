@@ -19,6 +19,7 @@ import { session } from "../api/session"
 import { loadSettings, onSettingsChanged } from "../store/settings"
 import { appToolbar, AvatarImage } from "./components"
 import { destinationElement } from "./routes"
+import { setActiveTabKind } from "./routeNavigation"
 import { useExperimentalAmbientPalette } from "./hooks"
 import { ReverseImageSearchSheet } from "./reverseImageSearchSheet"
 import { AccountSwitcherSheet } from "./accountSwitcherSheet"
@@ -30,6 +31,10 @@ function isVirtualNode(v: unknown): v is VirtualNode {
 }
 
 export function MoreView(props: { onClose: () => void }) {
+  useEffect(() => {
+    setActiveTabKind("more")
+  }, [])
+
   const user = session.user
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
   const [activeSheet, setActiveSheet] = useState<"none" | "reverseSearch" | "accountSwitcher">("none")

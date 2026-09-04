@@ -23,7 +23,13 @@ import { SearchView } from "./search"
 import { MoreView } from "./more"
 import { LoginView } from "./login"
 import { FollowFeedView } from "./followFeed"
-import { setPixivRouteNavigator } from "./routeNavigation"
+import {
+  registerTabNavigator,
+  setActiveTabKind,
+  getActiveTabKind,
+  setPixivRouteNavigator,
+  type PixivTabKind,
+} from "./routeNavigation"
 
 function LaunchExperienceView() {
   return (
@@ -134,8 +140,24 @@ function MainTabView(props: {
   const morePath = useObservable<string[]>([])
 
   useEffect(() => {
-    return setPixivRouteNavigator((route: string) => {
-      const activeTab = selection.value || initialTab || "discovery"
+    const unregisterDiscovery = registerTabNavigator("discovery", (route) => {
+      discoveryPath.setValue([...discoveryPath.value, route])
+    })
+    const unregisterRanking = registerTabNavigator("ranking", (route) => {
+      rankingPath.setValue([...rankingPath.value, route])
+    })
+    const unregisterFollowing = registerTabNavigator("following", (route) => {
+      followingPath.setValue([...followingPath.value, route])
+    })
+    const unregisterSearch = registerTabNavigator("search", (route) => {
+      searchPath.setValue([...searchPath.value, route])
+    })
+    const unregisterMore = registerTabNavigator("more", (route) => {
+      morePath.setValue([...morePath.value, route])
+    })
+
+    const unregisterGlobal = setPixivRouteNavigator((route: string) => {
+      const activeTab = getActiveTabKind() || (selection.value as PixivTabKind) || initialTab || "discovery"
       if (activeTab === "ranking") {
         rankingPath.setValue([...rankingPath.value, route])
       } else if (activeTab === "following") {
@@ -148,6 +170,15 @@ function MainTabView(props: {
         discoveryPath.setValue([...discoveryPath.value, route])
       }
     })
+
+    return () => {
+      unregisterDiscovery()
+      unregisterRanking()
+      unregisterFollowing()
+      unregisterSearch()
+      unregisterMore()
+      unregisterGlobal()
+    }
   }, [selection, discoveryPath, rankingPath, followingPath, searchPath, morePath, initialTab])
 
   return (

@@ -30,6 +30,7 @@ import {
   isNovelContentVisible,
 } from "../store/contentFilter"
 import { destinationElement } from "./routes"
+import { setActiveTabKind } from "./routeNavigation"
 import { useLatest, usePagedList, currentBatchSize, useExperimentalAmbientPalette } from "./hooks"
 import type { PixivIllustration, PixivNovel } from "../types"
 import {
@@ -87,6 +88,10 @@ function getRankingModeTitle(
 }
 
 export function RankingView(props: { onClose: () => void }) {
+  useEffect(() => {
+    setActiveTabKind("ranking")
+  }, [])
+
   const isLaunchTab = useRef(loadSettings().launchPage === "ranking").current
   const [activated, setActivated] = useState(isLaunchTab)
   const [settings, setSettings] = useState<AppSettings>(() => loadSettings())
