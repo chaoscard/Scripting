@@ -87,14 +87,7 @@ export function ReverseImageSearchSheet(props: {
         navigationBarTitleDisplayMode="inline"
         toolbar={{
           topBarLeading: (
-            <Button title="关闭" action={onClose} />
-          ),
-          topBarTrailing: (
-            <Button
-              title="搜索"
-              systemImage="photo.badge.magnifyingglass"
-              action={handlePickFromPhotos}
-            />
+            <Button title="关闭" systemImage="xmark" action={onClose} />
           ),
         }}
       >
@@ -141,24 +134,17 @@ export function ReverseImageSearchSheet(props: {
             <VStack
               alignment="center"
               spacing={12}
-              padding={{ vertical: 36 }}
+              padding={{ vertical: 56 }}
               frame={{ maxWidth: "infinity" }}
             >
-              <Image
-                systemName="photo.badge.magnifyingglass"
-                font="largeTitle"
-                foregroundStyle="#007AFF"
-              />
-              <Text font="subheadline" foregroundStyle="secondaryLabel">
-                从相册选取图片，在 Pixiv 与全网寻找高清原图与画师
-              </Text>
               <Button
                 buttonStyle="borderedProminent"
+                controlSize="large"
                 action={handlePickFromPhotos}
               >
-                <HStack alignment="center" spacing={6}>
-                  <Image systemName="photo.on.rectangle" font="subheadline" />
-                  <Text font="subheadline" fontWeight="semibold">
+                <HStack alignment="center" spacing={8} padding={{ horizontal: 8, vertical: 4 }}>
+                  <Image systemName="photo.on.rectangle" font="headline" />
+                  <Text font="headline" fontWeight="semibold">
                     从相册选取图片
                   </Text>
                 </HStack>

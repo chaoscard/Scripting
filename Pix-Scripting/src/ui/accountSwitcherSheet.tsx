@@ -104,7 +104,7 @@ export function AccountSwitcherSheet(props: {
         navigationTitle="账号管理"
         navigationBarTitleDisplayMode="inline"
         toolbar={{
-          topBarLeading: <Button title="关闭" action={onClose} />,
+          topBarLeading: <Button title="关闭" systemImage="xmark" action={onClose} />,
           topBarTrailing: (
             <Button
               title="完成"
@@ -210,7 +210,10 @@ export function AccountSwitcherSheet(props: {
                             ) : null}
                           </HStack>
                           <Text font="caption" foregroundStyle="secondaryLabel" lineLimit={1}>
-                            @{acc.account} · UID: {acc.id}
+                            @{acc.account}
+                          </Text>
+                          <Text font="caption2" foregroundStyle="tertiaryLabel" lineLimit={1}>
+                            UID: {acc.id}
                           </Text>
                         </VStack>
 
@@ -275,7 +278,12 @@ export function AccountSwitcherSheet(props: {
                   登录并添加新账号
                 </Text>
                 <Spacer />
-                <Image systemName="chevron.right" font="caption" foregroundStyle="tertiaryLabel" />
+                <Image
+                  systemName="chevron.right"
+                  font="subheadline"
+                  fontWeight="semibold"
+                  foregroundStyle="#007AFF"
+                />
               </HStack>
             </Button>
 
@@ -312,6 +320,12 @@ export function AccountSwitcherSheet(props: {
                   退出当前账号
                 </Text>
                 <Spacer />
+                <Image
+                  systemName="chevron.right"
+                  font="subheadline"
+                  fontWeight="semibold"
+                  foregroundStyle="#FF3B30"
+                />
               </HStack>
             </Button>
           </VStack>

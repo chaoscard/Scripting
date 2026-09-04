@@ -457,53 +457,53 @@ export function PixivisionDetailView(props: { articleID: number }) {
             navigationTitle={detail.title}
             navigationBarTitleDisplayMode="inline"
             toolbar={{
-              topBarTrailing: (
-                <HStack spacing={12}>
-                  {detail.tableOfContents && detail.tableOfContents.length > 0 ? (
-                    <Menu key="toc-menu" label={<Image systemName="list.bullet" />}>
-                      {detail.tableOfContents.map((item, idx) => (
-                        <Button
-                          key={item.id || `toc-${idx}`}
-                          title={`${idx + 1}. ${item.title}`}
-                          action={() => {
-                            if (item.id) {
-                              scrollToTarget(item.id)
-                            }
-                          }}
-                        />
-                      ))}
-                    </Menu>
-                  ) : null}
-                  <Button key="share" action={handleShare}>
-                    <Image systemName="square.and.arrow.up" />
-                  </Button>
-                  <Button
-                    key="bookmark"
-                    action={() => {
-                      try {
-                        void Haptics.transient()
-                      } catch {}
-                      if (!detail) return
-                      const next = togglePixivisionBookmark({
-                        id: articleID,
-                        title: detail.title,
-                        thumbnailURL: detail.thumbnailURL || firstImageUrl || undefined,
-                        category: detail.category,
-                        categoryLabel: detail.category,
-                        publishedAt: detail.date,
-                        tags: detail.tags ? detail.tags.map((t) => t.name) : undefined,
-                        bookmarkedAt: Date.now(),
-                      })
-                      setBookmarked(next)
-                    }}
-                  >
-                    <Image
-                      systemName={bookmarked ? "heart.fill" : "heart"}
-                      foregroundStyle={bookmarked ? "#FF2D55" : undefined}
-                    />
-                  </Button>
-                </HStack>
-              ),
+              topBarTrailing: [
+                ...(detail.tableOfContents && detail.tableOfContents.length > 0
+                  ? [
+                      <Menu key="toc-menu" label={<Image systemName="list.bullet" />}>
+                        {detail.tableOfContents.map((item, idx) => (
+                          <Button
+                            key={item.id || `toc-${idx}`}
+                            title={`${idx + 1}. ${item.title}`}
+                            action={() => {
+                              if (item.id) {
+                                scrollToTarget(item.id)
+                              }
+                            }}
+                          />
+                        ))}
+                      </Menu>,
+                    ]
+                  : []),
+                <Button
+                  key="bookmark"
+                  action={() => {
+                    try {
+                      void Haptics.transient()
+                    } catch {}
+                    if (!detail) return
+                    const next = togglePixivisionBookmark({
+                      id: articleID,
+                      title: detail.title,
+                      thumbnailURL: detail.thumbnailURL || firstImageUrl || undefined,
+                      category: detail.category,
+                      categoryLabel: detail.category,
+                      publishedAt: detail.date,
+                      tags: detail.tags ? detail.tags.map((t) => t.name) : undefined,
+                      bookmarkedAt: Date.now(),
+                    })
+                    setBookmarked(next)
+                  }}
+                >
+                  <Image
+                    systemName={bookmarked ? "heart.fill" : "heart"}
+                    foregroundStyle={bookmarked ? "#FF2D55" : undefined}
+                  />
+                </Button>,
+                <Button key="share" action={handleShare}>
+                  <Image systemName="square.and.arrow.up" />
+                </Button>,
+              ],
             }}
           >
             <VStack

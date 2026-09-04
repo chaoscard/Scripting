@@ -14,6 +14,7 @@ import {
   useMemo,
   useState,
 } from "scripting"
+import { session } from "../api/session"
 import type {
   AdvancedSearchParams,
   BookmarkThreshold,
@@ -23,6 +24,9 @@ import type {
   SearchSort,
 } from "../types"
 import type { AppSettings } from "../store/settings"
+
+declare const Haptics: any
+declare const Dialog: any
 
 export function formatDateToPixivDate(timestamp: number): string {
   const d = new Date(timestamp)
@@ -329,18 +333,33 @@ export function SearchAdvancedSheet(props: {
           <Picker
             title="排序方式"
             value={sort}
-            onChanged={(val: string) => setSort(val as SearchSort)}
+            onChanged={(val: string) => {
+              if (val === "popular_desc" && !session.user?.is_premium) {
+                try {
+                  void Haptics.transient()
+                } catch {}
+                if (typeof Dialog !== "undefined" && typeof Dialog.alert === "function") {
+                  void Dialog.alert({
+                    title: "提示",
+                    message:
+                      "当前账号非 Pixiv Premium 会员，无法使用按热门排序，可在「高级搜索」中使用「收藏数筛选」替代。",
+                  })
+                }
+                return
+              }
+              setSort(val as SearchSort)
+            }}
           >
             <Label tag="date_desc" title="最新优先" systemImage="clock" />
+            <Label
+              tag="popular_desc"
+              title="热门优先"
+              systemImage="flame"
+            />
             <Label
               tag="date_asc"
               title="最早优先"
               systemImage="clock.arrow.circlepath"
-            />
-            <Label
-              tag="popular_desc"
-              title="热门优先（需会员）"
-              systemImage="flame"
             />
           </Picker>
         </Section>

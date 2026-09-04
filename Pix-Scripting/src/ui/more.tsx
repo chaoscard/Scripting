@@ -104,21 +104,12 @@ export function MoreView(props: { onClose: () => void }) {
           >
             <Image systemName="arrow.down.circle" />
           </NavigationLink>,
-          <Button
+          <NavigationLink
             key="profile"
-            buttonStyle="glass"
-            frame={{ width: 30, height: 30 }}
-            clipShape={{ type: "rect", cornerRadius: 15 }}
-            contentShape="rect"
-            action={() => {
-              try {
-                void Haptics.transient()
-              } catch {}
-              setActiveSheet("accountSwitcher")
-            }}
+            value={`user:${user.id}`}
           >
             <AvatarImage url={avatarURL} size={28} />
-          </Button>,
+          </NavigationLink>,
         ]
       )}
     >
@@ -175,6 +166,7 @@ export function MoreView(props: { onClose: () => void }) {
             iconColor="#007AFF"
             title="账号管理"
             subtitle={`当前：${user.name} (@${user.account})`}
+            showChevron
           />
         </Button>
       </Section>
@@ -188,6 +180,7 @@ function MoreRow(props: {
   iconColor?: any
   title: string
   subtitle?: string
+  showChevron?: boolean
 }) {
   return (
     <HStack spacing={12} alignment="center">
@@ -204,7 +197,19 @@ function MoreRow(props: {
           </Text>
         ) : null}
       </VStack>
-      {props.subtitle ? <Spacer /> : null}
+      {props.showChevron ? (
+        <>
+          <Spacer />
+          <Image
+            systemName="chevron.right"
+            font="subheadline"
+            fontWeight="semibold"
+            foregroundStyle="tertiaryLabel"
+          />
+        </>
+      ) : props.subtitle ? (
+        <Spacer />
+      ) : null}
     </HStack>
   )
 }

@@ -9,6 +9,7 @@ export interface SearchHistoryStore {
   illust: string[]
   novel: string[]
   user: string[]
+  updatedAt?: number
 }
 
 const SEARCH_HISTORY_FILE_NAME = "search_history.json"
@@ -94,6 +95,7 @@ export function getFullSearchHistoryStore(): SearchHistoryStore {
             user: Array.isArray(parsed.user)
               ? parsed.user.filter((it: any): it is string => typeof it === "string" && it.trim().length > 0)
               : [],
+            updatedAt: typeof parsed.updatedAt === "number" ? parsed.updatedAt : Date.now(),
           }
           return cachedSearchHistory
         }
@@ -102,6 +104,7 @@ export function getFullSearchHistoryStore(): SearchHistoryStore {
             illust: parsed.filter((it: any): it is string => typeof it === "string" && it.trim().length > 0),
             novel: [],
             user: [],
+            updatedAt: Date.now(),
           }
           return cachedSearchHistory
         }
@@ -109,7 +112,7 @@ export function getFullSearchHistoryStore(): SearchHistoryStore {
     }
   } catch {}
 
-  cachedSearchHistory = { illust: [], novel: [], user: [] }
+  cachedSearchHistory = { illust: [], novel: [], user: [], updatedAt: Date.now() }
   return cachedSearchHistory
 }
 
@@ -118,6 +121,7 @@ export function replaceSearchHistoryStore(store: SearchHistoryStore, persist = t
     illust: [...store.illust],
     novel: [...store.novel],
     user: [...store.user],
+    updatedAt: typeof store.updatedAt === "number" ? store.updatedAt : Date.now(),
   }
   if (persist) {
     flushSearchHistory()
@@ -147,6 +151,7 @@ export function addSearchHistory(query: string, scope: SearchHistoryScope = "ill
   const filtered = current.filter((item) => item !== trimmed)
   const next = [trimmed, ...filtered]
   store[scope] = next
+  store.updatedAt = Date.now()
   scheduleSave()
   emitChanged()
   notifyLocalMutation()
@@ -158,6 +163,7 @@ export function removeSearchHistory(query: string, scope: SearchHistoryScope = "
   const current = store[scope] ?? []
   const next = current.filter((item) => item !== query)
   store[scope] = next
+  store.updatedAt = Date.now()
   scheduleSave()
   emitChanged()
   notifyLocalMutation()
@@ -167,6 +173,7 @@ export function removeSearchHistory(query: string, scope: SearchHistoryScope = "
 export function clearSearchHistory(scope: SearchHistoryScope = "illust"): void {
   const store = getFullSearchHistoryStore()
   store[scope] = []
+  store.updatedAt = Date.now()
   scheduleSave()
   emitChanged()
   notifyLocalMutation()

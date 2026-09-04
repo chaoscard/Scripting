@@ -356,15 +356,39 @@ async function syncSearchHistoryFile(
   const cloudFile = `${cloudDir}/${fileName}`
 
   const localStore = getFullSearchHistoryStore()
+  const localUpdated = typeof localStore.updatedAt === "number" ? localStore.updatedAt : 0
 
   await prepareCloudFile(cloudFile)
   const cloudRaw = readCloudJson<any>(cloudFile)
+  const cloudUpdated = typeof cloudRaw?.updatedAt === "number" ? cloudRaw.updatedAt : 0
   const cloudStore: SearchHistoryStore = {
     illust: Array.isArray(cloudRaw?.illust) ? cloudRaw.illust : [],
     novel: Array.isArray(cloudRaw?.novel) ? cloudRaw.novel : [],
     user: Array.isArray(cloudRaw?.user) ? cloudRaw.user : [],
+    updatedAt: cloudUpdated,
   }
 
+  // 1. 如果本地版本更新或相等（如本地刚进行搜索、左滑删除或清空），以本地为主覆写云端
+  if (localUpdated >= cloudUpdated && localUpdated > 0) {
+    const cloudJson = JSON.stringify(cloudStore)
+    const localJson = JSON.stringify(localStore)
+    if (cloudJson !== localJson) {
+      try {
+        writeTextSafely(cloudFile, localJson)
+      } catch (e: any) {
+        console.warn("write cloud search history error:", e?.message ?? e)
+      }
+    }
+    return
+  }
+
+  // 2. 如果云端版本更新（如另一台设备添加了新搜索或清理），以云端为主覆盖本地
+  if (cloudUpdated > localUpdated && cloudUpdated > 0) {
+    replaceSearchHistoryStore(cloudStore, true)
+    return
+  }
+
+  // 3. 初始迁移兜底（两端均无时间戳或均为初始状态）
   function mergeScopeList(localArr: string[], cloudArr: string[]): string[] {
     const set = new Set<string>()
     const result: string[] = []
@@ -389,22 +413,16 @@ async function syncSearchHistoryFile(
     illust: mergeScopeList(localStore.illust, cloudStore.illust),
     novel: mergeScopeList(localStore.novel, cloudStore.novel),
     user: mergeScopeList(localStore.user, cloudStore.user),
+    updatedAt: Date.now(),
   }
 
-  const localJson = JSON.stringify(localStore)
   const mergedJson = JSON.stringify(mergedStore)
+  replaceSearchHistoryStore(mergedStore, true)
 
-  if (localJson !== mergedJson) {
-    replaceSearchHistoryStore(mergedStore, true)
-  }
-
-  const cloudJson = JSON.stringify(cloudStore)
-  if (cloudJson !== mergedJson) {
-    try {
-      writeTextSafely(cloudFile, mergedJson)
-    } catch (e: any) {
-      console.warn("write cloud search history error:", e?.message ?? e)
-    }
+  try {
+    writeTextSafely(cloudFile, mergedJson)
+  } catch (e: any) {
+    console.warn("write cloud search history error:", e?.message ?? e)
   }
 }
 
