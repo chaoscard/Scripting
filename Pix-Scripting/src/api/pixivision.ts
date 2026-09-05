@@ -1,4 +1,6 @@
 import { apiGetPublicJson, apiGetPublicText, PixivError } from "./client"
+import { DEFAULT_WEB_BASE_URL } from "../config"
+import { getWebBaseUrl } from "../store/settings"
 import { derivePixivThumbUrl, recordPixivisionCoverUrl } from "../image/imageLoader"
 import type {
   PixivIllustration,
@@ -157,12 +159,18 @@ export async function pixivisionDetail(
 // 获取公开 Web 作品元数据（无需登录，快速获取确切真实物理宽高与大图地址）
 export async function fetchPublicWebIllustDetail(id: number): Promise<PixivIllustration | null> {
   try {
-    const url = `https://www.pixiv.net/ajax/illust/${id}`
+    const webBase = getWebBaseUrl()
+    const url = `${webBase}/ajax/illust/${id}`
+    const origins = [DEFAULT_WEB_BASE_URL, "https://pixiv.net"]
+    try {
+      const currentOrigin = new URL(webBase).origin
+      if (!origins.includes(currentOrigin)) origins.push(currentOrigin)
+    } catch {}
     const json = await apiGetPublicJson<any>(
       url,
-      ["https://www.pixiv.net", "https://pixiv.net"],
+      origins,
       {
-        Referer: "https://www.pixiv.net/",
+        Referer: `${webBase}/`,
         "User-Agent": PIXIVISION_USER_AGENT,
       }
     )

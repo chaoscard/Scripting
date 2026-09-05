@@ -1,6 +1,6 @@
 import { Script } from "scripting"
 
-export const SCRIPT_VERSION = Script.metadata?.version ?? "0.8.182"
+export const SCRIPT_VERSION = Script.metadata?.version ?? "0.8.183"
 
 // 默认服务端点地址
 export const DEFAULT_API_BASE_URL = "https://app-api.pixiv.net"
@@ -8,11 +8,13 @@ export const DEFAULT_OAUTH_BASE_URL = "https://oauth.secure.pixiv.net"
 export const DEFAULT_ACCOUNT_BASE_URL = "https://accounts.pixiv.net"
 export const DEFAULT_IMAGE_BASE_URL = "https://i.pximg.net"
 export const DEFAULT_STATIC_IMAGE_BASE_URL = "https://s.pximg.net"
+export const DEFAULT_WEB_BASE_URL = "https://www.pixiv.net"
 export const PIXIV_RE_IMAGE_BASE_URL = "https://i.pixiv.re"
 
 // 向后兼容现有引用
 export const API_BASE_URL = DEFAULT_API_BASE_URL
 export const OAUTH_BASE_URL = DEFAULT_OAUTH_BASE_URL
+export const WEB_BASE_URL = DEFAULT_WEB_BASE_URL
 export const OAUTH_REDIRECT_URI =
   "https://app-api.pixiv.net/web/v1/users/auth/pixiv/callback"
 

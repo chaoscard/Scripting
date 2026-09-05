@@ -271,7 +271,7 @@ export function SettingsView() {
           onChanged={(v) => setExpandedKey("content", v)}
           label={
             <HStack spacing={10} alignment="center">
-              <Image systemName="eye.fill" font="body" foregroundStyle="systemBlue" />
+              <Image systemName="eye.fill" font="body" foregroundStyle="systemBlue" frame={{ width: 24, alignment: "center" }} />
               <Text font="headline">内容显示</Text>
               <Spacer />
               {!expanded.content ? (
@@ -342,7 +342,7 @@ export function SettingsView() {
           onChanged={(v) => setExpandedKey("features", v)}
           label={
             <HStack spacing={10} alignment="center">
-              <Image systemName="slider.horizontal.3" font="body" foregroundStyle="systemIndigo" />
+              <Image systemName="slider.horizontal.3" font="body" foregroundStyle="systemIndigo" frame={{ width: 24, alignment: "center" }} />
               <Text font="headline">功能交互</Text>
               <Spacer />
               {!expanded.features ? (
@@ -454,7 +454,7 @@ export function SettingsView() {
           onChanged={(v) => setExpandedKey("appearance", v)}
           label={
             <HStack spacing={10} alignment="center">
-              <Image systemName="paintpalette" font="body" foregroundStyle="systemPink" />
+              <Image systemName="paintpalette" font="body" foregroundStyle="systemPink" frame={{ width: 24, alignment: "center" }} />
               <Text font="headline">外观布局</Text>
               <Spacer />
               {!expanded.appearance ? (
@@ -624,7 +624,7 @@ export function SettingsView() {
           onChanged={(v) => setExpandedKey("ranking", v)}
           label={
             <HStack spacing={10} alignment="center">
-              <Image systemName="chart.bar.xaxis" font="body" foregroundStyle="systemOrange" />
+              <Image systemName="chart.bar.xaxis" font="body" foregroundStyle="systemOrange" frame={{ width: 24, alignment: "center" }} />
               <Text font="headline">排行榜单</Text>
               <Spacer />
               {!expanded.ranking ? (
@@ -695,7 +695,7 @@ export function SettingsView() {
           onChanged={(v) => setExpandedKey("ai", v)}
           label={
             <HStack spacing={10} alignment="center">
-              <Image systemName="sparkles" font="body" foregroundStyle="systemPurple" />
+              <Image systemName="sparkles" font="body" foregroundStyle="systemPurple" frame={{ width: 24, alignment: "center" }} />
               <Text font="headline">智能助手</Text>
               <Spacer />
               {!expanded.ai ? (
@@ -775,7 +775,7 @@ export function SettingsView() {
           onChanged={(v) => setExpandedKey("widgets", v)}
           label={
             <HStack spacing={10} alignment="center">
-              <Image systemName="square.grid.2x2.fill" font="body" foregroundStyle="systemGreen" />
+              <Image systemName="square.grid.2x2.fill" font="body" foregroundStyle="systemGreen" frame={{ width: 24, alignment: "center" }} />
               <Text font="headline">桌面组件</Text>
               <Spacer />
               {!expanded.widgets ? (
@@ -911,7 +911,7 @@ export function SettingsView() {
           onChanged={(v) => setExpandedKey("quality", v)}
           label={
             <HStack spacing={10} alignment="center">
-              <Image systemName="photo.on.rectangle.angled" font="body" foregroundStyle="systemTeal" />
+              <Image systemName="photo.on.rectangle.angled" font="body" foregroundStyle="systemTeal" frame={{ width: 24, alignment: "center" }} />
               <Text font="headline">图片质量</Text>
               <Spacer />
               {!expanded.quality ? (
@@ -967,12 +967,12 @@ export function SettingsView() {
         </DisclosureGroup>
       </Section>
 
-      {/* 8. 网络与图片加速 */}
+      {/* 8. 网络连接 */}
       <Section
         footer={
           expanded.network ? (
             <Text>
-              图片镜像采用开源 CDN 缓存，完全匿名且不携带任何账号凭据，可大幅节省代理流量并提升图片与动图加载速度。API 网关供自定义反代节点使用。
+              图片镜像采用开源 CDN 缓存，完全匿名且不携带任何账号凭据，如需要节省代理流量，请在您的代理客户端添加以下规则 : DOMAIN,i.pixiv.re,DIRECT。API 网关供自定义反代节点使用。
             </Text>
           ) : undefined
         }
@@ -982,36 +982,32 @@ export function SettingsView() {
           onChanged={(v) => setExpandedKey("network", v)}
           label={
             <HStack spacing={10} alignment="center">
-              <Image systemName="network" font="body" foregroundStyle="systemIndigo" />
-              <Text font="headline">网络与图片加速</Text>
+              <Image systemName="network" font="body" foregroundStyle="systemIndigo" frame={{ width: 24, alignment: "center" }} />
+              <Text font="headline">网络连接</Text>
               <Spacer />
               {!expanded.network ? (
                 <Text font="footnote" foregroundStyle="tertiaryLabel">
-                  {settings.imageSourceMode === "pixiv_re"
-                    ? "Pixiv.re (免翻加速)"
-                    : settings.imageSourceMode === "custom"
-                    ? "自定义镜像"
-                    : "官方原源"}
+                  {`图片:${settings.imageSourceMode === "pixiv_re" ? "镜像" : settings.imageSourceMode === "custom" ? "自定义" : "官方"} · 网关:${settings.apiGatewayMode === "custom" ? "自定义" : "官方"}`}
                 </Text>
               ) : null}
             </HStack>
           }
         >
           <Picker
-            title="图片加载源"
-            value={settings.imageSourceMode || "pixiv_re"}
+            title="图片源"
+            value={settings.imageSourceMode || "official"}
             onChanged={(value: string) =>
-              update({ imageSourceMode: value as "pixiv_re" | "official" | "custom" })
+              update({ imageSourceMode: value as "official" | "pixiv_re" | "custom" })
             }
           >
-            <Text tag="pixiv_re">Pixiv.re 高速镜像 (免翻推荐)</Text>
-            <Text tag="official">官方原源 (i.pximg.net)</Text>
-            <Text tag="custom">自定义镜像</Text>
+            <Text tag="official">官方</Text>
+            <Text tag="pixiv_re">Pixiv.re 镜像</Text>
+            <Text tag="custom">自定义</Text>
           </Picker>
           {settings.imageSourceMode === "custom" ? (
             <TextField
               title="自定义图片源"
-              prompt="如 https://i.pixiv.re"
+              prompt="https://i.pximg.net"
               value={settings.customImageBaseUrl || ""}
               onChanged={(v) => update({ customImageBaseUrl: v.trim() })}
             />
@@ -1024,28 +1020,34 @@ export function SettingsView() {
               update({ apiGatewayMode: value as "official" | "custom" })
             }
           >
-            <Text tag="official">官方直连 (默认)</Text>
-            <Text tag="custom">自定义网关 (为完全直连准备)</Text>
+            <Text tag="official">官方</Text>
+            <Text tag="custom">自定义</Text>
           </Picker>
           {settings.apiGatewayMode === "custom" ? (
             <>
               <TextField
                 title="API 网关"
-                prompt="如 https://api.yourdomain.com"
+                prompt="https://app-api.pixiv.net"
                 value={settings.customApiBaseUrl || ""}
                 onChanged={(v) => update({ customApiBaseUrl: v.trim() })}
               />
               <TextField
                 title="OAuth 认证网关"
-                prompt="选填，留空默认使用 API 网关"
+                prompt="https://oauth.secure.pixiv.net"
                 value={settings.customOauthBaseUrl || ""}
                 onChanged={(v) => update({ customOauthBaseUrl: v.trim() })}
               />
               <TextField
                 title="账号服务网关"
-                prompt="选填，留空默认使用 API 网关"
+                prompt="https://accounts.pixiv.net"
                 value={settings.customAccountBaseUrl || ""}
                 onChanged={(v) => update({ customAccountBaseUrl: v.trim() })}
+              />
+              <TextField
+                title="网页服务网关"
+                prompt="https://www.pixiv.net"
+                value={settings.customWebBaseUrl || ""}
+                onChanged={(v) => update({ customWebBaseUrl: v.trim() })}
               />
             </>
           ) : null}
@@ -1071,7 +1073,7 @@ export function SettingsView() {
           onChanged={(v) => setExpandedKey("download", v)}
           label={
             <HStack spacing={10} alignment="center">
-              <Image systemName="arrow.down.circle.fill" font="body" foregroundStyle="systemCyan" />
+              <Image systemName="arrow.down.circle.fill" font="body" foregroundStyle="systemCyan" frame={{ width: 24, alignment: "center" }} />
               <Text font="headline">下载存储</Text>
               <Spacer />
               {!expanded.download ? (
@@ -1203,7 +1205,7 @@ export function SettingsView() {
           onChanged={(v) => setExpandedKey("history", v)}
           label={
             <HStack spacing={10} alignment="center">
-              <Image systemName="clock.arrow.circlepath" font="body" foregroundStyle="systemBrown" />
+              <Image systemName="clock.arrow.circlepath" font="body" foregroundStyle="systemBrown" frame={{ width: 24, alignment: "center" }} />
               <Text font="headline">浏览记录</Text>
               <Spacer />
               {!expanded.history ? (
@@ -1251,7 +1253,7 @@ export function SettingsView() {
           onChanged={(v) => setExpandedKey("cache", v)}
           label={
             <HStack spacing={10} alignment="center">
-              <Image systemName="internaldrive.fill" font="body" foregroundStyle="systemGray" />
+              <Image systemName="internaldrive.fill" font="body" foregroundStyle="systemGray" frame={{ width: 24, alignment: "center" }} />
               <Text font="headline">缓存管理</Text>
               <Spacer />
               {!expanded.cache ? (
@@ -1309,7 +1311,7 @@ export function SettingsView() {
             onChanged={(v) => setExpandedKey("debug", v)}
             label={
               <HStack spacing={10} alignment="center">
-                <Image systemName="wrench.and.screwdriver.fill" font="body" foregroundStyle="systemRed" />
+                <Image systemName="wrench.and.screwdriver.fill" font="body" foregroundStyle="systemRed" frame={{ width: 24, alignment: "center" }} />
                 <Text font="headline">调试高级</Text>
                 <Spacer />
                 {!expanded.debug ? (

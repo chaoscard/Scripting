@@ -1,4 +1,5 @@
-import { API_BASE_URL, OAUTH_REDIRECT_URI } from "../config"
+import { OAUTH_REDIRECT_URI } from "../config"
+import { getApiBaseUrl } from "../store/settings"
 import type { AuthTokenResponse, AuthUser } from "../types"
 import { oauthTokenRequest } from "./client"
 
@@ -110,17 +111,21 @@ export function buildAuthorizationURL(challenge: string): string {
     code_challenge_method: "S256",
     client: "pixiv-android",
   })
-  return `${API_BASE_URL}/web/v1/login?${params.toString()}`
+  return `${getApiBaseUrl()}/web/v1/login?${params.toString()}`
 }
 
-// 从回调 URL 提取授权码（严格比对协议、域名与路径）
+// 从回调 URL 提取授权码（严格比对协议、路径及域名）
 export function extractAuthCode(url: string): string | null {
   try {
     const parsed = new URL(url)
     const expected = new URL(OAUTH_REDIRECT_URI)
+    const currentApiHost = new URL(getApiBaseUrl()).host
+    const isHostMatched =
+      parsed.host === expected.host || parsed.host === currentApiHost
+
     if (
       parsed.protocol !== expected.protocol ||
-      parsed.host !== expected.host ||
+      !isHostMatched ||
       parsed.pathname !== expected.pathname ||
       parsed.username ||
       parsed.password

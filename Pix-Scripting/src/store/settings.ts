@@ -171,6 +171,7 @@ export interface AppSettings {
   customApiBaseUrl: string
   customOauthBaseUrl: string
   customAccountBaseUrl: string
+  customWebBaseUrl: string
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -245,12 +246,13 @@ const DEFAULT_SETTINGS: AppSettings = {
   widgetPoolCapacity: 30,
   widgetReloadIntervalMinutes: 60,
   sauceNaoApiKey: "",
-  imageSourceMode: "pixiv_re",
+  imageSourceMode: "official",
   customImageBaseUrl: "",
   apiGatewayMode: "official",
   customApiBaseUrl: "",
   customOauthBaseUrl: "",
   customAccountBaseUrl: "",
+  customWebBaseUrl: "",
 }
 
 const KEY = "pixiv_settings_v1"
@@ -297,8 +299,8 @@ const NOVEL_READER_EXPERIMENTAL_ALGORITHM_VALUES: readonly NovelReaderExperiment
 ]
 const CACHE_LIMIT_VALUES = [300, 500, 1000, 2000] as const
 const IMAGE_SOURCE_MODE_VALUES: readonly ImageSourceMode[] = [
-  "pixiv_re",
   "official",
+  "pixiv_re",
   "custom",
 ]
 const API_GATEWAY_MODE_VALUES: readonly ApiGatewayMode[] = [
@@ -695,6 +697,9 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
     customAccountBaseUrl: typeof stored?.customAccountBaseUrl === "string"
       ? stored.customAccountBaseUrl
       : DEFAULT_SETTINGS.customAccountBaseUrl,
+    customWebBaseUrl: typeof stored?.customWebBaseUrl === "string"
+      ? stored.customWebBaseUrl
+      : DEFAULT_SETTINGS.customWebBaseUrl,
   }
 }
 
@@ -961,14 +966,16 @@ export function resolveImageUrl(
   settings: AppSettings = loadSettings()
 ): string {
   if (!url || typeof url !== "string") return url
-  const mode = settings.imageSourceMode || "pixiv_re"
+  const mode = settings.imageSourceMode || "official"
   if (mode === "official") return url
   let targetBase = "https://i.pixiv.re"
   if (mode === "custom") {
     const custom = settings.customImageBaseUrl?.trim().replace(/\/+$/, "")
-    if (custom) {
-      targetBase = custom
+    if (!custom) {
+      // 自定义未输入时静默回退官方原源
+      return url
     }
+    targetBase = custom
   }
   // 替换官方图片域名 i.pximg.net 与静态资源 s.pximg.net
   return url
@@ -1012,6 +1019,29 @@ export function getAccountBaseUrl(
     }
   }
   return "https://accounts.pixiv.net"
+}
+
+export function getWebBaseUrl(
+  settings: AppSettings = loadSettings()
+): string {
+  if (settings.apiGatewayMode === "custom") {
+    if (settings.customWebBaseUrl?.trim()) {
+      return settings.customWebBaseUrl.trim().replace(/\/+$/, "")
+    }
+  }
+  return "https://www.pixiv.net"
+}
+
+export function resetNetworkSettings(): AppSettings {
+  return updateSettings({
+    imageSourceMode: "official",
+    customImageBaseUrl: "",
+    apiGatewayMode: "official",
+    customApiBaseUrl: "",
+    customOauthBaseUrl: "",
+    customAccountBaseUrl: "",
+    customWebBaseUrl: "",
+  })
 }
 
 

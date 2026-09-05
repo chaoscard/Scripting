@@ -1,5 +1,6 @@
 import {
   Button,
+  HStack,
   Image,
   Text,
   useEffect,
@@ -18,6 +19,7 @@ import {
 import { isPixivCookieDomain } from "../api/pixiv"
 import { session } from "../api/session"
 import { appToolbar, LoadingView } from "./components"
+import { LoginNetworkSheet } from "./loginNetworkSheet"
 
 export function LoginView(props: {
   onClose: () => void
@@ -25,6 +27,7 @@ export function LoginView(props: {
 }) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showNetworkSheet, setShowNetworkSheet] = useState(false)
   // 组件卸载（用户关闭页面）后不再 setState
   const mountedRef = useRef(true)
 
@@ -112,7 +115,23 @@ export function LoginView(props: {
   return (
     <ZStack
       frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-      toolbar={appToolbar(props.onClose)}
+      toolbar={appToolbar(
+        props.onClose,
+        undefined,
+        <Button
+          key="network-settings"
+          title="网络设置"
+          systemImage="network"
+          action={() => setShowNetworkSheet(true)}
+        />
+      )}
+      sheet={{
+        isPresented: showNetworkSheet,
+        onChanged: (val: boolean) => setShowNetworkSheet(val),
+        content: (
+          <LoginNetworkSheet onClose={() => setShowNetworkSheet(false)} />
+        ),
+      }}
     >
       {isLoading ? (
         <LoadingView />
@@ -141,14 +160,26 @@ export function LoginView(props: {
           </VStack>
 
           {error ? (
-            <Text
-              font="footnote"
-              foregroundStyle="systemRed"
-              multilineTextAlignment="center"
-              padding={{ top: 8 }}
-            >
-              {error}
-            </Text>
+            <VStack spacing={8} alignment="center" padding={{ top: 8 }}>
+              <Text
+                font="footnote"
+                foregroundStyle="systemRed"
+                multilineTextAlignment="center"
+              >
+                {error}
+              </Text>
+              <Button
+                buttonStyle="plain"
+                action={() => setShowNetworkSheet(true)}
+              >
+                <HStack spacing={4} alignment="center">
+                  <Image systemName="network" font="caption" foregroundStyle="#0096FA" />
+                  <Text font="caption" foregroundStyle="#0096FA">
+                    检查或重置网络网关
+                  </Text>
+                </HStack>
+              </Button>
+            </VStack>
           ) : null}
         </VStack>
       )}

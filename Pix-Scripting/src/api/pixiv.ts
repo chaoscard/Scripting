@@ -40,7 +40,8 @@ import type {
   TextEmbeddedImage,
   UgoiraMetadataResponse,
 } from "../types"
-import { API_BASE_URL } from "../config"
+import { API_BASE_URL, DEFAULT_WEB_BASE_URL } from "../config"
+import { getWebBaseUrl } from "../store/settings"
 import { isPixivCookieDomain, clearPixivWebCookies } from "./auth"
 import { session } from "./session"
 import { notifyUserFollowChanged, recordUserFollowed } from "../store/userFollow"
@@ -549,7 +550,20 @@ export async function postComment(
 
 // ---------- 用户 ----------
 
-const WEB_BASE_ORIGIN = "https://www.pixiv.net"
+function getWebOrigin(): string {
+  return getWebBaseUrl()
+}
+
+function getAllowedWebOrigins(): string[] {
+  const current = getWebBaseUrl()
+  const list = [DEFAULT_WEB_BASE_URL, "https://pixiv.net"]
+  try {
+    const origin = new URL(current).origin
+    if (!list.includes(origin)) list.push(origin)
+  } catch {}
+  return list
+}
+
 const WEB_USER_AGENT =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/26.6"
 
@@ -603,12 +617,13 @@ export async function syncWebCookies(): Promise<boolean> {
 export async function fetchWebUserDetail(
   userID: number
 ): Promise<PixivWebUserDetail | null> {
-  const url = `${WEB_BASE_ORIGIN}/ajax/user/${userID}?full=1`
+  const origin = getWebOrigin()
+  const url = `${origin}/ajax/user/${userID}?full=1`
   try {
     const json = await apiGetPublicJson<{ error: boolean; body?: PixivWebUserDetail }>(
       url,
-      WEB_BASE_ORIGIN,
-      getWebHeaders(`${WEB_BASE_ORIGIN}/users/${userID}`)
+      getAllowedWebOrigins(),
+      getWebHeaders(`${origin}/users/${userID}`)
     )
     if (json?.error === false && json?.body) {
       return json.body as PixivWebUserDetail
@@ -761,18 +776,19 @@ export async function fetchUserWorkTags(
   kind: "illust" | "manga" | "novel",
   limit = 20
 ): Promise<PixivWebUserTag[]> {
+  const origin = getWebOrigin()
   const touchUrl =
     kind === "novel"
-      ? `${WEB_BASE_ORIGIN}/touch/ajax/user/novels?id=${userID}&sensitiveFilterMode=userSetting&lang=zh`
-      : `${WEB_BASE_ORIGIN}/touch/ajax/user/illusts?id=${userID}&type=${kind === "illust" ? "illust" : "manga"}&sensitiveFilterMode=userSetting&lang=zh`
+      ? `${origin}/touch/ajax/user/novels?id=${userID}&sensitiveFilterMode=userSetting&lang=zh`
+      : `${origin}/touch/ajax/user/illusts?id=${userID}&type=${kind === "illust" ? "illust" : "manga"}&sensitiveFilterMode=userSetting&lang=zh`
   try {
     const json = await apiGetPublicJson<{
       error: boolean
       body?: { tags?: PixivWebUserTag[] }
     }>(
       touchUrl,
-      WEB_BASE_ORIGIN,
-      getWebHeaders(`${WEB_BASE_ORIGIN}/users/${userID}`)
+      getAllowedWebOrigins(),
+      getWebHeaders(`${origin}/users/${userID}`)
     )
     if (
       json?.error === false &&
@@ -787,12 +803,12 @@ export async function fetchUserWorkTags(
 
   // Fallback to desktop ajax tags endpoint if touch endpoint fails or returns empty
   const path = kind === "illust" ? "illusts" : kind === "manga" ? "manga" : "novels"
-  const url = `${WEB_BASE_ORIGIN}/ajax/user/${userID}/${path}/tags?lang=zh`
+  const url = `${origin}/ajax/user/${userID}/${path}/tags?lang=zh`
   try {
     const json = await apiGetPublicJson<{ error: boolean; body?: PixivWebUserTag[] }>(
       url,
-      WEB_BASE_ORIGIN,
-      getWebHeaders(`${WEB_BASE_ORIGIN}/users/${userID}`)
+      getAllowedWebOrigins(),
+      getWebHeaders(`${origin}/users/${userID}`)
     )
     if (json?.error === false && Array.isArray(json.body)) {
       const sorted = [...json.body].sort((a, b) => (b.cnt ?? 0) - (a.cnt ?? 0))
@@ -812,16 +828,17 @@ export async function fetchUserTagFilteredWorks(
   offset = 0,
   limit = 48
 ): Promise<PixivPage<PixivIllustration>> {
+  const origin = getWebOrigin()
   const path = kind === "illust" ? "illusts" : "manga"
-  const url = `${WEB_BASE_ORIGIN}/ajax/user/${userID}/${path}/tag?tag=${encodeURIComponent(tag)}&offset=${offset}&limit=${limit}&sensitiveFilterMode=userSetting&lang=zh`
+  const url = `${origin}/ajax/user/${userID}/${path}/tag?tag=${encodeURIComponent(tag)}&offset=${offset}&limit=${limit}&sensitiveFilterMode=userSetting&lang=zh`
   try {
     const json = await apiGetPublicJson<{
       error: boolean
       body?: { works: WebIllustWorkItem[]; total: number }
     }>(
       url,
-      WEB_BASE_ORIGIN,
-      getWebHeaders(`${WEB_BASE_ORIGIN}/users/${userID}`)
+      getAllowedWebOrigins(),
+      getWebHeaders(`${origin}/users/${userID}`)
     )
     if (json?.error === false && json.body && Array.isArray(json.body.works)) {
       const works = json.body.works.map(mapWebIllustToPixivIllustration)
@@ -846,15 +863,16 @@ export async function fetchUserTagFilteredNovels(
   offset = 0,
   limit = 24
 ): Promise<PixivPage<PixivNovel>> {
-  const url = `${WEB_BASE_ORIGIN}/ajax/user/${userID}/novels/tag?tag=${encodeURIComponent(tag)}&offset=${offset}&limit=${limit}&sensitiveFilterMode=userSetting&lang=zh`
+  const origin = getWebOrigin()
+  const url = `${origin}/ajax/user/${userID}/novels/tag?tag=${encodeURIComponent(tag)}&offset=${offset}&limit=${limit}&sensitiveFilterMode=userSetting&lang=zh`
   try {
     const json = await apiGetPublicJson<{
       error: boolean
       body?: { works: WebNovelWorkItem[]; total: number }
     }>(
       url,
-      WEB_BASE_ORIGIN,
-      getWebHeaders(`${WEB_BASE_ORIGIN}/users/${userID}`)
+      getAllowedWebOrigins(),
+      getWebHeaders(`${origin}/users/${userID}`)
     )
     if (json?.error === false && json.body && Array.isArray(json.body.works)) {
       const works = json.body.works.map(mapWebNovelToPixivNovel)
@@ -1162,12 +1180,13 @@ export async function novelViewerData(
   // 若正文包含 uploadedimage 标签但尚未取得有效图片字典，则从 Web 端点降级补充拉取
   if (!hasEmbeddedImages && /\[uploadedimage:\s*[^\]]+\]/i.test(text)) {
     try {
+      const origin = getWebOrigin()
       const webData = await apiGetPublicJson<{
         body?: { textEmbeddedImages?: Record<string, TextEmbeddedImage> }
       }>(
-        `${WEB_BASE_ORIGIN}/ajax/novel/${id}`,
-        WEB_BASE_ORIGIN,
-        getWebHeaders(`${WEB_BASE_ORIGIN}/novel/show.php?id=${id}`)
+        `${origin}/ajax/novel/${id}`,
+        getAllowedWebOrigins(),
+        getWebHeaders(`${origin}/novel/show.php?id=${id}`)
       )
       if (webData?.body?.textEmbeddedImages) {
         textEmbeddedImages = webData.body.textEmbeddedImages
@@ -1501,12 +1520,13 @@ export async function fetchTagInfo(tagName: string): Promise<PixivTagDetail | nu
   const cleanTag = tagName.trim()
   if (!cleanTag) return null
   try {
-    const url = `https://www.pixiv.net/ajax/tag/info?tag=${encodeURIComponent(cleanTag)}`
+    const origin = getWebOrigin()
+    const url = `${origin}/ajax/tag/info?tag=${encodeURIComponent(cleanTag)}`
     const json = await apiGetPublicJson<PixivTagInfoResponse>(
       url,
-      "https://www.pixiv.net",
+      getAllowedWebOrigins(),
       {
-        Referer: "https://www.pixiv.net/",
+        Referer: `${origin}/`,
       }
     )
     if (!json || json.error || !json.body) {
