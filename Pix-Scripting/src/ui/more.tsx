@@ -64,7 +64,7 @@ export function MoreView(props: { onClose: () => void }) {
   }
 
   return (
-    <ZStack>
+    <ZStack navigationDestination={destinationElement}>
       {isVirtualNode(ambientBackground) ? (
         ambientBackground
       ) : (

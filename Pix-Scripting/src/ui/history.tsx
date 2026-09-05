@@ -159,7 +159,7 @@ export function HistoryView() {
       searchable={{
         value: searchQuery,
         onChanged: setSearchQuery,
-        placement: "navigationBarDrawerAlwaysDisplay",
+        placement: "navigationBarDrawer",
         prompt: "搜索作者、标题和标签",
       }}
       refreshable={() => refreshHandlerRef.current()}
