@@ -200,8 +200,9 @@ export function SettingsView() {
 
   const activeKeys: (keyof SectionExpandedState)[] = [
     "content",
-    "ranking",
     "features",
+    "appearance",
+    "ranking",
     "ai",
     "widgets",
     "quality",
@@ -330,62 +331,115 @@ export function SettingsView() {
         </DisclosureGroup>
       </Section>
 
-      {/* 2. 排行榜单 */}
+      {/* 2. 功能与交互 */}
       <Section>
         <DisclosureGroup
-          isExpanded={expanded.ranking}
-          onChanged={(v) => setExpandedKey("ranking", v)}
+          isExpanded={expanded.features}
+          onChanged={(v) => setExpandedKey("features", v)}
           label={
             <HStack spacing={10} alignment="center">
-              <Image systemName="chart.bar.xaxis" font="body" foregroundStyle="systemOrange" />
-              <Text font="headline">排行与榜单</Text>
+              <Image systemName="slider.horizontal.3" font="body" foregroundStyle="systemIndigo" />
+              <Text font="headline">功能与交互</Text>
               <Spacer />
-              {!expanded.ranking ? (
+              {!expanded.features ? (
                 <Text font="footnote" foregroundStyle="tertiaryLabel">
-                  {settings.customRankingEnabled ? "自定义榜单" : "默认榜单"}
+                  展开
                 </Text>
               ) : null}
             </HStack>
           }
         >
           <Toggle
-            title="自定义榜单"
-            value={settings.customRankingEnabled}
-            onChanged={(value) => update({ customRankingEnabled: value })}
+            title="预取后续图片"
+            value={settings.prefetchEnabled}
+            onChanged={(value) => update({ prefetchEnabled: value })}
           />
-          {settings.customRankingEnabled ? (
-            <>
-              <NavigationLink value="rankingCustomPicker:illust">
-                <HStack spacing={8}>
-                  <Text font="body">插画</Text>
-                  <Spacer />
-                  <Text font="caption" foregroundStyle="secondaryLabel">
-                    {formatCustomRankingSummary("illust", settings)}
-                  </Text>
+          <Picker
+            title="启动页面"
+            value={settings.launchPage}
+            onChanged={(value: string) =>
+              update({ launchPage: value as LaunchPage })
+            }
+          >
+            <Text tag="discovery">探索</Text>
+            <Text tag="ranking">排行</Text>
+            <Text tag="following">关注</Text>
+          </Picker>
+          <Picker title="追更顺序" value={settings.watchlistSortOrder} onChanged={(value: string) => update({ watchlistSortOrder: value as "asc" | "desc" })}>
+            <Text tag="asc">从第一话开始</Text>
+            <Text tag="desc">从最新话开始</Text>
+          </Picker>
+          <Picker title="长按收藏按钮" value={settings.longPressBookmarkAction} onChanged={(value: string) => update({ longPressBookmarkAction: value as "off" | "follow" | "detail" })}>
+            <Text tag="off">关闭长按功能</Text>
+            <Text tag="follow">一键关注作者</Text>
+            <Text tag="detail">打开收藏窗口</Text>
+          </Picker>
+          <Picker title="关闭按钮行为" value={settings.closeButtonAction} onChanged={(value: string) => update({ closeButtonAction: value as "minimize" | "exit" })}>
+            <Text tag="minimize">后台运行</Text>
+            <Text tag="exit">完全关闭</Text>
+          </Picker>
+          <Toggle
+            title="关注后推荐相似创作者"
+            value={settings.showRelatedUsersOnFollow}
+            onChanged={(value) => update({ showRelatedUsersOnFollow: value })}
+          />
+          <Toggle
+            title="灵动岛实时进度"
+            value={settings.enableLiveActivity}
+            onChanged={(value) => update({ enableLiveActivity: value })}
+          />
+          <Toggle
+            title="任务完成后通知"
+            value={settings.enableTaskNotification}
+            onChanged={(value) => update({ enableTaskNotification: value })}
+          />
+          <HStack spacing={8} alignment="center">
+            <VStack alignment="leading" spacing={2}>
+              <Text font="body">Web 登录态</Text>
+              <Text font="caption" foregroundStyle="secondaryLabel">
+                部分功能需要Web接口
+              </Text>
+            </VStack>
+            <Spacer />
+            <Button
+              buttonStyle="glass"
+              controlSize="small"
+              disabled={syncingWebCookie}
+              action={async () => {
+                setSyncingWebCookie(true)
+                void Haptics.transient()
+                try {
+                  const ok = await syncWebCookies()
+                  if (ok) {
+                    void Haptics.transient()
+                  }
+                  setWebCookieVersion((v) => v + 1)
+                } catch (e: any) {
+                  console.log("syncWebCookies error:", e?.message ?? e)
+                } finally {
+                  setSyncingWebCookie(false)
+                }
+              }}
+            >
+              {session.webCookie ? (
+                <HStack spacing={4} alignment="center">
+                  <Text font="body">{syncingWebCookie ? "同步中…" : "已同步"}</Text>
+                  {!syncingWebCookie ? (
+                    <Image
+                      systemName="checkmark"
+                      font="subheadline"
+                      fontWeight="bold"
+                      foregroundStyle="systemGreen"
+                    />
+                  ) : null}
                 </HStack>
-              </NavigationLink>
-              <NavigationLink value="rankingCustomPicker:manga">
-                <HStack spacing={8}>
-                  <Text font="body">漫画</Text>
-                  <Spacer />
-                  <Text font="caption" foregroundStyle="secondaryLabel">
-                    {formatCustomRankingSummary("manga", settings)}
-                  </Text>
-                </HStack>
-              </NavigationLink>
-              {!settings.hideNovels ? (
-                <NavigationLink value="rankingCustomPicker:novel">
-                  <HStack spacing={8}>
-                    <Text font="body">小说</Text>
-                    <Spacer />
-                    <Text font="caption" foregroundStyle="secondaryLabel">
-                      {formatCustomRankingSummary("novel", settings)}
-                    </Text>
-                  </HStack>
-                </NavigationLink>
-              ) : null}
-            </>
-          ) : null}
+              ) : (
+                <Text font="body">
+                  {syncingWebCookie ? "同步中…" : "立即同步"}
+                </Text>
+              )}
+            </Button>
+          </HStack>
         </DisclosureGroup>
       </Section>
 
@@ -559,119 +613,66 @@ export function SettingsView() {
         </DisclosureGroup>
       </Section>
 
-      {/* 4. 功能与交互 */}
+      {/* 4. 排行与榜单 */}
       <Section>
         <DisclosureGroup
-          isExpanded={expanded.features}
-          onChanged={(v) => setExpandedKey("features", v)}
+          isExpanded={expanded.ranking}
+          onChanged={(v) => setExpandedKey("ranking", v)}
           label={
             <HStack spacing={10} alignment="center">
-              <Image systemName="slider.horizontal.3" font="body" foregroundStyle="systemIndigo" />
-              <Text font="headline">功能与交互</Text>
+              <Image systemName="chart.bar.xaxis" font="body" foregroundStyle="systemOrange" />
+              <Text font="headline">排行与榜单</Text>
               <Spacer />
-              {!expanded.features ? (
+              {!expanded.ranking ? (
                 <Text font="footnote" foregroundStyle="tertiaryLabel">
-                  展开
+                  {settings.customRankingEnabled ? "自定义榜单" : "默认榜单"}
                 </Text>
               ) : null}
             </HStack>
           }
         >
           <Toggle
-            title="预取后续图片"
-            value={settings.prefetchEnabled}
-            onChanged={(value) => update({ prefetchEnabled: value })}
+            title="自定义榜单"
+            value={settings.customRankingEnabled}
+            onChanged={(value) => update({ customRankingEnabled: value })}
           />
-          <Picker
-            title="启动页面"
-            value={settings.launchPage}
-            onChanged={(value: string) =>
-              update({ launchPage: value as LaunchPage })
-            }
-          >
-            <Text tag="discovery">探索</Text>
-            <Text tag="ranking">排行</Text>
-            <Text tag="following">关注</Text>
-          </Picker>
-          <Picker title="追更顺序" value={settings.watchlistSortOrder} onChanged={(value: string) => update({ watchlistSortOrder: value as "asc" | "desc" })}>
-            <Text tag="asc">从第一话开始</Text>
-            <Text tag="desc">从最新话开始</Text>
-          </Picker>
-          <Picker title="长按收藏按钮" value={settings.longPressBookmarkAction} onChanged={(value: string) => update({ longPressBookmarkAction: value as "off" | "follow" | "detail" })}>
-            <Text tag="off">关闭长按功能</Text>
-            <Text tag="follow">一键关注作者</Text>
-            <Text tag="detail">打开收藏窗口</Text>
-          </Picker>
-          <Picker title="关闭按钮行为" value={settings.closeButtonAction} onChanged={(value: string) => update({ closeButtonAction: value as "minimize" | "exit" })}>
-            <Text tag="minimize">后台运行</Text>
-            <Text tag="exit">完全关闭</Text>
-          </Picker>
-          <Toggle
-            title="关注后推荐相似创作者"
-            value={settings.showRelatedUsersOnFollow}
-            onChanged={(value) => update({ showRelatedUsersOnFollow: value })}
-          />
-          <Toggle
-            title="灵动岛实时进度"
-            value={settings.enableLiveActivity}
-            onChanged={(value) => update({ enableLiveActivity: value })}
-          />
-          <Toggle
-            title="任务完成后通知"
-            value={settings.enableTaskNotification}
-            onChanged={(value) => update({ enableTaskNotification: value })}
-          />
-          <HStack spacing={8} alignment="center">
-            <VStack alignment="leading" spacing={2}>
-              <Text font="body">Web 登录态</Text>
-              <Text font="caption" foregroundStyle="secondaryLabel">
-                部分功能需要Web接口
-              </Text>
-            </VStack>
-            <Spacer />
-            <Button
-              buttonStyle="glass"
-              controlSize="small"
-              disabled={syncingWebCookie}
-              action={async () => {
-                setSyncingWebCookie(true)
-                void Haptics.transient()
-                try {
-                  const ok = await syncWebCookies()
-                  if (ok) {
-                    void Haptics.transient()
-                  }
-                  setWebCookieVersion((v) => v + 1)
-                } catch (e: any) {
-                  console.log("syncWebCookies error:", e?.message ?? e)
-                } finally {
-                  setSyncingWebCookie(false)
-                }
-              }}
-            >
-              {session.webCookie ? (
-                <HStack spacing={4} alignment="center">
-                  <Text font="body">{syncingWebCookie ? "同步中…" : "已同步"}</Text>
-                  {!syncingWebCookie ? (
-                    <Image
-                      systemName="checkmark"
-                      font="subheadline"
-                      fontWeight="bold"
-                      foregroundStyle="systemGreen"
-                    />
-                  ) : null}
+          {settings.customRankingEnabled ? (
+            <>
+              <NavigationLink value="rankingCustomPicker:illust">
+                <HStack spacing={8}>
+                  <Text font="body">插画</Text>
+                  <Spacer />
+                  <Text font="caption" foregroundStyle="secondaryLabel">
+                    {formatCustomRankingSummary("illust", settings)}
+                  </Text>
                 </HStack>
-              ) : (
-                <Text font="body">
-                  {syncingWebCookie ? "同步中…" : "立即同步"}
-                </Text>
-              )}
-            </Button>
-          </HStack>
+              </NavigationLink>
+              <NavigationLink value="rankingCustomPicker:manga">
+                <HStack spacing={8}>
+                  <Text font="body">漫画</Text>
+                  <Spacer />
+                  <Text font="caption" foregroundStyle="secondaryLabel">
+                    {formatCustomRankingSummary("manga", settings)}
+                  </Text>
+                </HStack>
+              </NavigationLink>
+              {!settings.hideNovels ? (
+                <NavigationLink value="rankingCustomPicker:novel">
+                  <HStack spacing={8}>
+                    <Text font="body">小说</Text>
+                    <Spacer />
+                    <Text font="caption" foregroundStyle="secondaryLabel">
+                      {formatCustomRankingSummary("novel", settings)}
+                    </Text>
+                  </HStack>
+                </NavigationLink>
+              ) : null}
+            </>
+          ) : null}
         </DisclosureGroup>
       </Section>
 
-      {/* 4. AI 助手 */}
+      {/* 5. AI 助手 */}
       <Section
         footer={
           expanded.ai ? (

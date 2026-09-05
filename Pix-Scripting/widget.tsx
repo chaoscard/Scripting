@@ -1,8 +1,10 @@
 import {
   Button,
+  HStack,
   Image,
   Link,
   Script,
+  Spacer,
   Text,
   VStack,
   Widget,
@@ -16,20 +18,52 @@ import {
   type WidgetArtwork,
 } from "./src/store/widgetStore"
 
+// 获取准确的小组件尺寸（修复 Scripting 在 systemMedium 下 displaySize.width 错误返回 158 的问题）
+function getAccurateWidgetDisplaySize(
+  family: string,
+  displaySize: { width: number; height: number }
+): { width: number; height: number } {
+  const w = displaySize?.width || 158
+  const h = displaySize?.height || 158
+
+  switch (family) {
+    case "systemSmall":
+      return { width: w, height: h }
+    case "systemMedium":
+      return {
+        width: w <= h ? Math.round(h * (338 / 158)) : w,
+        height: h,
+      }
+    case "systemLarge":
+      return {
+        width: w <= 160 ? 338 : w,
+        height: h <= 160 ? 354 : h,
+      }
+    case "systemExtraLarge":
+      return {
+        width: w <= 360 ? 708 : w,
+        height: h <= 200 ? 354 : h,
+      }
+    default:
+      return { width: w, height: h }
+  }
+}
+
 // 桌面小组件单图纯画框视图
 function PureArtworkWidgetView(props: {
   artwork: WidgetArtwork | null
   parameter: string
 }) {
   const { artwork, parameter } = props
-  const size = Widget.displaySize
+  const size = getAccurateWidgetDisplaySize(Widget.family, Widget.displaySize)
   const isTrans = Widget.isTransparentMode || Widget.isTransparentBackground
   const isBlur = Widget.isBlurMode
   const isLarge = Widget.family === "systemLarge"
   const isExtraLarge = Widget.family === "systemExtraLarge"
-  // 尺寸阶梯：小/中号 38×38，大号 46×46，iPad 特大号 52×52
-  const btnSize = isExtraLarge ? 52 : isLarge ? 46 : 38
-  const paddingValue = isExtraLarge ? 18 : isLarge ? 16 : 12
+  // 玻璃保持紧凑尺寸：小/中号 30×30，大号 34×34，iPad 特大号 40×40
+  const btnSize = isExtraLarge ? 40 : isLarge ? 34 : 30
+  const paddingValue = isExtraLarge ? 16 : isLarge ? 14 : 10
+  // 恢复饱满图标尺寸：原版大号图标，填满紧凑玻璃胶囊
   const iconFont = isExtraLarge ? "title2" : isLarge ? "title3" : "subheadline"
 
   const isBookmarked = isWidgetArtworkBookmarked(artwork)
@@ -57,18 +91,16 @@ function PureArtworkWidgetView(props: {
       alignment="topLeading"
       widgetURL={runUrl}
     >
-      {/* 纯图底层：通过 Link 包裹实现全图点击直达作品详情 */}
+      {/* 纯图底层：不套 Link，依靠根视图 widgetURL 全图直达作品详情，避免层叠遮挡 */}
       {artwork && artwork.localImagePath ? (
-        <Link url={runUrl || ""}>
-          <Image
-            filePath={artwork.localImagePath}
-            resizable
-            scaleToFill
-            frame={size}
-            clipped
-            widgetAccentedRenderingMode="fullColor"
-          />
-        </Link>
+        <Image
+          filePath={artwork.localImagePath}
+          resizable
+          scaleToFill
+          frame={size}
+          clipped
+          widgetAccentedRenderingMode="fullColor"
+        />
       ) : (
         <VStack
           alignment="center"
@@ -87,67 +119,64 @@ function PureArtworkWidgetView(props: {
         </VStack>
       )}
 
-      {/* 右上角独立按钮：加大一号微透圆形液态玻璃手动刷新按钮 (AppIntent 原地切图) */}
-      <ZStack alignment="topTrailing" frame={size}>
-        <Button
-          intent={NextArtworkIntent(parameter)}
-          buttonStyle="plain"
-          padding={paddingValue}
-        >
-          <ZStack
-            frame={{ width: btnSize, height: btnSize }}
-            background="#00000040"
-            clipShape="circle"
-            alignment="center"
-            shadow={{
-              color: "#00000038",
-              radius: 4,
-              x: 0,
-              y: 2,
-            }}
-          >
-            <Image
-              systemName="arrow.clockwise"
-              font={iconFont}
-              fontWeight="bold"
-              foregroundStyle="white"
-              widgetAccentedRenderingMode="fullColor"
-            />
-          </ZStack>
-        </Button>
-      </ZStack>
-
-      {/* 右下角独立按钮：微透圆形液态玻璃一键轻收藏按钮 (AppIntent 原地收藏 + 触觉反馈) */}
-      {artwork ? (
-        <ZStack alignment="bottomTrailing" frame={size}>
+      {/* 控制操作层：弹性推导对齐，右上角刷新 + 右下角收藏 */}
+      <VStack
+        spacing={0}
+        padding={paddingValue}
+        frame={size}
+      >
+        {/* 顶部行：右上角独立刷新按钮 (AppIntent 原地切图) */}
+        <HStack spacing={0}>
+          <Spacer />
           <Button
-            intent={BookmarkArtworkIntent(bookmarkParam)}
+            intent={NextArtworkIntent(parameter)}
             buttonStyle="plain"
-            padding={paddingValue}
           >
             <ZStack
               frame={{ width: btnSize, height: btnSize }}
-              background="#00000040"
+              background="rgba(0, 0, 0, 0.45)"
               clipShape="circle"
               alignment="center"
-              shadow={{
-                color: "#00000038",
-                radius: 4,
-                x: 0,
-                y: 2,
-              }}
             >
               <Image
-                systemName={isBookmarked ? "heart.fill" : "heart"}
+                systemName="arrow.clockwise"
                 font={iconFont}
                 fontWeight="bold"
-                foregroundStyle={isBookmarked ? "#FF2D55" : "white"}
+                foregroundStyle="white"
                 widgetAccentedRenderingMode="fullColor"
               />
             </ZStack>
           </Button>
-        </ZStack>
-      ) : null}
+        </HStack>
+
+        <Spacer />
+
+        {/* 底部行：右下角独立收藏按钮 (AppIntent 原地收藏 + 触觉反馈) */}
+        {artwork ? (
+          <HStack spacing={0}>
+            <Spacer />
+            <Button
+              intent={BookmarkArtworkIntent(bookmarkParam)}
+              buttonStyle="plain"
+            >
+              <ZStack
+                frame={{ width: btnSize, height: btnSize }}
+                background="rgba(0, 0, 0, 0.45)"
+                clipShape="circle"
+                alignment="center"
+              >
+                <Image
+                  systemName={isBookmarked ? "heart.fill" : "heart"}
+                  font={iconFont}
+                  fontWeight="bold"
+                  foregroundStyle={isBookmarked ? "#FF2D55" : "white"}
+                  widgetAccentedRenderingMode="fullColor"
+                />
+              </ZStack>
+            </Button>
+          </HStack>
+        ) : null}
+      </VStack>
     </ZStack>
   )
 }
