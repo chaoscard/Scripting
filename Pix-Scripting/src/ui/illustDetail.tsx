@@ -910,7 +910,7 @@ export function IllustDetailView(props: { illustID: number }) {
           >
             <Image
               systemName={iconName}
-              font="title3"
+              font="title2"
               fontWeight="medium"
               foregroundStyle={iconColor}
             />

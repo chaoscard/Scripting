@@ -169,6 +169,15 @@ export function NovelDetailView(props: { novelID: number }) {
   const [totalPages, setTotalPages] = useState(1)
   const [pagerVisible, setPagerVisible] = useState(true)
   const [markerBusy, setMarkerBusy] = useState(false)
+  const [quickActionEnabled, setQuickActionEnabled] = useState(
+    () => loadSettings().quickActionButtonEnabled
+  )
+  const [quickActionType, setQuickActionType] = useState(
+    () => loadSettings().quickActionButtonAction
+  )
+  const [quickActionPos, setQuickActionPos] = useState(
+    () => loadSettings().quickActionButtonPosition
+  )
 
   const guard = useAsyncGuard()
   const novelRef = useLatest(novel)
@@ -463,10 +472,13 @@ export function NovelDetailView(props: { novelID: number }) {
     })
   }, [])
 
-  // 屏蔽黑名单变化时撤下或恢复已打开的内容。
+  // 屏蔽黑名单变化时撤下或恢复已打开的内容，并同步快捷操作设置。
   useEffect(() => {
     return onSettingsChanged(() => {
       const settings = loadSettings()
+      setQuickActionEnabled(settings.quickActionButtonEnabled)
+      setQuickActionType(settings.quickActionButtonAction)
+      setQuickActionPos(settings.quickActionButtonPosition)
       const current = novelRef.current
       if (current) {
         const isExempt =
@@ -806,8 +818,112 @@ export function NovelDetailView(props: { novelID: number }) {
     recordWorkSeriesAssociation(current.id, "novel", resolvedSeriesID, resolvedSeriesTitle, resolvedEpisodeNumber)
   }
 
+  function renderQuickActionButton() {
+    if (!quickActionEnabled || !current) return null
+
+    let iconName = "heart"
+    let iconColor: any = "label"
+    let disabled = false
+    let action = () => {}
+    let contextMenu: any = undefined
+    let gesture: any = undefined
+
+    if (quickActionType === "bookmark") {
+      iconName = bookmarked ? "heart.fill" : "heart"
+      iconColor = bookmarked ? "#FF375F" : "label"
+      disabled = bookmarkLoading || bookmarkLongPressLocked
+      action = toggleBookmark
+      gesture = LongPressGesture({ minDuration: 500 }).onEnded(() => {
+        setBookmarkLongPressLocked(true)
+        handleBookmarkLongPress()
+        setTimeout(() => setBookmarkLongPressLocked(false), 1500)
+      })
+    } else if (quickActionType === "follow") {
+      iconName = followed
+        ? followRestrict === "private"
+          ? "person.badge.shield.checkmark"
+          : "person.fill.checkmark"
+        : "person.badge.plus"
+      iconColor = followed ? "#007AFF" : "label"
+      disabled = followLoading
+      action = () => void toggleFollow()
+      contextMenu = {
+        menuItems: (
+          <Group>
+            {followed ? (
+              followRestrict === "private" ? (
+                <Button
+                  title="设为公开关注"
+                  systemImage="globe"
+                  disabled={followLoading}
+                  action={() => void followWithVisibility("public")}
+                />
+              ) : (
+                <Button
+                  title="设为私密关注"
+                  systemImage="lock"
+                  disabled={followLoading}
+                  action={() => void followWithVisibility("private")}
+                />
+              )
+            ) : (
+              <Button
+                title="私密关注"
+                systemImage="lock"
+                disabled={followLoading}
+                action={() => void followWithVisibility("private")}
+              />
+            )}
+          </Group>
+        ),
+      }
+    } else if (quickActionType === "download") {
+      iconName = downloadingEpub ? "arrow.down.circle.fill" : "arrow.down.circle"
+      iconColor = downloadingEpub ? "secondaryLabel" : "label"
+      disabled = downloadingEpub
+      action = () => {
+        void handleDownloadNovelEpub()
+      }
+    }
+
+    const bottomPadding = totalPages > 1 ? 60 : 24
+
+    return (
+      <VStack
+        padding={{
+          bottom: bottomPadding,
+          leading: quickActionPos === "leading" ? 18 : 0,
+          trailing: quickActionPos === "trailing" ? 18 : 0,
+        }}
+      >
+        <Button
+          buttonStyle="plain"
+          disabled={disabled}
+          action={action}
+          contextMenu={contextMenu}
+          simultaneousGesture={gesture}
+        >
+          <ZStack
+            alignment="center"
+            frame={{ width: 46, height: 46 }}
+            glassEffect="circle"
+            contentShape="circle"
+            shadow={{ color: "#0000002E", radius: 8, y: 2 }}
+          >
+            <Image
+              systemName={iconName}
+              font="title2"
+              fontWeight="medium"
+              foregroundStyle={iconColor}
+            />
+          </ZStack>
+        </Button>
+      </VStack>
+    )
+  }
+
   return (
-    <ZStack>
+    <ZStack alignment={quickActionPos === "leading" ? "bottomLeading" : "bottomTrailing"}>
       {isVirtualNode(ambientBackground) ? (
         ambientBackground
       ) : (
@@ -1454,6 +1570,7 @@ export function NovelDetailView(props: { novelID: number }) {
           )
         }}
       </ScrollViewReader>
+      {renderQuickActionButton()}
     </ZStack>
   )
 }

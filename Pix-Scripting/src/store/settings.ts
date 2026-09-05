@@ -249,7 +249,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   widgetSourceExtraLargeIpad: "pixivision",
   widgetPoolCapacity: 30,
   widgetReloadIntervalMinutes: 60,
-  quickActionButtonEnabled: false,
+  quickActionButtonEnabled: true,
   quickActionButtonAction: "bookmark",
   quickActionButtonPosition: "trailing",
   imageSourceMode: "official",
