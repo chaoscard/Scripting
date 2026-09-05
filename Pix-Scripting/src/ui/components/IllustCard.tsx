@@ -62,6 +62,7 @@ export function IllustCard(props: {
   flow?: boolean
   hero?: boolean
   compact?: boolean
+  showBookmarkButton?: boolean
   priority?: number
   cornerBadge?: any
   footerText?: string
@@ -74,6 +75,7 @@ export function IllustCard(props: {
     flow = false,
     hero = false,
     compact,
+    showBookmarkButton = true,
     priority,
     cornerBadge,
     footerText,
@@ -299,28 +301,30 @@ export function IllustCard(props: {
               {cornerBadge ?? null}
             </ZStack>
           </NavigationLink>
-          <BookmarkButton
-            hero={hero}
-            bookmarked={bookmarked}
-            disabled={bookmarkBusy}
-            onTap={toggleBookmark}
-            onLongPress={handleBookmarkLongPress}
-            sheetContent={
-              <BookmarkDetailSheet
-                item={illust}
-                bookmarked={bookmarked}
-                loadDetail={(token) => bookmarkDetail(illust.id, token)}
-                loadTags={(restrict, token) => bookmarkTags(session.userID ?? 0, restrict, token)}
-                save={(restrict, tags, token) =>
-                  addBookmark(illust.id, restrict, tags, token)
-                }
-                onSaved={() => setBookmarked(true)}
-                onClose={() => setShowBookmarkDetail(false)}
-              />
-            }
-            sheetPresented={showBookmarkDetail}
-            onSheetChanged={setShowBookmarkDetail}
-          />
+          {showBookmarkButton ? (
+            <BookmarkButton
+              hero={hero}
+              bookmarked={bookmarked}
+              disabled={bookmarkBusy}
+              onTap={toggleBookmark}
+              onLongPress={handleBookmarkLongPress}
+              sheetContent={
+                <BookmarkDetailSheet
+                  item={illust}
+                  bookmarked={bookmarked}
+                  loadDetail={(token) => bookmarkDetail(illust.id, token)}
+                  loadTags={(restrict, token) => bookmarkTags(session.userID ?? 0, restrict, token)}
+                  save={(restrict, tags, token) =>
+                    addBookmark(illust.id, restrict, tags, token)
+                  }
+                  onSaved={() => setBookmarked(true)}
+                  onClose={() => setShowBookmarkDetail(false)}
+                />
+              }
+              sheetPresented={showBookmarkDetail}
+              onSheetChanged={setShowBookmarkDetail}
+            />
+          ) : null}
         </ZStack>
         {!isCompact ? (
           <>

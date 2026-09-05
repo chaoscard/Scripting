@@ -24,8 +24,7 @@ import {
   VStack,
   ZStack,
 } from "scripting"
-import { fetchPublicWebIllustDetail, illustrationDetail, pixivisionDetail } from "../api/pixiv"
-import { session } from "../api/session"
+import { pixivisionDetail } from "../api/pixiv"
 import { cacheIllust, getCachedIllust } from "../store/illustCache"
 import { cachedFilePath, derivePixivThumbUrl, getPixivisionCoverUrl, loadImage } from "../image/imageLoader"
 import { fetchImageBinaryWithRetry, saveImageToPixivAlbum, withAlbumKeepAlive } from "../downloader"
@@ -70,12 +69,9 @@ export function PixivisionDetailView(props: { articleID: number }) {
   const [detail, setDetail] = useState<PixivisionDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [hydratedMap, setHydratedMap] = useState<Record<number, PixivIllustration>>({})
   const [isTocExpanded, setIsTocExpanded] = useState(true)
-  const [scrollTargetId, setScrollTargetId] = useState<string | null>(null)
   const [bookmarked, setBookmarked] = useState<boolean>(() => isPixivisionBookmarked(articleID))
   const guard = useAsyncGuard()
-  const hydratingSetRef = useRef<Set<number>>(new Set())
   const proxyRef = useRef<ScrollViewProxy | null>(null)
 
   // 按照探索推荐页沉浸逻辑：从第一张图片提取色调，绝不侵入顶栏背景
@@ -108,7 +104,6 @@ export function PixivisionDetailView(props: { articleID: number }) {
 
   const scrollToTarget = useCallback((targetId: string) => {
     withAnimation(() => {
-      setScrollTargetId(targetId)
       proxyRef.current?.scrollTo(targetId, "top")
     })
   }, [])
@@ -132,59 +127,6 @@ export function PixivisionDetailView(props: { articleID: number }) {
     }
   }, [])
 
-  const hydrateArtwork = useCallback(async (id: number) => {
-    if (hydratingSetRef.current.has(id)) return
-    const cached = getCachedIllust(id)
-    if (cached && cached.width > 0 && cached.height > 0) {
-      setHydratedMap((prev) => (prev[id] ? prev : { ...prev, [id]: cached }))
-      return
-    }
-    hydratingSetRef.current.add(id)
-    try {
-      let full: PixivIllustration | null = null
-      if (session.userID) {
-        try {
-          full = await session.call((token) => illustrationDetail(id, token))
-        } catch {
-          // 回退到公开 Web 接口
-        }
-      }
-      if (!full) {
-        full = await fetchPublicWebIllustDetail(id)
-      }
-      if (full) {
-        const art = detail?.artworks.find((a) => a.id === id)
-        if (art?.draftImages && art.draftImages.length > 0) {
-          const draftPages = art.draftImages.map((d) => {
-            const dThumb = d.thumbURL || derivePixivThumbUrl(d.imageURL) || d.imageURL
-            return {
-              image_urls: {
-                square_medium: dThumb,
-                medium: dThumb,
-                large: d.imageURL,
-                original: d.imageURL,
-              },
-            }
-          })
-          full.meta_pages = [
-            ...(full.meta_pages && full.meta_pages.length > 0 ? full.meta_pages : [{ image_urls: full.image_urls }]),
-            ...draftPages,
-          ]
-          full.page_count = full.meta_pages.length
-        }
-        if (art?.imageURL) {
-          full.extra_preview_url = art.imageURL
-        }
-        cacheIllust(full)
-        setHydratedMap((prev) => ({ ...prev, [id]: full }))
-      }
-    } catch {
-      // 容错：接口失败时保持骨架卡片展示
-    } finally {
-      hydratingSetRef.current.delete(id)
-    }
-  }, [detail])
-
   const openGalleryForBlock = useCallback(
     (block: Extract<PixivisionBodyBlock, { type: "image" }>) => {
       let targetIllust: PixivIllustration | null = null
@@ -193,8 +135,8 @@ export function PixivisionDetailView(props: { articleID: number }) {
       if (block.associatedArtworkID && detail) {
         const artwork = detail.artworks.find((a) => a.id === block.associatedArtworkID)
         if (artwork) {
-          const hydrated = hydratedMap[artwork.id]
-          targetIllust = hydrated ?? buildArtworkSkeletonIllust(artwork)
+          const cached = getCachedIllust(artwork.id)
+          targetIllust = cached && cached.width > 0 && cached.height > 0 ? cached : buildArtworkSkeletonIllust(artwork)
           targetPageIndex = block.galleryPageIndex ?? 0
         }
       }
@@ -248,7 +190,7 @@ export function PixivisionDetailView(props: { articleID: number }) {
         modalPresentationStyle: "fullScreen",
       })
     },
-    [detail, hydratedMap]
+    [detail]
   )
 
   async function load() {
@@ -445,15 +387,6 @@ export function PixivisionDetailView(props: { articleID: number }) {
           proxyRef.current = proxy
           return (
             <ScrollView
-            scrollPosition={{
-              value: scrollTargetId,
-              onChanged: (newId) => {
-                if (newId !== scrollTargetId) {
-                  setScrollTargetId(newId as string | null)
-                }
-              },
-              anchor: "top",
-            }}
             navigationTitle={detail.title}
             navigationBarTitleDisplayMode="inline"
             toolbar={{
@@ -876,8 +809,8 @@ export function PixivisionDetailView(props: { articleID: number }) {
                       )
                     case "illust": {
                       const artwork = block.artwork
-                      const hydrated = hydratedMap[artwork.id]
-                      const illust = hydrated ?? buildArtworkSkeletonIllust(artwork)
+                      const cached = getCachedIllust(artwork.id)
+                      const illust = cached && cached.width > 0 && cached.height > 0 ? cached : buildArtworkSkeletonIllust(artwork)
                       return (
                         <VStack
                           key={`illust-${artwork.id}-${idx}`}
@@ -889,13 +822,9 @@ export function PixivisionDetailView(props: { articleID: number }) {
                           <IllustCard
                             hero={true}
                             compact={true}
+                            showBookmarkButton={false}
                             illust={illust}
                             priority={idx}
-                            onAppear={() => {
-                              if (!hydrated) {
-                                void hydrateArtwork(artwork.id)
-                              }
-                            }}
                           />
                           {artwork.comment ? (
                             <VStack padding={{ horizontal: 6 }} frame={{ maxWidth: "infinity", alignment: "leading" }}>
@@ -1112,8 +1041,8 @@ export function PixivisionDetailView(props: { articleID: number }) {
                 <>
                   {detail.artworks.length > 0 ? (
                     detail.artworks.map((artwork, index) => {
-                      const hydrated = hydratedMap[artwork.id]
-                      const illust = hydrated ?? buildArtworkSkeletonIllust(artwork)
+                      const cached = getCachedIllust(artwork.id)
+                      const illust = cached && cached.width > 0 && cached.height > 0 ? cached : buildArtworkSkeletonIllust(artwork)
                       return (
                         <VStack
                           key={`fallback-art-${artwork.id}`}
@@ -1125,13 +1054,9 @@ export function PixivisionDetailView(props: { articleID: number }) {
                           <IllustCard
                             hero={true}
                             compact={true}
+                            showBookmarkButton={false}
                             illust={illust}
                             priority={index}
-                            onAppear={() => {
-                              if (!hydrated) {
-                                void hydrateArtwork(artwork.id)
-                              }
-                            }}
                           />
                           {artwork.comment ? (
                             <VStack padding={{ horizontal: 6 }} frame={{ maxWidth: "infinity", alignment: "leading" }}>
