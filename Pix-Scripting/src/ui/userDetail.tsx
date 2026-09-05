@@ -72,6 +72,7 @@ import {
 import { UserProfileHeader } from "./UserProfileHeader"
 import { UserWorkTagFilterBar } from "./UserWorkTagFilterBar"
 import { UserWorksFeedSection, UserWorkPicker, type UserWorkKind } from "./UserWorksFeedSection"
+import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
 
 export function UserDetailView(props: { userID: number }) {
   const { userID } = props
@@ -89,6 +90,8 @@ export function UserDetailView(props: { userID: number }) {
   const [selectedTag, setSelectedTag] = useState<string | null>(null)
   const [tagsByKind, setTagsByKind] = useState<Partial<Record<UserWorkKind, PixivWebUserTag[]>>>({})
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
+  const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
+  const isAppleMusic = pageLayout === "appleMusic"
   const [emptyKinds, setEmptyKinds] = useState<Partial<Record<UserWorkKind, boolean>>>({})
   const { ambientBackground } = useUserAmbientPalette(detail?.profile.background_image_url)
 
@@ -221,10 +224,34 @@ export function UserDetailView(props: { userID: number }) {
 
   useEffect(() => {
     return onSettingsChanged(() => {
-      setHideNovels(loadSettings().hideNovels)
+      const next = loadSettings()
+      setHideNovels(next.hideNovels)
+      setPageLayout(next.pageLayout)
       setEmptyKinds({})
     })
   }, [])
+
+  const userWorkItems = useMemo(() => {
+    return availableKinds.map((k) => ({
+      tag: k,
+      label: k === "illust" ? "插画" : k === "manga" ? "漫画" : "小说",
+    }))
+  }, [availableKinds])
+
+  useRegisterBottomAccessory(
+    "userWorks",
+    availableKinds.length <= 1 ? null : (
+      <DockSegmentedBar
+        items={userWorkItems}
+        value={activeKind}
+        onChanged={(k) => {
+          setSelectedTag(null)
+          setKind(k)
+        }}
+      />
+    ),
+    isAppleMusic
+  )
 
   useEffect(() => {
     void loadDetail()
@@ -771,14 +798,16 @@ export function UserDetailView(props: { userID: number }) {
         ) : null}
 
         {/* 位于个人资料和作品列表之间的分段选择器（仅显示有投稿项，<=1 项时自动隐藏） */}
-        <UserWorkPicker
-          availableKinds={availableKinds}
-          kind={activeKind}
-          onChanged={(k) => {
-            setSelectedTag(null)
-            setKind(k)
-          }}
-        />
+        {isAppleMusic ? null : (
+          <UserWorkPicker
+            availableKinds={availableKinds}
+            kind={activeKind}
+            onChanged={(k) => {
+              setSelectedTag(null)
+              setKind(k)
+            }}
+          />
+        )}
 
         {availableKinds.length === 0 ? (
           <EmptyView text="暂无作品投稿" systemImage="photo.on.rectangle.angled" />

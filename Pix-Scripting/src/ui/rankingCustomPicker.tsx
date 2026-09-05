@@ -94,8 +94,8 @@ export function RankingCustomPickerView(props: { kind: CustomRankingPickerKind }
         updateSettings({ customRankingNovelModes: next })
       }
     } else {
-      // 检查上限（当前类别最多选择 5 个，达到上限时提示语变红提醒）
-      if (currentKindSelectedCount >= 5) {
+      // 检查上限（当前类别最多选择 3 个，达到上限时提示语变红提醒）
+      if (currentKindSelectedCount >= 3) {
         triggerLimitExceeded()
         return
       }
@@ -117,12 +117,12 @@ export function RankingCustomPickerView(props: { kind: CustomRankingPickerKind }
     }
   }
 
-  let headerText = "最多可选择 5 个，长按右上角重置按钮恢复默认。"
+  let headerText = "最多可选择 3 个，长按右上角重置按钮恢复默认。"
   let headerColor: "systemRed" | "systemGreen" | "secondaryLabel" =
     "secondaryLabel"
 
   if (isLimitExceeded) {
-    headerText = "最多可选择5个排行榜单"
+    headerText = "最多可选择3个排行榜单"
     headerColor = "systemRed"
   } else if (isResetSuccess) {
     headerText = "已重置回初始状态"

@@ -1,6 +1,8 @@
 import { downloadBinary } from "../api/client"
 import { getDetailImageQuality, getFeedImageQuality, getHeroImageQuality, loadSettings } from "../store/settings"
 import { getCachedIllust } from "../store/illustCache"
+import { loadKindEntries, type IllustrationHistoryEntry } from "../store/history"
+import { isIllustContentVisible } from "../store/contentFilter"
 import { pixivDataPath } from "../store/dataDirectory"
 import { recoverFile, writeDataSafely, writeTextSafely } from "../store/safeFile"
 import { enforceUgoiraCacheLimit } from "../ugoira/ugoira"
@@ -150,31 +152,78 @@ export function cachedFilePath(url: string): string | null {
 }
 
 /**
- * 获取本地缓存中最新访问的一张高质量作品插画路径，供启动页模糊背景使用。
+ * 获取本地缓存中近期访问的合规高质量插画路径，供启动页模糊背景使用。
+ * 规则：
+ * 1. 排除小说封面与动图，仅从插画（history_illust.json）中选取；
+ * 2. 100% 绝对过滤 R18 和 R18G（无论设置中是否开启显示，启动页绝对不可见）；
+ * 3. AI 作品严格跟随设置项 settings.showAI 控制，若未开启则过滤；
+ * 4. 遵守用户标签与画师黑名单拦截；
+ * 5. 从近期最多 30 张有效合规缓存插画中随机抽取 1 张展示；
+ * 6. 若无可用合规插画缓存，安全返回 null 并自动降级为梦幻流体光晕渐变背景。
  */
 export function getLatestCachedArtworkPath(): string | null {
   try {
-    const meta = loadMeta()
-    const entries = Object.entries(meta)
-    if (entries.length === 0) return null
-    // 筛选出大于 30KB（排除微型头像或图标）且最近访问过的有效插画
-    const validArtworkEntries = entries
-      .filter(([_, item]) => {
-        if (!item || !item.url) return false
-        const url = item.url.toLowerCase()
-        if (url.includes("avatar") || url.includes("profile") || url.endsWith(".zip") || url.endsWith(".mp4")) {
-          return false
-        }
-        return (item.size || 0) > 30 * 1024
-      })
-      .sort((a, b) => (b[1].lastAccess || 0) - (a[1].lastAccess || 0))
+    const settings = loadSettings()
+    const historyEntries = loadKindEntries("illustration") as IllustrationHistoryEntry[]
+    if (!historyEntries || historyEntries.length === 0) return null
 
-    for (const [_, item] of validArtworkEntries.slice(0, 10)) {
-      const path = cachedFilePath(item.url)
-      if (path && isUsableCacheFile(path)) {
-        return path
+    const candidates: string[] = []
+    const MAX_CANDIDATES = 30
+
+    // 按最后浏览时间降序遍历
+    for (const entry of historyEntries) {
+      if (candidates.length >= MAX_CANDIDATES) break
+
+      const illust = entry?.illustration
+      if (!illust) continue
+
+      // 1. 绝对过滤 R-18 与 R-18G
+      if (illust.x_restrict !== 0) continue
+      const tags = Array.isArray(illust.tags) ? illust.tags : []
+      const hasR18Tag = tags.some((t) => {
+        const name = (t.name || "").toLowerCase()
+        return name.includes("r-18") || name.includes("r18")
+      })
+      if (hasR18Tag) continue
+
+      // 2. AI 作品严格跟随设置 settings.showAI
+      if (!settings.showAI) {
+        if (illust.illust_ai_type === 2) continue
+        const hasAITag = tags.some((t) => {
+          const name = (t.name || "").toLowerCase()
+          return name.includes("ai生成") || name.includes("novelai") || name === "ai"
+        })
+        if (hasAITag) continue
+      }
+
+      // 3. 检查常规内容过滤规则（画师黑名单、标签黑名单等）
+      if (!isIllustContentVisible(illust as any, settings)) {
+        continue
+      }
+
+      // 4. 排除动图
+      if (illust.type === "ugoira") continue
+
+      // 5. 寻找本地已下载可用的缓存大图/中图
+      const candidateUrls = [
+        illust.image_urls?.large,
+        illust.image_urls?.medium,
+      ].filter(Boolean) as string[]
+
+      for (const url of candidateUrls) {
+        const path = cachedFilePath(url)
+        if (path && isUsableCacheFile(path)) {
+          candidates.push(path)
+          break
+        }
       }
     }
+
+    if (candidates.length === 0) return null
+    if (candidates.length === 1) return candidates[0]
+
+    const randomIndex = Math.floor(Math.random() * candidates.length)
+    return candidates[randomIndex]
   } catch {}
   return null
 }

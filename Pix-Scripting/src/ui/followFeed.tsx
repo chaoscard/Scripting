@@ -6,6 +6,7 @@ import {
   Picker,
   Text,
   useEffect,
+  useMemo,
   useRef,
   useState,
   VStack,
@@ -34,6 +35,7 @@ import { onWatchlistChanged } from "../store/bookmarkSync"
 import { recordWorkSeriesAssociation } from "../store/seriesCache"
 import { destinationElement } from "./routes"
 import { setActiveTabKind } from "./routeNavigation"
+import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
 import { useLatest, usePagedList, currentBatchSize, useExperimentalAmbientPalette } from "./hooks"
 import type {
   PixivIllustration,
@@ -74,6 +76,8 @@ export function FollowFeedView(props: {
   const [watchKind, setWatchKind] = useState<WatchKind>("manga")
   const [friendKind, setFriendKind] = useState<WorkKind>("illust")
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
+  const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
+  const isAppleMusic = pageLayout === "appleMusic"
   const [showRecommendedUsers, setShowRecommendedUsers] = useState(false)
   const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(null)
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
@@ -81,9 +85,10 @@ export function FollowFeedView(props: {
 
   useEffect(() => {
     return onSettingsChanged(() => {
-      const next = loadSettings().hideNovels
-      setHideNovels(next)
-      if (next) {
+      const nextSettings = loadSettings()
+      setHideNovels(nextSettings.hideNovels)
+      setPageLayout(nextSettings.pageLayout)
+      if (nextSettings.hideNovels) {
         setFollowingKind("illust")
         setWatchKind("manga")
         setFriendKind("illust")
@@ -102,6 +107,31 @@ export function FollowFeedView(props: {
     else if (mode === "watchlist") setWatchKind(value as WatchKind)
     else setFriendKind(value as WorkKind)
   }
+
+  const followItems = useMemo<Array<{ tag: string; label: string }>>(() => {
+    if (mode === "watchlist") {
+      return [
+        { tag: "manga", label: "漫画" },
+        ...(hideNovels ? [] : [{ tag: "novel", label: "小说" }]),
+      ]
+    }
+    return [
+      { tag: "illust", label: "插画·漫画" },
+      ...(hideNovels ? [] : [{ tag: "novel", label: "小说" }]),
+    ]
+  }, [mode, hideNovels])
+
+  useRegisterBottomAccessory(
+    "following",
+    hideNovels || followItems.length <= 1 ? null : (
+      <DockSegmentedBar
+        items={followItems}
+        value={segmentedValue}
+        onChanged={selectSegmentedKind}
+      />
+    ),
+    isAppleMusic
+  )
 
   return (
     <RefreshableScrollView
@@ -125,7 +155,7 @@ export function FollowFeedView(props: {
           if (!activated) setActivated(true)
         }}
       >
-        {hideNovels ? null : (
+        {hideNovels || isAppleMusic ? null : (
           <FollowKindPicker
             mode={mode}
             value={segmentedValue}

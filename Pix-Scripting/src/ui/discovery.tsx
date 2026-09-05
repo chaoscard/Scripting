@@ -6,6 +6,7 @@ import {
   Picker,
   Text,
   useEffect,
+  useMemo,
   useRef,
   useState,
   VStack,
@@ -31,6 +32,7 @@ import {
 } from "../store/contentFilter"
 import { destinationElement } from "./routes"
 import { setActiveTabKind } from "./routeNavigation"
+import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
 import { useLatest, usePagedList, currentBatchSize, useExperimentalAmbientPalette } from "./hooks"
 import type {
   PixivIllustration,
@@ -63,19 +65,45 @@ export function DiscoveryView(props: { onClose: () => void }) {
   const [mode, setMode] = useState<ExploreMode>("recommended")
   const [kind, setKind] = useState<FeedKind>("illustration")
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
+  const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
+  const isAppleMusic = pageLayout === "appleMusic"
   const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(null)
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
   useEffect(() => {
     return onSettingsChanged(() => {
-      const next = loadSettings().hideNovels
-      setHideNovels(next)
-      if (next && kind === "novel") {
+      const nextSettings = loadSettings()
+      setHideNovels(nextSettings.hideNovels)
+      setPageLayout(nextSettings.pageLayout)
+      if (nextSettings.hideNovels && kind === "novel") {
         setKind("illustration")
       }
     })
   }, [kind])
+
+  const discoveryItems = useMemo<Array<{ tag: FeedKind; label: string }>>(() => {
+    const items: Array<{ tag: FeedKind; label: string }> = [
+      { tag: "illustration", label: "插画" },
+      { tag: "manga", label: "漫画" },
+    ]
+    if (!hideNovels) {
+      items.push({ tag: "novel", label: "小说" })
+    }
+    return items
+  }, [hideNovels])
+
+  useRegisterBottomAccessory(
+    "discovery",
+    mode === "pixivision" || discoveryItems.length <= 1 ? null : (
+      <DockSegmentedBar
+        items={discoveryItems}
+        value={kind}
+        onChanged={setKind}
+      />
+    ),
+    isAppleMusic
+  )
 
   return (
     <RefreshableScrollView
@@ -92,7 +120,7 @@ export function DiscoveryView(props: { onClose: () => void }) {
           if (!activated) setActivated(true)
         }}
       >
-        {mode === "pixivision" ? null : (
+        {mode === "pixivision" || isAppleMusic ? null : (
           <FeedKindPicker kind={kind} hideNovels={hideNovels} onKindChange={setKind} />
         )}
         {mode === "pixivision" ? (

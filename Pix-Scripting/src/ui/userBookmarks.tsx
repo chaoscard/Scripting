@@ -4,6 +4,7 @@ import {
   Text,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   VStack,
@@ -38,25 +39,51 @@ import {
   NovelCard,
   RefreshableScrollView,
 } from "./components"
+import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
 
 type BookmarkKind = "illustration" | "novel"
 
 export function UserBookmarksView(props: { userID: number }) {
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
   const [kind, setKind] = useState<BookmarkKind>("illustration")
+  const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
+  const isAppleMusic = pageLayout === "appleMusic"
   const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(null)
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
   useEffect(() => {
     return onSettingsChanged(() => {
-      const next = loadSettings().hideNovels
-      setHideNovels(next)
-      if (next && kind === "novel") {
+      const next = loadSettings()
+      setHideNovels(next.hideNovels)
+      setPageLayout(next.pageLayout)
+      if (next.hideNovels && kind === "novel") {
         setKind("illustration")
       }
     })
   }, [kind])
+
+  const userBookmarkItems = useMemo<Array<{ tag: BookmarkKind; label: string }>>(() => {
+    const items: Array<{ tag: BookmarkKind; label: string }> = [
+      { tag: "illustration", label: "插画·漫画" },
+    ]
+    if (!hideNovels) {
+      items.push({ tag: "novel", label: "小说" })
+    }
+    return items
+  }, [hideNovels])
+
+  useRegisterBottomAccessory(
+    "userBookmarks",
+    hideNovels || userBookmarkItems.length <= 1 ? null : (
+      <DockSegmentedBar
+        items={userBookmarkItems}
+        value={kind}
+        onChanged={setKind}
+      />
+    ),
+    isAppleMusic
+  )
 
   return (
     <RefreshableScrollView
@@ -66,7 +93,7 @@ export function UserBookmarksView(props: { userID: number }) {
       refreshable={() => refreshHandlerRef.current()}
     >
       <VStack alignment="leading" spacing={8}>
-        {hideNovels ? null : (
+        {hideNovels || isAppleMusic ? null : (
           <BookmarkKindPicker kind={kind} onChanged={setKind} />
         )}
         <UserBookmarksFeed

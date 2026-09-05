@@ -22,6 +22,7 @@ import {
   NovelCard,
   RefreshableScrollView,
 } from "./components"
+import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
 import {
   clearHistoryKind,
   getHistory,
@@ -132,19 +133,45 @@ export function HistoryView() {
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
   const [kind, setKind] = useState<HistoryKind>("illustration")
   const [searchQuery, setSearchQuery] = useState("")
+  const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
+  const isAppleMusic = pageLayout === "appleMusic"
   const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(null)
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
   useEffect(() => {
     return onSettingsChanged(() => {
-      const next = loadSettings().hideNovels
-      setHideNovels(next)
-      if (next && kind === "novel") {
+      const next = loadSettings()
+      setHideNovels(next.hideNovels)
+      setPageLayout(next.pageLayout)
+      if (next.hideNovels && kind === "novel") {
         setKind("illustration")
       }
     })
   }, [kind])
+
+  const historyItems = useMemo<Array<{ tag: HistoryKind; label: string }>>(() => {
+    const items: Array<{ tag: HistoryKind; label: string }> = [
+      { tag: "illustration", label: "插画" },
+      { tag: "manga", label: "漫画" },
+    ]
+    if (!hideNovels) {
+      items.push({ tag: "novel", label: "小说" })
+    }
+    return items
+  }, [hideNovels])
+
+  useRegisterBottomAccessory(
+    "history",
+    historyItems.length <= 1 ? null : (
+      <DockSegmentedBar
+        items={historyItems}
+        value={kind}
+        onChanged={setKind}
+      />
+    ),
+    isAppleMusic
+  )
 
   function clearCurrentKind() {
     clearHistoryKind(kind)
@@ -165,7 +192,9 @@ export function HistoryView() {
       refreshable={() => refreshHandlerRef.current()}
     >
       <VStack alignment="leading" spacing={8}>
-        <HistoryKindPicker kind={kind} hideNovels={hideNovels} onKindChange={setKind} />
+        {isAppleMusic ? null : (
+          <HistoryKindPicker kind={kind} hideNovels={hideNovels} onKindChange={setKind} />
+        )}
         <HistoryFeed
           kind={kind}
           searchQuery={searchQuery}

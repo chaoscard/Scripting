@@ -492,6 +492,7 @@ export function SettingsView() {
               {!expanded.appearance ? (
                 <Text font="footnote" foregroundStyle="tertiaryLabel">
                   {[
+                    settings.pageLayout === "appleMusic" ? "苹果音乐" : "经典样式",
                     settings.heroFirstFeedCard ? "全宽" : "双列",
                     settings.compactIllustCard ? "简约" : null,
                     settings.ambientImmersion ? "沉浸" : null,
@@ -503,6 +504,16 @@ export function SettingsView() {
             </HStack>
           }
         >
+          <Picker
+            title="页面布局"
+            value={settings.pageLayout}
+            onChanged={(value: string) =>
+              update({ pageLayout: value as "classic" | "appleMusic" })
+            }
+          >
+            <Text tag="classic">经典样式</Text>
+            <Text tag="appleMusic">苹果音乐</Text>
+          </Picker>
           <Toggle
             title="瀑布流首图全宽展示"
             value={settings.heroFirstFeedCard}

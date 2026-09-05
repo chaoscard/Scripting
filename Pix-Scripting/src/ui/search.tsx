@@ -92,6 +92,7 @@ import {
   getDefaultAdvancedSearchParams,
   SearchAdvancedSheet,
 } from "./searchAdvancedSheet"
+import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
 import {
   appToolbar,
   ConnectionRow,
@@ -394,6 +395,8 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
     getDefaultAdvancedSearchParams(scope, query)
   )
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
+  const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
+  const isAppleMusic = pageLayout === "appleMusic"
 
   // 搜索记录
   const [historyItems, setHistoryItems] = useState<string[]>(() => getSearchHistory(scope))
@@ -527,8 +530,10 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
 
   useEffect(() => {
     return onSettingsChanged(() => {
-      const next = loadSettings().hideNovels
+      const nextSettings = loadSettings()
+      const next = nextSettings.hideNovels
       setHideNovels(next)
+      setPageLayout(nextSettings.pageLayout)
       if (next && scope === "novel") {
         setScope("illust")
       }
@@ -716,6 +721,29 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
     setAdvancedParams((prev) => ({ ...prev, sort: value }))
   }
 
+  const searchScopeItems = useMemo<Array<{ tag: SearchScope; label: string }>>(() => {
+    const items: Array<{ tag: SearchScope; label: string }> = [
+      { tag: "illust", label: "插画·漫画" },
+    ]
+    if (!hideNovels) {
+      items.push({ tag: "novel", label: "小说" })
+    }
+    items.push({ tag: "user", label: "用户" })
+    return items
+  }, [hideNovels])
+
+  useRegisterBottomAccessory(
+    "search",
+    searchScopeItems.length <= 1 ? null : (
+      <DockSegmentedBar
+        items={searchScopeItems}
+        value={scope}
+        onChanged={handleScopeChange}
+      />
+    ),
+    isAppleMusic
+  )
+
   function submitSearch(textToSearch: string) {
     const trimmed = textToSearch.trim()
     if (!trimmed) return
@@ -849,11 +877,13 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
         onSubmit={{ triggers: "search" as const, action: () => submitSearch(query) }}
         submitLabel="search"
       >
-        <SearchScopePicker
-          scope={scope}
-          hideNovels={hideNovels}
-          onScopeChange={handleScopeChange}
-        />
+        {isAppleMusic ? null : (
+          <SearchScopePicker
+            scope={scope}
+            hideNovels={hideNovels}
+            onScopeChange={handleScopeChange}
+          />
+        )}
         <SearchHistorySection
           history={historyItems}
           onSelect={submitSearch}
@@ -938,11 +968,13 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
       submitLabel="search"
     >
       <VStack alignment="leading" spacing={10}>
-        <SearchScopePicker
-          scope={scope}
-          hideNovels={hideNovels}
-          onScopeChange={handleScopeChange}
-        />
+        {isAppleMusic ? null : (
+          <SearchScopePicker
+            scope={scope}
+            hideNovels={hideNovels}
+            onScopeChange={handleScopeChange}
+          />
+        )}
 
           {/* 1. 搜索提示词与精准直达：插画·漫画 / 小说展示官方标签提示词，用户展示用户卡片提示列表 */}
           {isSuggestingActive ? (

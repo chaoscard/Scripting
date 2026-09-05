@@ -18,7 +18,12 @@ import {
   useState,
 } from "scripting"
 import { session } from "../api/session"
-import { loadSettings } from "../store/settings"
+import { loadSettings, onSettingsChanged } from "../store/settings"
+import {
+  CapsuleAccessoryContainer,
+  getActiveAccessory,
+  subscribeBottomAccessory,
+} from "./bottomAccessory"
 import { getLatestCachedArtworkPath } from "../image/imageLoader"
 import { DreamyFluidBackground } from "./components/DreamyBackground"
 import { DiscoveryView } from "./discovery"
@@ -184,13 +189,20 @@ export function RootView() {
 function MainTabView(props: {
   onClose: () => void
 }) {
-  const initialTab = useRef(loadSettings().launchPage).current
+  const [settings, setSettings] = useState(() => loadSettings())
+  const initialTab = useRef(settings.launchPage).current
   const selection = useObservable<string>(initialTab)
   const discoveryPath = useObservable<string[]>([])
   const rankingPath = useObservable<string[]>([])
   const followingPath = useObservable<string[]>([])
   const searchPath = useObservable<string[]>([])
   const morePath = useObservable<string[]>([])
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      setSettings(loadSettings())
+    })
+  }, [])
 
   useEffect(() => {
     const unregisterDiscovery = registerTabNavigator("discovery", (route) => {
@@ -234,11 +246,56 @@ function MainTabView(props: {
     }
   }, [selection, discoveryPath, rankingPath, followingPath, searchPath, morePath, initialTab])
 
+  const isAppleMusic = settings.pageLayout === "appleMusic"
+  const [, setAccessoryTick] = useState(0)
+
+  useEffect(() => {
+    const trigger = () => setAccessoryTick((t) => t + 1)
+    const unsubs: Array<(() => void) | null | undefined> = [
+      subscribeBottomAccessory(trigger),
+      (selection as any)?.subscribe ? (selection as any).subscribe(trigger) : null,
+      (discoveryPath as any)?.subscribe ? (discoveryPath as any).subscribe(trigger) : null,
+      (rankingPath as any)?.subscribe ? (rankingPath as any).subscribe(trigger) : null,
+      (followingPath as any)?.subscribe ? (followingPath as any).subscribe(trigger) : null,
+      (searchPath as any)?.subscribe ? (searchPath as any).subscribe(trigger) : null,
+      (morePath as any)?.subscribe ? (morePath as any).subscribe(trigger) : null,
+    ]
+    return () => {
+      for (const unsub of unsubs) {
+        if (typeof unsub === "function") {
+          unsub()
+        }
+      }
+    }
+  }, [selection, discoveryPath, rankingPath, followingPath, searchPath, morePath])
+
+  const activeTab = selection.value
+  let activePath: string[] = []
+  if (activeTab === "discovery") activePath = discoveryPath.value
+  else if (activeTab === "ranking") activePath = rankingPath.value
+  else if (activeTab === "following") activePath = followingPath.value
+  else if (activeTab === "search") activePath = searchPath.value
+  else if (activeTab === "more") activePath = morePath.value
+
+  const activeAccessoryNode = isAppleMusic
+    ? getActiveAccessory(activeTab, activePath)
+    : null
+
+  const tabViewProps: any = {
+    selection,
+    tabBarMinimizeBehavior: "onScrollDown",
+  }
+
+  if (isAppleMusic && activeAccessoryNode) {
+    tabViewProps.tabViewBottomAccessory = (
+      <CapsuleAccessoryContainer>
+        {activeAccessoryNode}
+      </CapsuleAccessoryContainer>
+    )
+  }
+
   return (
-    <TabView
-      selection={selection}
-      tabBarMinimizeBehavior="onScrollDown"
-    >
+    <TabView {...tabViewProps}>
       <Tab title="探索" systemImage="photo.on.rectangle.angled" value="discovery">
         <NavigationStack path={discoveryPath}>
           <DiscoveryView onClose={props.onClose} />

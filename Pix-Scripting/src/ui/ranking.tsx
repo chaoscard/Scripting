@@ -10,6 +10,7 @@ import {
   Text,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   VStack,
@@ -31,6 +32,7 @@ import {
 } from "../store/contentFilter"
 import { destinationElement } from "./routes"
 import { setActiveTabKind } from "./routeNavigation"
+import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
 import { useLatest, usePagedList, currentBatchSize, useExperimentalAmbientPalette } from "./hooks"
 import type { PixivIllustration, PixivNovel } from "../types"
 import {
@@ -56,15 +58,12 @@ const DEFAULT_ILLUSTRATION_MODES: ReadonlyArray<{ value: string; title: string }
   { value: "day", title: "每日" },
   { value: "week", title: "每周" },
   { value: "month", title: "每月" },
-  { value: "week_original", title: "原创" },
-  { value: "week_rookie", title: "新人" },
 ]
 
 const DEFAULT_MANGA_MODES: ReadonlyArray<{ value: string; title: string }> = [
   { value: "day_manga", title: "每日" },
   { value: "week_manga", title: "每周" },
   { value: "month_manga", title: "每月" },
-  { value: "week_rookie_manga", title: "新人" },
 ]
 
 const DEFAULT_NOVEL_MODES: ReadonlyArray<{ value: string; title: string }> = [
@@ -181,6 +180,25 @@ export function RankingView(props: { onClose: () => void }) {
     }
   }
 
+  const isAppleMusic = settings.pageLayout === "appleMusic"
+
+  const rankingItems = useMemo(() => {
+    if (!activeModes) return []
+    return activeModes.map((m) => ({ tag: m.value, label: m.title }))
+  }, [activeModes])
+
+  useRegisterBottomAccessory(
+    "ranking",
+    kind === "advanced" || rankingItems.length <= 1 || !selectedMode ? null : (
+      <DockSegmentedBar
+        items={rankingItems}
+        value={selectedMode}
+        onChanged={handleSelectMode}
+      />
+    ),
+    isAppleMusic
+  )
+
   return (
     <RefreshableScrollView
       navigationBarTitleDisplayMode="inline"
@@ -224,7 +242,7 @@ export function RankingView(props: { onClose: () => void }) {
             params={advancedParams}
             onPress={() => setIsAdvancedSheetOpen(true)}
           />
-        ) : activeModes && activeModes.length > 0 && selectedMode ? (
+        ) : !isAppleMusic && activeModes && activeModes.length > 0 && selectedMode ? (
           <RankingModePicker
             modes={activeModes}
             selected={selectedMode}

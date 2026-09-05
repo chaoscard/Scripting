@@ -45,6 +45,7 @@ import {
   NovelCard,
   RefreshableScrollView,
 } from "./components"
+import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
 
 export type WorkTab = "illust" | "manga" | "novel"
 
@@ -58,6 +59,8 @@ export function UserWorksView(props: { userID?: number; title?: string }) {
   const [detailError, setDetailError] = useState<string | null>(null)
   const [tab, setTab] = useState<WorkTab>("illust")
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
+  const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
+  const isAppleMusic = pageLayout === "appleMusic"
   const [emptyKinds, setEmptyKinds] = useState<Partial<Record<WorkTab, boolean>>>({})
   const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(null)
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
@@ -66,7 +69,9 @@ export function UserWorksView(props: { userID?: number; title?: string }) {
 
   useEffect(() => {
     return onSettingsChanged(() => {
-      setHideNovels(loadSettings().hideNovels)
+      const next = loadSettings()
+      setHideNovels(next.hideNovels)
+      setPageLayout(next.pageLayout)
       setEmptyKinds({})
     })
   }, [])
@@ -120,6 +125,25 @@ export function UserWorksView(props: { userID?: number; title?: string }) {
       setTab(availableKinds[0])
     }
   }, [availableKinds, tab])
+
+  const userWorkItems = useMemo(() => {
+    return availableKinds.map((k) => ({
+      tag: k,
+      label: k === "illust" ? "插画" : k === "manga" ? "漫画" : "小说",
+    }))
+  }, [availableKinds])
+
+  useRegisterBottomAccessory(
+    "userWorks",
+    availableKinds.length <= 1 ? null : (
+      <DockSegmentedBar
+        items={userWorkItems}
+        value={activeTab}
+        onChanged={setTab}
+      />
+    ),
+    isAppleMusic
+  )
 
   const handleKindEmpty = useCallback((targetKind: WorkTab, isEmpty: boolean) => {
     setEmptyKinds((prev) => {
@@ -208,11 +232,13 @@ export function UserWorksView(props: { userID?: number; title?: string }) {
       }}
     >
       <VStack alignment="leading" spacing={8}>
-        <UserWorkPicker
-          availableKinds={availableKinds}
-          kind={activeTab}
-          onChanged={setTab}
-        />
+        {isAppleMusic ? null : (
+          <UserWorkPicker
+            availableKinds={availableKinds}
+            kind={activeTab}
+            onChanged={setTab}
+          />
+        )}
 
         {availableKinds.length === 0 ? (
           <EmptyView text="暂无作品投稿" systemImage="photo.on.rectangle.angled" />

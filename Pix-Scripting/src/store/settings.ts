@@ -11,6 +11,8 @@ export type UgoiraExportFormat = "mp4" | "gif"
 export type DownloadStorageMode = "local" | "icloud"
 export type QuickActionButtonAction = "bookmark" | "follow" | "download"
 export type QuickActionButtonPosition = "trailing" | "leading"
+export type PageLayout = "classic" | "appleMusic"
+export const PAGE_LAYOUT_VALUES: ReadonlyArray<PageLayout> = ["classic", "appleMusic"]
 export type CloseButtonAction = "minimize" | "exit"
 export type WatchlistSortOrder = "asc" | "desc"
 export type AmbientIntensity = "low" | "medium" | "high"
@@ -103,6 +105,7 @@ export interface AppSettings {
   showRelatedUsersOnFollow: boolean
   exemptFilterForPersonal: boolean
   hideNovels: boolean
+  pageLayout: PageLayout
   heroFirstFeedCard: boolean
   compactIllustCard: boolean
   ambientImmersion: boolean
@@ -186,6 +189,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   showRelatedUsersOnFollow: true,
   exemptFilterForPersonal: true,
   hideNovels: false,
+  pageLayout: "classic",
   heroFirstFeedCard: true,
   compactIllustCard: true,
   ambientImmersion: true,
@@ -237,8 +241,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   enableTaskNotification: true,
   advancedSettingsUnlocked: false,
   customRankingEnabled: false,
-  customRankingIllustModes: ["day", "week", "month", "week_original", "week_rookie"],
-  customRankingMangaModes: ["day_manga", "week_manga", "month_manga", "week_rookie_manga"],
+  customRankingIllustModes: ["day", "week", "month"],
+  customRankingMangaModes: ["day_manga", "week_manga", "month_manga"],
   customRankingNovelModes: ["day", "week", "week_rookie"],
   widgetSourceSmallIos: "ranking_day",
   widgetSourceMediumIos: "pixivision",
@@ -541,6 +545,9 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
       DEFAULT_SETTINGS.exemptFilterForPersonal
     ),
     hideNovels: boolOr(stored?.hideNovels, DEFAULT_SETTINGS.hideNovels),
+    pageLayout: isOneOf(stored?.pageLayout, PAGE_LAYOUT_VALUES)
+      ? stored.pageLayout
+      : DEFAULT_SETTINGS.pageLayout,
     heroFirstFeedCard: boolOr(stored?.heroFirstFeedCard, DEFAULT_SETTINGS.heroFirstFeedCard),
     compactIllustCard: boolOr(stored?.compactIllustCard, DEFAULT_SETTINGS.compactIllustCard),
     ambientImmersion: boolOr(stored?.ambientImmersion, DEFAULT_SETTINGS.ambientImmersion),
@@ -871,15 +878,12 @@ export const DEFAULT_ILLUST_RANKING_MODES = [
   "day",
   "week",
   "month",
-  "week_original",
-  "week_rookie",
 ]
 
 export const DEFAULT_MANGA_RANKING_MODES = [
   "day_manga",
   "week_manga",
   "month_manga",
-  "week_rookie_manga",
 ]
 
 export const DEFAULT_NOVEL_RANKING_MODES = [
@@ -938,8 +942,8 @@ export function getCustomRankingModesForKind(
     }
   }
 
-  // 每个类别最多截取 5 项
-  const limited = active.slice(0, 5)
+  // 每个类别最多截取 3 项
+  const limited = active.slice(0, 3)
   if (limited.length > 0) return limited
 
   // 如果用户未选任何有效项（如全部取消），回退到该类别的默认初始有效榜单列表
