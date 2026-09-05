@@ -331,7 +331,7 @@ export function SettingsView() {
         </DisclosureGroup>
       </Section>
 
-      {/* 2. 功能与交互 */}
+      {/* 2. 功能交互 */}
       <Section>
         <DisclosureGroup
           isExpanded={expanded.features}
@@ -339,7 +339,7 @@ export function SettingsView() {
           label={
             <HStack spacing={10} alignment="center">
               <Image systemName="slider.horizontal.3" font="body" foregroundStyle="systemIndigo" />
-              <Text font="headline">功能与交互</Text>
+              <Text font="headline">功能交互</Text>
               <Spacer />
               {!expanded.features ? (
                 <Text font="footnote" foregroundStyle="tertiaryLabel">
@@ -443,7 +443,7 @@ export function SettingsView() {
         </DisclosureGroup>
       </Section>
 
-      {/* 3. 外观与布局 */}
+      {/* 3. 外观布局 */}
       <Section>
         <DisclosureGroup
           isExpanded={expanded.appearance}
@@ -451,7 +451,7 @@ export function SettingsView() {
           label={
             <HStack spacing={10} alignment="center">
               <Image systemName="paintpalette" font="body" foregroundStyle="systemPink" />
-              <Text font="headline">外观与布局</Text>
+              <Text font="headline">外观布局</Text>
               <Spacer />
               {!expanded.appearance ? (
                 <Text font="footnote" foregroundStyle="tertiaryLabel">
@@ -613,7 +613,7 @@ export function SettingsView() {
         </DisclosureGroup>
       </Section>
 
-      {/* 4. 排行与榜单 */}
+      {/* 4. 排行榜单 */}
       <Section>
         <DisclosureGroup
           isExpanded={expanded.ranking}
@@ -621,7 +621,7 @@ export function SettingsView() {
           label={
             <HStack spacing={10} alignment="center">
               <Image systemName="chart.bar.xaxis" font="body" foregroundStyle="systemOrange" />
-              <Text font="headline">排行与榜单</Text>
+              <Text font="headline">排行榜单</Text>
               <Spacer />
               {!expanded.ranking ? (
                 <Text font="footnote" foregroundStyle="tertiaryLabel">
@@ -672,7 +672,7 @@ export function SettingsView() {
         </DisclosureGroup>
       </Section>
 
-      {/* 5. AI 助手 */}
+      {/* 5. 智能助手 */}
       <Section
         footer={
           expanded.ai ? (
@@ -692,7 +692,7 @@ export function SettingsView() {
           label={
             <HStack spacing={10} alignment="center">
               <Image systemName="sparkles" font="body" foregroundStyle="systemPurple" />
-              <Text font="headline">AI 助手</Text>
+              <Text font="headline">智能助手</Text>
               <Spacer />
               {!expanded.ai ? (
                 <Text font="footnote" foregroundStyle="tertiaryLabel">
@@ -707,7 +707,7 @@ export function SettingsView() {
           }
         >
           <HStack spacing={8} alignment="center">
-            <Text font="body">AI 助手状态</Text>
+            <Text font="body">智能助手状态</Text>
             <Spacer />
             {aiProfile.enabled ? (
               <HStack spacing={4} alignment="center">
@@ -756,7 +756,7 @@ export function SettingsView() {
         </DisclosureGroup>
       </Section>
 
-      {/* 5. 桌面小组件 */}
+      {/* 6. 桌面组件 */}
       <Section
         footer={
           expanded.widgets ? (
@@ -772,7 +772,7 @@ export function SettingsView() {
           label={
             <HStack spacing={10} alignment="center">
               <Image systemName="square.grid.2x2.fill" font="body" foregroundStyle="systemGreen" />
-              <Text font="headline">桌面小组件</Text>
+              <Text font="headline">桌面组件</Text>
               <Spacer />
               {!expanded.widgets ? (
                 <Text font="footnote" foregroundStyle="tertiaryLabel">
@@ -900,7 +900,7 @@ export function SettingsView() {
         </DisclosureGroup>
       </Section>
 
-      {/* 6. 图片质量 */}
+      {/* 7. 图片质量 */}
       <Section>
         <DisclosureGroup
           isExpanded={expanded.quality}
@@ -963,7 +963,7 @@ export function SettingsView() {
         </DisclosureGroup>
       </Section>
 
-      {/* 7. 下载与存储 */}
+      {/* 8. 下载存储 */}
       <Section
         footer={
           expanded.download ? (
@@ -983,7 +983,7 @@ export function SettingsView() {
           label={
             <HStack spacing={10} alignment="center">
               <Image systemName="arrow.down.circle.fill" font="body" foregroundStyle="systemCyan" />
-              <Text font="headline">下载与存储</Text>
+              <Text font="headline">下载存储</Text>
               <Spacer />
               {!expanded.download ? (
                 <Text font="footnote" foregroundStyle="tertiaryLabel">
@@ -1107,7 +1107,7 @@ export function SettingsView() {
         </DisclosureGroup>
       </Section>
 
-      {/* 8. 浏览记录 */}
+      {/* 9. 浏览记录 */}
       <Section>
         <DisclosureGroup
           isExpanded={expanded.history}
@@ -1155,7 +1155,7 @@ export function SettingsView() {
         </DisclosureGroup>
       </Section>
 
-      {/* 9. 缓存管理 */}
+      {/* 10. 缓存管理 */}
       <Section>
         <DisclosureGroup
           isExpanded={expanded.cache}
@@ -1212,7 +1212,7 @@ export function SettingsView() {
         </DisclosureGroup>
       </Section>
 
-      {/* 10. 调试与高级设置 */}
+      {/* 11. 调试高级 */}
       {settings.advancedSettingsUnlocked ? (
         <Section>
           <DisclosureGroup
@@ -1221,7 +1221,7 @@ export function SettingsView() {
             label={
               <HStack spacing={10} alignment="center">
                 <Image systemName="wrench.and.screwdriver.fill" font="body" foregroundStyle="systemRed" />
-                <Text font="headline">调试与高级参数</Text>
+                <Text font="headline">调试高级</Text>
                 <Spacer />
                 {!expanded.debug ? (
                   <Text font="footnote" foregroundStyle="tertiaryLabel">

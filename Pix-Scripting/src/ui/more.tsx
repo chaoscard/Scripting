@@ -165,6 +165,8 @@ export function MoreView(props: { onClose: () => void }) {
             } catch {}
             setActiveSheet("accountSwitcher")
           }}
+          contentShape="rect"
+          frame={{ maxWidth: "infinity", alignment: "leading" }}
         >
           <MoreRow
             icon="person.2.circle.fill"
@@ -187,7 +189,12 @@ function MoreRow(props: {
   showChevron?: boolean
 }) {
   return (
-    <HStack spacing={12} alignment="center">
+    <HStack
+      spacing={12}
+      alignment="center"
+      frame={{ maxWidth: "infinity", alignment: "leading" }}
+      contentShape="rect"
+    >
       <Image
         systemName={props.icon}
         foregroundStyle={props.iconColor}

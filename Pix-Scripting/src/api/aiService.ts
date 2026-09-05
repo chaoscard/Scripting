@@ -61,9 +61,9 @@ export function isAIAvailable(): boolean {
  */
 export function getAIUnavailableErrorMessage(): string {
   if (isScriptingPro()) {
-    return "Scripting 原生 AI 助手未配置或暂不可用，请在 Scripting App 设置中配置模型，或在 Pix-Scripting「设置 ➔ AI 助手」中开启自定义模型。"
+    return "Scripting 原生 AI 助手未配置或暂不可用，请在 Scripting App 设置中配置模型，或在 Pix-Scripting「设置 ➔ 智能助手」中开启自定义模型。"
   }
-  return "当前未检测到 Scripting PRO 会员。您可以前往「设置 ➔ AI 助手」开启自定义 AI 模型并填入您的 API 密钥（支持 DeepSeek、OpenAI、Gemini、Claude 等），即可免费解锁完整 AI 功能。"
+  return "当前未检测到 Scripting PRO 会员。您可以前往「设置 ➔ 智能助手」开启自定义 AI 模型并填入您的 API 密钥（支持 DeepSeek、OpenAI、Gemini、Claude 等），即可免费解锁完整 AI 功能。"
 }
 
 /**
