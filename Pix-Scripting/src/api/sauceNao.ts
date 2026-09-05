@@ -1,5 +1,5 @@
 import { fetch, FormData } from "scripting"
-import { getSauceNaoApiKey } from "../store/sauceNaoStore"
+import { getSauceNaoApiKey, getSauceNaoApiKeys, recordSauceNaoQuota } from "../store/sauceNaoStore"
 
 declare const UIImage: any
 declare const Data: any
@@ -15,6 +15,7 @@ export interface SauceNAOMatch {
   indexName?: string
   extUrls: string[]
   isPixiv: boolean
+  extraInfo?: string
 }
 
 export interface SauceNAOResponse {
@@ -240,6 +241,12 @@ export function extractAuthorInfoFromSauceNaoData(
     authorName = data.author_name.trim()
   } else if (typeof data.artist_name === "string" && data.artist_name.trim()) {
     authorName = data.artist_name.trim()
+  } else if (typeof data.artist === "string" && data.artist.trim()) {
+    authorName = data.artist.trim()
+  } else if (typeof data.author === "string" && data.author.trim()) {
+    authorName = data.author.trim()
+  } else if (typeof data.circle === "string" && data.circle.trim()) {
+    authorName = data.circle.trim()
   } else if (typeof data.creator === "string" && data.creator.trim()) {
     authorName = data.creator.trim()
   } else if (Array.isArray(data.creator) && data.creator.length > 0) {
@@ -280,13 +287,25 @@ export function extractAuthorInfoFromSauceNaoData(
 }
 
 /**
- * 格式化候选标题
+ * 格式化候选标题（优先提取人类可读的书名、日文名、英文名、作品名等）
  */
 export function extractTitleFromSauceNaoData(
   data: Record<string, any>,
   pixivId?: number,
   indexName?: string
 ): string {
+  if (pixivId && typeof data.title === "string" && data.title.trim()) {
+    return data.title.trim()
+  }
+  if (typeof data.jp_name === "string" && data.jp_name.trim()) {
+    return data.jp_name.trim()
+  }
+  if (typeof data.eng_name === "string" && data.eng_name.trim()) {
+    return data.eng_name.trim()
+  }
+  if (typeof data.source === "string" && data.source.trim() && !data.source.startsWith("http://") && !data.source.startsWith("https://") && !/^\d+$/.test(data.source.trim())) {
+    return data.source.trim()
+  }
   if (typeof data.title === "string" && data.title.trim()) {
     return data.title.trim()
   }
@@ -303,6 +322,118 @@ export function extractTitleFromSauceNaoData(
     return data.material.trim()
   }
   return indexName || "未知来源"
+}
+
+/**
+ * 提取附加元数据（如章节/页码、社团、角色、动画时间等）
+ */
+export function extractExtraInfoFromSauceNaoData(data: Record<string, any>): string | undefined {
+  const parts: string[] = []
+  if (data.part !== undefined && data.part !== null && String(data.part).trim()) {
+    parts.push(`P${String(data.part).trim()}`)
+  } else if (data.page !== undefined && data.page !== null && String(data.page).trim()) {
+    parts.push(`P${String(data.page).trim()}`)
+  }
+  if (typeof data.episode === "string" && data.episode.trim()) {
+    parts.push(`EP${data.episode.trim()}`)
+  }
+  if (typeof data.est_time === "string" && data.est_time.trim()) {
+    parts.push(data.est_time.trim())
+  }
+  if (typeof data.circle === "string" && data.circle.trim()) {
+    parts.push(data.circle.trim())
+  }
+  if (typeof data.characters === "string" && data.characters.trim()) {
+    parts.push(data.characters.trim())
+  } else if (Array.isArray(data.characters) && data.characters.length > 0) {
+    parts.push(data.characters.slice(0, 2).join(", "))
+  }
+  return parts.length > 0 ? parts.join(" · ") : undefined
+}
+
+/**
+ * 提取并补全各索引库的外链地址
+ */
+export function extractExtUrlsFromSauceNaoData(
+  data: Record<string, any>,
+  indexName?: string
+): string[] {
+  const urls: string[] = []
+  if (Array.isArray(data.ext_urls)) {
+    for (const u of data.ext_urls) {
+      if (typeof u === "string" && u.trim() && !urls.includes(u.trim())) {
+        urls.push(u.trim())
+      }
+    }
+  }
+
+  // 1. 从 source 字段提取合法 URL
+  if (typeof data.source === "string" && data.source.trim()) {
+    const s = data.source.trim()
+    if (s.startsWith("http://") || s.startsWith("https://")) {
+      if (!urls.includes(s)) urls.push(s)
+    }
+  }
+
+  const idx = (indexName || "").toLowerCase()
+
+  // 2. nhentai 索引库 (Index #18)
+  const isNhentai = idx.includes("nhentai")
+  const nhentaiId = data.nhentai_id || (isNhentai ? (data.id || data.gallery_id) : undefined)
+  if (nhentaiId) {
+    const u = `https://nhentai.net/g/${nhentaiId}/`
+    if (!urls.includes(u)) urls.push(u)
+  }
+
+  // 3. E-Hentai / ExHentai (Index #38)
+  const isEHentai = !isNhentai && (idx.includes("e-hentai") || idx.includes("exhentai") || idx.includes("e_hentai") || idx.includes("ehentai") || (idx.includes("hentai") && !idx.includes("nhentai")))
+  const eHentaiGid = data.ehentai_id || data.gid || data.g_id || (isEHentai ? data.id : undefined)
+  const eHentaiToken = data.token || data.gtoken
+  if (eHentaiGid && eHentaiToken) {
+    const u = `https://e-hentai.org/g/${eHentaiGid}/${eHentaiToken}/`
+    if (!urls.includes(u)) urls.push(u)
+  } else if (eHentaiGid && !urls.some((x) => x.includes("e-hentai.org") || x.includes("exhentai.org"))) {
+    const u = `https://e-hentai.org/?f_search=${eHentaiGid}`
+    if (!urls.includes(u)) urls.push(u)
+  }
+
+  // 4. Nico Nico Seiga (Index #8)
+  const seigaId = data.seiga_id || (idx.includes("seiga") ? data.id : undefined)
+  if (seigaId) {
+    const u = `https://seiga.nicovideo.jp/watch/im${seigaId}`
+    if (!urls.includes(u)) urls.push(u)
+  }
+
+  // 5. Nijie
+  const nijieId = data.nijie_id || (idx.includes("nijie") ? data.id : undefined)
+  if (nijieId) {
+    const u = `https://nijie.info/view.php?id=${nijieId}`
+    if (!urls.includes(u)) urls.push(u)
+  }
+
+  // 6. MangaDex (Index #37)
+  const mdId = data.mangadex_id || data.md_id || (idx.includes("mangadex") ? data.id : undefined)
+  if (mdId) {
+    const u = `https://mangadex.org/chapter/${mdId}`
+    if (!urls.includes(u)) urls.push(u)
+  }
+
+  // 7. Pawoo (Index #41)
+  const pawooId = data.pawoo_id || (idx.includes("pawoo") ? data.id : undefined)
+  const pawooUser = data.pawoo_user_username || data.pawoo_user_acct
+  if (pawooId && pawooUser) {
+    const u = `https://pawoo.net/@${pawooUser}/${pawooId}`
+    if (!urls.includes(u)) urls.push(u)
+  }
+
+  // 8. Bcy (Index #31)
+  const bcyId = data.bcy_id || (idx.includes("bcy") ? data.id : undefined)
+  if (bcyId) {
+    const u = `https://bcy.net/item/detail/${bcyId}`
+    if (!urls.includes(u)) urls.push(u)
+  }
+
+  return urls
 }
 
 export async function searchImageBySauceNAO(
@@ -339,39 +470,69 @@ export async function searchImageBySauceNAO(
     throw new Error("图片转码 JPEG 失败")
   }
 
-  const apiKey = (customApiKey !== undefined ? customApiKey : getSauceNaoApiKey()).trim()
-  if (!apiKey) {
+  const availableKeys = customApiKey ? [customApiKey.trim()] : getSauceNaoApiKeys()
+  if (availableKeys.length === 0) {
     throw new Error("NEED_API_KEY")
   }
 
-  // SauceNAO 官方 API 要求将控制参数置于 URL Query，二进制图片置于 multipart body
-  const queryParams = new URLSearchParams({
-    output_type: "2",
-    api_key: apiKey,
-    db: "999",
-    numres: "12",
-  })
-  const requestUrl = `https://saucenao.com/search.php?${queryParams.toString()}`
+  let lastError: Error | null = null
+  let response: any = null
+  let usedKey = availableKeys[0]
 
-  const formData = new FormData()
-  formData.append("file", jpegData, "image/jpeg", "search.jpg")
+  // 轮询尝试可用 Key，遇 429 或限流自动故障转移至下一个 Key
+  for (let i = 0; i < availableKeys.length; i++) {
+    const currentKey = availableKeys[i]
+    usedKey = currentKey
 
-  const response = await fetch(requestUrl, {
-    method: "POST",
-    headers: {
-      "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148",
-    },
-    body: formData,
-  })
+    const queryParams = new URLSearchParams({
+      output_type: "2",
+      api_key: currentKey,
+      db: "999",
+      numres: "12",
+    })
+    const requestUrl = `https://saucenao.com/search.php?${queryParams.toString()}`
 
-  if (!response.ok) {
-    if (response.status === 429) {
-      throw new Error("SauceNAO 搜图请求频率超限，请稍后重试（免费个人 Key 每日限额 100 次）")
+    const formData = new FormData()
+    formData.append("file", jpegData, "image/jpeg", "search.jpg")
+
+    try {
+      const resp = await fetch(requestUrl, {
+        method: "POST",
+        headers: {
+          "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148",
+        },
+        body: formData,
+      })
+
+      if (resp.status === 429) {
+        // 当前 Key 每日额度耗尽，记录剩余 0 并尝试下一个 Key
+        recordSauceNaoQuota(currentKey, 0, 100)
+        lastError = new Error("SauceNAO 搜图请求频率超限（已用完该密钥每日额度）")
+        continue
+      }
+
+      if (resp.status === 403) {
+        lastError = new Error(`SauceNAO API Key (${currentKey.slice(0, 4)}...) 无效或未开通权限`)
+        continue
+      }
+
+      if (!resp.ok) {
+        lastError = new Error(`搜图服务异常 (HTTP ${resp.status})`)
+        continue
+      }
+
+      response = resp
+      break
+    } catch (err: any) {
+      lastError = err
     }
-    if (response.status === 403) {
-      throw new Error("SauceNAO API Key 无效或未开通 API 权限，请在右上角 ⚙️ 中检查密钥")
+  }
+
+  if (!response) {
+    if (lastError?.message?.includes("超限") && availableKeys.length > 1) {
+      throw new Error(`所有已配置的 SauceNAO 密钥 (${availableKeys.length} 个) 均已耗尽今日额度`)
     }
-    throw new Error(`搜图服务异常 (HTTP ${response.status})`)
+    throw lastError || new Error("搜图服务异常")
   }
 
   const rawJson = (await response.json()) as any
@@ -382,6 +543,12 @@ export async function searchImageBySauceNAO(
       throw new Error("NEED_API_KEY")
     }
     throw new Error(header.message || `搜图失败 (错误代码 ${header.status})`)
+  }
+
+  // 记录并更新当前所用 Key 的实际剩余配额与总额度
+  if (typeof header.long_remaining === "number") {
+    const limit = typeof header.long_limit === "number" ? header.long_limit : 100
+    recordSauceNaoQuota(usedKey, header.long_remaining, limit)
   }
 
   const rawResults = Array.isArray(rawJson?.results) ? rawJson.results : []
@@ -396,9 +563,8 @@ export async function searchImageBySauceNAO(
     const pixivId = extractPixivIdFromSauceNaoData(data)
     const { authorId, authorName, authorUrl } = extractAuthorInfoFromSauceNaoData(data, indexName)
     const title = extractTitleFromSauceNaoData(data, pixivId, indexName)
-    const extUrls: string[] = Array.isArray(data.ext_urls)
-      ? data.ext_urls.filter((u: any) => typeof u === "string")
-      : []
+    const extraInfo = extractExtraInfoFromSauceNaoData(data)
+    const extUrls: string[] = extractExtUrlsFromSauceNaoData(data, indexName)
     const isPixiv = Boolean(pixivId) || indexName.toLowerCase().includes("pixiv")
 
     matches.push({
@@ -412,6 +578,7 @@ export async function searchImageBySauceNAO(
       indexName,
       extUrls,
       isPixiv,
+      extraInfo,
     })
   }
 
