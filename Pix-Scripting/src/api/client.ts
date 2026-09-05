@@ -3,6 +3,7 @@ import {
   API_BASE_URL,
   OAUTH_BASE_URL,
   ACCEPT_LANGUAGE,
+  APP_ACCEPT_LANGUAGE,
   APP_OS,
   APP_OS_VERSION,
   APP_VERSION,
@@ -61,6 +62,7 @@ export function standardHeaders(
     "X-Client-Hash": clientHash(time),
     "User-Agent": USER_AGENT,
     "Accept-Language": ACCEPT_LANGUAGE,
+    "App-Accept-Language": APP_ACCEPT_LANGUAGE,
     "App-OS": APP_OS,
     "App-OS-Version": APP_OS_VERSION,
     "App-Version": APP_VERSION,
@@ -270,12 +272,39 @@ async function rawRequest(
   return { status: response.status, data }
 }
 
+export type QueryValue =
+  | string
+  | number
+  | boolean
+  | (string | number | boolean)[]
+  | null
+  | undefined
+export type QueryParams = Record<string, QueryValue>
+
+export function buildQueryString(query?: QueryParams): string {
+  if (!query) return ""
+  const params = new URLSearchParams()
+  for (const [k, v] of Object.entries(query)) {
+    if (v === undefined || v === null) continue
+    if (Array.isArray(v)) {
+      v.forEach((item, idx) => {
+        if (item !== undefined && item !== null) {
+          params.append(`${k}[${idx}]`, String(item))
+        }
+      })
+    } else {
+      params.append(k, String(v))
+    }
+  }
+  return params.toString()
+}
+
 export async function apiGet<T = any>(
   path: string,
-  query: Record<string, string>,
+  query: QueryParams,
   accessToken: string | null
 ): Promise<T> {
-  const params = new URLSearchParams(query).toString()
+  const params = buildQueryString(query)
   const url = `${API_BASE_URL}${path}${params ? `?${params}` : ""}`
   return withTransientRetry(async () => {
     const { status, data } = await rawRequest(url, "GET", {

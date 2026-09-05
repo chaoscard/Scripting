@@ -58,6 +58,7 @@ import {
   apiGetText,
   apiPost,
   PixivError,
+  QueryParams,
 } from "./client"
 
 export type RecommendationKind = "illustration" | "manga"
@@ -76,7 +77,10 @@ export async function recommendations(
     kind === "illustration" ? "/v1/illust/recommended" : "/v1/manga/recommended"
   const json = await apiGet<PixivIllustListResponse>(
     path,
-    { filter: "for_ios", include_ranking_label: "true" },
+    {
+      filter: "for_ios",
+      include_ranking_illusts: "true",
+    },
     accessToken
   )
   return { items: json?.illusts ?? [], nextURL: json?.next_url ?? null }
@@ -88,7 +92,9 @@ export async function recommendedNovels(
 ): Promise<PixivPage<PixivNovel>> {
   const json = await apiGet<PixivNovelListResponse>(
     "/v1/novel/recommended",
-    { include_ranking_label: "true" },
+    {
+      include_ranking_novels: "true",
+    },
     accessToken
   )
   return { items: json?.novels ?? [], nextURL: json?.next_url ?? null }
