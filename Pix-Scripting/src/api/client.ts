@@ -16,6 +16,11 @@ import {
   REQUEST_TIMEOUT_SECONDS,
   USER_AGENT,
 } from "../config"
+import {
+  getApiBaseUrl,
+  getOauthBaseUrl,
+  resolveImageUrl,
+} from "../store/settings"
 
 export class PixivError extends Error {
   status: number
@@ -83,7 +88,9 @@ export function isPixivMediaDomain(hostname: string): boolean {
     host === "pixivision.net" ||
     host.endsWith(".pixivision.net") ||
     host === "pixiv.org" ||
-    host.endsWith(".pixiv.org")
+    host.endsWith(".pixiv.org") ||
+    host === "pixiv.re" ||
+    host.endsWith(".pixiv.re")
   )
 }
 
@@ -305,11 +312,12 @@ export async function apiGet<T = any>(
   accessToken: string | null
 ): Promise<T> {
   const params = buildQueryString(query)
-  const url = `${API_BASE_URL}${path}${params ? `?${params}` : ""}`
+  const baseUrl = getApiBaseUrl()
+  const url = `${baseUrl}${path}${params ? `?${params}` : ""}`
   return withTransientRetry(async () => {
     const { status, data } = await rawRequest(url, "GET", {
       headers: standardHeaders(accessToken),
-      allowedOrigin: new URL(API_BASE_URL).origin,
+      allowedOrigin: new URL(baseUrl).origin,
     })
     if (status >= 200 && status < 300) {
       if (!data) throw new PixivError(status, "空响应")
@@ -325,14 +333,15 @@ export async function apiPost<T = any>(
   form: Record<string, string>,
   accessToken: string | null
 ): Promise<T> {
-  const url = `${API_BASE_URL}${path}`
+  const baseUrl = getApiBaseUrl()
+  const url = `${baseUrl}${path}`
   const { status, data } = await rawRequest(url, "POST", {
     headers: {
       ...standardHeaders(accessToken),
       "Content-Type": "application/x-www-form-urlencoded",
     },
     body: formBody(form),
-    allowedOrigin: new URL(API_BASE_URL).origin,
+    allowedOrigin: new URL(baseUrl).origin,
   })
   if (status >= 200 && status < 300) {
     if (!data) return null as T
@@ -355,11 +364,12 @@ export async function apiGetAbsolute<T = any>(
   accessToken: string | null,
   extraHeaders?: Record<string, string>
 ): Promise<T> {
-  const apiOrigin = new URL(API_BASE_URL).origin
+  const baseUrl = getApiBaseUrl()
+  const apiOrigin = new URL(baseUrl).origin
   return withTransientRetry(async () => {
     const { status, data } = await rawRequest(url, "GET", {
       headers: { ...standardHeaders(accessToken), ...(extraHeaders ?? {}) },
-      allowedOrigin: apiOrigin,
+      allowedOrigin: [apiOrigin, new URL(API_BASE_URL).origin],
     })
     if (status >= 200 && status < 300) {
       if (!data) throw new PixivError(status, "空响应")
@@ -374,7 +384,8 @@ export async function apiGetAbsolute<T = any>(
 export async function oauthTokenRequest<T = any>(
   values: Record<string, string>
 ): Promise<T> {
-  const url = `${OAUTH_BASE_URL}/auth/token`
+  const oauthBase = getOauthBaseUrl()
+  const url = `${oauthBase}/auth/token`
   return withTransientRetry(async () => {
     const { status, data } = await rawRequest(url, "POST", {
       headers: {
@@ -382,7 +393,7 @@ export async function oauthTokenRequest<T = any>(
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body: formBody({ client_id: CLIENT_ID, client_secret: CLIENT_SECRET, ...values }),
-      allowedOrigin: new URL(OAUTH_BASE_URL).origin,
+      allowedOrigin: new URL(oauthBase).origin,
     })
     if (status >= 200 && status < 300) {
       if (!data) throw new PixivError(status, "空响应")
@@ -402,6 +413,7 @@ export async function apiGetText(
   accept = "text/html",
   extraHeaders?: Record<string, string>
 ): Promise<string> {
+  const baseUrl = getApiBaseUrl()
   return withTransientRetry(async () => {
     const { status, data } = await rawRequest(url, "GET", {
       headers: {
@@ -409,7 +421,7 @@ export async function apiGetText(
         Accept: accept,
         ...(extraHeaders ?? {}),
       },
-      allowedOrigin: new URL(API_BASE_URL).origin,
+      allowedOrigin: [new URL(baseUrl).origin, new URL(API_BASE_URL).origin],
     })
     if (status < 200 || status >= 300) {
       const message = await parseError(data)
@@ -497,22 +509,41 @@ export function isAllowedImageDownloadURL(url: string): boolean {
 }
 
 // 下载二进制（图片等），带 Referer 与 HTTPS 安全过滤；跳过 API 限速（图片 CDN 并发下载）
+// 支持自动解析图片镜像源（如 i.pixiv.re），并在镜像源下载失败时静默回退至官方原始源重试
 export async function downloadBinary(
   url: string,
   extraHeaders?: Record<string, string>
 ): Promise<Data | null> {
-  if (!isAllowedImageDownloadURL(url)) {
-    console.log("downloadBinary rejected insecure or non-HTTPS URL:", url.slice(0, 90))
+  const targetUrl = resolveImageUrl(url)
+  if (!isAllowedImageDownloadURL(targetUrl)) {
+    console.log("downloadBinary rejected insecure or non-HTTPS URL:", targetUrl.slice(0, 90))
     return null
   }
-  const { status, data } = await rawRequest(url, "GET", {
-    headers: { ...imageHeaders(url), ...(extraHeaders ?? {}) },
+  const { status, data } = await rawRequest(targetUrl, "GET", {
+    headers: { ...imageHeaders(targetUrl), ...(extraHeaders ?? {}) },
     timeout: 60,
     skipPace: true,
   })
   if (status >= 200 && status < 300) {
     return data
   }
-  console.log("image download failed:", url.slice(0, 90), "status:", status)
+
+  // 容灾降级：若镜像源未成功且与原 URL 不同，尝试回退官方原源重试
+  if (targetUrl !== url && isAllowedImageDownloadURL(url)) {
+    try {
+      const fallbackRes = await rawRequest(url, "GET", {
+        headers: { ...imageHeaders(url), ...(extraHeaders ?? {}) },
+        timeout: 45,
+        skipPace: true,
+      })
+      if (fallbackRes.status >= 200 && fallbackRes.status < 300 && fallbackRes.data) {
+        return fallbackRes.data
+      }
+    } catch {
+      // ignore fallback error
+    }
+  }
+
+  console.log("image download failed:", targetUrl.slice(0, 90), "status:", status)
   return null
 }

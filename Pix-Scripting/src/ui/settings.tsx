@@ -60,6 +60,7 @@ interface SectionExpandedState {
   ai: boolean
   widgets: boolean
   quality: boolean
+  network: boolean
   download: boolean
   history: boolean
   cache: boolean
@@ -74,6 +75,7 @@ const DEFAULT_EXPANDED_STATE: SectionExpandedState = {
   ai: false,
   widgets: false,
   quality: false,
+  network: false,
   download: false,
   history: false,
   cache: false,
@@ -109,6 +111,7 @@ export function SettingsView() {
       ai: true,
       widgets: true,
       quality: true,
+      network: true,
       download: true,
       history: true,
       cache: true,
@@ -125,6 +128,7 @@ export function SettingsView() {
       ai: false,
       widgets: false,
       quality: false,
+      network: false,
       download: false,
       history: false,
       cache: false,
@@ -963,7 +967,92 @@ export function SettingsView() {
         </DisclosureGroup>
       </Section>
 
-      {/* 8. 下载存储 */}
+      {/* 8. 网络与图片加速 */}
+      <Section
+        footer={
+          expanded.network ? (
+            <Text>
+              图片镜像采用开源 CDN 缓存，完全匿名且不携带任何账号凭据，可大幅节省代理流量并提升图片与动图加载速度。API 网关供自定义反代节点使用。
+            </Text>
+          ) : undefined
+        }
+      >
+        <DisclosureGroup
+          isExpanded={expanded.network}
+          onChanged={(v) => setExpandedKey("network", v)}
+          label={
+            <HStack spacing={10} alignment="center">
+              <Image systemName="network" font="body" foregroundStyle="systemIndigo" />
+              <Text font="headline">网络与图片加速</Text>
+              <Spacer />
+              {!expanded.network ? (
+                <Text font="footnote" foregroundStyle="tertiaryLabel">
+                  {settings.imageSourceMode === "pixiv_re"
+                    ? "Pixiv.re (免翻加速)"
+                    : settings.imageSourceMode === "custom"
+                    ? "自定义镜像"
+                    : "官方原源"}
+                </Text>
+              ) : null}
+            </HStack>
+          }
+        >
+          <Picker
+            title="图片加载源"
+            value={settings.imageSourceMode || "pixiv_re"}
+            onChanged={(value: string) =>
+              update({ imageSourceMode: value as "pixiv_re" | "official" | "custom" })
+            }
+          >
+            <Text tag="pixiv_re">Pixiv.re 高速镜像 (免翻推荐)</Text>
+            <Text tag="official">官方原源 (i.pximg.net)</Text>
+            <Text tag="custom">自定义镜像</Text>
+          </Picker>
+          {settings.imageSourceMode === "custom" ? (
+            <TextField
+              title="自定义图片源"
+              prompt="如 https://i.pixiv.re"
+              value={settings.customImageBaseUrl || ""}
+              onChanged={(v) => update({ customImageBaseUrl: v.trim() })}
+            />
+          ) : null}
+
+          <Picker
+            title="API 网关"
+            value={settings.apiGatewayMode || "official"}
+            onChanged={(value: string) =>
+              update({ apiGatewayMode: value as "official" | "custom" })
+            }
+          >
+            <Text tag="official">官方直连 (默认)</Text>
+            <Text tag="custom">自定义网关 (为完全直连准备)</Text>
+          </Picker>
+          {settings.apiGatewayMode === "custom" ? (
+            <>
+              <TextField
+                title="API 网关"
+                prompt="如 https://api.yourdomain.com"
+                value={settings.customApiBaseUrl || ""}
+                onChanged={(v) => update({ customApiBaseUrl: v.trim() })}
+              />
+              <TextField
+                title="OAuth 认证网关"
+                prompt="选填，留空默认使用 API 网关"
+                value={settings.customOauthBaseUrl || ""}
+                onChanged={(v) => update({ customOauthBaseUrl: v.trim() })}
+              />
+              <TextField
+                title="账号服务网关"
+                prompt="选填，留空默认使用 API 网关"
+                value={settings.customAccountBaseUrl || ""}
+                onChanged={(v) => update({ customAccountBaseUrl: v.trim() })}
+              />
+            </>
+          ) : null}
+        </DisclosureGroup>
+      </Section>
+
+      {/* 9. 下载存储 */}
       <Section
         footer={
           expanded.download ? (

@@ -5,6 +5,8 @@ import { recoverFile, writeTextSafely } from "./safeFile"
 export type FeedImageQuality = "medium" | "large"
 export type DetailImageQuality = "large" | "original"
 export type DownloadImageQuality = "large" | "original"
+export type ImageSourceMode = "pixiv_re" | "official" | "custom"
+export type ApiGatewayMode = "official" | "custom"
 export type UgoiraExportFormat = "mp4" | "gif"
 export type DownloadStorageMode = "local" | "icloud"
 export type CloseButtonAction = "minimize" | "exit"
@@ -163,6 +165,12 @@ export interface AppSettings {
   widgetPoolCapacity: WidgetPoolCapacity
   widgetReloadIntervalMinutes: WidgetReloadIntervalMinutes
   sauceNaoApiKey: string
+  imageSourceMode: ImageSourceMode
+  customImageBaseUrl: string
+  apiGatewayMode: ApiGatewayMode
+  customApiBaseUrl: string
+  customOauthBaseUrl: string
+  customAccountBaseUrl: string
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -237,6 +245,12 @@ const DEFAULT_SETTINGS: AppSettings = {
   widgetPoolCapacity: 30,
   widgetReloadIntervalMinutes: 60,
   sauceNaoApiKey: "",
+  imageSourceMode: "pixiv_re",
+  customImageBaseUrl: "",
+  apiGatewayMode: "official",
+  customApiBaseUrl: "",
+  customOauthBaseUrl: "",
+  customAccountBaseUrl: "",
 }
 
 const KEY = "pixiv_settings_v1"
@@ -282,6 +296,15 @@ const NOVEL_READER_EXPERIMENTAL_ALGORITHM_VALUES: readonly NovelReaderExperiment
   "geminiB",
 ]
 const CACHE_LIMIT_VALUES = [300, 500, 1000, 2000] as const
+const IMAGE_SOURCE_MODE_VALUES: readonly ImageSourceMode[] = [
+  "pixiv_re",
+  "official",
+  "custom",
+]
+const API_GATEWAY_MODE_VALUES: readonly ApiGatewayMode[] = [
+  "official",
+  "custom",
+]
 
 export function getImageBatchSize(level?: number): number {
   if (typeof level === "number" && Number.isFinite(level) && level > 0) {
@@ -654,6 +677,24 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
       : DEFAULT_SETTINGS.widgetSourceExtraLargeIpad,
     widgetPoolCapacity: parseWidgetPoolCapacity(stored?.widgetPoolCapacity),
     widgetReloadIntervalMinutes: parseWidgetReloadInterval(stored?.widgetReloadIntervalMinutes),
+    imageSourceMode: isOneOf(stored?.imageSourceMode, IMAGE_SOURCE_MODE_VALUES)
+      ? stored.imageSourceMode
+      : DEFAULT_SETTINGS.imageSourceMode,
+    customImageBaseUrl: typeof stored?.customImageBaseUrl === "string"
+      ? stored.customImageBaseUrl
+      : DEFAULT_SETTINGS.customImageBaseUrl,
+    apiGatewayMode: isOneOf(stored?.apiGatewayMode, API_GATEWAY_MODE_VALUES)
+      ? stored.apiGatewayMode
+      : DEFAULT_SETTINGS.apiGatewayMode,
+    customApiBaseUrl: typeof stored?.customApiBaseUrl === "string"
+      ? stored.customApiBaseUrl
+      : DEFAULT_SETTINGS.customApiBaseUrl,
+    customOauthBaseUrl: typeof stored?.customOauthBaseUrl === "string"
+      ? stored.customOauthBaseUrl
+      : DEFAULT_SETTINGS.customOauthBaseUrl,
+    customAccountBaseUrl: typeof stored?.customAccountBaseUrl === "string"
+      ? stored.customAccountBaseUrl
+      : DEFAULT_SETTINGS.customAccountBaseUrl,
   }
 }
 
@@ -914,5 +955,64 @@ export function formatCustomRankingSummary(
   if (activeTitles.length <= 2) return activeTitles.join("、")
   return `已选 ${activeTitles.length} 项`
 }
+
+export function resolveImageUrl(
+  url: string,
+  settings: AppSettings = loadSettings()
+): string {
+  if (!url || typeof url !== "string") return url
+  const mode = settings.imageSourceMode || "pixiv_re"
+  if (mode === "official") return url
+  let targetBase = "https://i.pixiv.re"
+  if (mode === "custom") {
+    const custom = settings.customImageBaseUrl?.trim().replace(/\/+$/, "")
+    if (custom) {
+      targetBase = custom
+    }
+  }
+  // 替换官方图片域名 i.pximg.net 与静态资源 s.pximg.net
+  return url
+    .replace(/^https?:\/\/i\.pximg\.net/, targetBase)
+    .replace(/^https?:\/\/s\.pximg\.net/, targetBase)
+}
+
+export function getApiBaseUrl(settings: AppSettings = loadSettings()): string {
+  if (
+    settings.apiGatewayMode === "custom" &&
+    settings.customApiBaseUrl?.trim()
+  ) {
+    return settings.customApiBaseUrl.trim().replace(/\/+$/, "")
+  }
+  return "https://app-api.pixiv.net"
+}
+
+export function getOauthBaseUrl(
+  settings: AppSettings = loadSettings()
+): string {
+  if (settings.apiGatewayMode === "custom") {
+    if (settings.customOauthBaseUrl?.trim()) {
+      return settings.customOauthBaseUrl.trim().replace(/\/+$/, "")
+    }
+    if (settings.customApiBaseUrl?.trim()) {
+      return settings.customApiBaseUrl.trim().replace(/\/+$/, "")
+    }
+  }
+  return "https://oauth.secure.pixiv.net"
+}
+
+export function getAccountBaseUrl(
+  settings: AppSettings = loadSettings()
+): string {
+  if (settings.apiGatewayMode === "custom") {
+    if (settings.customAccountBaseUrl?.trim()) {
+      return settings.customAccountBaseUrl.trim().replace(/\/+$/, "")
+    }
+    if (settings.customApiBaseUrl?.trim()) {
+      return settings.customApiBaseUrl.trim().replace(/\/+$/, "")
+    }
+  }
+  return "https://accounts.pixiv.net"
+}
+
 
 
