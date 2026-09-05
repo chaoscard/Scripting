@@ -1,14 +1,17 @@
 import {
   Button,
-  HStack,
   Image,
+  ProgressView,
+  Rectangle,
   Text,
   useEffect,
+  useMemo,
   useRef,
   useState,
   VStack,
   ZStack,
 } from "scripting"
+import { REQUEST_TIMEOUT_SECONDS } from "../config"
 import {
   buildAuthorizationURL,
   exchangeCode,
@@ -18,8 +21,9 @@ import {
 } from "../api/auth"
 import { isPixivCookieDomain } from "../api/pixiv"
 import { session } from "../api/session"
-import { appToolbar, LoadingView } from "./components"
+import { appToolbar } from "./components"
 import { LoginNetworkSheet } from "./loginNetworkSheet"
+import { LOGIN_BACKGROUND_BASE64 } from "./loginBackground"
 
 export function LoginView(props: {
   onClose: () => void
@@ -30,6 +34,14 @@ export function LoginView(props: {
   const [showNetworkSheet, setShowNetworkSheet] = useState(false)
   // 组件卸载（用户关闭页面）后不再 setState
   const mountedRef = useRef(true)
+
+  const bgImage = useMemo(() => {
+    try {
+      return UIImage.fromBase64String(LOGIN_BACKGROUND_BASE64)
+    } catch {
+      return null
+    }
+  }, [])
 
   useEffect(() => {
     return () => {
@@ -81,13 +93,33 @@ export function LoginView(props: {
     }
 
     try {
-      await webView.loadURL(buildAuthorizationURL(challenge))
+      const authUrl = buildAuthorizationURL(challenge)
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error("连接登录端点超时"))
+        }, REQUEST_TIMEOUT_SECONDS * 1000)
+      })
+      try {
+        await Promise.race([webView.loadURL(authUrl), timeoutPromise])
+      } finally {
+        if (timer) clearTimeout(timer)
+      }
       await webView.present({
         navigationTitle: "Pixiv 登录",
         fullscreen: false,
       })
     } catch (err: any) {
-      authError = `无法打开登录页面：${err?.message ?? "未知错误"}`
+      const rawMsg = String(err?.message ?? "")
+      if (
+        rawMsg.includes("超时") ||
+        rawMsg.includes("timeout") ||
+        rawMsg.includes("timed out")
+      ) {
+        authError = "连接登录服务超时\n若处于受限网络环境，请点击右上角网络图标配置网络连接"
+      } else {
+        authError = `无法打开登录页面：${rawMsg || "未知错误"}\n若处于受限网络环境，请点击右上角网络图标配置网络连接`
+      }
     } finally {
       webView.dispose()
     }
@@ -102,7 +134,16 @@ export function LoginView(props: {
         props.onSuccess()
         return
       } catch (err: any) {
-        authError = `登录失败：${err?.message ?? "未知错误"}`
+        const rawMsg = String(err?.message ?? "")
+        if (
+          rawMsg.includes("超时") ||
+          rawMsg.includes("timeout") ||
+          rawMsg.includes("timed out")
+        ) {
+          authError = "连接登录服务超时\n若处于受限网络环境，请点击右上角网络图标配置网络连接"
+        } else {
+          authError = `登录验证失败：${rawMsg || "未知错误"}\n若处于受限网络环境，请点击右上角网络图标配置网络连接`
+        }
       }
     } else if (!authError) {
       authError = "登录已取消"
@@ -114,7 +155,11 @@ export function LoginView(props: {
 
   return (
     <ZStack
+      alignment="center"
       frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+      ignoresSafeArea={true}
+      toolbarBackground="clear"
+      toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
       toolbar={appToolbar(
         props.onClose,
         undefined,
@@ -133,52 +178,104 @@ export function LoginView(props: {
         ),
       }}
     >
+      {/* 1. 离线高斯模糊插画背景：由 Rectangle 约束物理视口并在 overlay 中铺满裁剪，杜绝撑宽父容器破坏居中 */}
+      <Rectangle
+        fill="clear"
+        frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+        ignoresSafeArea={true}
+        clipped={true}
+        overlay={
+          bgImage ? (
+            <Image
+              image={bgImage}
+              resizable={true}
+              aspectRatio={{ contentMode: "fill" }}
+              frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+              clipped={true}
+              ignoresSafeArea={true}
+            />
+          ) : (
+            <Rectangle fill="systemBackground" ignoresSafeArea={true} />
+          )
+        }
+      />
+
+      {/* 2. 极轻微的微透渐变：保留原画丰富色彩，同时提供柔和文字对比度 */}
+      <Rectangle
+        fill={{
+          colors: [
+            "rgba(0, 0, 0, 0.02)",
+            "rgba(0, 0, 0, 0.08)",
+            "rgba(0, 0, 0, 0.18)",
+          ],
+          startPoint: "top",
+          endPoint: "bottom",
+        }}
+        ignoresSafeArea={true}
+      />
+
       {isLoading ? (
-        <LoadingView />
+        <VStack
+          alignment="center"
+          spacing={24}
+          frame={{ maxWidth: "infinity", maxHeight: "infinity", alignment: "center" }}
+          padding={32}
+        >
+          <Text
+            font={38}
+            fontWeight="heavy"
+            foregroundStyle="white"
+            shadow={{ color: "rgba(0, 0, 0, 0.32)", radius: 10, y: 3 }}
+          >
+            Pix-Scripting
+          </Text>
+          <VStack spacing={14} alignment="center" padding={{ top: 12 }}>
+            <ProgressView progressViewStyle="circular" />
+            <Text
+              font="subheadline"
+              foregroundStyle="rgba(255, 255, 255, 0.9)"
+              shadow={{ color: "rgba(0, 0, 0, 0.3)", radius: 6, y: 1 }}
+            >
+              正在连接 Pixiv 登录服务...
+            </Text>
+          </VStack>
+        </VStack>
       ) : (
         <VStack
           alignment="center"
-          spacing={16}
-          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          spacing={24}
+          frame={{ maxWidth: "infinity", maxHeight: "infinity", alignment: "center" }}
           padding={32}
-          offset={{ x: 0, y: -104 }}
         >
-          <Image
-            systemName="paintpalette.fill"
-            font="largeTitle"
-            foregroundStyle="#0096FA"
-            padding={{ top: 80, bottom: 12 }}
+          <Text
+            font={38}
+            fontWeight="heavy"
+            foregroundStyle="white"
+            shadow={{ color: "rgba(0, 0, 0, 0.32)", radius: 10, y: 3 }}
+          >
+            Pix-Scripting
+          </Text>
+          <Button
+            title="使用 Pixiv 账号登录"
+            buttonStyle="glassProminent"
+            tint="#0096FA"
+            controlSize="large"
+            action={startLogin}
           />
-          <VStack spacing={8} padding={{ top: 24 }}>
-            <Button
-              title="使用 Pixiv 账号登录"
-              buttonStyle="glassProminent"
-              tint="#0096FA"
-              controlSize="large"
-              action={startLogin}
-            />
-          </VStack>
 
           {error ? (
             <VStack spacing={8} alignment="center" padding={{ top: 8 }}>
               <Text
                 font="footnote"
-                foregroundStyle="systemRed"
+                foregroundStyle={
+                  error === "登录已取消"
+                    ? "rgba(255, 255, 255, 0.75)"
+                    : "#FF6B6B"
+                }
                 multilineTextAlignment="center"
               >
                 {error}
               </Text>
-              <Button
-                buttonStyle="plain"
-                action={() => setShowNetworkSheet(true)}
-              >
-                <HStack spacing={4} alignment="center">
-                  <Image systemName="network" font="caption" foregroundStyle="#0096FA" />
-                  <Text font="caption" foregroundStyle="#0096FA">
-                    检查或重置网络网关
-                  </Text>
-                </HStack>
-              </Button>
             </VStack>
           ) : null}
         </VStack>

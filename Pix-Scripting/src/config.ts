@@ -1,6 +1,6 @@
 import { Script } from "scripting"
 
-export const SCRIPT_VERSION = Script.metadata?.version ?? "0.8.183"
+export const SCRIPT_VERSION = Script.metadata?.version ?? "0.8.184"
 
 // 默认服务端点地址
 export const DEFAULT_API_BASE_URL = "https://app-api.pixiv.net"
@@ -36,4 +36,4 @@ export const IMAGE_USER_AGENT =
 
 // 请求限速（毫秒），避免触发风控
 export const REQUEST_INTERVAL_MS = 400
-export const REQUEST_TIMEOUT_SECONDS = 30
+export const REQUEST_TIMEOUT_SECONDS = 10

@@ -96,7 +96,7 @@ export function RootView() {
     return (
       <ZStack
         frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-        background="systemBackground"
+        background="clear"
         ignoresSafeArea={true}
       >
         <NavigationStack>
