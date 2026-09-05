@@ -1,7 +1,8 @@
 // 全局路由表：各 Tab 根视图的 navigationDestination 共用
 // 注意：navigationDestination 必须挂在根视图属性上（不能作为 NavigationStack 子元素）
-import { NavigationDestination, VStack } from "scripting"
+import { NavigationDestination } from "scripting"
 import { session } from "../api/session"
+import { NotFoundRouteView } from "./components/StatusViews"
 import { IllustDetailView } from "./illustDetail"
 import { PixivisionDetailView } from "./pixivisionDetail"
 import { PixivisionBookmarksView } from "./pixivisionBookmarks"
@@ -221,8 +222,8 @@ export function renderDestination(rawPage: string) {
   if (page === "customAISettings") return <CustomAISettingsView />
   if (page === "settings") return <SettingsView />
   if (page === "about") return <AboutView />
-  // 未知路由静默兜底（内部路由表固定，正常不会走到）
-  return <VStack />
+  // 统一未知路由与损坏深链缺省页，避免白屏
+  return <NotFoundRouteView rawRoute={rawPage} />
 }
 
 // 每个 Tab 根视图通过 navigationDestination 属性挂载路由

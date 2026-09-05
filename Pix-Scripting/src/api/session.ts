@@ -236,11 +236,23 @@ export class Session {
     try {
       const res = await this.dependencies.refreshToken(target.refreshToken)
       newCreds = buildCredentialsFromResponse(res, target.webCookie)
-    } catch {
+    } catch (err: any) {
+      console.log("switchAccount refreshToken failed:", err?.message ?? err)
+      // 判断是否具备离线未过期的本地 Access Token（保留 60s 缓冲）
+      const isTokenValid = Boolean(
+        target.accessToken && target.expiresAt && target.expiresAt > Date.now() + 60 * 1000
+      )
+      // 若是明确的认证失效错误（如 400 invalid_grant / 401），或本地 Token 已过期，严格拒绝切换并要求重新认证
+      const isAuthError = err instanceof PixivError && (err.status === 400 || err.status === 401)
+      if (isAuthError || !isTokenValid) {
+        return false
+      }
+
+      // 仅在非认证错误（如网络波动）且本地 Access Token 明确有效时，才允许离线降级
       newCreds = {
         accessToken: target.accessToken,
         refreshToken: target.refreshToken,
-        expiresAt: target.expiresAt || Date.now() + 3600 * 1000,
+        expiresAt: target.expiresAt,
         user: {
           id: target.id,
           name: target.name,

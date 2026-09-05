@@ -67,8 +67,32 @@ export interface AIPreset {
 }
 
 /**
+ * 判断给定的 Host 是否属于本地/私网或 IP 格式（如 192.168.x.x, 10.x.x.x, 127.0.0.1, localhost 等）
+ */
+export function isLocalOrIPHost(host: string): boolean {
+  const h = host.toLowerCase().split(":")[0].trim()
+  if (h === "localhost" || h === "127.0.0.1" || h === "::1" || h.endsWith(".local")) {
+    return true
+  }
+  // IPv4 地址匹配
+  if (/^(\d{1,3}\.){3}\d{1,3}$/.test(h)) {
+    return true
+  }
+  return false
+}
+
+/**
+ * 判断是否为非加密 HTTP 端点
+ */
+export function isUnencryptedHttpEndpoint(endpoint?: string): boolean {
+  if (!endpoint) return false
+  const trimmed = endpoint.trim().toLowerCase()
+  return trimmed.startsWith("http://")
+}
+
+/**
  * 规范化与清理 AI API 端点地址，剥离多余的操作后缀与请求路径，
- * 确保存储与展示的始终是干净的 Base URL（如 https://opencode.ai/zen/go）
+ * 确保存储与展示的始终是干净且安全的 Base URL（如 https://opencode.ai/zen/go 或 http://192.168.1.10:11434）
  */
 export function cleanAIEndpoint(rawEndpoint?: string, presetId?: string): string {
   let ep = (rawEndpoint || "").trim()
@@ -77,10 +101,41 @@ export function cleanAIEndpoint(rawEndpoint?: string, presetId?: string): string
   // 1. 剥离 query 参数与 hash
   ep = ep.replace(/[?#].*$/, "")
 
-  // 2. 剥离 Gemini/Google RPC 方法后缀 (:streamGenerateContent, :generateContent, :predict)
+  // 2. 协议判断与智能补全
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//i.test(ep)) {
+    // 带有标准 scheme://，严格仅允许 http:// 与 https://
+    if (!/^https?:\/\//i.test(ep)) {
+      return ""
+    }
+  } else if (/^(?:javascript|file|data|blob|about|mailto):/i.test(ep)) {
+    // 拦截无双斜杠的非网络伪协议
+    return ""
+  } else {
+    // 没有协议头（如 localhost:8000, 192.168.1.1:11434, api.deepseek.com），根据 host 特征智能补全
+    const hostPart = ep.split("/")[0]
+    if (isLocalOrIPHost(hostPart)) {
+      ep = `http://${ep}`
+    } else {
+      ep = `https://${ep}`
+    }
+  }
+
+  // 3. 剥离内嵌的用户认证凭据（如 http://user:pass@host -> http://host）
+  try {
+    const urlObj = new URL(ep)
+    if (urlObj.username || urlObj.password) {
+      urlObj.username = ""
+      urlObj.password = ""
+      ep = urlObj.toString().replace(/\/+$/, "")
+    }
+  } catch {
+    ep = ep.replace(/^(https?:\/\/)[^/@]+@/, "$1")
+  }
+
+  // 4. 剥离 Gemini/Google RPC 方法后缀 (:streamGenerateContent, :generateContent, :predict)
   ep = ep.replace(/:(?:streamGenerateContent|generateContent|predict)$/, "")
 
-  // 3. 循环剥离协议与模型路由后缀
+  // 5. 循环剥离协议与模型路由后缀
   let prev = ""
   while (prev !== ep) {
     prev = ep
@@ -89,7 +144,7 @@ export function cleanAIEndpoint(rawEndpoint?: string, presetId?: string): string
       .replace(/\/+$/, "")
   }
 
-  // 4. 对 OpenCode 系列预设及 opencode.ai 域名，剥离末尾残留的 /v1 或 /v1beta
+  // 6. 对 OpenCode 系列预设及 opencode.ai 域名，剥离末尾残留的 /v1 或 /v1beta
   if (
     presetId === "opencode-zen" ||
     presetId === "opencode-go" ||
@@ -98,7 +153,7 @@ export function cleanAIEndpoint(rawEndpoint?: string, presetId?: string): string
     ep = ep.replace(/\/(?:v1|v1beta)$/, "")
   }
 
-  // 5. 若端点匹配对应预设的 defaultEndpoint（含 /v1 等），自动标准化为纯净的预设默认端点
+  // 7. 若端点匹配对应预设的 defaultEndpoint（含 /v1 等），自动标准化为纯净的预设默认端点
   if (presetId) {
     const presetMeta = AI_PRESETS.find((p) => p.id === presetId)
     if (presetMeta?.defaultEndpoint) {

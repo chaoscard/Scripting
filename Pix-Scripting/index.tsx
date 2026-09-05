@@ -29,6 +29,26 @@ function seedIfRoute(route?: string | null) {
 }
 
 async function main() {
+  let stopSyncScheduler: (() => void) | null = null
+
+  function cleanupResources() {
+    try {
+      if (stopSyncScheduler) {
+        stopSyncScheduler()
+        stopSyncScheduler = null
+      }
+    } catch {}
+    try {
+      abortAllAITasks()
+    } catch {}
+    try {
+      flushHistory()
+      flushNovelProgress()
+      flushSearchHistory()
+      flushSeriesCache()
+    } catch {}
+  }
+
   try {
     const startupRoute =
       (Script.queryParameters?.route as string | undefined) ||
@@ -60,40 +80,41 @@ async function main() {
     })
     Script.enableMinimize()
 
-    await Promise.all([
-      prepareHistoryStorage(),
-      prepareSettingsStorage(),
-      prepareBlocklistStorage(),
-      prepareNovelProgressStorage(),
-      prepareSearchHistoryStorage(),
-      prepareSeriesCacheStorage(),
-    ]).catch(() => {})
+    const storageTasks = [
+      { name: "history", task: prepareHistoryStorage() },
+      { name: "settings", task: prepareSettingsStorage() },
+      { name: "blocklist", task: prepareBlocklistStorage() },
+      { name: "novelProgress", task: prepareNovelProgressStorage() },
+      { name: "searchHistory", task: prepareSearchHistoryStorage() },
+      { name: "seriesCache", task: prepareSeriesCacheStorage() },
+    ]
+
+    const storageResults = await Promise.allSettled(storageTasks.map((t) => t.task))
+    for (let i = 0; i < storageResults.length; i++) {
+      const res = storageResults[i]
+      if (res.status === "rejected") {
+        console.log(`[Storage] prepare ${storageTasks[i].name} storage notice:`, res.reason?.message ?? res.reason)
+      }
+    }
 
     // 后台静默预热小组件数据池
     populateWidgetPool().catch(() => {})
 
     // 启动低频 iCloud 同步调度器 (5s启动延迟 + 15分钟周期)
-    const stopSyncScheduler = startHistorySyncScheduler()
+    stopSyncScheduler = startHistorySyncScheduler()
 
     await Navigation.present({
       element: <RootView />,
       modalPresentationStyle: "fullScreen",
     })
-    stopSyncScheduler()
-    abortAllAITasks()
-    flushHistory()
-    flushNovelProgress()
-    flushSearchHistory()
-    flushSeriesCache()
+  } catch (e: any) {
+    console.error("Main app runtime error:", e)
+    try {
+      await console.present()
+    } catch {}
+  } finally {
+    cleanupResources()
     Script.exit()
-  } catch (e) {
-    abortAllAITasks()
-    flushHistory()
-    flushNovelProgress()
-    flushSearchHistory()
-    flushSeriesCache()
-    console.present().then(Script.exit)
-    console.error(e)
   }
 }
 

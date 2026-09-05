@@ -21,6 +21,7 @@ import {
   getEffectiveGeneralEndpoint,
   getEffectiveImageGenEndpoint,
   getEffectiveImageGenKey,
+  isUnencryptedHttpEndpoint,
   loadCustomAIProfile,
   onCustomAIConfigChanged,
   switchCustomAIPreset,
@@ -190,6 +191,40 @@ export function CustomAISettingsView() {
     } finally {
       setTestingImage(false)
     }
+  }
+
+  async function handleGeneralEndpointChanged(val: string) {
+    const trimmed = val.trim()
+    if (trimmed && isUnencryptedHttpEndpoint(trimmed)) {
+      const confirmed = await Dialog.confirm({
+        title: "⚠️ 非加密连接提示 (HTTP)",
+        message:
+          "当前端点使用未加密的 HTTP 协议。若处于公网环境，您的 API 密钥及对话内容可能存在被窃听的风险；若连接的是本地/局域网私有大模型，可忽略此提示。",
+        confirmLabel: "确认使用",
+        cancelLabel: "取消",
+      })
+      if (!confirmed) {
+        return
+      }
+    }
+    updateGeneral({ endpoint: val })
+  }
+
+  async function handleImageEndpointChanged(val: string) {
+    const trimmed = val.trim()
+    if (trimmed && isUnencryptedHttpEndpoint(trimmed)) {
+      const confirmed = await Dialog.confirm({
+        title: "⚠️ 非加密连接提示 (HTTP)",
+        message:
+          "当前端点使用未加密的 HTTP 协议。若处于公网环境，您的 API 密钥及对话内容可能存在被窃听的风险；若连接的是本地/局域网私有大模型，可忽略此提示。",
+        confirmLabel: "确认使用",
+        cancelLabel: "取消",
+      })
+      if (!confirmed) {
+        return
+      }
+    }
+    updateImageGen({ endpoint: val })
   }
 
   function applyPreset(presetId: string) {
@@ -548,8 +583,17 @@ export function CustomAISettingsView() {
           title="API 端点"
           prompt={defaultGeneralEndpointPlaceholder}
           value={profile.general.endpoint}
-          onChanged={(val) => updateGeneral({ endpoint: val })}
+          onChanged={handleGeneralEndpointChanged}
         />
+
+        {isUnencryptedHttpEndpoint(profile.general.endpoint) ? (
+          <HStack spacing={6} alignment="center">
+            <Image systemName="exclamationmark.triangle.fill" foregroundStyle="systemOrange" />
+            <Text font="caption" foregroundStyle="systemOrange">
+              ⚠️ 未加密 HTTP 连接
+            </Text>
+          </HStack>
+        ) : null}
 
         {remoteModels.length > 0 ? (
           <HStack spacing={10} alignment="center">
@@ -726,8 +770,17 @@ export function CustomAISettingsView() {
               title="生图端点"
               prompt={defaultImageGenEndpointPlaceholder}
               value={profile.imageGen.endpoint}
-              onChanged={(val) => updateImageGen({ endpoint: val })}
+              onChanged={handleImageEndpointChanged}
             />
+
+            {isUnencryptedHttpEndpoint(profile.imageGen.endpoint) ? (
+              <HStack spacing={6} alignment="center">
+                <Image systemName="exclamationmark.triangle.fill" foregroundStyle="systemOrange" />
+                <Text font="caption" foregroundStyle="systemOrange">
+                  ⚠️ 未加密 HTTP 连接
+                </Text>
+              </HStack>
+            ) : null}
 
             {imageRemoteModels.length > 0 ? (
               <HStack spacing={10} alignment="center">

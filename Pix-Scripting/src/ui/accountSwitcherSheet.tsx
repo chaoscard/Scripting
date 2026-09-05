@@ -55,7 +55,7 @@ export function AccountSwitcherSheet(props: {
           } catch {}
           onClose()
         } else {
-          setError("切换账号失败，请尝试重新登录")
+          setError("切换账号失败：该账号授权已失效或已过期，请点击添加账号重新登录")
         }
       } catch (err: any) {
         setError(err?.message ?? "切换账号失败")

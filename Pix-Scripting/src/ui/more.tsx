@@ -170,7 +170,6 @@ export function MoreView(props: { onClose: () => void }) {
             icon="person.2.circle.fill"
             iconColor="#007AFF"
             title="账号管理"
-            subtitle={`当前：${user.name} (@${user.account})`}
             showChevron
           />
         </Button>

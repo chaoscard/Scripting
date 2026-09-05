@@ -69,3 +69,35 @@ export function EmptyView(props: { text?: string; systemImage?: string }) {
   )
 }
 
+// 统一的未知路由/非法深链缺省视图
+export function NotFoundRouteView(props?: { rawRoute?: string }) {
+  return (
+    <ZStack
+      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+      padding={40}
+      navigationTitle="页面未找到"
+      navigationBarTitleDisplayMode="inline"
+    >
+      <VStack alignment="center" spacing={16}>
+        <Image
+          systemName="exclamationmark.triangle"
+          font="largeTitle"
+          foregroundStyle="systemOrange"
+        />
+        <VStack alignment="center" spacing={6}>
+          <Text font="headline" fontWeight="semibold">
+            内容链接无效或已过期
+          </Text>
+          <Text
+            font="subheadline"
+            foregroundStyle="secondaryLabel"
+            multilineTextAlignment="center"
+          >
+            该页面可能已被删除、参数有误或深层链接已失效
+          </Text>
+        </VStack>
+      </VStack>
+    </ZStack>
+  )
+}
+

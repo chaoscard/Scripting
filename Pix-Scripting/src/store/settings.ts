@@ -663,19 +663,22 @@ function persistSettings(settings: AppSettings): boolean {
       const parsed = JSON.parse(raw)
       if (typeof parsed !== "object" || parsed === null) throw new Error("设置格式错误")
     })
+    Storage.set(KEY, settings)
+    return true
   } catch (error: any) {
     console.log("settings persist error:", error?.message ?? error)
+    return false
   }
-  Storage.set(KEY, settings)
-  return true
 }
 
 export function resetSettings(): AppSettings {
   const next = { ...DEFAULT_SETTINGS }
-  persistSettings(next)
-  cachedSettings = next
-  emitChanged()
-  return next
+  const success = persistSettings(next)
+  if (success) {
+    cachedSettings = next
+    emitChanged()
+  }
+  return cachedSettings || next
 }
 
 export function onSettingsChanged(fn: () => void): () => void {
@@ -726,10 +729,14 @@ export function updateSettings(patch: Partial<AppSettings>): AppSettings {
   const current = loadSettings()
   const raw = { ...current, ...patch }
   const next = parseSettings(raw)
-  cachedSettings = next
-  persistSettings(next)
-  emitChanged()
-  return next
+  const success = persistSettings(next)
+  if (success) {
+    cachedSettings = next
+    emitChanged()
+    return next
+  }
+  console.log("updateSettings: failed to persist to disk, retaining current settings.")
+  return current
 }
 
 export function getFeedImageQuality(settings: AppSettings = loadSettings()): FeedImageQuality {

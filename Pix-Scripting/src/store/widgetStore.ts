@@ -40,11 +40,13 @@ export interface WidgetArtwork {
 }
 
 export interface WidgetPoolState {
+  revision?: number
   currentIndex: number
   artworks: WidgetArtwork[]
   lastFetchTime: number
   parameter: string
   nextURL?: string | null
+  updatedAt?: number
 }
 
 const IMAGES_DIR_NAME = "images"
@@ -157,6 +159,7 @@ export function loadWidgetPool(param?: string, family?: string): WidgetPoolState
       const parsed = JSON.parse(raw)
       if (parsed && Array.isArray(parsed.artworks)) {
         return {
+          revision: typeof parsed.revision === "number" ? parsed.revision : 0,
           currentIndex: typeof parsed.currentIndex === "number" ? parsed.currentIndex : 0,
           artworks: parsed.artworks.filter(
             (a: WidgetArtwork) =>
@@ -168,6 +171,7 @@ export function loadWidgetPool(param?: string, family?: string): WidgetPoolState
           lastFetchTime: typeof parsed.lastFetchTime === "number" ? parsed.lastFetchTime : 0,
           parameter: normalized,
           nextURL: typeof parsed.nextURL === "string" ? parsed.nextURL : null,
+          updatedAt: typeof parsed.updatedAt === "number" ? parsed.updatedAt : 0,
         }
       }
     } catch {
@@ -175,19 +179,107 @@ export function loadWidgetPool(param?: string, family?: string): WidgetPoolState
     }
   }
   return {
+    revision: 0,
     currentIndex: 0,
     artworks: [],
     lastFetchTime: 0,
     parameter: normalized,
     nextURL: null,
+    updatedAt: 0,
+  }
+}
+
+/**
+ * 跨进程智能合并小组件池数据，防止 AppIntent 推进游标与主 App 后台补池互相覆盖
+ */
+function mergeWidgetPools(base: WidgetPoolState, incoming: WidgetPoolState): WidgetPoolState {
+  const mergedArtworksMap = new Map<number, WidgetArtwork>()
+
+  // 1. 放入 base 的所有作品
+  for (const art of base.artworks) {
+    if (art && art.id) mergedArtworksMap.set(art.id, art)
+  }
+
+  // 2. 用 incoming 的作品覆盖或追加（保留最新的 localImagePath 与 bookmarked 变化）
+  for (const art of incoming.artworks) {
+    if (!art || !art.id) continue
+    const existing = mergedArtworksMap.get(art.id)
+    if (existing) {
+      mergedArtworksMap.set(art.id, {
+        ...existing,
+        ...art,
+        bookmarked: art.bookmarked !== undefined ? art.bookmarked : existing.bookmarked,
+        updatedAt: Math.max(existing.updatedAt || 0, art.updatedAt || 0),
+      })
+    } else {
+      mergedArtworksMap.set(art.id, art)
+    }
+  }
+
+  // 3. 游标对齐：若 incoming 显式改变了游标则优先采用，并保证处于合法边界
+  const mergedArtworks = Array.from(mergedArtworksMap.values())
+  const targetIndex =
+    incoming.currentIndex !== base.currentIndex ? incoming.currentIndex : base.currentIndex
+  const safeIndex =
+    mergedArtworks.length > 0
+      ? Math.max(0, Math.min(mergedArtworks.length - 1, targetIndex))
+      : 0
+
+  return {
+    revision: Math.max(base.revision || 0, incoming.revision || 0) + 1,
+    currentIndex: safeIndex,
+    artworks: mergedArtworks,
+    lastFetchTime: Math.max(base.lastFetchTime || 0, incoming.lastFetchTime || 0),
+    parameter: incoming.parameter || base.parameter,
+    nextURL: incoming.nextURL !== undefined ? incoming.nextURL : base.nextURL,
+    updatedAt: Date.now(),
   }
 }
 
 export function saveWidgetPool(state: WidgetPoolState, param?: string, family?: string): void {
   const normalized = normalizeParameter(param || state.parameter, family)
   const path = poolFilePath(normalized)
+
+  let finalState: WidgetPoolState = state
   try {
-    writeTextSafely(path, JSON.stringify(state, null, 2), (raw) => {
+    if (FileManager.existsSync(path)) {
+      const raw = FileManager.readAsStringSync(path, "utf-8")
+      const diskParsed = JSON.parse(raw)
+      if (diskParsed && Array.isArray(diskParsed.artworks)) {
+        const diskRevision = typeof diskParsed.revision === "number" ? diskParsed.revision : 0
+        const memoryRevision = typeof state.revision === "number" ? state.revision : 0
+        if (diskRevision > memoryRevision) {
+          // 磁盘已被其他进程更新过，执行跨进程安全增量合并
+          const diskState: WidgetPoolState = {
+            revision: diskRevision,
+            currentIndex: typeof diskParsed.currentIndex === "number" ? diskParsed.currentIndex : 0,
+            artworks: diskParsed.artworks.filter(
+              (a: any) => a && a.localImagePath && FileManager.existsSync(a.localImagePath)
+            ),
+            lastFetchTime: typeof diskParsed.lastFetchTime === "number" ? diskParsed.lastFetchTime : 0,
+            parameter: normalized,
+            nextURL: typeof diskParsed.nextURL === "string" ? diskParsed.nextURL : null,
+            updatedAt: typeof diskParsed.updatedAt === "number" ? diskParsed.updatedAt : 0,
+          }
+          finalState = mergeWidgetPools(diskState, state)
+        }
+      }
+    }
+  } catch {}
+
+  finalState.revision = (finalState.revision || 0) + 1
+  finalState.updatedAt = Date.now()
+
+  // 同步回原引用对象
+  state.revision = finalState.revision
+  state.currentIndex = finalState.currentIndex
+  state.artworks = finalState.artworks
+  state.nextURL = finalState.nextURL
+  state.lastFetchTime = finalState.lastFetchTime
+  state.updatedAt = finalState.updatedAt
+
+  try {
+    writeTextSafely(path, JSON.stringify(finalState, null, 2), (raw) => {
       const parsed = JSON.parse(raw)
       if (!parsed || !Array.isArray(parsed.artworks)) throw new Error("小组件池数据格式错误")
     })
@@ -793,10 +885,16 @@ export async function toggleWidgetArtworkBookmark(
       } else {
         await session.call((token) => removeBookmark(target.id, token))
       }
+      return nextBookmarked
     } catch (e: any) {
-      console.log("toggleWidgetArtworkBookmark API error:", e?.message ?? e)
+      console.log("toggleWidgetArtworkBookmark API error, rolling back state:", e?.message ?? e)
+      // 远端失败时严格回滚内存、缓存与小组件池状态并重新通知
+      target.bookmarked = currentlyBookmarked
+      recordIllustBookmark(target.id, currentlyBookmarked)
+      notifyIllustBookmarkChanged(target.id, currentlyBookmarked, "public")
+      saveWidgetPool(pool, normalized, family)
+      return currentlyBookmarked
     }
-    return nextBookmarked
   }
 }
 
