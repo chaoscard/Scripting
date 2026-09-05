@@ -3,6 +3,7 @@ import {
   Navigation,
   NavigationStack,
   ProgressView,
+  Rectangle,
   Script,
   Spacer,
   Tab,
@@ -11,12 +12,15 @@ import {
   VStack,
   ZStack,
   useEffect,
+  useMemo,
   useObservable,
   useRef,
   useState,
 } from "scripting"
 import { session } from "../api/session"
 import { loadSettings } from "../store/settings"
+import { getLatestCachedArtworkPath } from "../image/imageLoader"
+import { DreamyFluidBackground } from "./components/DreamyBackground"
 import { DiscoveryView } from "./discovery"
 import { RankingView } from "./ranking"
 import { SearchView } from "./search"
@@ -32,30 +36,79 @@ import {
 } from "./routeNavigation"
 
 function LaunchExperienceView() {
+  const bgImage = useMemo(() => {
+    try {
+      const cachedPath = getLatestCachedArtworkPath()
+      if (cachedPath) {
+        const raw = UIImage.fromFile(cachedPath)
+        if (raw) {
+          return raw.blurred(1)
+        }
+      }
+    } catch {}
+    return null
+  }, [])
+
   return (
     <ZStack
+      alignment="center"
       frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-      background="systemBackground"
       ignoresSafeArea={true}
     >
+      {/* 1. 背景层：若有缓存插画则展示柔和高斯模糊图，若无则无缝展示梦幻流体光晕 */}
+      {bgImage ? (
+        <>
+          <Rectangle
+            fill="clear"
+            frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+            ignoresSafeArea={true}
+            clipped={true}
+            overlay={
+              <Image
+                image={bgImage}
+                resizable={true}
+                aspectRatio={{ contentMode: "fill" }}
+                frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+                clipped={true}
+                ignoresSafeArea={true}
+              />
+            }
+          />
+          <Rectangle
+            fill={{
+              colors: [
+                "rgba(0, 0, 0, 0.02)",
+                "rgba(0, 0, 0, 0.08)",
+                "rgba(0, 0, 0, 0.18)",
+              ],
+              startPoint: "top",
+              endPoint: "bottom",
+            }}
+            ignoresSafeArea={true}
+          />
+        </>
+      ) : (
+        <DreamyFluidBackground />
+      )}
+
+      {/* 2. 居中品牌字与加载组件（严格与登录页保持一致的高质感排版） */}
       <VStack
         alignment="center"
-        spacing={20}
-        frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+        spacing={24}
+        frame={{ maxWidth: "infinity", maxHeight: "infinity", alignment: "center" }}
+        padding={32}
       >
-        <Spacer />
-        <VStack alignment="center" spacing={14}>
-          <Image
-            systemName="paintpalette.fill"
-            font="largeTitle"
-            foregroundStyle="#0096FA"
-          />
-          <Text font="title2" fontWeight="bold">
-            Pix-Scripting
-          </Text>
+        <Text
+          font={38}
+          fontWeight="heavy"
+          foregroundStyle="white"
+          shadow={{ color: "rgba(0, 0, 0, 0.32)", radius: 10, y: 3 }}
+        >
+          Pix-Scripting
+        </Text>
+        <VStack spacing={14} alignment="center" padding={{ top: 12 }}>
+          <ProgressView progressViewStyle="circular" />
         </VStack>
-        <ProgressView progressViewStyle="circular" />
-        <Spacer />
       </VStack>
     </ZStack>
   )

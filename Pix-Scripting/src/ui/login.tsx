@@ -23,7 +23,7 @@ import { isPixivCookieDomain } from "../api/pixiv"
 import { session } from "../api/session"
 import { appToolbar } from "./components"
 import { LoginNetworkSheet } from "./loginNetworkSheet"
-import { LOGIN_BACKGROUND_BASE64 } from "./loginBackground"
+import { DreamyFluidBackground } from "./components/DreamyBackground"
 
 export function LoginView(props: {
   onClose: () => void
@@ -34,14 +34,6 @@ export function LoginView(props: {
   const [showNetworkSheet, setShowNetworkSheet] = useState(false)
   // 组件卸载（用户关闭页面）后不再 setState
   const mountedRef = useRef(true)
-
-  const bgImage = useMemo(() => {
-    try {
-      return UIImage.fromBase64String(LOGIN_BACKGROUND_BASE64)
-    } catch {
-      return null
-    }
-  }, [])
 
   useEffect(() => {
     return () => {
@@ -178,41 +170,8 @@ export function LoginView(props: {
         ),
       }}
     >
-      {/* 1. 离线高斯模糊插画背景：由 Rectangle 约束物理视口并在 overlay 中铺满裁剪，杜绝撑宽父容器破坏居中 */}
-      <Rectangle
-        fill="clear"
-        frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-        ignoresSafeArea={true}
-        clipped={true}
-        overlay={
-          bgImage ? (
-            <Image
-              image={bgImage}
-              resizable={true}
-              aspectRatio={{ contentMode: "fill" }}
-              frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-              clipped={true}
-              ignoresSafeArea={true}
-            />
-          ) : (
-            <Rectangle fill="systemBackground" ignoresSafeArea={true} />
-          )
-        }
-      />
-
-      {/* 2. 极轻微的微透渐变：保留原画丰富色彩，同时提供柔和文字对比度 */}
-      <Rectangle
-        fill={{
-          colors: [
-            "rgba(0, 0, 0, 0.02)",
-            "rgba(0, 0, 0, 0.08)",
-            "rgba(0, 0, 0, 0.18)",
-          ],
-          startPoint: "top",
-          endPoint: "bottom",
-        }}
-        ignoresSafeArea={true}
-      />
+      {/* 梦幻流体光晕背景 (纯代码渲染，零侵权风险) */}
+      <DreamyFluidBackground />
 
       {isLoading ? (
         <VStack

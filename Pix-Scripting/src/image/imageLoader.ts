@@ -149,6 +149,36 @@ export function cachedFilePath(url: string): string | null {
   return isUsableCacheFile(path) ? path : null
 }
 
+/**
+ * 获取本地缓存中最新访问的一张高质量作品插画路径，供启动页模糊背景使用。
+ */
+export function getLatestCachedArtworkPath(): string | null {
+  try {
+    const meta = loadMeta()
+    const entries = Object.entries(meta)
+    if (entries.length === 0) return null
+    // 筛选出大于 30KB（排除微型头像或图标）且最近访问过的有效插画
+    const validArtworkEntries = entries
+      .filter(([_, item]) => {
+        if (!item || !item.url) return false
+        const url = item.url.toLowerCase()
+        if (url.includes("avatar") || url.includes("profile") || url.endsWith(".zip") || url.endsWith(".mp4")) {
+          return false
+        }
+        return (item.size || 0) > 30 * 1024
+      })
+      .sort((a, b) => (b[1].lastAccess || 0) - (a[1].lastAccess || 0))
+
+    for (const [_, item] of validArtworkEntries.slice(0, 10)) {
+      const path = cachedFilePath(item.url)
+      if (path && isUsableCacheFile(path)) {
+        return path
+      }
+    }
+  } catch {}
+  return null
+}
+
 function touch(meta: CacheMeta, key: string, url: string, size: number): void {
   meta[key] = { url, size, lastAccess: Date.now() }
 }
