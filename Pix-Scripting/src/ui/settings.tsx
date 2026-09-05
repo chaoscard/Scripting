@@ -34,6 +34,8 @@ import {
   type NovelReaderExperimentalAlgorithm,
   type GeminiMotionSpeed,
   type LaunchPage,
+  type QuickActionButtonAction,
+  type QuickActionButtonPosition,
   type WidgetDefaultSource,
 } from "../store/settings"
 import { loadBlocklist, onBlocklistChanged } from "../store/blocklist"
@@ -358,6 +360,36 @@ export function SettingsView() {
             value={settings.prefetchEnabled}
             onChanged={(value) => update({ prefetchEnabled: value })}
           />
+          <Toggle
+            title="快捷操作按钮"
+            value={settings.quickActionButtonEnabled}
+            onChanged={(value) => update({ quickActionButtonEnabled: value })}
+          />
+          {settings.quickActionButtonEnabled ? (
+            <Group>
+              <Picker
+                title="快捷操作按钮定义"
+                value={settings.quickActionButtonAction}
+                onChanged={(value: string) =>
+                  update({ quickActionButtonAction: value as QuickActionButtonAction })
+                }
+              >
+                <Text tag="bookmark">收藏</Text>
+                <Text tag="follow">关注</Text>
+                <Text tag="download">下载</Text>
+              </Picker>
+              <Picker
+                title="快捷操作按钮位置"
+                value={settings.quickActionButtonPosition}
+                onChanged={(value: string) =>
+                  update({ quickActionButtonPosition: value as QuickActionButtonPosition })
+                }
+              >
+                <Text tag="trailing">右下角</Text>
+                <Text tag="leading">左下角</Text>
+              </Picker>
+            </Group>
+          ) : null}
           <Picker
             title="启动页面"
             value={settings.launchPage}

@@ -153,3 +153,4 @@ export function calculateLineSpacing(fontSize: number, level: NovelLineSpacingLe
       return Math.round(fontSize * 0.65)
   }
 }
+

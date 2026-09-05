@@ -9,6 +9,8 @@ export type ImageSourceMode = "pixiv_re" | "official" | "custom"
 export type ApiGatewayMode = "official" | "custom"
 export type UgoiraExportFormat = "mp4" | "gif"
 export type DownloadStorageMode = "local" | "icloud"
+export type QuickActionButtonAction = "bookmark" | "follow" | "download"
+export type QuickActionButtonPosition = "trailing" | "leading"
 export type CloseButtonAction = "minimize" | "exit"
 export type WatchlistSortOrder = "asc" | "desc"
 export type AmbientIntensity = "low" | "medium" | "high"
@@ -164,7 +166,9 @@ export interface AppSettings {
   widgetSourceExtraLargeIpad: WidgetDefaultSource
   widgetPoolCapacity: WidgetPoolCapacity
   widgetReloadIntervalMinutes: WidgetReloadIntervalMinutes
-  sauceNaoApiKey: string
+  quickActionButtonEnabled: boolean
+  quickActionButtonAction: QuickActionButtonAction
+  quickActionButtonPosition: QuickActionButtonPosition
   imageSourceMode: ImageSourceMode
   customImageBaseUrl: string
   apiGatewayMode: ApiGatewayMode
@@ -245,7 +249,9 @@ const DEFAULT_SETTINGS: AppSettings = {
   widgetSourceExtraLargeIpad: "pixivision",
   widgetPoolCapacity: 30,
   widgetReloadIntervalMinutes: 60,
-  sauceNaoApiKey: "",
+  quickActionButtonEnabled: false,
+  quickActionButtonAction: "bookmark",
+  quickActionButtonPosition: "trailing",
   imageSourceMode: "official",
   customImageBaseUrl: "",
   apiGatewayMode: "official",
@@ -274,6 +280,15 @@ const UGOIRA_EXPORT_FORMAT_VALUES: readonly UgoiraExportFormat[] = ["mp4", "gif"
 const DOWNLOAD_STORAGE_MODE_VALUES: readonly DownloadStorageMode[] = ["local", "icloud"]
 const LONG_PRESS_ACTION_VALUES: readonly AppSettings["longPressBookmarkAction"][] = ["off", "follow", "detail"]
 const CLOSE_BUTTON_ACTION_VALUES: readonly CloseButtonAction[] = ["minimize", "exit"]
+const QUICK_ACTION_BUTTON_ACTION_VALUES: readonly QuickActionButtonAction[] = [
+  "bookmark",
+  "follow",
+  "download",
+]
+const QUICK_ACTION_BUTTON_POSITION_VALUES: readonly QuickActionButtonPosition[] = [
+  "trailing",
+  "leading",
+]
 const AMBIENT_INTENSITY_VALUES: readonly AmbientIntensity[] = ["low", "medium", "high"]
 const GEMINI_MOTION_SPEED_VALUES: readonly GeminiMotionSpeed[] = [
   "fast",
@@ -679,6 +694,22 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
       : DEFAULT_SETTINGS.widgetSourceExtraLargeIpad,
     widgetPoolCapacity: parseWidgetPoolCapacity(stored?.widgetPoolCapacity),
     widgetReloadIntervalMinutes: parseWidgetReloadInterval(stored?.widgetReloadIntervalMinutes),
+    quickActionButtonEnabled: boolOr(
+      stored?.quickActionButtonEnabled,
+      DEFAULT_SETTINGS.quickActionButtonEnabled
+    ),
+    quickActionButtonAction: isOneOf(
+      stored?.quickActionButtonAction,
+      QUICK_ACTION_BUTTON_ACTION_VALUES
+    )
+      ? stored.quickActionButtonAction
+      : DEFAULT_SETTINGS.quickActionButtonAction,
+    quickActionButtonPosition: isOneOf(
+      stored?.quickActionButtonPosition,
+      QUICK_ACTION_BUTTON_POSITION_VALUES
+    )
+      ? stored.quickActionButtonPosition
+      : DEFAULT_SETTINGS.quickActionButtonPosition,
     imageSourceMode: isOneOf(stored?.imageSourceMode, IMAGE_SOURCE_MODE_VALUES)
       ? stored.imageSourceMode
       : DEFAULT_SETTINGS.imageSourceMode,
