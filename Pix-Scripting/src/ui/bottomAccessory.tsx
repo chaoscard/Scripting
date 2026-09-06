@@ -25,7 +25,7 @@ import {
   illustrationSeries,
   novelSeries,
 } from "../api/pixiv"
-import { getCachedIllust } from "../store/illustCache"
+import { cacheIllust, getCachedIllust } from "../store/illustCache"
 import { cacheNovel, getCachedNovel } from "../store/novelCache"
 import { getCachedSeriesNav } from "../store/seriesCache"
 import { updateHistoryBookmark, updateNovelHistoryBookmark } from "../store/history"
@@ -315,8 +315,10 @@ export function CapsuleAccessoryContainer(props: { children: any }) {
 
 export function IllustDetailDockBar(props: { illustID: number }) {
   const { illustID } = props
-  const cached = getCachedIllust(illustID)
-  const [illust, setIllust] = useState<PixivIllustration | null>(cached)
+  const [illust, setIllust] = useState<PixivIllustration | null>(() =>
+    getCachedIllust(illustID)
+  )
+  const cached = illust ?? getCachedIllust(illustID)
   const [bookmarked, setBookmarked] = useIllustBookmark(
     illustID,
     cached?.is_bookmarked ?? false
@@ -331,15 +333,18 @@ export function IllustDetailDockBar(props: { illustID: number }) {
   const [downloading, setDownloading] = useState(false)
 
   useEffect(() => {
-    if (!illust) {
-      session
-        .call((token) => illustrationDetail(illustID, token))
-        .then((detail) => {
-          if (detail) setIllust(detail)
-        })
-        .catch(() => {})
-    }
-  }, [illustID, illust])
+    const c = getCachedIllust(illustID)
+    if (c) setIllust(c)
+    session
+      .call((token) => illustrationDetail(illustID, token))
+      .then((detail) => {
+        if (detail) {
+          cacheIllust(detail)
+          setIllust(detail)
+        }
+      })
+      .catch(() => {})
+  }, [illustID])
 
   async function toggleBookmark() {
     if (bookmarkLoading) return
@@ -432,8 +437,10 @@ export function IllustDetailDockBar(props: { illustID: number }) {
 
 export function NovelDetailDockBar(props: { novelID: number }) {
   const { novelID } = props
-  const cached = getCachedNovel(novelID)
-  const [novel, setNovel] = useState<PixivNovelDetail | PixivNovel | null>(cached)
+  const [novel, setNovel] = useState<PixivNovelDetail | PixivNovel | null>(() =>
+    getCachedNovel(novelID)
+  )
+  const cached = novel ?? getCachedNovel(novelID)
   const [bookmarked, setBookmarked] = useNovelBookmark(
     novelID,
     cached?.is_bookmarked ?? false
@@ -448,6 +455,8 @@ export function NovelDetailDockBar(props: { novelID: number }) {
   const [downloading, setDownloading] = useState(false)
 
   useEffect(() => {
+    const c = getCachedNovel(novelID)
+    if (c) setNovel(c)
     session
       .call((token) => novelDetail(novelID, token))
       .then((detail) => {
@@ -674,12 +683,21 @@ export function SeriesDetailDockBar(props: {
   }, [])
 
   useEffect(() => {
+    const nav = getCachedSeriesNav(seriesID, kind)
+    if (nav?.title) setSeriesTitle(nav.title)
     if (kind === "manga") {
       session
         .call((token) => illustrationSeries(seriesID, token))
         .then((res) => {
           if (res?.illust_series_detail?.title) {
             setSeriesTitle(res.illust_series_detail.title)
+          }
+          if (res?.illust_series_detail) {
+            const watched = Boolean(
+              res.illust_series_detail.watchlist_added ??
+                (res.illust_series_detail as any).is_watched
+            )
+            setIsWatched(watched)
           }
         })
         .catch(() => {})
@@ -689,6 +707,13 @@ export function SeriesDetailDockBar(props: {
         .then((res) => {
           if (res?.novel_series_detail?.title) {
             setSeriesTitle(res.novel_series_detail.title)
+          }
+          if (res?.novel_series_detail) {
+            const watched = Boolean(
+              res.novel_series_detail.watchlist_added ??
+                (res.novel_series_detail as any).is_watched
+            )
+            setIsWatched(watched)
           }
         })
         .catch(() => {})
@@ -782,7 +807,7 @@ export function SeriesDetailDockBar(props: {
   const items: DockActionItem[] = [
     {
       key: "watchlist",
-      label: isWatched ? "已追更" : "追更系列",
+      label: isWatched ? "已追更" : "追更",
       icon: isWatched ? "bookmark.fill" : "bookmark",
       color: isWatched ? "#EE2F49" : "#3172EB",
       disabled: watchLoading,
@@ -797,7 +822,7 @@ export function SeriesDetailDockBar(props: {
     },
     {
       key: "download",
-      label: seriesDownloading ? "下载中…" : "下载系列",
+      label: seriesDownloading ? "下载中…" : "下载",
       icon: seriesDownloading ? "arrow.down.circle.fill" : "square.and.arrow.down",
       color: seriesDownloading ? "secondaryLabel" : "#3172EB",
       disabled: seriesDownloading,
@@ -1098,7 +1123,7 @@ export function GlobalBottomAccessoryHost(props: {
     const parts = top.split(":")
     const id = Number(parts[parts.length - 1])
     if (Number.isFinite(id) && id > 0) {
-      return <IllustDetailDockBar illustID={id} />
+      return <IllustDetailDockBar key={top} illustID={id} />
     }
   }
 
@@ -1107,7 +1132,7 @@ export function GlobalBottomAccessoryHost(props: {
     const parts = top.split(":")
     const id = Number(parts[parts.length - 1])
     if (Number.isFinite(id) && id > 0) {
-      return <NovelDetailDockBar novelID={id} />
+      return <NovelDetailDockBar key={top} novelID={id} />
     }
   }
 
@@ -1116,7 +1141,7 @@ export function GlobalBottomAccessoryHost(props: {
     const parts = top.split(":")
     const id = Number(parts[parts.length - 1])
     if (Number.isFinite(id) && id > 0) {
-      return <PixivisionDetailDockBar articleID={id} />
+      return <PixivisionDetailDockBar key={top} articleID={id} />
     }
   }
 
@@ -1125,7 +1150,7 @@ export function GlobalBottomAccessoryHost(props: {
     const parts = top.split(":")
     const id = Number(parts[parts.length - 1])
     if (Number.isFinite(id) && id > 0) {
-      return <SeriesDetailDockBar seriesID={id} kind="manga" />
+      return <SeriesDetailDockBar key={top} seriesID={id} kind="manga" />
     }
   }
 
@@ -1134,7 +1159,7 @@ export function GlobalBottomAccessoryHost(props: {
     const parts = top.split(":")
     const id = Number(parts[parts.length - 1])
     if (Number.isFinite(id) && id > 0) {
-      return <SeriesDetailDockBar seriesID={id} kind="novel" />
+      return <SeriesDetailDockBar key={top} seriesID={id} kind="novel" />
     }
   }
 

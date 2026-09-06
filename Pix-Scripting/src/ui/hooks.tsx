@@ -11,6 +11,9 @@ import {
   getCachedNovelBookmark,
   getCachedNovelMarker,
   getCachedWatchlist,
+  notifyIllustBookmarkChanged,
+  notifyNovelBookmarkChanged,
+  notifyWatchlistChanged,
   onIllustBookmarkChanged,
   onNovelBookmarkChanged,
   onNovelMarkerChanged,
@@ -20,6 +23,7 @@ import {
 import {
   getUserFollowRestrict,
   isUserFollowed,
+  notifyUserFollowChanged,
   onUserFollowChanged,
   type FollowRestrict,
 } from "../store/userFollow"
@@ -1018,19 +1022,27 @@ export function useIllustBookmark(
   illustID: number,
   initialBookmarked = false
 ): [boolean, (bookmarked: boolean) => void] {
-  const [bookmarked, setBookmarked] = useState<boolean>(() => {
+  const [bookmarked, setBookmarkedState] = useState<boolean>(() => {
     return getCachedIllustBookmark(illustID) ?? initialBookmarked
   })
+
+  const setBookmarked = useCallback(
+    (nextBookmarked: boolean) => {
+      setBookmarkedState(nextBookmarked)
+      notifyIllustBookmarkChanged(illustID, nextBookmarked)
+    },
+    [illustID]
+  )
 
   useEffect(() => {
     // 挂载时若无缓存则补录入初值
     const cached = getCachedIllustBookmark(illustID)
     if (cached !== undefined) {
-      setBookmarked(cached)
+      setBookmarkedState(cached)
     }
     return onIllustBookmarkChanged((changedID, nextBookmarked) => {
       if (changedID === illustID) {
-        setBookmarked(nextBookmarked)
+        setBookmarkedState(nextBookmarked)
       }
     })
   }, [illustID])
@@ -1045,18 +1057,26 @@ export function useNovelBookmark(
   novelID: number,
   initialBookmarked = false
 ): [boolean, (bookmarked: boolean) => void] {
-  const [bookmarked, setBookmarked] = useState<boolean>(() => {
+  const [bookmarked, setBookmarkedState] = useState<boolean>(() => {
     return getCachedNovelBookmark(novelID) ?? initialBookmarked
   })
+
+  const setBookmarked = useCallback(
+    (nextBookmarked: boolean) => {
+      setBookmarkedState(nextBookmarked)
+      notifyNovelBookmarkChanged(novelID, nextBookmarked)
+    },
+    [novelID]
+  )
 
   useEffect(() => {
     const cached = getCachedNovelBookmark(novelID)
     if (cached !== undefined) {
-      setBookmarked(cached)
+      setBookmarkedState(cached)
     }
     return onNovelBookmarkChanged((changedID, nextBookmarked) => {
       if (changedID === novelID) {
-        setBookmarked(nextBookmarked)
+        setBookmarkedState(nextBookmarked)
       }
     })
   }, [novelID])
@@ -1076,26 +1096,42 @@ export function useUserFollow(
   FollowRestrict | null,
   (restrict: FollowRestrict | null) => void
 ] {
-  const [followed, setFollowed] = useState<boolean>(() => {
+  const [followed, setFollowedState] = useState<boolean>(() => {
     return isUserFollowed(userID) ?? initialFollowed
   })
-  const [followRestrict, setFollowRestrict] = useState<FollowRestrict | null>(() => {
+  const [followRestrict, setFollowRestrictState] = useState<FollowRestrict | null>(() => {
     return getUserFollowRestrict(userID) ?? null
   })
+
+  const setFollowed = useCallback(
+    (nextFollowed: boolean) => {
+      setFollowedState(nextFollowed)
+      notifyUserFollowChanged(userID, nextFollowed, followRestrict ?? "public")
+    },
+    [userID, followRestrict]
+  )
+
+  const setFollowRestrict = useCallback(
+    (restrict: FollowRestrict | null) => {
+      setFollowRestrictState(restrict)
+      notifyUserFollowChanged(userID, followed, restrict ?? undefined)
+    },
+    [userID, followed]
+  )
 
   useEffect(() => {
     const cached = isUserFollowed(userID)
     if (cached !== undefined) {
-      setFollowed(cached)
+      setFollowedState(cached)
     }
     const cachedRestrict = getUserFollowRestrict(userID)
     if (cachedRestrict !== undefined) {
-      setFollowRestrict(cachedRestrict)
+      setFollowRestrictState(cachedRestrict)
     }
     return onUserFollowChanged((changedID, nextFollowed, nextRestrict) => {
       if (changedID === userID) {
-        setFollowed(nextFollowed)
-        setFollowRestrict(nextFollowed ? (nextRestrict ?? "public") : null)
+        setFollowedState(nextFollowed)
+        setFollowRestrictState(nextFollowed ? (nextRestrict ?? "public") : null)
       }
     })
   }, [userID])
@@ -1111,18 +1147,26 @@ export function useSeriesWatchlist(
   kind: "manga" | "novel",
   initialWatched = false
 ): [boolean, (watched: boolean) => void] {
-  const [watched, setWatched] = useState<boolean>(() => {
+  const [watched, setWatchedState] = useState<boolean>(() => {
     return getCachedWatchlist(seriesID, kind) ?? initialWatched
   })
+
+  const setWatched = useCallback(
+    (nextWatched: boolean) => {
+      setWatchedState(nextWatched)
+      notifyWatchlistChanged(seriesID, kind, nextWatched)
+    },
+    [seriesID, kind]
+  )
 
   useEffect(() => {
     const cached = getCachedWatchlist(seriesID, kind)
     if (cached !== undefined) {
-      setWatched(cached)
+      setWatchedState(cached)
     }
     return onWatchlistChanged((changedID, changedKind, nextWatched) => {
       if (changedID === seriesID && changedKind === kind) {
-        setWatched(nextWatched)
+        setWatchedState(nextWatched)
       }
     })
   }, [seriesID, kind])
