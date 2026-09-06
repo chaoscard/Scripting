@@ -95,20 +95,22 @@ export function RefreshableScrollView(props: {
 
   return (
     <ZStack navigationDestination={props.navigationDestination}>
-      <ZStack
-        frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-        clipped={true}
-        ignoresSafeArea={true}
-      >
-        {isVirtualNode(props.background) ? (
-          props.background
-        ) : (
-          <Rectangle
-            fill={props.background ?? "clear"}
-            ignoresSafeArea={true}
-          />
-        )}
-      </ZStack>
+      {props.background ? (
+        <ZStack
+          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          clipped={true}
+          ignoresSafeArea={true}
+        >
+          {isVirtualNode(props.background) ? (
+            props.background
+          ) : (
+            <Rectangle
+              fill={props.background}
+              ignoresSafeArea={true}
+            />
+          )}
+        </ZStack>
+      ) : null}
       <ScrollViewReader>
         {(proxy) => {
           proxyRef.current = proxy

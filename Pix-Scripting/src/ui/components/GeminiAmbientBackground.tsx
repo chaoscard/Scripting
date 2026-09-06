@@ -26,6 +26,7 @@ export interface GeminiAmbientBackgroundProps {
   bgColor: Color
   isDark: boolean
   intensity: AmbientIntensity
+  active?: boolean
 }
 
 // 官方 Gemini 色调调色环定义（融合 Google 蓝 #4285f4、罗兰紫 #9059ff、星云粉 #f772bb、冰川青 #06b6d4）
@@ -250,6 +251,7 @@ export function GeminiAmbientBackground(props: GeminiAmbientBackgroundProps) {
   const [rightIndex, setRightIndex] = useState(1)
 
   useEffect(() => {
+    if (props.active === false) return
     let active = true
     let timerId: any = null
 
@@ -293,7 +295,7 @@ export function GeminiAmbientBackground(props: GeminiAmbientBackgroundProps) {
         clearTimeout(timerId)
       }
     }
-  }, [paletteLen, intervalMs, durationMs])
+  }, [paletteLen, intervalMs, durationMs, props.active])
 
   // 4. 当前时刻的双主色与 3 阶中心微提亮流光渐变（实现 Gemini 官方 Gradient Flow & Luminous Core）
   const leftColor = activePalette[leftIndex % paletteLen] ?? activePalette[0]!

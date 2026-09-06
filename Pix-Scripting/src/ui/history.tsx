@@ -221,6 +221,7 @@ export function HistoryView() {
       <VStack
         frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
         opacity={kind === "illustration" ? 1 : 0}
+        hidden={kind !== "illustration"}
         zIndex={kind === "illustration" ? 1 : 0}
         allowsHitTesting={kind === "illustration"}
       >
@@ -245,6 +246,7 @@ export function HistoryView() {
         <VStack
           frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
           opacity={kind === "manga" ? 1 : 0}
+          hidden={kind !== "manga"}
           zIndex={kind === "manga" ? 1 : 0}
           allowsHitTesting={kind === "manga"}
         >
@@ -270,6 +272,7 @@ export function HistoryView() {
         <VStack
           frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
           opacity={kind === "novel" ? 1 : 0}
+          hidden={kind !== "novel"}
           zIndex={kind === "novel" ? 1 : 0}
           allowsHitTesting={kind === "novel"}
         >

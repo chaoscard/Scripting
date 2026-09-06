@@ -308,6 +308,7 @@ export function UserWorksView(props: { userID?: number; title?: string }) {
               key={k}
               frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
               opacity={isCurrent ? 1 : 0}
+              hidden={!isCurrent}
               zIndex={isCurrent ? 1 : 0}
               allowsHitTesting={isCurrent}
             >

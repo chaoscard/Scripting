@@ -13,6 +13,7 @@ import {
   VStack,
   ZStack,
 } from "scripting"
+import { useIsCurrentTab } from "./routeNavigation"
 import {
   followingFeed,
   followingNovels,
@@ -82,7 +83,8 @@ export function FollowFeedView(props: {
   const isAppleMusic = pageLayout === "appleMusic"
   const [showRecommendedUsers, setShowRecommendedUsers] = useState(false)
   const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(null)
-  const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
+  const isTabActive = useIsCurrentTab("following")
+  const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl, isTabActive)
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
   const [visitedModes, setVisitedModes] = useState<Set<FollowMode>>(() => new Set([mode]))
@@ -173,6 +175,7 @@ export function FollowFeedView(props: {
       <VStack
         frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
         opacity={mode === "following" ? 1 : 0}
+        hidden={mode !== "following"}
         zIndex={mode === "following" ? 1 : 0}
         allowsHitTesting={mode === "following"}
       >
@@ -194,6 +197,7 @@ export function FollowFeedView(props: {
         <VStack
           frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
           opacity={mode === "watchlist" ? 1 : 0}
+          hidden={mode !== "watchlist"}
           zIndex={mode === "watchlist" ? 1 : 0}
           allowsHitTesting={mode === "watchlist"}
         >
@@ -215,6 +219,7 @@ export function FollowFeedView(props: {
         <VStack
           frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
           opacity={mode === "friends" ? 1 : 0}
+          hidden={mode !== "friends"}
           zIndex={mode === "friends" ? 1 : 0}
           allowsHitTesting={mode === "friends"}
         >
@@ -467,6 +472,7 @@ function FollowingFeed(props: {
       <VStack
         frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
         opacity={kind === "illust" ? 1 : 0}
+        hidden={kind !== "illust"}
         zIndex={kind === "illust" ? 1 : 0}
         allowsHitTesting={kind === "illust"}
       >
@@ -502,6 +508,7 @@ function FollowingFeed(props: {
         <VStack
           frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
           opacity={kind === "novel" ? 1 : 0}
+          hidden={kind !== "novel"}
           zIndex={kind === "novel" ? 1 : 0}
           allowsHitTesting={kind === "novel"}
         >
@@ -631,6 +638,7 @@ function WatchlistFeed(props: {
       <VStack
         frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
         opacity={kind === "manga" ? 1 : 0}
+        hidden={kind !== "manga"}
         zIndex={kind === "manga" ? 1 : 0}
         allowsHitTesting={kind === "manga"}
       >
@@ -664,6 +672,7 @@ function WatchlistFeed(props: {
         <VStack
           frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
           opacity={kind === "novel" ? 1 : 0}
+          hidden={kind !== "novel"}
           zIndex={kind === "novel" ? 1 : 0}
           allowsHitTesting={kind === "novel"}
         >
@@ -781,6 +790,7 @@ function FriendsFeed(props: {
       <VStack
         frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
         opacity={kind === "illust" ? 1 : 0}
+        hidden={kind !== "illust"}
         zIndex={kind === "illust" ? 1 : 0}
         allowsHitTesting={kind === "illust"}
       >
@@ -816,6 +826,7 @@ function FriendsFeed(props: {
         <VStack
           frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
           opacity={kind === "novel" ? 1 : 0}
+          hidden={kind !== "novel"}
           zIndex={kind === "novel" ? 1 : 0}
           allowsHitTesting={kind === "novel"}
         >

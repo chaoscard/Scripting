@@ -14,6 +14,7 @@ import {
   VStack,
   ZStack,
 } from "scripting"
+import { useIsCurrentTab } from "./routeNavigation"
 import {
   newIllustrations,
   newNovels,
@@ -77,7 +78,8 @@ export function DiscoveryView(props: { onClose: () => void }) {
   const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
   const isAppleMusic = pageLayout === "appleMusic"
   const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(null)
-  const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
+  const isTabActive = useIsCurrentTab("discovery")
+  const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl, isTabActive)
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
   // 模式保活机制：惰性挂载，访问后永久保留在内存中
@@ -172,6 +174,7 @@ export function DiscoveryView(props: { onClose: () => void }) {
       <VStack
         frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
         opacity={mode === "recommended" ? 1 : 0}
+        hidden={mode !== "recommended"}
         zIndex={mode === "recommended" ? 1 : 0}
         allowsHitTesting={mode === "recommended"}
       >
@@ -192,6 +195,7 @@ export function DiscoveryView(props: { onClose: () => void }) {
         <VStack
           frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
           opacity={mode === "latest" ? 1 : 0}
+          hidden={mode !== "latest"}
           zIndex={mode === "latest" ? 1 : 0}
           allowsHitTesting={mode === "latest"}
         >
@@ -213,6 +217,7 @@ export function DiscoveryView(props: { onClose: () => void }) {
         <VStack
           frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
           opacity={mode === "pixivision" ? 1 : 0}
+          hidden={mode !== "pixivision"}
           zIndex={mode === "pixivision" ? 1 : 0}
           allowsHitTesting={mode === "pixivision"}
         >
@@ -350,6 +355,7 @@ function RecommendedExploreFeed(props: {
       <VStack
         frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
         opacity={kind === "illustration" ? 1 : 0}
+        hidden={kind !== "illustration"}
         zIndex={kind === "illustration" ? 1 : 0}
         allowsHitTesting={kind === "illustration"}
       >
@@ -363,6 +369,7 @@ function RecommendedExploreFeed(props: {
         <VStack
           frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
           opacity={kind === "manga" ? 1 : 0}
+          hidden={kind !== "manga"}
           zIndex={kind === "manga" ? 1 : 0}
           allowsHitTesting={kind === "manga"}
         >
@@ -377,6 +384,7 @@ function RecommendedExploreFeed(props: {
         <VStack
           frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
           opacity={kind === "novel" ? 1 : 0}
+          hidden={kind !== "novel"}
           zIndex={kind === "novel" ? 1 : 0}
           allowsHitTesting={kind === "novel"}
         >
@@ -511,6 +519,7 @@ function LatestExploreFeed(props: {
       <VStack
         frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
         opacity={kind === "illustration" ? 1 : 0}
+        hidden={kind !== "illustration"}
         zIndex={kind === "illustration" ? 1 : 0}
         allowsHitTesting={kind === "illustration"}
       >
@@ -524,6 +533,7 @@ function LatestExploreFeed(props: {
         <VStack
           frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
           opacity={kind === "manga" ? 1 : 0}
+          hidden={kind !== "manga"}
           zIndex={kind === "manga" ? 1 : 0}
           allowsHitTesting={kind === "manga"}
         >
@@ -538,6 +548,7 @@ function LatestExploreFeed(props: {
         <VStack
           frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
           opacity={kind === "novel" ? 1 : 0}
+          hidden={kind !== "novel"}
           zIndex={kind === "novel" ? 1 : 0}
           allowsHitTesting={kind === "novel"}
         >

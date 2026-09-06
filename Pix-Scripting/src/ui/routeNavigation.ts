@@ -1,3 +1,4 @@
+import { useEffect, useState } from "scripting"
 import { normalizeRoute } from "./routes"
 
 export type PixivRoute = string
@@ -6,12 +7,38 @@ export type PixivTabKind = "discovery" | "ranking" | "following" | "search" | "m
 type PixivRouteNavigator = (route: PixivRoute) => void
 
 let activeTabKind: PixivTabKind = "discovery"
+const activeTabListeners = new Set<(tab: PixivTabKind) => void>()
 const tabNavigators: Partial<Record<PixivTabKind, PixivRouteNavigator>> = {}
 let globalNavigator: PixivRouteNavigator | null = null
 let pendingRoute: { route: PixivRoute; explicitTab?: PixivTabKind } | null = null
 
 export function setActiveTabKind(tab: PixivTabKind): void {
-  activeTabKind = tab
+  if (activeTabKind !== tab) {
+    activeTabKind = tab
+    activeTabListeners.forEach((fn) => {
+      try {
+        fn(tab)
+      } catch {}
+    })
+  }
+}
+
+export function onActiveTabChanged(listener: (tab: PixivTabKind) => void): () => void {
+  activeTabListeners.add(listener)
+  return () => {
+    activeTabListeners.delete(listener)
+  }
+}
+
+export function useIsCurrentTab(tab: PixivTabKind): boolean {
+  const [isCurrent, setIsCurrent] = useState(() => activeTabKind === tab)
+  useEffect(() => {
+    setIsCurrent(activeTabKind === tab)
+    return onActiveTabChanged((curr) => {
+      setIsCurrent(curr === tab)
+    })
+  }, [tab])
+  return isCurrent
 }
 
 export function getActiveTabKind(): PixivTabKind {

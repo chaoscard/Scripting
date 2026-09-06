@@ -20,7 +20,7 @@ import { session } from "../api/session"
 import { loadSettings, onSettingsChanged } from "../store/settings"
 import { appToolbar, AvatarImage } from "./components"
 import { destinationElement } from "./routes"
-import { requestPixivRoute, setActiveTabKind } from "./routeNavigation"
+import { requestPixivRoute, setActiveTabKind, useIsCurrentTab } from "./routeNavigation"
 import { DockActionBar, useRegisterBottomAccessory, type DockActionItem } from "./bottomAccessory"
 import { useExperimentalAmbientPalette } from "./hooks"
 import { ReverseImageSearchSheet } from "./reverseImageSearchSheet"
@@ -43,7 +43,8 @@ export function MoreView(props: { onClose: () => void }) {
   const isAppleMusic = pageLayout === "appleMusic"
   const [activeSheet, setActiveSheet] = useState<"none" | "reverseSearch" | "accountSwitcher">("none")
   const avatarURL = user?.profile_image_urls?.px_170x170 ?? null
-  const { ambientBackground } = useExperimentalAmbientPalette(avatarURL)
+  const isTabActive = useIsCurrentTab("more")
+  const { ambientBackground } = useExperimentalAmbientPalette(avatarURL, isTabActive)
 
   useEffect(() => {
     return onSettingsChanged(() => {

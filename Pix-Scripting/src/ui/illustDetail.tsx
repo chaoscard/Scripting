@@ -11,6 +11,7 @@ import {
   Navigation,
   NavigationLink,
   ProgressView,
+  Rectangle,
   ScrollView,
   Spacer,
   Text,
@@ -959,18 +960,23 @@ export function IllustDetailView(props: { illustID: number }) {
             }
       }
       background={
-        ambientEnabled && ambientPalette
-          ? {
-              colors: [
-                ambientPalette.topColor,
-                ambientPalette.midColor,
-                ambientPalette.backgroundColor,
-                ambientPalette.backgroundColor,
-              ],
-              startPoint: "top",
-              endPoint: "bottom",
-            }
-          : undefined
+        ambientEnabled && ambientPalette ? (
+          <ZStack ignoresSafeArea={true}>
+            <Rectangle
+              fill={{
+                colors: [
+                  ambientPalette.topColor,
+                  ambientPalette.midColor,
+                  ambientPalette.backgroundColor,
+                  ambientPalette.backgroundColor,
+                ],
+                startPoint: "top",
+                endPoint: "bottom",
+              }}
+              ignoresSafeArea={true}
+            />
+          </ZStack>
+        ) : undefined
       }
       toolbar={{
         topBarTrailing: [

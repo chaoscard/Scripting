@@ -22,6 +22,7 @@ import {
   VStack,
   ZStack,
 } from "scripting"
+import { useIsCurrentTab } from "./routeNavigation"
 import {
   nextIllustrations,
   nextNovels,
@@ -813,7 +814,8 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
     trendingNovel[0]?.tag,
     userRecommendedPaged.items[0]?.id,
   ])
-  const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
+  const isTabActive = useIsCurrentTab("search")
+  const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl, isTabActive)
 
   const directTargets = useMemo(
     () => parseDirectRouteTargets(query, scope, hideNovels),
