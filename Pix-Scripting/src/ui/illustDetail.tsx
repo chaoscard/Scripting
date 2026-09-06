@@ -87,7 +87,7 @@ import {
 } from "../store/illustCache"
 import { getCachedIllustBookmark } from "../store/bookmarkSync"
 import { getSeriesByWorkID, recordWorkSeriesAssociation } from "../store/seriesCache"
-import { useAsyncGuard, useIllustBookmark, useLatest, usePagedList, currentBatchSize } from "./hooks"
+import { useAsyncGuard, useIllustBookmark, useLatest, useOpenBookmarkDetailListener, usePagedList, currentBatchSize } from "./hooks"
 import type { PixivIllustration } from "../types"
 import {
   AvatarImage,
@@ -186,6 +186,9 @@ export function IllustDetailView(props: { illustID: number }) {
   const [bookmarkLoading, setBookmarkLoading] = useState(false)
   const [bookmarkLongPressLocked, setBookmarkLongPressLocked] = useState(false)
   const [showBookmarkDetail, setShowBookmarkDetail] = useState(false)
+  useOpenBookmarkDetailListener("illust", illustID, () => {
+    setShowBookmarkDetail(true)
+  })
   const [followed, setFollowed] = useState(() => {
     const cachedUser = getCachedIllust(illustID)?.user
     if (cachedUser?.id != null) {
@@ -212,6 +215,14 @@ export function IllustDetailView(props: { illustID: number }) {
   const errorRef = useLatest(error)
   // 同一实例只记录一次浏览（下拉刷新/重试不重复刷新 viewedAt）；换作品时重置
   const recordedIDRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    const cached = getCachedIllust(illustID)
+    if (cached && recordedIDRef.current !== cached.id) {
+      recordedIDRef.current = cached.id
+      recordHistory(cached)
+    }
+  }, [illustID])
 
   const cachedIllust = getCachedIllust(illustID)
   const currentIllust = illust ?? cachedIllust
@@ -562,7 +573,7 @@ export function IllustDetailView(props: { illustID: number }) {
   }
 
   async function bookmarkAndFollow() {
-    if (bookmarkLoading) return
+    if (bookmarkLoading || followLoading) return
     setBookmarkLoading(true)
     try {
       if (!bookmarked) {
@@ -570,10 +581,12 @@ export function IllustDetailView(props: { illustID: number }) {
         setBookmarked(true)
         updateHistoryBookmark(current.id, true)
       }
-      await session.call((token) => followUser(current.user.id, "public", token))
-      setFollowed(true)
-      if (loadSettings().showRelatedUsersOnFollow) {
-        setShowRelatedUsers(true)
+      if (!followed) {
+        await session.call((token) => followUser(current.user.id, "public", token))
+        setFollowed(true)
+        if (loadSettings().showRelatedUsersOnFollow) {
+          setShowRelatedUsers(true)
+        }
       }
     } catch {
       // ignore

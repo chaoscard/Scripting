@@ -3,9 +3,12 @@ import {
   Group,
   HStack,
   Image,
+  LongPressGesture,
   Spacer,
   Text,
+  useCallback,
   useEffect,
+  useMemo,
   useState,
 } from "scripting"
 import { session } from "../api/session"
@@ -39,14 +42,21 @@ import {
   useNovelBookmark,
   useSeriesWatchlist,
   useUserFollow,
+  notifyOpenBookmarkDetail,
 } from "./hooks"
 import {
   downloadEntireMangaSeries,
   downloadEntireNovelSeries,
   downloadIllustToAlbum,
+  exportIllustToZip,
+  exportMangaToCbz,
+  exportMangaToEpub,
   exportNovelToEpub,
   exportUgoiraToAlbum,
+  exportUgoiraZip,
 } from "../downloader"
+import { imageUrlOf } from "../image/imageLoader"
+import { requestPixivRoute } from "./routeNavigation"
 import {
   getDownloadImageQuality,
   loadSettings,
@@ -216,6 +226,8 @@ export interface DockActionItem {
   disabled?: boolean
   action: () => void
   contextMenu?: any
+  simultaneousGesture?: any
+  gesture?: any
 }
 
 export function DockActionBar(props: {
@@ -237,6 +249,8 @@ export function DockActionBar(props: {
             disabled={item.disabled}
             action={item.action}
             contextMenu={item.contextMenu}
+            simultaneousGesture={item.simultaneousGesture}
+            gesture={item.gesture}
           >
             <HStack
               alignment="center"
@@ -324,11 +338,13 @@ export function IllustDetailDockBar(props: { illustID: number }) {
     cached?.is_bookmarked ?? false
   )
   const [bookmarkLoading, setBookmarkLoading] = useState(false)
+  const [bookmarkLongPressLocked, setBookmarkLongPressLocked] = useState(false)
   const userID = illust?.user?.id ?? cached?.user?.id ?? 0
-  const [followed, setFollowed] = useUserFollow(
-    userID,
-    illust?.user?.is_followed ?? cached?.user?.is_followed ?? false
-  )
+  const [followed, setFollowed, followRestrict, setFollowRestrict] =
+    useUserFollow(
+      userID,
+      illust?.user?.is_followed ?? cached?.user?.is_followed ?? false
+    )
   const [followLoading, setFollowLoading] = useState(false)
   const [downloading, setDownloading] = useState(false)
 
@@ -347,7 +363,7 @@ export function IllustDetailDockBar(props: { illustID: number }) {
   }, [illustID])
 
   async function toggleBookmark() {
-    if (bookmarkLoading) return
+    if (bookmarkLoading || bookmarkLongPressLocked) return
     try {
       void Haptics.transient()
     } catch {}
@@ -364,6 +380,43 @@ export function IllustDetailDockBar(props: { illustID: number }) {
     } catch {
     } finally {
       setBookmarkLoading(false)
+    }
+  }
+
+  async function bookmarkAndFollow() {
+    if (bookmarkLoading || followLoading) return
+    try {
+      void Haptics.transient()
+    } catch {}
+    setBookmarkLoading(true)
+    setFollowLoading(true)
+    try {
+      if (!bookmarked) {
+        await session.call((token) => addBookmark(illustID, "public", [], token))
+        setBookmarked(true)
+        updateHistoryBookmark(illustID, true)
+      }
+      if (userID && !followed) {
+        await session.call((token) => followUser(userID, "public", token))
+        setFollowed(true)
+      }
+    } catch {
+    } finally {
+      setBookmarkLoading(false)
+      setFollowLoading(false)
+    }
+  }
+
+  function handleBookmarkLongPress() {
+    const action = loadSettings().longPressBookmarkAction
+    if (action === "off") return
+    try {
+      void Haptics.transient()
+    } catch {}
+    if (action === "follow") {
+      void bookmarkAndFollow()
+    } else {
+      notifyOpenBookmarkDetail("illust", illustID)
     }
   }
 
@@ -387,7 +440,23 @@ export function IllustDetailDockBar(props: { illustID: number }) {
     }
   }
 
-  async function handleDownload() {
+  async function followWithVisibility(visibility: "public" | "private") {
+    if (!userID || followLoading) return
+    try {
+      void Haptics.transient()
+    } catch {}
+    setFollowLoading(true)
+    try {
+      await session.call((token) => followUser(userID, visibility, token))
+      setFollowed(true)
+      setFollowRestrict(visibility)
+    } catch {
+    } finally {
+      setFollowLoading(false)
+    }
+  }
+
+  async function handleDownloadDefault() {
     const current = illust ?? cached
     if (downloading || !current) return
     try {
@@ -405,6 +474,183 @@ export function IllustDetailDockBar(props: { illustID: number }) {
     }
   }
 
+  async function handleDownloadUgoiraZip() {
+    const current = illust ?? cached
+    if (downloading || !current) return
+    try {
+      void Haptics.transient()
+    } catch {}
+    setDownloading(true)
+    try {
+      await exportUgoiraZip(current)
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  async function handleDownloadIllustToZip() {
+    const current = illust ?? cached
+    if (downloading || !current) return
+    try {
+      void Haptics.transient()
+    } catch {}
+    setDownloading(true)
+    const downloadQuality = getDownloadImageQuality()
+    try {
+      const pageCount = current.page_count ?? 1
+      const urls: string[] = []
+      for (let i = 0; i < pageCount; i++) {
+        const url = imageUrlOf(current, i, downloadQuality)
+        if (url) urls.push(url)
+      }
+      await exportIllustToZip({
+        illust: current,
+        imageUrls: urls,
+      })
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  async function handleDownloadManga(format: "cbz" | "epub") {
+    const current = illust ?? cached
+    if (downloading || !current) return
+    try {
+      void Haptics.transient()
+    } catch {}
+    setDownloading(true)
+    const downloadQuality = getDownloadImageQuality()
+    try {
+      const pageCount = current.page_count ?? 1
+      const pages: { pageIndex: number; url: string }[] = []
+      for (let i = 0; i < pageCount; i++) {
+        const url = imageUrlOf(current, i, downloadQuality)
+        if (url) pages.push({ pageIndex: i + 1, url })
+      }
+      const isR18 =
+        (current.x_restrict ?? 0) > 0 ||
+        current.tags?.some((t) => /r-?18/i.test(t.name))
+      if (format === "cbz") {
+        await exportMangaToCbz({
+          id: current.id,
+          title: current.title,
+          author: current.user?.name || "Unknown",
+          authorId: current.user?.id,
+          description: current.caption,
+          tags: current.tags?.map((t) => t.name),
+          createdDate: current.create_date,
+          isR18,
+          pages,
+        })
+      } else {
+        await exportMangaToEpub({
+          id: current.id,
+          title: current.title,
+          author: current.user?.name || "Unknown",
+          authorId: current.user?.id,
+          description: current.caption,
+          tags: current.tags?.map((t) => t.name),
+          createdDate: current.create_date,
+          isR18,
+          pages,
+        })
+      }
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  const followContextMenu = useMemo(() => {
+    if (!userID) return undefined
+    return {
+      menuItems: (
+        <Group>
+          {followed ? (
+            followRestrict === "private" ? (
+              <Button
+                title="设为公开关注"
+                systemImage="globe"
+                disabled={followLoading}
+                action={() => void followWithVisibility("public")}
+              />
+            ) : (
+              <Button
+                title="设为私密关注"
+                systemImage="lock"
+                disabled={followLoading}
+                action={() => void followWithVisibility("private")}
+              />
+            )
+          ) : (
+            <Button
+              title="私密关注"
+              systemImage="lock"
+              disabled={followLoading}
+              action={() => void followWithVisibility("private")}
+            />
+          )}
+        </Group>
+      ),
+    }
+  }, [userID, followed, followRestrict, followLoading])
+
+  const downloadContextMenu = useMemo(() => {
+    const current = illust ?? cached
+    if (!current) return undefined
+    if (current.type === "ugoira") {
+      return {
+        menuItems: (
+          <Group>
+            <Button
+              title="下载原始 ZIP 帧包"
+              systemImage="doc.zipper"
+              disabled={downloading}
+              action={() => void handleDownloadUgoiraZip()}
+            />
+          </Group>
+        ),
+      }
+    }
+    if (current.type === "manga") {
+      return {
+        menuItems: (
+          <Group>
+            <Button
+              title="下载为 CBZ 漫画包"
+              systemImage="doc.zipper"
+              disabled={downloading}
+              action={() => void handleDownloadManga("cbz")}
+            />
+            <Button
+              title="下载为 EPUB 电子书"
+              systemImage="book"
+              disabled={downloading}
+              action={() => void handleDownloadManga("epub")}
+            />
+          </Group>
+        ),
+      }
+    }
+    const pageCount = current.page_count ?? 1
+    if (pageCount > 1) {
+      return {
+        menuItems: (
+          <Group>
+            <Button
+              title="打包为 ZIP 归档"
+              systemImage="doc.zipper"
+              disabled={downloading}
+              action={() => void handleDownloadIllustToZip()}
+            />
+          </Group>
+        ),
+      }
+    }
+    return undefined
+  }, [illust, cached, downloading])
+
+  const currentItem = illust ?? cached
+
   const items: DockActionItem[] = [
     {
       key: "follow",
@@ -413,14 +659,20 @@ export function IllustDetailDockBar(props: { illustID: number }) {
       color: followed ? "#EE2F49" : "#3172EB",
       disabled: !userID || followLoading,
       action: toggleFollow,
+      contextMenu: followContextMenu,
     },
     {
       key: "bookmark",
       label: bookmarked ? "已收藏" : "收藏",
       icon: bookmarked ? "heart.fill" : "heart",
       color: bookmarked ? "#EE2F49" : "#3172EB",
-      disabled: bookmarkLoading,
+      disabled: bookmarkLoading || bookmarkLongPressLocked,
       action: toggleBookmark,
+      simultaneousGesture: LongPressGesture({ minDuration: 500 }).onEnded(() => {
+        setBookmarkLongPressLocked(true)
+        handleBookmarkLongPress()
+        setTimeout(() => setBookmarkLongPressLocked(false), 1500)
+      }),
     },
     {
       key: "download",
@@ -428,7 +680,8 @@ export function IllustDetailDockBar(props: { illustID: number }) {
       icon: downloading ? "arrow.down.circle.fill" : "arrow.down.circle",
       color: downloading ? "secondaryLabel" : "#3172EB",
       disabled: downloading,
-      action: handleDownload,
+      action: handleDownloadDefault,
+      contextMenu: downloadContextMenu,
     },
   ]
 
@@ -446,11 +699,13 @@ export function NovelDetailDockBar(props: { novelID: number }) {
     cached?.is_bookmarked ?? false
   )
   const [bookmarkLoading, setBookmarkLoading] = useState(false)
+  const [bookmarkLongPressLocked, setBookmarkLongPressLocked] = useState(false)
   const userID = novel?.user?.id ?? cached?.user?.id ?? 0
-  const [followed, setFollowed] = useUserFollow(
-    userID,
-    novel?.user?.is_followed ?? cached?.user?.is_followed ?? false
-  )
+  const [followed, setFollowed, followRestrict, setFollowRestrict] =
+    useUserFollow(
+      userID,
+      novel?.user?.is_followed ?? cached?.user?.is_followed ?? false
+    )
   const [followLoading, setFollowLoading] = useState(false)
   const [downloading, setDownloading] = useState(false)
 
@@ -469,7 +724,7 @@ export function NovelDetailDockBar(props: { novelID: number }) {
   }, [novelID])
 
   async function toggleBookmark() {
-    if (bookmarkLoading) return
+    if (bookmarkLoading || bookmarkLongPressLocked) return
     try {
       void Haptics.transient()
     } catch {}
@@ -489,6 +744,43 @@ export function NovelDetailDockBar(props: { novelID: number }) {
     }
   }
 
+  async function bookmarkAndFollow() {
+    if (bookmarkLoading || followLoading) return
+    try {
+      void Haptics.transient()
+    } catch {}
+    setBookmarkLoading(true)
+    setFollowLoading(true)
+    try {
+      if (!bookmarked) {
+        await session.call((token) => addNovelBookmark(novelID, "public", token))
+        setBookmarked(true)
+        updateNovelHistoryBookmark(novelID, true)
+      }
+      if (userID && !followed) {
+        await session.call((token) => followUser(userID, "public", token))
+        setFollowed(true)
+      }
+    } catch {
+    } finally {
+      setBookmarkLoading(false)
+      setFollowLoading(false)
+    }
+  }
+
+  function handleBookmarkLongPress() {
+    const action = loadSettings().longPressBookmarkAction
+    if (action === "off") return
+    try {
+      void Haptics.transient()
+    } catch {}
+    if (action === "follow") {
+      void bookmarkAndFollow()
+    } else {
+      notifyOpenBookmarkDetail("novel", novelID)
+    }
+  }
+
   async function toggleFollow() {
     if (!userID || followLoading) return
     try {
@@ -503,6 +795,22 @@ export function NovelDetailDockBar(props: { novelID: number }) {
         await session.call((token) => followUser(userID, "public", token))
         setFollowed(true)
       }
+    } catch {
+    } finally {
+      setFollowLoading(false)
+    }
+  }
+
+  async function followWithVisibility(visibility: "public" | "private") {
+    if (!userID || followLoading) return
+    try {
+      void Haptics.transient()
+    } catch {}
+    setFollowLoading(true)
+    try {
+      await session.call((token) => followUser(userID, visibility, token))
+      setFollowed(true)
+      setFollowRestrict(visibility)
     } catch {
     } finally {
       setFollowLoading(false)
@@ -527,7 +835,7 @@ export function NovelDetailDockBar(props: { novelID: number }) {
             detail.image_urls?.large ||
             detail.image_urls?.medium ||
             viewer.coverUrl
-          const res = await exportNovelToEpub({
+          await exportNovelToEpub({
             id: detail.id,
             title: detail.title,
             author: detail.user?.name || "Unknown",
@@ -546,12 +854,6 @@ export function NovelDetailDockBar(props: { novelID: number }) {
               },
             ],
           })
-          if (res) {
-            try {
-              void Haptics.transient()
-            } catch {}
-            await ShareSheet.present([res])
-          }
         }
       }
     } catch {
@@ -559,6 +861,42 @@ export function NovelDetailDockBar(props: { novelID: number }) {
       setDownloading(false)
     }
   }
+
+  const followContextMenu = useMemo(() => {
+    if (!userID) return undefined
+    return {
+      menuItems: (
+        <Group>
+          {followed ? (
+            followRestrict === "private" ? (
+              <Button
+                title="设为公开关注"
+                systemImage="globe"
+                disabled={followLoading}
+                action={() => void followWithVisibility("public")}
+              />
+            ) : (
+              <Button
+                title="设为私密关注"
+                systemImage="lock"
+                disabled={followLoading}
+                action={() => void followWithVisibility("private")}
+              />
+            )
+          ) : (
+            <Button
+              title="私密关注"
+              systemImage="lock"
+              disabled={followLoading}
+              action={() => void followWithVisibility("private")}
+            />
+          )}
+        </Group>
+      ),
+    }
+  }, [userID, followed, followRestrict, followLoading])
+
+  const currentItem = novel || cached
 
   const items: DockActionItem[] = [
     {
@@ -568,14 +906,20 @@ export function NovelDetailDockBar(props: { novelID: number }) {
       color: followed ? "#EE2F49" : "#3172EB",
       disabled: !userID || followLoading,
       action: toggleFollow,
+      contextMenu: followContextMenu,
     },
     {
       key: "bookmark",
       label: bookmarked ? "已收藏" : "收藏",
       icon: bookmarked ? "heart.fill" : "heart",
       color: bookmarked ? "#EE2F49" : "#3172EB",
-      disabled: bookmarkLoading,
+      disabled: bookmarkLoading || bookmarkLongPressLocked,
       action: toggleBookmark,
+      simultaneousGesture: LongPressGesture({ minDuration: 500 }).onEnded(() => {
+        setBookmarkLongPressLocked(true)
+        handleBookmarkLongPress()
+        setTimeout(() => setBookmarkLongPressLocked(false), 1500)
+      }),
     },
     {
       key: "download",
@@ -857,7 +1201,8 @@ export function renderRouteInfoBar(top: string) {
     } else if (decoded.includes("?")) {
       decoded = decoded.split("?")[0]
     }
-    return <DockInfoBar icon="number" title={`# ${decoded || "标签"}`} />
+    decoded = decoded.replace(/^#+/, "").trim()
+    return <DockInfoBar icon="number" title={decoded || "标签"} />
   }
 
   // 2. 相关作品
@@ -1057,13 +1402,23 @@ function renderDefaultRootTabAccessory(activeTab: string) {
             key: "reverseSearch",
             label: "以图搜图",
             icon: "photo.badge.magnifyingglass",
-            action: () => {},
+            action: () => {
+              try {
+                void Haptics.transient()
+              } catch {}
+              requestPixivRoute("reverseImageSearch", "more")
+            },
           },
           {
             key: "downloadManager",
             label: "下载与文件管理",
             icon: "arrow.down.circle",
-            action: () => {},
+            action: () => {
+              try {
+                void Haptics.transient()
+              } catch {}
+              requestPixivRoute("downloadManager", "more")
+            },
           },
         ]}
       />

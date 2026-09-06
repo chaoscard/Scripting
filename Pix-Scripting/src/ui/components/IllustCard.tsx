@@ -25,6 +25,7 @@ import { BlockWorkSheet } from "./BlockWorkSheet"
 import { FilteredContentNotice, LoadMoreTrigger } from "./RefreshableScrollView"
 import { CORNER_ICON_SIZE, formatNumber } from "./formatUtils"
 import { useIllustBookmark, useLatest, useUserFollow } from "../hooks"
+import { isUserFollowed, notifyUserFollowChanged } from "../../store/userFollow"
 import { cacheIllust, cacheIllusts } from "../../store/illustCache"
 import { recordWorkSeriesAssociation } from "../../store/seriesCache"
 import { loadSettings, getDownloadImageQuality, onSettingsChanged } from "../../store/settings"
@@ -148,7 +149,11 @@ export function IllustCard(props: {
         await session.call((token) => addBookmark(illust.id, "public", [], token))
         setBookmarked(true)
       }
-      await session.call((token) => followUser(illust.user.id, "public", token))
+      const alreadyFollowed = isUserFollowed(illust.user.id) ?? illust.user.is_followed ?? false
+      if (!alreadyFollowed) {
+        await session.call((token) => followUser(illust.user.id, "public", token))
+        notifyUserFollowChanged(illust.user.id, true, "public")
+      }
     } catch {
       // 保持卡片可继续操作
     } finally {

@@ -193,3 +193,27 @@ export function clearBookmarkMemoryCache(): void {
   novelMarkerCache.clear()
 }
 
+// 打开收藏详情弹窗（标签/公开私密编辑）事件
+export type OpenBookmarkDetailListener = (
+  type: "illust" | "novel",
+  id: number
+) => void
+
+const openDetailListeners = new Set<OpenBookmarkDetailListener>()
+
+export function onOpenBookmarkDetail(listener: OpenBookmarkDetailListener): () => void {
+  openDetailListeners.add(listener)
+  return () => {
+    openDetailListeners.delete(listener)
+  }
+}
+
+export function notifyOpenBookmarkDetail(type: "illust" | "novel", id: number): void {
+  for (const listener of openDetailListeners) {
+    try {
+      listener(type, id)
+    } catch {}
+  }
+}
+
+

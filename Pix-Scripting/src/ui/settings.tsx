@@ -233,7 +233,7 @@ export function SettingsView() {
     <List
       navigationTitle="设置"
       navigationBarTitleDisplayMode="inline"
-      listSectionSpacing="compact"
+      listSectionSpacing={6}
       toolbar={{
         topBarTrailing: [
           <Button

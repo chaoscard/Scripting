@@ -41,6 +41,8 @@ import {
   isIllustContentVisible,
   isNovelContentVisible,
 } from "../store/contentFilter"
+import { cacheIllust } from "../store/illustCache"
+import { cacheNovel } from "../store/novelCache"
 import { cardThumbUrlOf, novelThumbUrlOf, prefetch } from "../image/imageLoader"
 import { currentBatchSize, useLatest, usePagedList, useExperimentalAmbientPalette } from "./hooks"
 import type { PixivIllustration, PixivNovel } from "../types"
@@ -96,19 +98,25 @@ export function matchesHistoryQuery(item: HistoryIllustItem | HistoryNovelItem, 
 export function loadHistoryIllusts(kind: "illustration" | "manga"): HistoryIllustItem[] {
   return getHistory(kind)
     .filter((entry): entry is Extract<HistoryEntry, { kind: "illust" }> => entry.kind === "illust")
-    .map((entry) => ({
-      ...entry.illustration,
-      viewedAt: entry.viewedAt,
-    }))
+    .map((entry) => {
+      cacheIllust(entry.illustration)
+      return {
+        ...entry.illustration,
+        viewedAt: entry.viewedAt,
+      }
+    })
 }
 
 export function loadHistoryNovels(): HistoryNovelItem[] {
   return getHistory("novel")
     .filter((entry): entry is Extract<HistoryEntry, { kind: "novel" }> => entry.kind === "novel")
-    .map((entry) => ({
-      ...entry.novel,
-      viewedAt: entry.viewedAt,
-    }))
+    .map((entry) => {
+      cacheNovel(entry.novel)
+      return {
+        ...entry.novel,
+        viewedAt: entry.viewedAt,
+      }
+    })
 }
 
 export function filterHistoryIllusts(items: HistoryIllustItem[]): HistoryIllustItem[] {
@@ -175,6 +183,7 @@ export function HistoryView() {
 
   function clearCurrentKind() {
     clearHistoryKind(kind)
+    void refreshHandlerRef.current()
   }
 
   return (
@@ -281,6 +290,7 @@ function HistoryFeed(props: {
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
   const { kind, searchQuery = "", onFirstImageUrlChange, onRegisterRefresh } = props
+  const mountTime = useRef(Date.now()).current
 
   // 1. 插画历史流
   const illustPaged = usePagedList<HistoryIllustItem>({
@@ -295,7 +305,7 @@ function HistoryFeed(props: {
       }
     },
     filter: filterHistoryIllusts,
-    deps: ["history", "illustration", searchQuery],
+    deps: ["history", "illustration", searchQuery, mountTime],
     enabled: kind === "illustration",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
@@ -314,7 +324,7 @@ function HistoryFeed(props: {
       }
     },
     filter: filterHistoryIllusts,
-    deps: ["history", "manga", searchQuery],
+    deps: ["history", "manga", searchQuery, mountTime],
     enabled: kind === "manga",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
@@ -333,7 +343,7 @@ function HistoryFeed(props: {
       }
     },
     filter: filterHistoryNovels,
-    deps: ["history", "novel", searchQuery],
+    deps: ["history", "novel", searchQuery, mountTime],
     enabled: kind === "novel",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
@@ -346,21 +356,13 @@ function HistoryFeed(props: {
   const [historyVersion, setHistoryVersion] = useState(0)
 
   useEffect(() => {
-    const handleHistoryChange = () => {
-      setHistoryVersion((v) => v + 1)
-      illustPagedRef.current.refresh()
-      mangaPagedRef.current.refresh()
-      novelPagedRef.current.refresh()
-    }
     const handleSettingsChange = () => {
       illustPagedRef.current.reapplyFilter()
       mangaPagedRef.current.reapplyFilter()
       novelPagedRef.current.reapplyFilter()
     }
-    const unsubscribeHistory = onHistoryChanged(handleHistoryChange)
     const unsubscribeSettings = onSettingsChanged(handleSettingsChange)
     return () => {
-      unsubscribeHistory()
       unsubscribeSettings()
     }
   }, [])
@@ -467,11 +469,14 @@ function IllustHistoryContent(props: {
           title="删除记录"
           systemImage="trash"
           role="destructive"
-          action={() => removeHistoryEntry("illust", illust.id)}
+          action={() => {
+            removeHistoryEntry("illust", illust.id)
+            paged.refresh()
+          }}
         />
       </Group>
     ),
-  }), [])
+  }), [paged])
 
   const isSearching = Boolean(searchQuery.trim())
 
@@ -594,7 +599,10 @@ function NovelHistoryContent(props: {
                     title="删除记录"
                     systemImage="trash"
                     role="destructive"
-                    action={() => removeHistoryEntry("novel", entry.id)}
+                    action={() => {
+                      removeHistoryEntry("novel", entry.id)
+                      paged.refresh()
+                    }}
                   />
                 </Group>
               ),

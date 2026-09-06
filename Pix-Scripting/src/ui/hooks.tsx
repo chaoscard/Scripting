@@ -13,10 +13,12 @@ import {
   getCachedWatchlist,
   notifyIllustBookmarkChanged,
   notifyNovelBookmarkChanged,
+  notifyOpenBookmarkDetail,
   notifyWatchlistChanged,
   onIllustBookmarkChanged,
   onNovelBookmarkChanged,
   onNovelMarkerChanged,
+  onOpenBookmarkDetail,
   onWatchlistChanged,
   recordNovelMarker,
 } from "../store/bookmarkSync"
@@ -1173,6 +1175,27 @@ export function useSeriesWatchlist(
 
   return [watched, setWatched]
 }
+
+/**
+ * 监听打开收藏详情弹窗（标签/公开私密编辑）事件
+ */
+export function useOpenBookmarkDetailListener(
+  type: "illust" | "novel",
+  id: number,
+  onOpen: () => void
+): void {
+  const onOpenRef = useLatest(onOpen)
+  useEffect(() => {
+    return onOpenBookmarkDetail((targetType, targetID) => {
+      if (targetType === type && targetID === id) {
+        onOpenRef.current()
+      }
+    })
+  }, [type, id, onOpenRef])
+}
+
+export { notifyOpenBookmarkDetail }
+
 
 /**
  * 响应式同步小说的阅读书签（第几页）

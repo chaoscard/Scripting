@@ -155,7 +155,7 @@ export function renderDestination(rawPage: string) {
   if (page === "pixivisionBookmarks") return <PixivisionBookmarksView />
   if (page === "novelBookmarks") return <NovelLibraryView />
   if (page === "library") return <LibraryView />
-  if (page === "history") return <HistoryView />
+  if (page === "history") return <HistoryView key={`history-${Date.now()}`} />
   if (page === "notifications") return <NotificationsView />
   if (page.startsWith("notificationsMore:")) {
     const id = parseID(page, "notificationsMore:")

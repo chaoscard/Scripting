@@ -52,6 +52,7 @@ import {
   useLatest,
   useNovelBookmark,
   useNovelMarker,
+  useOpenBookmarkDetailListener,
   usePagedList,
   useNovelExperimentalAmbientPalette,
   waitForNovelLoadingFeedback,
@@ -156,6 +157,9 @@ export function NovelDetailView(props: { novelID: number }) {
   const [bookmarkLoading, setBookmarkLoading] = useState(false)
   const [bookmarkLongPressLocked, setBookmarkLongPressLocked] = useState(false)
   const [showBookmarkDetail, setShowBookmarkDetail] = useState(false)
+  useOpenBookmarkDetailListener("novel", novelID, () => {
+    setShowBookmarkDetail(true)
+  })
   const [followed, setFollowed] = useState(() => {
     if (cachedNovel?.user?.id) {
       return (
@@ -198,6 +202,18 @@ export function NovelDetailView(props: { novelID: number }) {
   const readerSettingsRef = useLatest(readerSettings)
   const currentPageRef = useLatest(currentPage)
   const recordedIDRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    const cached = getCachedNovel(novelID)
+    if (cached && recordedIDRef.current !== cached.id) {
+      recordedIDRef.current = cached.id
+      const n: PixivNovel =
+        "is_muted" in cached
+          ? (cached as PixivNovel)
+          : historyNovelFromDetail(cached as PixivNovelDetail)
+      recordNovelHistory(n)
+    }
+  }, [novelID])
   const proxyRef = useRef<ScrollViewProxy | null>(null)
   const initialScrollChunkIdRef = useRef<string | null>(initialProgress?.chunkId ?? null)
   const lastRecordedChunkRef = useRef<string | null>(initialProgress?.chunkId ?? null)
@@ -553,7 +569,7 @@ export function NovelDetailView(props: { novelID: number }) {
   }
 
   async function bookmarkAndFollow() {
-    if (!novel || bookmarkLoading) return
+    if (!novel || bookmarkLoading || followLoading) return
     setBookmarkLoading(true)
     try {
       if (!bookmarked) {
@@ -561,10 +577,12 @@ export function NovelDetailView(props: { novelID: number }) {
         setBookmarked(true)
         updateNovelHistoryBookmark(novel.id, true)
       }
-      await session.call((token) => followUser(novel.user.id, "public", token))
-      setFollowed(true)
-      if (loadSettings().showRelatedUsersOnFollow) {
-        setShowRelatedUsers(true)
+      if (!followed) {
+        await session.call((token) => followUser(novel.user.id, "public", token))
+        setFollowed(true)
+        if (loadSettings().showRelatedUsersOnFollow) {
+          setShowRelatedUsers(true)
+        }
       }
     } catch {
       // ignore

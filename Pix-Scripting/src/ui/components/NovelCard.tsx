@@ -20,6 +20,7 @@ import { BookmarkButton, BookmarkDetailSheet } from "./BookmarkDetailSheet"
 import { CORNER_ICON_SIZE, formatNumber } from "./formatUtils"
 import { IllustCardAction } from "./IllustCard"
 import { useLatest, useNovelBookmark, useNovelMarker } from "../hooks"
+import { isUserFollowed, notifyUserFollowChanged } from "../../store/userFollow"
 import { recordNovelMarker } from "../../store/bookmarkSync"
 import { loadSettings } from "../../store/settings"
 import { getSeriesByWorkID, recordWorkSeriesAssociation } from "../../store/seriesCache"
@@ -102,7 +103,11 @@ export function NovelCard(props: {
         await session.call((token) => addNovelBookmark(novel.id, "public", token))
         setBookmarked(true)
       }
-      await session.call((token) => followUser(novel.user.id, "public", token))
+      const alreadyFollowed = isUserFollowed(novel.user.id) ?? novel.user.is_followed ?? false
+      if (!alreadyFollowed) {
+        await session.call((token) => followUser(novel.user.id, "public", token))
+        notifyUserFollowChanged(novel.user.id, true, "public")
+      }
     } catch {
       // 保持卡片可继续操作
     } finally {
