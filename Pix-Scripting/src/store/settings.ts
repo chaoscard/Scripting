@@ -12,7 +12,7 @@ export type DownloadStorageMode = "local" | "icloud"
 export type QuickActionButtonAction = "bookmark" | "follow" | "download"
 export type QuickActionButtonPosition = "trailing" | "leading"
 export type PageLayout = "classic" | "appleMusic"
-export const PAGE_LAYOUT_VALUES: ReadonlyArray<PageLayout> = ["classic", "appleMusic"]
+export const PAGE_LAYOUT_VALUES: ReadonlyArray<PageLayout> = ["appleMusic", "classic"]
 export type CloseButtonAction = "minimize" | "exit"
 export type WatchlistSortOrder = "asc" | "desc"
 export type AmbientIntensity = "low" | "medium" | "high"
@@ -156,6 +156,7 @@ export interface AppSettings {
   enableLiveActivity: boolean
   enableTaskNotification: boolean
   advancedSettingsUnlocked: boolean
+  hasSeenFeatureHighlights: boolean
   customRankingEnabled: boolean
   customRankingIllustModes: string[]
   customRankingMangaModes: string[]
@@ -189,7 +190,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   showRelatedUsersOnFollow: true,
   exemptFilterForPersonal: true,
   hideNovels: false,
-  pageLayout: "classic",
+  pageLayout: "appleMusic",
   heroFirstFeedCard: true,
   compactIllustCard: true,
   ambientImmersion: true,
@@ -240,6 +241,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   enableLiveActivity: true,
   enableTaskNotification: true,
   advancedSettingsUnlocked: false,
+  hasSeenFeatureHighlights: false,
   customRankingEnabled: false,
   customRankingIllustModes: ["day", "week", "month"],
   customRankingMangaModes: ["day_manga", "week_manga", "month_manga"],
@@ -674,6 +676,10 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
       DEFAULT_SETTINGS.enableTaskNotification
     ),
     advancedSettingsUnlocked: boolOr(stored?.advancedSettingsUnlocked, DEFAULT_SETTINGS.advancedSettingsUnlocked),
+    hasSeenFeatureHighlights: boolOr(
+      stored?.hasSeenFeatureHighlights,
+      DEFAULT_SETTINGS.hasSeenFeatureHighlights
+    ),
     customRankingEnabled: boolOr(stored?.customRankingEnabled, DEFAULT_SETTINGS.customRankingEnabled),
     customRankingIllustModes: parseStringArray(stored?.customRankingIllustModes, DEFAULT_SETTINGS.customRankingIllustModes),
     customRankingMangaModes: parseStringArray(stored?.customRankingMangaModes, DEFAULT_SETTINGS.customRankingMangaModes),

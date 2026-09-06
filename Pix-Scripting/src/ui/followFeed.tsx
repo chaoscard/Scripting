@@ -1,5 +1,6 @@
 import {
   Button,
+  HStack,
   Image,
   LazyVStack,
   Menu,
@@ -10,6 +11,7 @@ import {
   useRef,
   useState,
   VStack,
+  ZStack,
 } from "scripting"
 import {
   followingFeed,
@@ -83,6 +85,16 @@ export function FollowFeedView(props: {
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
+  const [visitedModes, setVisitedModes] = useState<Set<FollowMode>>(() => new Set([mode]))
+  useEffect(() => {
+    setVisitedModes((prev) => {
+      if (prev.has(mode)) return prev
+      const next = new Set(prev)
+      next.add(mode)
+      return next
+    })
+  }, [mode])
+
   useEffect(() => {
     return onSettingsChanged(() => {
       const nextSettings = loadSettings()
@@ -134,93 +146,195 @@ export function FollowFeedView(props: {
   )
 
   return (
-    <RefreshableScrollView
+    <ZStack
+      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
       navigationBarTitleDisplayMode="inline"
       navigationDestination={destinationElement}
       background={ambientBackground}
       toolbar={followToolbar({
         mode,
         scope,
+        followingKind,
+        watchKind,
+        friendKind,
+        hideNovels,
+        isAppleMusic,
         onModeChange: setMode,
         onScopeChange: setScope,
+        onKindChange: selectSegmentedKind,
         onOpenRecommendedUsers: () => setShowRecommendedUsers(true),
         onClose: props.onClose,
       })}
-      refreshable={() => refreshHandlerRef.current()}
+      onAppear={() => {
+        if (!activated) setActivated(true)
+      }}
     >
+      {/* 1. 关注动态模式保活 */}
       <VStack
-        alignment="leading"
-        spacing={8}
-        onAppear={() => {
-          if (!activated) setActivated(true)
-        }}
+        frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+        opacity={mode === "following" ? 1 : 0}
+        zIndex={mode === "following" ? 1 : 0}
+        allowsHitTesting={mode === "following"}
       >
-        {hideNovels || isAppleMusic ? null : (
-          <FollowKindPicker
-            mode={mode}
-            value={segmentedValue}
-            onChanged={selectSegmentedKind}
-          />
-        )}
-        {mode === "following" ? (
-          <FollowingFeed
-            key={`following:${scope}`}
-            enabled={activated}
-            kind={followingKind}
-            scope={scope}
-            onFirstImageUrlChange={setAmbientImageUrl}
-            onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
-          />
-        ) : mode === "watchlist" ? (
-          <WatchlistFeed
-            key="watchlist"
-            enabled={activated}
-            kind={watchKind}
-            onFirstImageUrlChange={setAmbientImageUrl}
-            onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
-          />
-        ) : (
-          <FriendsFeed
-            key="friends"
-            enabled={activated}
-            kind={friendKind}
-            onFirstImageUrlChange={setAmbientImageUrl}
-            onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
-          />
-        )}
-        <VStack
-          sheet={{
-            content: (
-              <RecommendedUsersSheet
-                onClose={() => setShowRecommendedUsers(false)}
-              />
-            ),
-            isPresented: showRecommendedUsers,
-            onChanged: setShowRecommendedUsers,
+        <FollowingFeed
+          enabled={activated && mode === "following"}
+          kind={followingKind}
+          scope={scope}
+          hideNovels={hideNovels}
+          isAppleMusic={isAppleMusic}
+          onKindChange={setFollowingKind}
+          onFirstImageUrlChange={(url) => {
+            if (mode === "following") setAmbientImageUrl(url)
           }}
         />
       </VStack>
-    </RefreshableScrollView>
+
+      {/* 2. 追更列表模式保活 */}
+      {visitedModes.has("watchlist") ? (
+        <VStack
+          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          opacity={mode === "watchlist" ? 1 : 0}
+          zIndex={mode === "watchlist" ? 1 : 0}
+          allowsHitTesting={mode === "watchlist"}
+        >
+          <WatchlistFeed
+            enabled={activated && mode === "watchlist"}
+            kind={watchKind}
+            hideNovels={hideNovels}
+            isAppleMusic={isAppleMusic}
+            onKindChange={setWatchKind}
+            onFirstImageUrlChange={(url) => {
+              if (mode === "watchlist") setAmbientImageUrl(url)
+            }}
+          />
+        </VStack>
+      ) : null}
+
+      {/* 3. 好友动态模式保活 */}
+      {visitedModes.has("friends") ? (
+        <VStack
+          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          opacity={mode === "friends" ? 1 : 0}
+          zIndex={mode === "friends" ? 1 : 0}
+          allowsHitTesting={mode === "friends"}
+        >
+          <FriendsFeed
+            enabled={activated && mode === "friends"}
+            kind={friendKind}
+            hideNovels={hideNovels}
+            isAppleMusic={isAppleMusic}
+            onKindChange={setFriendKind}
+            onFirstImageUrlChange={(url) => {
+              if (mode === "friends") setAmbientImageUrl(url)
+            }}
+          />
+        </VStack>
+      ) : null}
+
+      <VStack
+        sheet={{
+          content: (
+            <RecommendedUsersSheet
+              onClose={() => setShowRecommendedUsers(false)}
+            />
+          ),
+          isPresented: showRecommendedUsers,
+          onChanged: setShowRecommendedUsers,
+        }}
+      />
+    </ZStack>
   )
 }
 
 function followToolbar(props: {
   mode: FollowMode
   scope: FollowScope
+  followingKind: WorkKind
+  watchKind: WatchKind
+  friendKind: WorkKind
+  hideNovels?: boolean
+  isAppleMusic?: boolean
   onModeChange: (mode: FollowMode) => void
   onScopeChange: (scope: FollowScope) => void
+  onKindChange: (kind: string) => void
   onOpenRecommendedUsers: () => void
   onClose: () => void
 }) {
-  const title =
+  const isClassic = !props.isAppleMusic
+  const baseTitle =
     props.mode === "following"
       ? "关注"
       : props.mode === "watchlist"
         ? "追更"
         : "好友"
+
+  const currentKind =
+    props.mode === "following"
+      ? props.followingKind
+      : props.mode === "watchlist"
+        ? props.watchKind
+        : props.friendKind
+
+  const kindLabel =
+    currentKind === "illust" ? "插画·漫画" : currentKind === "manga" ? "漫画" : "小说"
+
+  let titleNode: any
+  if (isClassic) {
+    titleNode = (
+      <Menu
+        label={
+          <HStack alignment="center" spacing={4}>
+            <Text font="title2" fontWeight="bold">
+              {baseTitle} · {kindLabel}
+            </Text>
+            <Image
+              systemName="chevron.down.circle.fill"
+              font="caption"
+              foregroundStyle="secondaryLabel"
+            />
+          </HStack>
+        }
+      >
+        {props.mode === "watchlist" ? (
+          <>
+            <Button
+              title="漫画"
+              systemImage={currentKind === "manga" ? "checkmark" : undefined}
+              action={() => props.onKindChange("manga")}
+            />
+            {!props.hideNovels && (
+              <Button
+                title="小说"
+                systemImage={currentKind === "novel" ? "checkmark" : undefined}
+                action={() => props.onKindChange("novel")}
+              />
+            )}
+          </>
+        ) : (
+          <>
+            <Button
+              title="插画·漫画"
+              systemImage={currentKind === "illust" ? "checkmark" : undefined}
+              action={() => props.onKindChange("illust")}
+            />
+            {!props.hideNovels && (
+              <Button
+                title="小说"
+                systemImage={currentKind === "novel" ? "checkmark" : undefined}
+                action={() => props.onKindChange("novel")}
+              />
+            )}
+          </>
+        )}
+      </Menu>
+    )
+  } else {
+    titleNode = baseTitle
+  }
+
   return appToolbar(
     props.onClose,
-    title,
+    titleNode,
     <Menu label={<Image systemName="ellipsis.circle" />}>
       <Menu title="关注" systemImage="person.2">
         <Button
@@ -259,49 +373,42 @@ function followToolbar(props: {
   )
 }
 
-function FollowKindPicker(props: {
-  mode: FollowMode
-  value: string
-  onChanged: (value: string) => void
-}) {
-  return (
-    <Picker
-      title="内容类型"
-      value={props.value}
-      onChanged={props.onChanged}
-      pickerStyle="segmented"
-      padding={{ horizontal: 14 }}
-    >
-      {props.mode === "watchlist" ? (
-        <>
-          <Text tag="manga">漫画</Text>
-          <Text tag="novel">小说</Text>
-        </>
-      ) : (
-        <>
-          <Text tag="illust">插画·漫画</Text>
-          <Text tag="novel">小说</Text>
-        </>
-      )}
-    </Picker>
-  )
-}
-
 function FollowingFeed(props: {
   enabled?: boolean
   kind: WorkKind
   scope: FollowScope
+  hideNovels?: boolean
+  isAppleMusic?: boolean
+  onKindChange?: (kind: WorkKind) => void
   onFirstImageUrlChange?: (url: string | null) => void
-  onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { enabled = true, kind, scope, onFirstImageUrlChange, onRegisterRefresh } = props
+  const {
+    enabled = true,
+    kind,
+    scope,
+    hideNovels,
+    isAppleMusic,
+    onKindChange,
+    onFirstImageUrlChange,
+  } = props
+
+  const [visitedKinds, setVisitedKinds] = useState<Set<WorkKind>>(() => new Set([kind]))
+
+  useEffect(() => {
+    setVisitedKinds((prev) => {
+      if (prev.has(kind)) return prev
+      const next = new Set(prev)
+      next.add(kind)
+      return next
+    })
+  }, [kind])
 
   const illustPaged = usePagedList<PixivIllustration>({
     first: (token) => followingFeed(scope, token),
     more: (nextURL, token) => nextIllustrations(nextURL, token),
     filter: filterFollowingIllustrationItems,
     deps: ["following", "illust", scope],
-    enabled: enabled && kind === "illust",
+    enabled: enabled && visitedKinds.has("illust"),
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
@@ -311,7 +418,7 @@ function FollowingFeed(props: {
     more: (nextURL, token) => nextNovels(nextURL, token),
     filter: filterFollowingNovelItems,
     deps: ["following", "novel", scope],
-    enabled: enabled && kind === "novel",
+    enabled: enabled && visitedKinds.has("novel"),
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
   })
@@ -348,85 +455,121 @@ function FollowingFeed(props: {
   ])
 
   useEffect(() => {
-    onRegisterRefresh?.(activeRefresh)
-  }, [activeRefresh, onRegisterRefresh])
-
-  useEffect(() => {
     return onSettingsChanged(() => {
       illustPagedRef.current.reapplyFilter()
       novelPagedRef.current.reapplyFilter()
     })
   }, [])
 
-  if (kind === "illust") {
-    return (
-      <VStack alignment="leading" spacing={10}>
-        {illustPaged.initialLoading ? (
-          <LoadingView />
-        ) : illustPaged.error && illustPaged.items.length === 0 ? (
-          <ErrorView message={illustPaged.error} onRetry={illustPaged.refresh} />
-        ) : illustPaged.items.length === 0 ? (
-          <EmptyView
-            text={
-              illustPaged.hasFilteredContent
-                ? "当前页面部分作品被内容显示设置过滤，暂时无法显示"
-                : "关注的人还没有新作品"
-            }
-            systemImage={illustPaged.hasFilteredContent ? "eye.slash" : "person.2"}
-          />
-        ) : (
-          <IllustFlowFeed
-            items={illustPaged.items}
-            onLoadMore={illustPaged.loadMore}
-            hasMore={illustPaged.hasMore}
-            isLoading={illustPaged.loadingMore}
-          />
-        )}
-      </VStack>
-    )
-  }
-
   return (
-    <VStack alignment="leading" spacing={10}>
-      {novelPaged.initialLoading ? (
-        <LoadingView />
-      ) : novelPaged.error && novelPaged.items.length === 0 ? (
-        <ErrorView message={novelPaged.error} onRetry={novelPaged.refresh} />
-      ) : novelPaged.items.length === 0 ? (
-        <EmptyView
-          text={
-            novelPaged.hasFilteredContent
-              ? "当前页面部分小说被内容显示设置过滤，暂时无法显示"
-              : "关注的人还没有新小说"
-          }
-          systemImage={novelPaged.hasFilteredContent ? "eye.slash" : "book"}
-        />
-      ) : (
-        <NovelFeedItems
-          items={novelPaged.items}
-          onLoadMore={novelPaged.loadMore}
-          hasMore={novelPaged.hasMore}
-          isLoading={novelPaged.loadingMore}
-        />
-      )}
-    </VStack>
+    <ZStack frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
+      {/* 1. 插画·漫画独立容器 */}
+      <VStack
+        frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+        opacity={kind === "illust" ? 1 : 0}
+        zIndex={kind === "illust" ? 1 : 0}
+        allowsHitTesting={kind === "illust"}
+      >
+        <RefreshableScrollView refreshable={illustPaged.refresh}>
+          <VStack alignment="leading" spacing={10}>
+            {illustPaged.initialLoading ? (
+              <LoadingView />
+            ) : illustPaged.error && illustPaged.items.length === 0 ? (
+              <ErrorView message={illustPaged.error} onRetry={illustPaged.refresh} />
+            ) : illustPaged.items.length === 0 ? (
+              <EmptyView
+                text={
+                  illustPaged.hasFilteredContent
+                    ? "当前页面部分作品被内容显示设置过滤，暂时无法显示"
+                    : "关注的人还没有新作品"
+                }
+                systemImage={illustPaged.hasFilteredContent ? "eye.slash" : "person.2"}
+              />
+            ) : (
+              <IllustFlowFeed
+                items={illustPaged.items}
+                onLoadMore={illustPaged.loadMore}
+                hasMore={illustPaged.hasMore}
+                isLoading={illustPaged.loadingMore}
+              />
+            )}
+          </VStack>
+        </RefreshableScrollView>
+      </VStack>
+
+      {/* 2. 小说独立容器 */}
+      {visitedKinds.has("novel") ? (
+        <VStack
+          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          opacity={kind === "novel" ? 1 : 0}
+          zIndex={kind === "novel" ? 1 : 0}
+          allowsHitTesting={kind === "novel"}
+        >
+          <RefreshableScrollView refreshable={novelPaged.refresh}>
+            <VStack alignment="leading" spacing={10}>
+              {novelPaged.initialLoading ? (
+                <LoadingView />
+              ) : novelPaged.error && novelPaged.items.length === 0 ? (
+                <ErrorView message={novelPaged.error} onRetry={novelPaged.refresh} />
+              ) : novelPaged.items.length === 0 ? (
+                <EmptyView
+                  text={
+                    novelPaged.hasFilteredContent
+                      ? "当前页面部分小说被内容显示设置过滤，暂时无法显示"
+                      : "关注的人还没有新小说"
+                  }
+                  systemImage={novelPaged.hasFilteredContent ? "eye.slash" : "book"}
+                />
+              ) : (
+                <NovelFeedItems
+                  items={novelPaged.items}
+                  onLoadMore={novelPaged.loadMore}
+                  hasMore={novelPaged.hasMore}
+                  isLoading={novelPaged.loadingMore}
+                />
+              )}
+            </VStack>
+          </RefreshableScrollView>
+        </VStack>
+      ) : null}
+    </ZStack>
   )
 }
 
 function WatchlistFeed(props: {
   enabled?: boolean
   kind: WatchKind
+  hideNovels?: boolean
+  isAppleMusic?: boolean
+  onKindChange?: (kind: WatchKind) => void
   onFirstImageUrlChange?: (url: string | null) => void
-  onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { enabled = true, kind, onFirstImageUrlChange, onRegisterRefresh } = props
+  const {
+    enabled = true,
+    kind,
+    hideNovels,
+    isAppleMusic,
+    onKindChange,
+    onFirstImageUrlChange,
+  } = props
+
+  const [visitedKinds, setVisitedKinds] = useState<Set<WatchKind>>(() => new Set([kind]))
+
+  useEffect(() => {
+    setVisitedKinds((prev) => {
+      if (prev.has(kind)) return prev
+      const next = new Set(prev)
+      next.add(kind)
+      return next
+    })
+  }, [kind])
 
   const mangaPaged = usePagedList<PixivWatchlistSeries>({
     first: (token) => watchlistManga(token),
     more: (nextURL, token) => nextWatchlist(nextURL, token),
     filter: filterWatchlistItems,
     deps: ["watchlist", "manga"],
-    enabled: enabled && kind === "manga",
+    enabled: enabled && visitedKinds.has("manga"),
     onBatchPublished: (_, pendingItems) => {
       for (const it of pendingItems) {
         if (it.latest_content_id) {
@@ -442,7 +585,7 @@ function WatchlistFeed(props: {
     more: (nextURL, token) => nextWatchlist(nextURL, token),
     filter: filterWatchlistItems,
     deps: ["watchlist", "novel"],
-    enabled: enabled && kind === "novel",
+    enabled: enabled && visitedKinds.has("novel"),
     onBatchPublished: (_, pendingItems) => {
       for (const it of pendingItems) {
         if (it.latest_content_id) {
@@ -453,10 +596,8 @@ function WatchlistFeed(props: {
     },
   })
 
-  const activeRefresh = kind === "manga" ? mangaPaged.refresh : novelPaged.refresh
-  const currentPaged = kind === "manga" ? mangaPaged : novelPaged
-
   useEffect(() => {
+    const currentPaged = kind === "manga" ? mangaPaged : novelPaged
     const first = currentPaged.items[0]
     if (first) {
       onFirstImageUrlChange?.(watchlistThumbUrlOf(first))
@@ -464,63 +605,131 @@ function WatchlistFeed(props: {
       onFirstImageUrlChange?.(null)
     }
   }, [
-    currentPaged.items[0]?.id,
-    currentPaged.initialLoading,
-    currentPaged.items.length,
+    kind,
+    mangaPaged.items[0]?.id,
+    mangaPaged.initialLoading,
+    mangaPaged.items.length,
+    novelPaged.items[0]?.id,
+    novelPaged.initialLoading,
+    novelPaged.items.length,
     onFirstImageUrlChange,
   ])
 
   useEffect(() => {
-    onRegisterRefresh?.(activeRefresh)
-  }, [activeRefresh, onRegisterRefresh])
-
-  useEffect(() => {
     return onWatchlistChanged((_, changedKind) => {
-      if (changedKind === kind) {
-        activeRefresh()
+      if (changedKind === "manga") {
+        mangaPaged.refresh()
+      } else if (changedKind === "novel") {
+        novelPaged.refresh()
       }
     })
-  }, [activeRefresh, kind])
+  }, [mangaPaged, novelPaged])
 
   return (
-    <VStack alignment="leading" spacing={10}>
-      {currentPaged.initialLoading ? (
-        <LoadingView />
-      ) : currentPaged.error && currentPaged.items.length === 0 ? (
-        <ErrorView message={currentPaged.error} onRetry={currentPaged.refresh} />
-      ) : currentPaged.items.length === 0 ? (
-        <EmptyView text={`暂无追更${kind === "manga" ? "漫画" : "小说"}，下拉刷新试试`} systemImage="bookmark" />
-      ) : (
-        <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
-          {currentPaged.items.map((item, index) => (
-            <WatchlistSeriesCard key={item.id} item={item} kind={kind} priority={index} />
-          ))}
-          <LoadMoreTrigger
-            anchor={currentPaged.items[currentPaged.items.length - 1].id}
-            onLoadMore={currentPaged.loadMore}
-            hasMore={currentPaged.hasMore}
-            isLoading={currentPaged.loadingMore}
-          />
-        </LazyVStack>
-      )}
-    </VStack>
+    <ZStack frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
+      {/* 1. 漫画追更独立容器 */}
+      <VStack
+        frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+        opacity={kind === "manga" ? 1 : 0}
+        zIndex={kind === "manga" ? 1 : 0}
+        allowsHitTesting={kind === "manga"}
+      >
+        <RefreshableScrollView refreshable={mangaPaged.refresh}>
+          <VStack alignment="leading" spacing={10}>
+            {mangaPaged.initialLoading ? (
+              <LoadingView />
+            ) : mangaPaged.error && mangaPaged.items.length === 0 ? (
+              <ErrorView message={mangaPaged.error} onRetry={mangaPaged.refresh} />
+            ) : mangaPaged.items.length === 0 ? (
+              <EmptyView text="暂无追更漫画，下拉刷新试试" systemImage="bookmark" />
+            ) : (
+              <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
+                {mangaPaged.items.map((item, index) => (
+                  <WatchlistSeriesCard key={item.id} item={item} kind="manga" priority={index} />
+                ))}
+                <LoadMoreTrigger
+                  anchor={mangaPaged.items[mangaPaged.items.length - 1].id}
+                  onLoadMore={mangaPaged.loadMore}
+                  hasMore={mangaPaged.hasMore}
+                  isLoading={mangaPaged.loadingMore}
+                />
+              </LazyVStack>
+            )}
+          </VStack>
+        </RefreshableScrollView>
+      </VStack>
+
+      {/* 2. 小说追更独立容器 */}
+      {visitedKinds.has("novel") ? (
+        <VStack
+          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          opacity={kind === "novel" ? 1 : 0}
+          zIndex={kind === "novel" ? 1 : 0}
+          allowsHitTesting={kind === "novel"}
+        >
+          <RefreshableScrollView refreshable={novelPaged.refresh}>
+            <VStack alignment="leading" spacing={10}>
+              {novelPaged.initialLoading ? (
+                <LoadingView />
+              ) : novelPaged.error && novelPaged.items.length === 0 ? (
+                <ErrorView message={novelPaged.error} onRetry={novelPaged.refresh} />
+              ) : novelPaged.items.length === 0 ? (
+                <EmptyView text="暂无追更小说，下拉刷新试试" systemImage="bookmark" />
+              ) : (
+                <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
+                  {novelPaged.items.map((item, index) => (
+                    <WatchlistSeriesCard key={item.id} item={item} kind="novel" priority={index} />
+                  ))}
+                  <LoadMoreTrigger
+                    anchor={novelPaged.items[novelPaged.items.length - 1].id}
+                    onLoadMore={novelPaged.loadMore}
+                    hasMore={novelPaged.hasMore}
+                    isLoading={novelPaged.loadingMore}
+                  />
+                </LazyVStack>
+              )}
+            </VStack>
+          </RefreshableScrollView>
+        </VStack>
+      ) : null}
+    </ZStack>
   )
 }
 
 function FriendsFeed(props: {
   enabled?: boolean
   kind: WorkKind
+  hideNovels?: boolean
+  isAppleMusic?: boolean
+  onKindChange?: (kind: WorkKind) => void
   onFirstImageUrlChange?: (url: string | null) => void
-  onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { enabled = true, kind, onFirstImageUrlChange, onRegisterRefresh } = props
+  const {
+    enabled = true,
+    kind,
+    hideNovels,
+    isAppleMusic,
+    onKindChange,
+    onFirstImageUrlChange,
+  } = props
+
+  const [visitedKinds, setVisitedKinds] = useState<Set<WorkKind>>(() => new Set([kind]))
+
+  useEffect(() => {
+    setVisitedKinds((prev) => {
+      if (prev.has(kind)) return prev
+      const next = new Set(prev)
+      next.add(kind)
+      return next
+    })
+  }, [kind])
 
   const illustPaged = usePagedList<PixivIllustration>({
     first: myPixivFeed,
     more: (nextURL, token) => nextIllustrations(nextURL, token),
     filter: filterFollowingIllustrationItems,
     deps: ["friends", "illust"],
-    enabled: enabled && kind === "illust",
+    enabled: enabled && visitedKinds.has("illust"),
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
@@ -530,7 +739,7 @@ function FriendsFeed(props: {
     more: (nextURL, token) => nextNovels(nextURL, token),
     filter: filterFollowingNovelItems,
     deps: ["friends", "novel"],
-    enabled: enabled && kind === "novel",
+    enabled: enabled && visitedKinds.has("novel"),
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
   })
@@ -566,69 +775,78 @@ function FriendsFeed(props: {
     onFirstImageUrlChange,
   ])
 
-  useEffect(() => {
-    onRegisterRefresh?.(activeRefresh)
-  }, [activeRefresh, onRegisterRefresh])
-
-  useEffect(() => {
-    return onSettingsChanged(() => {
-      illustPagedRef.current.reapplyFilter()
-      novelPagedRef.current.reapplyFilter()
-    })
-  }, [])
-
-  if (kind === "illust") {
-    return (
-      <VStack alignment="leading" spacing={10}>
-        {illustPaged.initialLoading ? (
-          <LoadingView />
-        ) : illustPaged.error && illustPaged.items.length === 0 ? (
-          <ErrorView message={illustPaged.error} onRetry={illustPaged.refresh} />
-        ) : illustPaged.items.length === 0 ? (
-          <EmptyView
-            text={
-              illustPaged.hasFilteredContent
-                ? "当前页面部分作品被内容显示设置过滤，暂时无法显示"
-                : "好友还没有新作品"
-            }
-            systemImage={illustPaged.hasFilteredContent ? "eye.slash" : "person.2"}
-          />
-        ) : (
-          <IllustFlowFeed
-            items={illustPaged.items}
-            onLoadMore={illustPaged.loadMore}
-            hasMore={illustPaged.hasMore}
-            isLoading={illustPaged.loadingMore}
-          />
-        )}
-      </VStack>
-    )
-  }
-
   return (
-    <VStack alignment="leading" spacing={10}>
-      {novelPaged.initialLoading ? (
-        <LoadingView />
-      ) : novelPaged.error && novelPaged.items.length === 0 ? (
-        <ErrorView message={novelPaged.error} onRetry={novelPaged.refresh} />
-      ) : novelPaged.items.length === 0 ? (
-        <EmptyView
-          text={
-            novelPaged.hasFilteredContent
-              ? "当前页面部分小说被内容显示设置过滤，暂时无法显示"
-              : "好友还没有新小说"
-          }
-          systemImage={novelPaged.hasFilteredContent ? "eye.slash" : "book"}
-        />
-      ) : (
-        <NovelFeedItems
-          items={novelPaged.items}
-          onLoadMore={novelPaged.loadMore}
-          hasMore={novelPaged.hasMore}
-          isLoading={novelPaged.loadingMore}
-        />
-      )}
-    </VStack>
+    <ZStack frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
+      {/* 1. 好友插画独立容器 */}
+      <VStack
+        frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+        opacity={kind === "illust" ? 1 : 0}
+        zIndex={kind === "illust" ? 1 : 0}
+        allowsHitTesting={kind === "illust"}
+      >
+        <RefreshableScrollView refreshable={illustPaged.refresh}>
+          <VStack alignment="leading" spacing={10}>
+            {illustPaged.initialLoading ? (
+              <LoadingView />
+            ) : illustPaged.error && illustPaged.items.length === 0 ? (
+              <ErrorView message={illustPaged.error} onRetry={illustPaged.refresh} />
+            ) : illustPaged.items.length === 0 ? (
+              <EmptyView
+                text={
+                  illustPaged.hasFilteredContent
+                    ? "当前页面部分作品被内容显示设置过滤，暂时无法显示"
+                    : "好友还没有新作品"
+                }
+                systemImage={illustPaged.hasFilteredContent ? "eye.slash" : "person.2"}
+              />
+            ) : (
+              <IllustFlowFeed
+                items={illustPaged.items}
+                onLoadMore={illustPaged.loadMore}
+                hasMore={illustPaged.hasMore}
+                isLoading={illustPaged.loadingMore}
+              />
+            )}
+          </VStack>
+        </RefreshableScrollView>
+      </VStack>
+
+      {/* 2. 好友小说独立容器 */}
+      {visitedKinds.has("novel") ? (
+        <VStack
+          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          opacity={kind === "novel" ? 1 : 0}
+          zIndex={kind === "novel" ? 1 : 0}
+          allowsHitTesting={kind === "novel"}
+        >
+          <RefreshableScrollView refreshable={novelPaged.refresh}>
+            <VStack alignment="leading" spacing={10}>
+              {novelPaged.initialLoading ? (
+                <LoadingView />
+              ) : novelPaged.error && novelPaged.items.length === 0 ? (
+                <ErrorView message={novelPaged.error} onRetry={novelPaged.refresh} />
+              ) : novelPaged.items.length === 0 ? (
+                <EmptyView
+                  text={
+                    novelPaged.hasFilteredContent
+                      ? "当前页面部分小说被内容显示设置过滤，暂时无法显示"
+                      : "好友还没有新小说"
+                  }
+                  systemImage={novelPaged.hasFilteredContent ? "eye.slash" : "book"}
+                />
+              ) : (
+                <NovelFeedItems
+                  items={novelPaged.items}
+                  onLoadMore={novelPaged.loadMore}
+                  hasMore={novelPaged.hasMore}
+                  isLoading={novelPaged.loadingMore}
+                />
+              )}
+            </VStack>
+          </RefreshableScrollView>
+        </VStack>
+      ) : null}
+    </ZStack>
   )
 }
 

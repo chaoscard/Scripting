@@ -1,6 +1,7 @@
 import {
   Button,
   Group,
+  HStack,
   Image,
   LazyVStack,
   Menu,
@@ -12,6 +13,7 @@ import {
   useRef,
   useState,
   VStack,
+  ZStack,
 } from "scripting"
 import {
   deleteIllust,
@@ -62,6 +64,16 @@ export function UserWorksView(props: { userID?: number; title?: string }) {
   const [detailLoading, setDetailLoading] = useState(true)
   const [detailError, setDetailError] = useState<string | null>(null)
   const [tab, setTab] = useState<WorkTab>("illust")
+  const [visitedTabs, setVisitedTabs] = useState<Set<WorkTab>>(() => new Set(["illust"]))
+
+  useEffect(() => {
+    setVisitedTabs((prev) => {
+      if (prev.has(tab)) return prev
+      const next = new Set(prev)
+      next.add(tab)
+      return next
+    })
+  }, [tab])
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
   const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
   const isAppleMusic = pageLayout === "appleMusic"
@@ -162,8 +174,52 @@ export function UserWorksView(props: { userID?: number; title?: string }) {
   }, [])
 
   const toolbar = useMemo(() => {
-    if (!isOwn) return undefined
+    const baseTitle = props.title ?? (isOwn ? "我的作品" : "作品")
+    const tabName = activeTab === "illust" ? "插画" : activeTab === "manga" ? "漫画" : "小说"
+    const isClassic = !isAppleMusic
+
+    let principalNode: any
+    if (isClassic && availableKinds.length > 1) {
+      principalNode = (
+        <Menu
+          label={
+            <HStack alignment="center" spacing={4}>
+              <Text font="title2" fontWeight="bold">
+                {baseTitle} · {tabName}
+              </Text>
+              <Image
+                systemName="chevron.down.circle.fill"
+                font="caption"
+                foregroundStyle="secondaryLabel"
+              />
+            </HStack>
+          }
+        >
+          {availableKinds.map((k) => (
+            <Button
+              key={k}
+              title={k === "illust" ? "插画" : k === "manga" ? "漫画" : "小说"}
+              systemImage={activeTab === k ? "checkmark" : undefined}
+              action={() => setTab(k)}
+            />
+          ))}
+        </Menu>
+      )
+    } else {
+      principalNode = (
+        <Text font="title2" fontWeight="bold">
+          {baseTitle}
+        </Text>
+      )
+    }
+
+    if (!isOwn) {
+      return {
+        principal: principalNode,
+      }
+    }
     return {
+      principal: principalNode,
       topBarTrailing: [
         <Menu label={<Image systemName="square.and.pencil" />}>
           <Button
@@ -190,7 +246,7 @@ export function UserWorksView(props: { userID?: number; title?: string }) {
         </Menu>,
       ],
     }
-  }, [isOwn])
+  }, [isOwn, isAppleMusic, availableKinds, activeTab, props.title])
 
   if (currentUserID == null) {
     return (
@@ -231,66 +287,58 @@ export function UserWorksView(props: { userID?: number; title?: string }) {
   }
 
   return (
-    <RefreshableScrollView
-      navigationTitle={props.title ?? (isOwn ? "我的作品" : "作品")}
+    <ZStack
       navigationBarTitleDisplayMode="inline"
       toolbar={toolbar}
       background={ambientBackground}
-      refreshable={async () => {
-        await Promise.all([loadDetail(), worksRefreshRef.current()])
-      }}
+      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
     >
-      <VStack alignment="leading" spacing={8}>
-        {isAppleMusic ? null : (
-          <UserWorkPicker
-            availableKinds={availableKinds}
-            kind={activeTab}
-            onChanged={setTab}
-          />
-        )}
-
-        {availableKinds.length === 0 ? (
+      {availableKinds.length === 0 ? (
+        <RefreshableScrollView
+          refreshable={loadDetail}
+        >
           <EmptyView text="暂无作品投稿" systemImage="photo.on.rectangle.angled" />
-        ) : (
-          <UserWorksFeed
-            userID={currentUserID}
-            tab={activeTab}
-            onFirstImageUrlChange={setAmbientImageUrl}
-            onKindEmpty={handleKindEmpty}
-            onRegisterRefresh={(fn) => {
-              worksRefreshRef.current = fn
-            }}
-          />
-        )}
-      </VStack>
-    </RefreshableScrollView>
+        </RefreshableScrollView>
+      ) : (
+        availableKinds.map((k) => {
+          if (!visitedTabs.has(k)) return null
+          const isCurrent = activeTab === k
+          return (
+            <VStack
+              key={k}
+              frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+              opacity={isCurrent ? 1 : 0}
+              zIndex={isCurrent ? 1 : 0}
+              allowsHitTesting={isCurrent}
+            >
+              <RefreshableScrollView
+                refreshable={async () => {
+                  await Promise.all([loadDetail(), worksRefreshRef.current()])
+                }}
+              >
+                <VStack alignment="leading" spacing={8}>
+                  <UserWorksFeed
+                    userID={currentUserID}
+                    tab={k}
+                    onFirstImageUrlChange={(url) => {
+                      if (isCurrent) setAmbientImageUrl(url)
+                    }}
+                    onKindEmpty={handleKindEmpty}
+                    onRegisterRefresh={(fn) => {
+                      if (isCurrent) worksRefreshRef.current = fn
+                    }}
+                  />
+                </VStack>
+              </RefreshableScrollView>
+            </VStack>
+          )
+        })
+      )}
+    </ZStack>
   )
 }
 
-function UserWorkPicker(props: {
-  availableKinds: WorkTab[]
-  kind: WorkTab
-  onChanged: (kind: WorkTab) => void
-}) {
-  const { availableKinds, kind, onChanged } = props
-  if (availableKinds.length <= 1) return null
 
-  return (
-    <Picker
-      title="作品类型"
-      value={kind}
-      onChanged={(value: string) => onChanged(value as WorkTab)}
-      pickerStyle="segmented"
-      padding={{ horizontal: 14 }}
-    >
-      {availableKinds.map((k) => (
-        <Text key={k} tag={k}>
-          {k === "illust" ? "插画" : k === "manga" ? "漫画" : "小说"}
-        </Text>
-      ))}
-    </Picker>
-  )
-}
 
 function UserWorksFeed(props: {
   userID: number

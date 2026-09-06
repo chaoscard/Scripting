@@ -2,7 +2,7 @@ import { Button, Script, Text } from "scripting"
 import { loadSettings } from "../../store/settings"
 import { abortAllAITasks } from "../../api/aiService"
 
-export function appToolbar(dismiss: () => void, title?: string, trailing?: any) {
+export function appToolbar(dismiss: () => void, title?: any, trailing?: any, principal?: any) {
   return {
     topBarLeading: [
       <Button
@@ -26,13 +26,21 @@ export function appToolbar(dismiss: () => void, title?: string, trailing?: any) 
         ? trailing
         : [trailing]
       : undefined,
-    principal: title
-      ? [
-          <Text font="title2" fontWeight="bold">
-            {title}
-          </Text>,
-        ]
-      : undefined,
+    principal: principal
+      ? Array.isArray(principal)
+        ? principal
+        : [principal]
+      : title
+        ? Array.isArray(title)
+          ? title
+          : typeof title === "string"
+            ? [
+                <Text font="title2" fontWeight="bold">
+                  {title}
+                </Text>,
+              ]
+            : [title]
+        : undefined,
   }
 }
 

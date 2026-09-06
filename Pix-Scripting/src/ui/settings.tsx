@@ -24,6 +24,7 @@ import {
   enforceCacheLimit,
 } from "../image/imageLoader"
 import { clearHistory, historyCount, onHistoryChanged } from "../store/history"
+import { FeatureHighlightsSheet } from "./components/FeatureHighlightsSheet"
 import {
   formatCustomRankingSummary,
   loadSettings,
@@ -89,6 +90,7 @@ export function SettingsView() {
   const [blocklist, setBlocklist] = useState(loadBlocklist())
   const [aiProfile, setAiProfile] = useState<CustomAIProfile>(() => loadCustomAIProfile())
   const [settingsReset, setSettingsReset] = useTimedFlag()
+  const [showHighlights, setShowHighlights] = useState(false)
   const [cacheSize, setCacheSize] = useState<number | null>(null)
   const [cacheCleared, setCacheCleared] = useTimedFlag()
   const [historyTotal, setHistoryTotal] = useState<number>(() => historyCount())
@@ -179,6 +181,7 @@ export function SettingsView() {
     setSettings(next)
     setSettingsReset()
     setExperimentalImmersionKey((k) => k + 1)
+    setShowHighlights(true)
   }
 
   function clearAllCaches() {
@@ -234,6 +237,20 @@ export function SettingsView() {
       navigationTitle="设置"
       navigationBarTitleDisplayMode="inline"
       listSectionSpacing={6}
+      sheet={{
+        isPresented: showHighlights,
+        onChanged: (val: boolean) => setShowHighlights(val),
+        content: (
+          <FeatureHighlightsSheet
+            onClose={() => {
+              setShowHighlights(false)
+              if (!settings.hasSeenFeatureHighlights) {
+                update({ hasSeenFeatureHighlights: true })
+              }
+            }}
+          />
+        ),
+      }}
       toolbar={{
         topBarTrailing: [
           <Button
@@ -242,6 +259,14 @@ export function SettingsView() {
             <Image
               systemName={isAllExpanded ? "rectangle.compress.vertical" : "rectangle.expand.vertical"}
             />
+          </Button>,
+          <Button
+            action={() => {
+              void Haptics.transient()
+              setShowHighlights(true)
+            }}
+          >
+            <Image systemName="lightbulb" />
           </Button>,
           <Button
             action={() => {}}
@@ -517,8 +542,8 @@ export function SettingsView() {
               update({ pageLayout: value as "classic" | "appleMusic" })
             }
           >
-            <Text tag="classic">经典样式</Text>
             <Text tag="appleMusic">苹果音乐</Text>
+            <Text tag="classic">经典样式</Text>
           </Picker>
           <Toggle
             title="瀑布流首图全宽展示"
@@ -1666,5 +1691,8 @@ function AdvancedNumberRow(props: {
     </HStack>
   )
 }
+
+export default SettingsView
+
 
 

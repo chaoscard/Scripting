@@ -14,6 +14,7 @@ import {
   useRef,
   useState,
   VStack,
+  ZStack,
 } from "scripting"
 import {
   bookmarkTags,
@@ -63,6 +64,16 @@ export function LibraryView() {
   const [restrict, setRestrict] = useState<Visibility>("public")
   const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
   const isAppleMusic = pageLayout === "appleMusic"
+  const [visitedKinds, setVisitedKinds] = useState<Set<LibraryKind>>(() => new Set([kind]))
+
+  useEffect(() => {
+    setVisitedKinds((prev) => {
+      if (prev.has(kind)) return prev
+      const next = new Set(prev)
+      next.add(kind)
+      return next
+    })
+  }, [kind])
   const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(null)
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
@@ -101,34 +112,116 @@ export function LibraryView() {
   )
 
   return (
-    <RefreshableScrollView
-      navigationTitle="我的收藏"
+    <ZStack
       navigationBarTitleDisplayMode="inline"
-      toolbar={libraryToolbar({ restrict, onRestrictChange: setRestrict })}
       background={ambientBackground}
-      refreshable={() => refreshHandlerRef.current()}
+      toolbar={libraryToolbar({
+        kind,
+        hideNovels,
+        isAppleMusic,
+        restrict,
+        onKindChange: setKind,
+        onRestrictChange: setRestrict,
+      })}
+      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
     >
-      <VStack alignment="leading" spacing={8}>
-        {hideNovels || isAppleMusic ? null : (
-          <LibraryKindPicker kind={kind} onKindChange={setKind} />
-        )}
-        <LibraryFeed
-          key={restrict}
-          kind={kind}
-          restrict={restrict}
-          onFirstImageUrlChange={setAmbientImageUrl}
-          onRegisterRefresh={(fn) => { refreshHandlerRef.current = fn }}
-        />
+      {/* 1. 插画·漫画收藏保活容器 */}
+      <VStack
+        frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+        opacity={kind === "illustration" ? 1 : 0}
+        zIndex={kind === "illustration" ? 1 : 0}
+        allowsHitTesting={kind === "illustration"}
+      >
+        <RefreshableScrollView refreshable={() => refreshHandlerRef.current()}>
+          <VStack alignment="leading" spacing={8}>
+            <LibraryFeed
+              key={`library-illust:${restrict}`}
+              kind="illustration"
+              restrict={restrict}
+              onFirstImageUrlChange={(url) => {
+                if (kind === "illustration") setAmbientImageUrl(url)
+              }}
+              onRegisterRefresh={(fn) => {
+                if (kind === "illustration") refreshHandlerRef.current = fn
+              }}
+            />
+          </VStack>
+        </RefreshableScrollView>
       </VStack>
-    </RefreshableScrollView>
+
+      {/* 2. 小说收藏保活容器 */}
+      {visitedKinds.has("novel") ? (
+        <VStack
+          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          opacity={kind === "novel" ? 1 : 0}
+          zIndex={kind === "novel" ? 1 : 0}
+          allowsHitTesting={kind === "novel"}
+        >
+          <RefreshableScrollView refreshable={() => refreshHandlerRef.current()}>
+            <VStack alignment="leading" spacing={8}>
+              <LibraryFeed
+                key={`library-novel:${restrict}`}
+                kind="novel"
+                restrict={restrict}
+                onFirstImageUrlChange={(url) => {
+                  if (kind === "novel") setAmbientImageUrl(url)
+                }}
+                onRegisterRefresh={(fn) => {
+                  if (kind === "novel") refreshHandlerRef.current = fn
+                }}
+              />
+            </VStack>
+          </RefreshableScrollView>
+        </VStack>
+      ) : null}
+    </ZStack>
   )
 }
 
 function libraryToolbar(props: {
+  kind: LibraryKind
+  hideNovels: boolean
+  isAppleMusic?: boolean
   restrict: Visibility
+  onKindChange: (kind: LibraryKind) => void
   onRestrictChange: (restrict: Visibility) => void
 }) {
+  const isClassic = !props.isAppleMusic
+  const kindLabel = props.kind === "illustration" ? "插画·漫画" : "小说"
+
   return {
+    principal:
+      isClassic && !props.hideNovels ? (
+        <Menu
+          label={
+            <HStack alignment="center" spacing={4}>
+              <Text font="title2" fontWeight="bold">
+                我的收藏 · {kindLabel}
+              </Text>
+              <Image
+                systemName="chevron.down.circle.fill"
+                font="caption"
+                foregroundStyle="secondaryLabel"
+              />
+            </HStack>
+          }
+        >
+          <Button
+            title="插画·漫画"
+            systemImage={props.kind === "illustration" ? "checkmark" : undefined}
+            action={() => props.onKindChange("illustration")}
+          />
+          <Button
+            title="小说"
+            systemImage={props.kind === "novel" ? "checkmark" : undefined}
+            action={() => props.onKindChange("novel")}
+          />
+        </Menu>
+      ) : (
+        <Text font="title2" fontWeight="bold">
+          我的收藏
+        </Text>
+      ),
     topBarTrailing: [
       <Menu label={<Image systemName="ellipsis.circle" />}>
         <Picker
@@ -149,24 +242,6 @@ function libraryToolbar(props: {
       </Menu>,
     ],
   }
-}
-
-function LibraryKindPicker(props: {
-  kind: LibraryKind
-  onKindChange: (kind: LibraryKind) => void
-}) {
-  return (
-    <Picker
-      title="收藏类型"
-      value={props.kind}
-      onChanged={(value: string) => props.onKindChange(value as LibraryKind)}
-      pickerStyle="segmented"
-      padding={{ horizontal: 14 }}
-    >
-      <Text tag="illustration">插画·漫画</Text>
-      <Text tag="novel">小说</Text>
-    </Picker>
-  )
 }
 
 export function BookmarkTags(props: {

@@ -186,6 +186,16 @@ export function RankingView(props: { onClose: () => void }) {
   }
 
   const isAppleMusic = settings.pageLayout === "appleMusic"
+  const [visitedKinds, setVisitedKinds] = useState<Set<RankingKind>>(() => new Set([kind]))
+
+  useEffect(() => {
+    setVisitedKinds((prev) => {
+      if (prev.has(kind)) return prev
+      const next = new Set(prev)
+      next.add(kind)
+      return next
+    })
+  }, [kind])
 
   const rankingItems = useMemo(() => {
     if (!activeModes) return []
@@ -299,10 +309,11 @@ export function RankingView(props: { onClose: () => void }) {
   )
 
   return (
-    <RefreshableScrollView
+    <ZStack
       navigationBarTitleDisplayMode="inline"
       navigationDestination={destinationElement}
       background={ambientBackground}
+      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
       sheet={{
         isPresented: isAdvancedSheetOpen,
         onChanged: (presented: boolean) => setIsAdvancedSheetOpen(presented),
@@ -321,83 +332,112 @@ export function RankingView(props: { onClose: () => void }) {
       }}
       toolbar={rankingToolbar({
         kind,
+        selectedMode:
+          kind === "illustration"
+            ? illustrationMode
+            : kind === "manga"
+              ? mangaMode
+              : kind === "novel"
+                ? novelMode
+                : advancedParams.mode,
+        activeModes: activeModes ?? [],
         hideNovels: settings.hideNovels,
+        isAppleMusic,
         onKindChange: handleKindChange,
+        onModeChange: handleSelectMode,
         onOpenAdvancedSheet: () => setIsAdvancedSheetOpen(true),
         onClose: props.onClose,
       })}
-      refreshable={() => refreshHandlerRef.current()}
+      onAppear={() => {
+        if (!activated) setActivated(true)
+      }}
     >
+      {/* 1. 插画排行榜（多榜单模式独立保活） */}
       <VStack
-        alignment="leading"
-        spacing={8}
-        frame={{ maxWidth: "infinity" }}
-        onAppear={() => {
-          if (!activated) setActivated(true)
-        }}
+        frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+        opacity={kind === "illustration" ? 1 : 0}
+        zIndex={kind === "illustration" ? 1 : 0}
+        allowsHitTesting={kind === "illustration"}
       >
-        {kind === "advanced" ? (
-          <AdvancedRankingBar
-            params={advancedParams}
-            onPress={() => setIsAdvancedSheetOpen(true)}
-            onBack={() => setKind("illustration")}
-          />
-        ) : !isAppleMusic && activeModes && activeModes.length > 0 && selectedMode ? (
-          <RankingModePicker
-            modes={activeModes}
-            selected={selectedMode}
-            onSelect={handleSelectMode}
-          />
-        ) : null}
+        <IllustRankingSection
+          selectedMode={illustrationMode}
+          label="插画"
+          enabled={activated && kind === "illustration"}
+          onFirstImageUrlChange={(url) => {
+            if (kind === "illustration") setAmbientImageUrl(url)
+          }}
+        />
+      </VStack>
 
-        {/* 右上角菜单切换分类时销毁非激活分类内存；分类内部横向Picker切换时保持已访问模式挂载，0 重载 0 转圈 */}
-        {kind === "illustration" ? (
+      {/* 2. 漫画排行榜（多榜单模式独立保活） */}
+      {visitedKinds.has("manga") ? (
+        <VStack
+          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          opacity={kind === "manga" ? 1 : 0}
+          zIndex={kind === "manga" ? 1 : 0}
+          allowsHitTesting={kind === "manga"}
+        >
           <IllustRankingSection
-            key="ranking-illust"
-            selectedMode={illustrationMode}
-            label="插画"
-            enabled={activated}
-            onFirstImageUrlChange={setAmbientImageUrl}
-            onRegisterRefresh={(fn) => {
-              refreshHandlerRef.current = fn
-            }}
-          />
-        ) : kind === "manga" ? (
-          <IllustRankingSection
-            key="ranking-manga"
             selectedMode={mangaMode}
             label="漫画"
-            enabled={activated}
-            onFirstImageUrlChange={setAmbientImageUrl}
-            onRegisterRefresh={(fn) => {
-              refreshHandlerRef.current = fn
+            enabled={activated && kind === "manga"}
+            onFirstImageUrlChange={(url) => {
+              if (kind === "manga") setAmbientImageUrl(url)
             }}
           />
-        ) : kind === "novel" ? (
+        </VStack>
+      ) : null}
+
+      {/* 3. 小说排行榜（多榜单模式独立保活） */}
+      {visitedKinds.has("novel") ? (
+        <VStack
+          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          opacity={kind === "novel" ? 1 : 0}
+          zIndex={kind === "novel" ? 1 : 0}
+          allowsHitTesting={kind === "novel"}
+        >
           <NovelRankingSection
-            key="ranking-novel"
             selectedMode={novelMode}
-            enabled={activated}
-            onFirstImageUrlChange={setAmbientImageUrl}
-            onRegisterRefresh={(fn) => {
-              refreshHandlerRef.current = fn
+            enabled={activated && kind === "novel"}
+            onFirstImageUrlChange={(url) => {
+              if (kind === "novel") setAmbientImageUrl(url)
             }}
           />
-        ) : (
-          <AdvancedRankingFeedItem
-            key={`ranking-advanced-${advancedParams.category}-${advancedParams.mode}-${advancedParams.date}`}
-            params={advancedParams}
-            active={true}
-            enabled={activated}
-            onFirstImageUrlChange={setAmbientImageUrl}
-            onRegisterRefresh={(fn) => {
-              refreshHandlerRef.current = fn
-            }}
-            onBackToDefault={() => setKind("illustration")}
-          />
-        )}
-      </VStack>
-    </RefreshableScrollView>
+        </VStack>
+      ) : null}
+
+      {/* 4. 自定义历史榜单 */}
+      {visitedKinds.has("advanced") ? (
+        <VStack
+          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          opacity={kind === "advanced" ? 1 : 0}
+          zIndex={kind === "advanced" ? 1 : 0}
+          allowsHitTesting={kind === "advanced"}
+        >
+          <RefreshableScrollView refreshable={() => refreshHandlerRef.current()}>
+            <VStack alignment="leading" spacing={8} frame={{ maxWidth: "infinity" }}>
+              <AdvancedRankingBar
+                params={advancedParams}
+                onPress={() => setIsAdvancedSheetOpen(true)}
+                onBack={() => setKind("illustration")}
+              />
+              <AdvancedRankingFeedItem
+                params={advancedParams}
+                active={true}
+                enabled={activated && kind === "advanced"}
+                onFirstImageUrlChange={(url) => {
+                  if (kind === "advanced") setAmbientImageUrl(url)
+                }}
+                onRegisterRefresh={(fn) => {
+                  refreshHandlerRef.current = fn
+                }}
+                onBackToDefault={() => setKind("illustration")}
+              />
+            </VStack>
+          </RefreshableScrollView>
+        </VStack>
+      ) : null}
+    </ZStack>
   )
 }
 
@@ -481,12 +521,17 @@ function AdvancedRankingBar(props: {
 
 function rankingToolbar(props: {
   kind: RankingKind
+  selectedMode: string
+  activeModes: ReadonlyArray<{ value: string; title: string }>
   hideNovels: boolean
+  isAppleMusic?: boolean
   onKindChange: (kind: RankingKind) => void
+  onModeChange: (mode: string) => void
   onOpenAdvancedSheet: () => void
   onClose: () => void
 }) {
-  const title =
+  const isClassic = !props.isAppleMusic
+  const baseTitle =
     props.kind === "illustration"
       ? "插画"
       : props.kind === "manga"
@@ -494,6 +539,40 @@ function rankingToolbar(props: {
         : props.kind === "novel"
           ? "小说"
           : "历史"
+
+  const currentModeObj = props.activeModes.find((m) => m.value === props.selectedMode)
+  const modeTitle = currentModeObj?.title ?? ""
+
+  let titleNode: any
+  if (isClassic && props.kind !== "advanced" && props.activeModes.length > 0) {
+    titleNode = (
+      <Menu
+        label={
+          <HStack alignment="center" spacing={4}>
+            <Text font="title2" fontWeight="bold">
+              {baseTitle} · {modeTitle}
+            </Text>
+            <Image
+              systemName="chevron.down.circle.fill"
+              font="caption"
+              foregroundStyle="secondaryLabel"
+            />
+          </HStack>
+        }
+      >
+        {props.activeModes.map((m) => (
+          <Button
+            key={m.value}
+            title={m.title}
+            systemImage={props.selectedMode === m.value ? "checkmark" : undefined}
+            action={() => props.onModeChange(m.value)}
+          />
+        ))}
+      </Menu>
+    )
+  } else {
+    titleNode = baseTitle
+  }
 
   const trailingItems = [
     props.kind === "advanced" ? (
@@ -523,29 +602,7 @@ function rankingToolbar(props: {
     </Menu>,
   ].filter(Boolean)
 
-  return appToolbar(props.onClose, title, trailingItems)
-}
-
-function RankingModePicker(props: {
-  modes: ReadonlyArray<{ value: string; title: string }>
-  selected: string
-  onSelect: (mode: string) => void
-}) {
-  return (
-    <Picker
-      title="榜单类型"
-      value={props.selected}
-      onChanged={(value: string) => props.onSelect(value)}
-      pickerStyle="segmented"
-      padding={{ horizontal: 14 }}
-    >
-      {props.modes.map((mode) => (
-        <Text key={mode.value} tag={mode.value}>
-          {mode.title}
-        </Text>
-      ))}
-    </Picker>
-  )
+  return appToolbar(props.onClose, titleNode, trailingItems)
 }
 
 function IllustRankingSection(props: {
@@ -553,9 +610,13 @@ function IllustRankingSection(props: {
   label: "插画" | "漫画"
   enabled?: boolean
   onFirstImageUrlChange?: (url: string | null) => void
-  onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { selectedMode, label, enabled = true, onFirstImageUrlChange, onRegisterRefresh } = props
+  const {
+    selectedMode,
+    label,
+    enabled = true,
+    onFirstImageUrlChange,
+  } = props
   const [visitedModes, setVisitedModes] = useState<string[]>(() => [selectedMode])
 
   useEffect(() => {
@@ -567,22 +628,28 @@ function IllustRankingSection(props: {
   }, [selectedMode])
 
   return (
-    <>
+    <ZStack frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
       {visitedModes.map((m) => {
         const isCurrent = selectedMode === m
         return (
-          <IllustRankingFeedItem
+          <VStack
             key={m}
-            mode={m}
-            label={label}
-            active={isCurrent}
-            enabled={enabled && isCurrent}
-            onFirstImageUrlChange={onFirstImageUrlChange}
-            onRegisterRefresh={onRegisterRefresh}
-          />
+            frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+            opacity={isCurrent ? 1 : 0}
+            zIndex={isCurrent ? 1 : 0}
+            allowsHitTesting={isCurrent}
+          >
+            <IllustRankingFeedItem
+              mode={m}
+              label={label}
+              active={isCurrent}
+              enabled={enabled}
+              onFirstImageUrlChange={onFirstImageUrlChange}
+            />
+          </VStack>
         )
       })}
-    </>
+    </ZStack>
   )
 }
 
@@ -590,9 +657,12 @@ function NovelRankingSection(props: {
   selectedMode: string
   enabled?: boolean
   onFirstImageUrlChange?: (url: string | null) => void
-  onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { selectedMode, enabled = true, onFirstImageUrlChange, onRegisterRefresh } = props
+  const {
+    selectedMode,
+    enabled = true,
+    onFirstImageUrlChange,
+  } = props
   const [visitedModes, setVisitedModes] = useState<string[]>(() => [selectedMode])
 
   useEffect(() => {
@@ -604,21 +674,27 @@ function NovelRankingSection(props: {
   }, [selectedMode])
 
   return (
-    <>
+    <ZStack frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
       {visitedModes.map((m) => {
         const isCurrent = selectedMode === m
         return (
-          <NovelRankingFeedItem
+          <VStack
             key={m}
-            mode={m}
-            active={isCurrent}
-            enabled={enabled && isCurrent}
-            onFirstImageUrlChange={onFirstImageUrlChange}
-            onRegisterRefresh={onRegisterRefresh}
-          />
+            frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+            opacity={isCurrent ? 1 : 0}
+            zIndex={isCurrent ? 1 : 0}
+            allowsHitTesting={isCurrent}
+          >
+            <NovelRankingFeedItem
+              mode={m}
+              active={isCurrent}
+              enabled={enabled}
+              onFirstImageUrlChange={onFirstImageUrlChange}
+            />
+          </VStack>
         )
       })}
-    </>
+    </ZStack>
   )
 }
 
@@ -629,9 +705,15 @@ function IllustRankingFeedItem(props: {
   active: boolean
   enabled?: boolean
   onFirstImageUrlChange?: (url: string | null) => void
-  onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { mode, label, date = null, active, enabled = true, onFirstImageUrlChange, onRegisterRefresh } = props
+  const {
+    mode,
+    label,
+    date = null,
+    active,
+    enabled = true,
+    onFirstImageUrlChange,
+  } = props
 
   const paged = usePagedList<PixivIllustration>({
     first: (token) => ranking(mode, date, token),
@@ -659,13 +741,16 @@ function IllustRankingFeedItem(props: {
       } else if (!paged.initialLoading && paged.items.length === 0) {
         onFirstImageUrlChange?.(null)
       }
-      onRegisterRefresh?.(paged.refresh)
     }
-  }, [active, enabled, paged.items[0]?.id, paged.initialLoading, paged.items.length, paged.refresh, onFirstImageUrlChange, onRegisterRefresh])
+  }, [active, enabled, paged.items[0]?.id, paged.initialLoading, paged.items.length, onFirstImageUrlChange])
 
-  if (!active) return null
-
-  return <IllustRankingFeedContent paged={paged} label={label} />
+  return (
+    <RefreshableScrollView refreshable={paged.refresh}>
+      <VStack alignment="leading" spacing={8} frame={{ maxWidth: "infinity" }}>
+        <IllustRankingFeedContent paged={paged} label={label} />
+      </VStack>
+    </RefreshableScrollView>
+  )
 }
 
 function NovelRankingFeedItem(props: {
@@ -674,9 +759,14 @@ function NovelRankingFeedItem(props: {
   active: boolean
   enabled?: boolean
   onFirstImageUrlChange?: (url: string | null) => void
-  onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { mode, date = null, active, enabled = true, onFirstImageUrlChange, onRegisterRefresh } = props
+  const {
+    mode,
+    date = null,
+    active,
+    enabled = true,
+    onFirstImageUrlChange,
+  } = props
 
   const paged = usePagedList<PixivNovel>({
     first: (token) => novelRanking(mode, date, token),
@@ -704,13 +794,16 @@ function NovelRankingFeedItem(props: {
       } else if (!paged.initialLoading && paged.items.length === 0) {
         onFirstImageUrlChange?.(null)
       }
-      onRegisterRefresh?.(paged.refresh)
     }
-  }, [active, enabled, paged.items[0]?.id, paged.initialLoading, paged.items.length, paged.refresh, onFirstImageUrlChange, onRegisterRefresh])
+  }, [active, enabled, paged.items[0]?.id, paged.initialLoading, paged.items.length, onFirstImageUrlChange])
 
-  if (!active) return null
-
-  return <NovelRankingFeedContent paged={paged} />
+  return (
+    <RefreshableScrollView refreshable={paged.refresh}>
+      <VStack alignment="leading" spacing={8} frame={{ maxWidth: "infinity" }}>
+        <NovelRankingFeedContent paged={paged} />
+      </VStack>
+    </RefreshableScrollView>
+  )
 }
 
 function AdvancedRankingFeedItem(props: {

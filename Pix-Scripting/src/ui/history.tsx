@@ -4,6 +4,7 @@ import {
   HStack,
   Image,
   LazyVStack,
+  Menu,
   Picker,
   Text,
   useCallback,
@@ -12,6 +13,7 @@ import {
   useRef,
   useState,
   VStack,
+  ZStack,
 } from "scripting"
 import {
   EmptyView,
@@ -143,6 +145,16 @@ export function HistoryView() {
   const [searchQuery, setSearchQuery] = useState("")
   const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
   const isAppleMusic = pageLayout === "appleMusic"
+  const [visitedKinds, setVisitedKinds] = useState<Set<HistoryKind>>(() => new Set([kind]))
+
+  useEffect(() => {
+    setVisitedKinds((prev) => {
+      if (prev.has(kind)) return prev
+      const next = new Set(prev)
+      next.add(kind)
+      return next
+    })
+  }, [kind])
   const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(null)
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
@@ -187,38 +199,149 @@ export function HistoryView() {
   }
 
   return (
-    <RefreshableScrollView
-      navigationTitle="浏览记录"
+    <ZStack
       navigationBarTitleDisplayMode="inline"
-      toolbar={historyToolbar({ kind, onClear: clearCurrentKind })}
       background={ambientBackground}
+      toolbar={historyToolbar({
+        kind,
+        hideNovels,
+        isAppleMusic,
+        onKindChange: setKind,
+        onClear: clearCurrentKind,
+      })}
       searchable={{
         value: searchQuery,
         onChanged: setSearchQuery,
         placement: "navigationBarDrawer",
         prompt: "搜索作者、标题和标签",
       }}
-      refreshable={() => refreshHandlerRef.current()}
+      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
     >
-      <VStack alignment="leading" spacing={8}>
-        {isAppleMusic ? null : (
-          <HistoryKindPicker kind={kind} hideNovels={hideNovels} onKindChange={setKind} />
-        )}
-        <HistoryFeed
-          kind={kind}
-          searchQuery={searchQuery}
-          onFirstImageUrlChange={setAmbientImageUrl}
-          onRegisterRefresh={(fn) => {
-            refreshHandlerRef.current = fn
-          }}
-        />
+      {/* 1. 插画历史保活容器 */}
+      <VStack
+        frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+        opacity={kind === "illustration" ? 1 : 0}
+        zIndex={kind === "illustration" ? 1 : 0}
+        allowsHitTesting={kind === "illustration"}
+      >
+        <RefreshableScrollView refreshable={() => refreshHandlerRef.current()}>
+          <VStack alignment="leading" spacing={8}>
+            <HistoryFeed
+              kind="illustration"
+              searchQuery={searchQuery}
+              onFirstImageUrlChange={(url) => {
+                if (kind === "illustration") setAmbientImageUrl(url)
+              }}
+              onRegisterRefresh={(fn) => {
+                if (kind === "illustration") refreshHandlerRef.current = fn
+              }}
+            />
+          </VStack>
+        </RefreshableScrollView>
       </VStack>
-    </RefreshableScrollView>
+
+      {/* 2. 漫画历史保活容器 */}
+      {visitedKinds.has("manga") ? (
+        <VStack
+          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          opacity={kind === "manga" ? 1 : 0}
+          zIndex={kind === "manga" ? 1 : 0}
+          allowsHitTesting={kind === "manga"}
+        >
+          <RefreshableScrollView refreshable={() => refreshHandlerRef.current()}>
+            <VStack alignment="leading" spacing={8}>
+              <HistoryFeed
+                kind="manga"
+                searchQuery={searchQuery}
+                onFirstImageUrlChange={(url) => {
+                  if (kind === "manga") setAmbientImageUrl(url)
+                }}
+                onRegisterRefresh={(fn) => {
+                  if (kind === "manga") refreshHandlerRef.current = fn
+                }}
+              />
+            </VStack>
+          </RefreshableScrollView>
+        </VStack>
+      ) : null}
+
+      {/* 3. 小说历史保活容器 */}
+      {visitedKinds.has("novel") ? (
+        <VStack
+          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          opacity={kind === "novel" ? 1 : 0}
+          zIndex={kind === "novel" ? 1 : 0}
+          allowsHitTesting={kind === "novel"}
+        >
+          <RefreshableScrollView refreshable={() => refreshHandlerRef.current()}>
+            <VStack alignment="leading" spacing={8}>
+              <HistoryFeed
+                kind="novel"
+                searchQuery={searchQuery}
+                onFirstImageUrlChange={(url) => {
+                  if (kind === "novel") setAmbientImageUrl(url)
+                }}
+                onRegisterRefresh={(fn) => {
+                  if (kind === "novel") refreshHandlerRef.current = fn
+                }}
+              />
+            </VStack>
+          </RefreshableScrollView>
+        </VStack>
+      ) : null}
+    </ZStack>
   )
 }
 
-function historyToolbar(props: { kind: HistoryKind; onClear: () => void }) {
+function historyToolbar(props: {
+  kind: HistoryKind
+  hideNovels: boolean
+  isAppleMusic?: boolean
+  onKindChange: (kind: HistoryKind) => void
+  onClear: () => void
+}) {
+  const isClassic = !props.isAppleMusic
+  const kindLabel = historyKindTitle(props.kind)
+
   return {
+    principal: isClassic ? (
+      <Menu
+        label={
+          <HStack alignment="center" spacing={4}>
+            <Text font="title2" fontWeight="bold">
+              浏览记录 · {kindLabel}
+            </Text>
+            <Image
+              systemName="chevron.down.circle.fill"
+              font="caption"
+              foregroundStyle="secondaryLabel"
+            />
+          </HStack>
+        }
+      >
+        <Button
+          title="插画"
+          systemImage={props.kind === "illustration" ? "checkmark" : undefined}
+          action={() => props.onKindChange("illustration")}
+        />
+        <Button
+          title="漫画"
+          systemImage={props.kind === "manga" ? "checkmark" : undefined}
+          action={() => props.onKindChange("manga")}
+        />
+        {!props.hideNovels && (
+          <Button
+            title="小说"
+            systemImage={props.kind === "novel" ? "checkmark" : undefined}
+            action={() => props.onKindChange("novel")}
+          />
+        )}
+      </Menu>
+    ) : (
+      <Text font="title2" fontWeight="bold">
+        浏览记录
+      </Text>
+    ),
     topBarTrailing: [
       <Button
         action={() => {}}
@@ -252,36 +375,7 @@ function historyKindTitle(kind: HistoryKind): string {
   }
 }
 
-function HistoryKindPicker(props: {
-  kind: HistoryKind
-  hideNovels?: boolean
-  onKindChange: (kind: HistoryKind) => void
-}) {
-  const kinds: { tag: HistoryKind; label: string }[] = [
-    { tag: "illustration", label: "插画" },
-    { tag: "manga", label: "漫画" },
-  ]
-  if (!props.hideNovels) {
-    kinds.push({ tag: "novel", label: "小说" })
-  }
-  if (kinds.length <= 1) return null
 
-  return (
-    <Picker
-      title="浏览记录类型"
-      value={props.kind}
-      onChanged={(value: string) => props.onKindChange(value as HistoryKind)}
-      pickerStyle="segmented"
-      padding={{ horizontal: 14 }}
-    >
-      {kinds.map((item) => (
-        <Text key={item.tag} tag={item.tag}>
-          {item.label}
-        </Text>
-      ))}
-    </Picker>
-  )
-}
 
 function HistoryFeed(props: {
   kind: HistoryKind

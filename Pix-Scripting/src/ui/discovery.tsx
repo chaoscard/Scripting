@@ -1,4 +1,6 @@
 import {
+  Button,
+  HStack,
   Image,
   Label,
   LazyVStack,
@@ -10,6 +12,7 @@ import {
   useRef,
   useState,
   VStack,
+  ZStack,
 } from "scripting"
 import {
   newIllustrations,
@@ -77,6 +80,17 @@ export function DiscoveryView(props: { onClose: () => void }) {
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
+  // 模式保活机制：惰性挂载，访问后永久保留在内存中
+  const [visitedModes, setVisitedModes] = useState<Set<ExploreMode>>(() => new Set([mode]))
+  useEffect(() => {
+    setVisitedModes((prev) => {
+      if (prev.has(mode)) return prev
+      const next = new Set(prev)
+      next.add(mode)
+      return next
+    })
+  }, [mode])
+
   useEffect(() => {
     return onSettingsChanged(() => {
       const nextSettings = loadSettings()
@@ -136,65 +150,111 @@ export function DiscoveryView(props: { onClose: () => void }) {
   )
 
   return (
-    <RefreshableScrollView
+    <ZStack
+      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
       navigationBarTitleDisplayMode="inline"
       navigationDestination={destinationElement}
-      toolbar={exploreToolbar({ mode, onModeChange: setMode, onClose: props.onClose })}
       background={ambientBackground}
-      refreshable={() => refreshHandlerRef.current()}
+      toolbar={exploreToolbar({
+        mode,
+        kind,
+        hideNovels,
+        isAppleMusic,
+        onModeChange: setMode,
+        onKindChange: setKind,
+        onClose: props.onClose,
+      })}
+      onAppear={() => {
+        if (!activated) setActivated(true)
+      }}
     >
+      {/* 1. 推荐模式（默认常驻保活） */}
       <VStack
-        alignment="leading"
-        spacing={8}
-        onAppear={() => {
-          if (!activated) setActivated(true)
-        }}
+        frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+        opacity={mode === "recommended" ? 1 : 0}
+        zIndex={mode === "recommended" ? 1 : 0}
+        allowsHitTesting={mode === "recommended"}
       >
-        {mode === "pixivision" || isAppleMusic ? null : (
-          <FeedKindPicker kind={kind} hideNovels={hideNovels} onKindChange={setKind} />
-        )}
-        {mode === "pixivision" ? (
-          <PixivisionExploreFeed
-            key="pixivision"
-            enabled={activated}
-            onFirstImageUrlChange={setAmbientImageUrl}
-            onRegisterRefresh={(fn) => {
-              refreshHandlerRef.current = fn
-            }}
-          />
-        ) : mode === "recommended" ? (
-          <RecommendedExploreFeed
-            key="recommended"
-            kind={kind}
-            enabled={activated}
-            onFirstImageUrlChange={setAmbientImageUrl}
-            onRegisterRefresh={(fn) => {
-              refreshHandlerRef.current = fn
-            }}
-          />
-        ) : (
-          <LatestExploreFeed
-            key="latest"
-            kind={kind}
-            enabled={activated}
-            onFirstImageUrlChange={setAmbientImageUrl}
-            onRegisterRefresh={(fn) => {
-              refreshHandlerRef.current = fn
-            }}
-          />
-        )}
+        <RecommendedExploreFeed
+          kind={kind}
+          enabled={activated && mode === "recommended"}
+          hideNovels={hideNovels}
+          isAppleMusic={isAppleMusic}
+          onKindChange={setKind}
+          onFirstImageUrlChange={(url) => {
+            if (mode === "recommended") setAmbientImageUrl(url)
+          }}
+        />
       </VStack>
-    </RefreshableScrollView>
+
+      {/* 2. 最新模式（访问后永久保活） */}
+      {visitedModes.has("latest") ? (
+        <VStack
+          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          opacity={mode === "latest" ? 1 : 0}
+          zIndex={mode === "latest" ? 1 : 0}
+          allowsHitTesting={mode === "latest"}
+        >
+          <LatestExploreFeed
+            kind={kind}
+            enabled={activated && mode === "latest"}
+            hideNovels={hideNovels}
+            isAppleMusic={isAppleMusic}
+            onKindChange={setKind}
+            onFirstImageUrlChange={(url) => {
+              if (mode === "latest") setAmbientImageUrl(url)
+            }}
+          />
+        </VStack>
+      ) : null}
+
+      {/* 3. 特辑模式（访问后永久保活） */}
+      {visitedModes.has("pixivision") ? (
+        <VStack
+          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          opacity={mode === "pixivision" ? 1 : 0}
+          zIndex={mode === "pixivision" ? 1 : 0}
+          allowsHitTesting={mode === "pixivision"}
+        >
+          <PixivisionExploreFeed
+            enabled={activated && mode === "pixivision"}
+            onFirstImageUrlChange={(url) => {
+              if (mode === "pixivision") setAmbientImageUrl(url)
+            }}
+          />
+        </VStack>
+      ) : null}
+    </ZStack>
   )
 }
 
 function RecommendedExploreFeed(props: {
   kind: FeedKind
   enabled?: boolean
+  hideNovels?: boolean
+  isAppleMusic?: boolean
+  onKindChange?: (kind: FeedKind) => void
   onFirstImageUrlChange?: (url: string | null) => void
-  onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { kind, enabled = true, onFirstImageUrlChange, onRegisterRefresh } = props
+  const {
+    kind,
+    enabled = true,
+    hideNovels,
+    isAppleMusic,
+    onKindChange,
+    onFirstImageUrlChange,
+  } = props
+
+  const [visitedKinds, setVisitedKinds] = useState<Set<FeedKind>>(() => new Set([kind]))
+
+  useEffect(() => {
+    setVisitedKinds((prev) => {
+      if (prev.has(kind)) return prev
+      const next = new Set(prev)
+      next.add(kind)
+      return next
+    })
+  }, [kind])
 
   // 1. 推荐 - 插画
   const illustPaged = usePagedList<PixivIllustration>({
@@ -202,7 +262,7 @@ function RecommendedExploreFeed(props: {
     more: (nextURL, token) => nextIllustrations(nextURL, token),
     filter: filterIllustItems,
     deps: ["recommended", "illustration"],
-    enabled: enabled && kind === "illustration",
+    enabled: enabled && visitedKinds.has("illustration"),
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
@@ -213,7 +273,7 @@ function RecommendedExploreFeed(props: {
     more: (nextURL, token) => nextIllustrations(nextURL, token),
     filter: filterIllustItems,
     deps: ["recommended", "manga"],
-    enabled: enabled && kind === "manga",
+    enabled: enabled && visitedKinds.has("manga"),
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
@@ -224,7 +284,7 @@ function RecommendedExploreFeed(props: {
     more: (nextURL, token) => nextNovels(nextURL, token),
     filter: filterNovelItems,
     deps: ["recommended"],
-    enabled: enabled && kind === "novel",
+    enabled: enabled && visitedKinds.has("novel"),
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
   })
@@ -284,26 +344,78 @@ function RecommendedExploreFeed(props: {
     onFirstImageUrlChange,
   ])
 
-  useEffect(() => {
-    onRegisterRefresh?.(activeRefresh)
-  }, [activeRefresh, onRegisterRefresh])
+  return (
+    <ZStack frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
+      {/* 1. 插画独立滚动保活容器 */}
+      <VStack
+        frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+        opacity={kind === "illustration" ? 1 : 0}
+        zIndex={kind === "illustration" ? 1 : 0}
+        allowsHitTesting={kind === "illustration"}
+      >
+        <RefreshableScrollView refreshable={illustPaged.refresh}>
+          <IllustFeedContent paged={illustPaged} label="推荐" />
+        </RefreshableScrollView>
+      </VStack>
 
-  if (kind === "illustration") {
-    return <IllustFeedContent paged={illustPaged} label="推荐" />
-  }
-  if (kind === "manga") {
-    return <IllustFeedContent paged={mangaPaged} label="推荐" />
-  }
-  return <NovelFeedContent paged={novelPaged} label="推荐" />
+      {/* 2. 漫画独立滚动保活容器 */}
+      {visitedKinds.has("manga") ? (
+        <VStack
+          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          opacity={kind === "manga" ? 1 : 0}
+          zIndex={kind === "manga" ? 1 : 0}
+          allowsHitTesting={kind === "manga"}
+        >
+          <RefreshableScrollView refreshable={mangaPaged.refresh}>
+            <IllustFeedContent paged={mangaPaged} label="推荐" />
+          </RefreshableScrollView>
+        </VStack>
+      ) : null}
+
+      {/* 3. 小说独立滚动保活容器 */}
+      {visitedKinds.has("novel") ? (
+        <VStack
+          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          opacity={kind === "novel" ? 1 : 0}
+          zIndex={kind === "novel" ? 1 : 0}
+          allowsHitTesting={kind === "novel"}
+        >
+          <RefreshableScrollView refreshable={novelPaged.refresh}>
+            <NovelFeedContent paged={novelPaged} label="推荐" />
+          </RefreshableScrollView>
+        </VStack>
+      ) : null}
+    </ZStack>
+  )
 }
 
 function LatestExploreFeed(props: {
   kind: FeedKind
   enabled?: boolean
+  hideNovels?: boolean
+  isAppleMusic?: boolean
+  onKindChange?: (kind: FeedKind) => void
   onFirstImageUrlChange?: (url: string | null) => void
-  onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { kind, enabled = true, onFirstImageUrlChange, onRegisterRefresh } = props
+  const {
+    kind,
+    enabled = true,
+    hideNovels,
+    isAppleMusic,
+    onKindChange,
+    onFirstImageUrlChange,
+  } = props
+
+  const [visitedKinds, setVisitedKinds] = useState<Set<FeedKind>>(() => new Set([kind]))
+
+  useEffect(() => {
+    setVisitedKinds((prev) => {
+      if (prev.has(kind)) return prev
+      const next = new Set(prev)
+      next.add(kind)
+      return next
+    })
+  }, [kind])
 
   // 1. 最新 - 插画
   const illustPaged = usePagedList<PixivIllustration>({
@@ -311,7 +423,7 @@ function LatestExploreFeed(props: {
     more: (nextURL, token) => nextIllustrations(nextURL, token),
     filter: filterIllustItems,
     deps: ["latest", "illustration"],
-    enabled: enabled && kind === "illustration",
+    enabled: enabled && visitedKinds.has("illustration"),
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
@@ -322,7 +434,7 @@ function LatestExploreFeed(props: {
     more: (nextURL, token) => nextIllustrations(nextURL, token),
     filter: filterIllustItems,
     deps: ["latest", "manga"],
-    enabled: enabled && kind === "manga",
+    enabled: enabled && visitedKinds.has("manga"),
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
   })
@@ -333,7 +445,7 @@ function LatestExploreFeed(props: {
     more: (nextURL, token) => nextNovels(nextURL, token),
     filter: filterNovelItems,
     deps: ["latest"],
-    enabled: enabled && kind === "novel",
+    enabled: enabled && visitedKinds.has("novel"),
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
   })
@@ -393,25 +505,56 @@ function LatestExploreFeed(props: {
     onFirstImageUrlChange,
   ])
 
-  useEffect(() => {
-    onRegisterRefresh?.(activeRefresh)
-  }, [activeRefresh, onRegisterRefresh])
+  return (
+    <ZStack frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
+      {/* 1. 最新 - 插画 */}
+      <VStack
+        frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+        opacity={kind === "illustration" ? 1 : 0}
+        zIndex={kind === "illustration" ? 1 : 0}
+        allowsHitTesting={kind === "illustration"}
+      >
+        <RefreshableScrollView refreshable={illustPaged.refresh}>
+          <IllustFeedContent paged={illustPaged} label="最新作品" />
+        </RefreshableScrollView>
+      </VStack>
 
-  if (kind === "illustration") {
-    return <IllustFeedContent paged={illustPaged} label="最新作品" />
-  }
-  if (kind === "manga") {
-    return <IllustFeedContent paged={mangaPaged} label="最新作品" />
-  }
-  return <NovelFeedContent paged={novelPaged} label="最新作品" />
+      {/* 2. 最新 - 漫画 */}
+      {visitedKinds.has("manga") ? (
+        <VStack
+          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          opacity={kind === "manga" ? 1 : 0}
+          zIndex={kind === "manga" ? 1 : 0}
+          allowsHitTesting={kind === "manga"}
+        >
+          <RefreshableScrollView refreshable={mangaPaged.refresh}>
+            <IllustFeedContent paged={mangaPaged} label="最新作品" />
+          </RefreshableScrollView>
+        </VStack>
+      ) : null}
+
+      {/* 3. 最新 - 小说 */}
+      {visitedKinds.has("novel") ? (
+        <VStack
+          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          opacity={kind === "novel" ? 1 : 0}
+          zIndex={kind === "novel" ? 1 : 0}
+          allowsHitTesting={kind === "novel"}
+        >
+          <RefreshableScrollView refreshable={novelPaged.refresh}>
+            <NovelFeedContent paged={novelPaged} label="最新作品" />
+          </RefreshableScrollView>
+        </VStack>
+      ) : null}
+    </ZStack>
+  )
 }
 
 function PixivisionExploreFeed(props: {
   enabled?: boolean
   onFirstImageUrlChange?: (url: string | null) => void
-  onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { enabled = true, onFirstImageUrlChange, onRegisterRefresh } = props
+  const { enabled = true, onFirstImageUrlChange } = props
 
   const paged = usePagedList<PixivisionArticle>({
     first: () => pixivisionHome(),
@@ -432,27 +575,75 @@ function PixivisionExploreFeed(props: {
     }
   }, [paged.items[0]?.id, paged.items[0]?.imageURL, paged.initialLoading, paged.items.length, onFirstImageUrlChange])
 
-  useEffect(() => {
-    onRegisterRefresh?.(paged.refresh)
-  }, [paged.refresh, onRegisterRefresh])
-
-  return <PixivisionFeedContent paged={paged} />
+  return (
+    <RefreshableScrollView refreshable={paged.refresh}>
+      <PixivisionFeedContent paged={paged} />
+    </RefreshableScrollView>
+  )
 }
 
 function exploreToolbar(props: {
   mode: ExploreMode
+  kind: FeedKind
+  hideNovels?: boolean
+  isAppleMusic?: boolean
   onModeChange: (mode: ExploreMode) => void
+  onKindChange: (kind: FeedKind) => void
   onClose: () => void
 }) {
-  const title =
-    props.mode === "recommended"
-      ? "推荐"
-      : props.mode === "latest"
-        ? "最新"
-        : "特辑"
+  const isClassic = !props.isAppleMusic
+  const kindLabel =
+    props.kind === "illustration" ? "插画" : props.kind === "manga" ? "漫画" : "小说"
+
+  let titleNode: any
+  if (isClassic && (props.mode === "recommended" || props.mode === "latest")) {
+    const baseTitle = props.mode === "recommended" ? "推荐" : "最新"
+    titleNode = (
+      <Menu
+        label={
+          <HStack alignment="center" spacing={4}>
+            <Text font="title2" fontWeight="bold">
+              {baseTitle} · {kindLabel}
+            </Text>
+            <Image
+              systemName="chevron.down.circle.fill"
+              font="caption"
+              foregroundStyle="secondaryLabel"
+            />
+          </HStack>
+        }
+      >
+        <Button
+          title="插画"
+          systemImage={props.kind === "illustration" ? "checkmark" : undefined}
+          action={() => props.onKindChange("illustration")}
+        />
+        <Button
+          title="漫画"
+          systemImage={props.kind === "manga" ? "checkmark" : undefined}
+          action={() => props.onKindChange("manga")}
+        />
+        {!props.hideNovels && (
+          <Button
+            title="小说"
+            systemImage={props.kind === "novel" ? "checkmark" : undefined}
+            action={() => props.onKindChange("novel")}
+          />
+        )}
+      </Menu>
+    )
+  } else {
+    titleNode =
+      props.mode === "recommended"
+        ? "推荐"
+        : props.mode === "latest"
+          ? "最新"
+          : "特辑"
+  }
+
   return appToolbar(
     props.onClose,
-    title,
+    titleNode,
     <Menu label={<Image systemName="ellipsis.circle" />}>
       <Picker
         title="探索类型"
@@ -464,37 +655,6 @@ function exploreToolbar(props: {
         <Label tag="pixivision" title="特辑" systemImage="rectangle.stack" />
       </Picker>
     </Menu>
-  )
-}
-
-function FeedKindPicker(props: {
-  kind: FeedKind
-  hideNovels?: boolean
-  onKindChange: (kind: FeedKind) => void
-}) {
-  const kinds: { tag: FeedKind; label: string }[] = [
-    { tag: "illustration", label: "插画" },
-    { tag: "manga", label: "漫画" },
-  ]
-  if (!props.hideNovels) {
-    kinds.push({ tag: "novel", label: "小说" })
-  }
-  if (kinds.length <= 1) return null
-
-  return (
-    <Picker
-      title="作品类型"
-      value={props.kind}
-      onChanged={(value: string) => props.onKindChange(value as FeedKind)}
-      pickerStyle="segmented"
-      padding={{ horizontal: 14 }}
-    >
-      {kinds.map((item) => (
-        <Text key={item.tag} tag={item.tag}>
-          {item.label}
-        </Text>
-      ))}
-    </Picker>
   )
 }
 

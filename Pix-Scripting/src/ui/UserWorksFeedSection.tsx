@@ -483,18 +483,19 @@ export function UserWorkPicker(props: {
   if (availableKinds.length <= 1) return null
 
   return (
-    <Picker
-      title="作品类型"
-      value={kind}
-      onChanged={(value: string) => onChanged(value as UserWorkKind)}
-      pickerStyle="segmented"
-      padding={{ horizontal: 14 }}
-    >
-      {availableKinds.map((k) => (
-        <Text key={k} tag={k}>
-          {k === "illust" ? "插画" : k === "manga" ? "漫画" : "小说"}
-        </Text>
-      ))}
-    </Picker>
+    <VStack padding={{ horizontal: 14, top: 2, bottom: 6 }}>
+      <Picker
+        title="作品类型"
+        value={kind}
+        onChanged={(value: string) => onChanged(value as UserWorkKind)}
+        pickerStyle="segmented"
+      >
+        {availableKinds.map((k) => (
+          <Text key={k} tag={k}>
+            {k === "illust" ? "插画" : k === "manga" ? "漫画" : "小说"}
+          </Text>
+        ))}
+      </Picker>
+    </VStack>
   )
 }

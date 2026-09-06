@@ -397,6 +397,16 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
   const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
   const isAppleMusic = pageLayout === "appleMusic"
+  const [visitedScopes, setVisitedScopes] = useState<Set<SearchScope>>(() => new Set([scope]))
+
+  useEffect(() => {
+    setVisitedScopes((prev) => {
+      if (prev.has(scope)) return prev
+      const next = new Set(prev)
+      next.add(scope)
+      return next
+    })
+  }, [scope])
 
   // 搜索记录
   const [historyItems, setHistoryItems] = useState<string[]>(() => getSearchHistory(scope))
@@ -845,7 +855,11 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
           ),
         }}
         toolbar={searchToolbar({
+          scope,
+          hideNovels,
+          isAppleMusic,
           onClose: props.onClose,
+          onScopeChange: handleScopeChange,
           sort,
           onSortChange: selectSort,
           onAdvanced: () => {
@@ -877,13 +891,6 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
         onSubmit={{ triggers: "search" as const, action: () => submitSearch(query) }}
         submitLabel="search"
       >
-        {isAppleMusic ? null : (
-          <SearchScopePicker
-            scope={scope}
-            hideNovels={hideNovels}
-            onScopeChange={handleScopeChange}
-          />
-        )}
         <SearchHistorySection
           history={historyItems}
           onSelect={submitSearch}
@@ -894,100 +901,43 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
     )
   }
 
-  return (
-    <RefreshableScrollView
-      navigationBarTitleDisplayMode="inline"
-      background={ambientBackground}
-      refreshable={async () => {
-        if (submitted && !searchPresented) {
-          await activePaged.refresh()
-        } else if (!submitted && !searchPresented && !query.trim()) {
-          if (scope === "illust") {
-            await loadTrendingIllustData()
-          } else if (scope === "novel") {
-            await loadTrendingNovelData()
-          } else if (scope === "user") {
-            await userRecommendedPaged.refresh()
-          }
-        }
-      }}
-      navigationDestination={destinationElement}
-      sheet={{
-        isPresented: isAdvancedSheetOpen,
-        onChanged: (presented: boolean) => setIsAdvancedSheetOpen(presented),
-        content: (
-          <SearchAdvancedSheet
-            currentParams={advancedParams}
-            settings={loadSettings()}
-            onApply={(params) => {
-              setAdvancedParams(params)
-              setScope(params.scope)
-              setSort(params.sort)
-              if (params.word.trim()) {
-                setQuery(params.word.trim())
-                setSubmitted(params.word.trim())
-                addSearchHistory(params.word.trim(), params.scope)
-              }
-              setIsAdvancedSheetOpen(false)
-            }}
-            onCancel={() => setIsAdvancedSheetOpen(false)}
-          />
-        ),
-      }}
-      toolbar={searchToolbar({
-        onClose: props.onClose,
-        sort,
-        onSortChange: selectSort,
-        onAdvanced: () => {
-          setAdvancedParams((prev) => ({
-            ...prev,
-            word: query.trim() || submitted || prev.word,
-            scope: scope === "user" ? "illust" : scope,
-            sort,
-            category: categoryFromParams(
-              scope === "user" ? "illust" : scope,
-              prev.mediaFilter
-            ),
-          }))
-          setIsAdvancedSheetOpen(true)
-        },
-      })}
-      searchable={{
-        value: query,
-        onChanged: onQueryChanged,
-        placement: "toolbar",
-        prompt: "输入关键词",
-        presented: {
-          value: searchPresented,
-          onChanged: (val: boolean) => {
-            setSearchPresented(val)
-          },
-        },
-      }}
-      onSubmit={{ triggers: "search" as const, action: () => submitSearch(query) }}
-      submitLabel="search"
-    >
-      <VStack alignment="leading" spacing={10}>
-        {isAppleMusic ? null : (
-          <SearchScopePicker
-            scope={scope}
-            hideNovels={hideNovels}
-            onScopeChange={handleScopeChange}
-          />
-        )}
+  const renderScopeScrollFeed = (targetScope: SearchScope) => {
+    const targetPaged =
+      targetScope === "illust"
+        ? illustPaged
+        : targetScope === "novel"
+          ? novelPaged
+          : userSearchPaged
 
-          {/* 1. 搜索提示词与精准直达：插画·漫画 / 小说展示官方标签提示词，用户展示用户卡片提示列表 */}
+    return (
+      <RefreshableScrollView
+        refreshable={async () => {
+          if (submitted && !searchPresented) {
+            await targetPaged.refresh()
+          } else if (!submitted && !searchPresented && !query.trim()) {
+            if (targetScope === "illust") {
+              await loadTrendingIllustData()
+            } else if (targetScope === "novel") {
+              await loadTrendingNovelData()
+            } else if (targetScope === "user") {
+              await userRecommendedPaged.refresh()
+            }
+          }
+        }}
+      >
+        <VStack alignment="leading" spacing={10}>
+          {/* 1. 搜索提示词与精准直达 */}
           {isSuggestingActive ? (
             <VStack alignment="leading" spacing={8} frame={{ maxWidth: "infinity" }}>
               {directTargets.length > 0 ? (
                 <DirectRouteSection
                   targets={directTargets}
                   onSelect={() => {
-                    addSearchHistory(query.trim(), scope)
+                    addSearchHistory(query.trim(), targetScope)
                   }}
                 />
               ) : null}
-              {scope === "user" ? (
+              {targetScope === "user" ? (
                 <UserSuggestionsSection
                   items={userSuggestions}
                   loading={userSuggestionsLoading}
@@ -1003,9 +953,9 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
             </VStack>
           ) : null}
 
-          {/* 3. 默认未搜索状态且键盘未激活：展示热门标签或推荐用户 */}
+          {/* 2. 默认未搜索状态：展示对应分类的热门标签或推荐用户 */}
           {!isSuggestingActive && !submitted && !searchPresented && !query.trim() ? (
-            scope === "illust" ? (
+            targetScope === "illust" ? (
               <TrendingSection
                 tags={trendingIllust}
                 loading={trendingIllustLoading}
@@ -1013,7 +963,7 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
                 onRetry={loadTrendingIllustData}
                 onSelect={submitSearch}
               />
-            ) : scope === "novel" ? (
+            ) : targetScope === "novel" ? (
               <TrendingSection
                 tags={trendingNovel}
                 loading={trendingNovelLoading}
@@ -1029,10 +979,9 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
             )
           ) : null}
 
-          {/* 4. 已提交搜索且不在提示词态：展示当前搜索状态条与完整搜索结果列表 */}
+          {/* 3. 已提交搜索：展示当前搜索结果列表 */}
           {submitted && !searchPresented ? (
             <VStack spacing={10} frame={{ maxWidth: "infinity" }}>
-              {/* 当前搜索状态条：支持一键清除回到初始推荐状态 */}
               <HStack
                 alignment="center"
                 spacing={8}
@@ -1081,44 +1030,43 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
                 </Button>
               </HStack>
 
-              {/* 精准 ID / 链接直达目标卡片（即使在已搜索结果页也优先呈现直达） */}
               {submittedDirectTargets.length > 0 ? (
                 <DirectRouteSection
                   targets={submittedDirectTargets}
                   onSelect={() => {
-                    addSearchHistory(submitted.trim(), scope)
+                    addSearchHistory(submitted.trim(), targetScope)
                   }}
                 />
               ) : null}
 
-              {activePaged.initialLoading ? (
+              {targetPaged.initialLoading ? (
                 <LoadingView />
-              ) : activePaged.error ? (
+              ) : targetPaged.error ? (
                 <ErrorView
-                  message={activePaged.error}
-                  onRetry={activePaged.refresh}
+                  message={targetPaged.error}
+                  onRetry={targetPaged.refresh}
                 />
-              ) : activePaged.items.length === 0 ? (
+              ) : targetPaged.items.length === 0 ? (
                 <EmptyView
                   text={
-                    activePaged.hasFilteredContent
-                      ? scope === "novel"
+                    targetPaged.hasFilteredContent
+                      ? targetScope === "novel"
                         ? "当前页面部分小说被内容显示设置过滤，暂时无法显示"
-                        : scope === "user"
+                        : targetScope === "user"
                           ? "当前页面部分用户内容被内容显示设置过滤，暂时无法显示"
                           : "当前页面部分作品被内容显示设置过滤，暂时无法显示"
                       : "没有找到相关内容"
                   }
-                  systemImage={activePaged.hasFilteredContent ? "eye.slash" : "magnifyingglass"}
+                  systemImage={targetPaged.hasFilteredContent ? "eye.slash" : "magnifyingglass"}
                 />
-              ) : scope === "illust" ? (
+              ) : targetScope === "illust" ? (
                 <IllustFlowFeed
                   items={illustPaged.items}
                   onLoadMore={illustPaged.loadMore}
                   hasMore={illustPaged.hasMore}
                   isLoading={illustPaged.loadingMore}
                 />
-              ) : scope === "novel" ? (
+              ) : targetScope === "novel" ? (
                 <NovelResults
                   items={novelPaged.items}
                   loadingMore={novelPaged.loadingMore}
@@ -1134,19 +1082,155 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
             </VStack>
           ) : null}
         </VStack>
-    </RefreshableScrollView>
+      </RefreshableScrollView>
+    )
+  }
+
+  return (
+    <ZStack
+      navigationBarTitleDisplayMode="inline"
+      navigationDestination={destinationElement}
+      sheet={{
+        isPresented: isAdvancedSheetOpen,
+        onChanged: (presented: boolean) => setIsAdvancedSheetOpen(presented),
+        content: (
+          <SearchAdvancedSheet
+            currentParams={advancedParams}
+            settings={loadSettings()}
+            onApply={(params) => {
+              setAdvancedParams(params)
+              setScope(params.scope)
+              setSort(params.sort)
+              if (params.word.trim()) {
+                setQuery(params.word.trim())
+                setSubmitted(params.word.trim())
+                addSearchHistory(params.word.trim(), params.scope)
+              }
+              setIsAdvancedSheetOpen(false)
+            }}
+            onCancel={() => setIsAdvancedSheetOpen(false)}
+          />
+        ),
+      }}
+      toolbar={searchToolbar({
+        scope,
+        hideNovels,
+        isAppleMusic,
+        onClose: props.onClose,
+        onScopeChange: handleScopeChange,
+        sort,
+        onSortChange: selectSort,
+        onAdvanced: () => {
+          setAdvancedParams((prev) => ({
+            ...prev,
+            word: query.trim() || submitted || prev.word,
+            scope: scope === "user" ? "illust" : scope,
+            sort,
+            category: categoryFromParams(
+              scope === "user" ? "illust" : scope,
+              prev.mediaFilter
+            ),
+          }))
+          setIsAdvancedSheetOpen(true)
+        },
+      })}
+      searchable={{
+        value: query,
+        onChanged: onQueryChanged,
+        placement: "toolbar",
+        prompt: "输入关键词",
+        presented: {
+          value: searchPresented,
+          onChanged: (val: boolean) => {
+            setSearchPresented(val)
+          },
+        },
+      }}
+      onSubmit={{ triggers: "search" as const, action: () => submitSearch(query) }}
+      submitLabel="search"
+      background={ambientBackground}
+      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+    >
+      {(["illust", "novel", "user"] as const).map((s) => {
+        if (!visitedScopes.has(s)) return null
+        const isCurrent = scope === s
+        return (
+          <VStack
+            key={s}
+            frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+            opacity={isCurrent ? 1 : 0}
+            zIndex={isCurrent ? 1 : 0}
+            allowsHitTesting={isCurrent}
+          >
+            {renderScopeScrollFeed(s)}
+          </VStack>
+        )
+      })}
+    </ZStack>
   )
 }
 
 function searchToolbar(props: {
+  scope: SearchScope
+  hideNovels: boolean
+  isAppleMusic?: boolean
   onClose: () => void
+  onScopeChange: (scope: SearchScope) => void
   sort: SearchSort
   onSortChange: (sort: SearchSort) => void
   onAdvanced: () => void
 }) {
+  const isClassic = !props.isAppleMusic
+  const scopeLabel =
+    props.scope === "illust"
+      ? "插画·漫画"
+      : props.scope === "novel"
+        ? "小说"
+        : "用户"
+
+  let titleNode: any
+  if (isClassic) {
+    titleNode = (
+      <Menu
+        label={
+          <HStack alignment="center" spacing={4}>
+            <Text font="title2" fontWeight="bold">
+              搜索 · {scopeLabel}
+            </Text>
+            <Image
+              systemName="chevron.down.circle.fill"
+              font="caption"
+              foregroundStyle="secondaryLabel"
+            />
+          </HStack>
+        }
+      >
+        <Button
+          title="插画·漫画"
+          systemImage={props.scope === "illust" ? "checkmark" : undefined}
+          action={() => props.onScopeChange("illust")}
+        />
+        {!props.hideNovels && (
+          <Button
+            title="小说"
+            systemImage={props.scope === "novel" ? "checkmark" : undefined}
+            action={() => props.onScopeChange("novel")}
+          />
+        )}
+        <Button
+          title="用户"
+          systemImage={props.scope === "user" ? "checkmark" : undefined}
+          action={() => props.onScopeChange("user")}
+        />
+      </Menu>
+    )
+  } else {
+    titleNode = "搜索"
+  }
+
   return appToolbar(
     props.onClose,
-    "搜索",
+    titleNode,
     <Menu label={<Image systemName="ellipsis.circle" />}>
       <Picker
         title="排序方式"
@@ -1167,37 +1251,6 @@ function searchToolbar(props: {
         action={props.onAdvanced}
       />
     </Menu>
-  )
-}
-
-function SearchScopePicker(props: {
-  scope: SearchScope
-  hideNovels?: boolean
-  onScopeChange: (scope: SearchScope) => void
-}) {
-  const scopes: { tag: SearchScope; label: string }[] = [
-    { tag: "illust", label: "插画·漫画" },
-  ]
-  if (!props.hideNovels) {
-    scopes.push({ tag: "novel", label: "小说" })
-  }
-  scopes.push({ tag: "user", label: "用户" })
-  if (scopes.length <= 1) return null
-
-  return (
-    <Picker
-      title="搜索范围"
-      value={props.scope}
-      onChanged={(value: string) => props.onScopeChange(value as SearchScope)}
-      pickerStyle="segmented"
-      padding={{ horizontal: 12 }}
-    >
-      {scopes.map((item) => (
-        <Text key={item.tag} tag={item.tag}>
-          {item.label}
-        </Text>
-      ))}
-    </Picker>
   )
 }
 

@@ -18,7 +18,8 @@ import {
   useState,
 } from "scripting"
 import { session } from "../api/session"
-import { loadSettings, onSettingsChanged } from "../store/settings"
+import { loadSettings, onSettingsChanged, updateSettings } from "../store/settings"
+import { FeatureHighlightsSheet } from "./components/FeatureHighlightsSheet"
 import {
   CapsuleAccessoryContainer,
   GlobalBottomAccessoryHost,
@@ -121,6 +122,7 @@ function LaunchExperienceView() {
 export function RootView() {
   const [loggedIn, setLoggedIn] = useState(session.isAuthenticated)
   const [isReady, setIsReady] = useState(false)
+  const [showFeatureHighlights, setShowFeatureHighlights] = useState(false)
 
   useEffect(() => {
     return session.onAuthChanged(() => {
@@ -146,6 +148,22 @@ export function RootView() {
       clearTimeout(timer)
     }
   }, [])
+
+  useEffect(() => {
+    if (!isReady || !loggedIn) return
+    const hasStartupRoute = Boolean(
+      Script.queryParameters?.route || Script.widgetParameter
+    )
+    if (hasStartupRoute) return
+
+    const currentSettings = loadSettings()
+    if (!currentSettings.hasSeenFeatureHighlights) {
+      const timer = setTimeout(() => {
+        setShowFeatureHighlights(true)
+      }, 400)
+      return () => clearTimeout(timer)
+    }
+  }, [isReady, loggedIn])
 
   const dismiss = Navigation.useDismiss()
 
@@ -173,6 +191,18 @@ export function RootView() {
       frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
       background="systemBackground"
       ignoresSafeArea={true}
+      sheet={{
+        isPresented: showFeatureHighlights,
+        onChanged: (val: boolean) => setShowFeatureHighlights(val),
+        content: (
+          <FeatureHighlightsSheet
+            onClose={() => {
+              setShowFeatureHighlights(false)
+              updateSettings({ hasSeenFeatureHighlights: true })
+            }}
+          />
+        ),
+      }}
     >
       {/* 底层：主界面在第 0 毫秒即挂载并全力在后台请求数据与预载图片 */}
       <MainTabView onClose={dismiss} />

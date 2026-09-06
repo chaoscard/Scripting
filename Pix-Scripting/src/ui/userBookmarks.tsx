@@ -1,5 +1,9 @@
 import {
+  Button,
+  HStack,
+  Image,
   LazyVStack,
+  Menu,
   Picker,
   Text,
   useCallback,
@@ -8,6 +12,7 @@ import {
   useRef,
   useState,
   VStack,
+  ZStack,
 } from "scripting"
 import {
   bookmarkTags,
@@ -48,6 +53,16 @@ export function UserBookmarksView(props: { userID: number }) {
   const [kind, setKind] = useState<BookmarkKind>("illustration")
   const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
   const isAppleMusic = pageLayout === "appleMusic"
+  const [visitedKinds, setVisitedKinds] = useState<Set<BookmarkKind>>(() => new Set([kind]))
+
+  useEffect(() => {
+    setVisitedKinds((prev) => {
+      if (prev.has(kind)) return prev
+      const next = new Set(prev)
+      next.add(kind)
+      return next
+    })
+  }, [kind])
   const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(null)
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
@@ -86,26 +101,93 @@ export function UserBookmarksView(props: { userID: number }) {
   )
 
   return (
-    <RefreshableScrollView
-      navigationTitle="收藏"
+    <ZStack
       navigationBarTitleDisplayMode="inline"
       background={ambientBackground}
-      refreshable={() => refreshHandlerRef.current()}
+      toolbar={{
+        principal:
+          !isAppleMusic && !hideNovels ? (
+            <Menu
+              label={
+                <HStack alignment="center" spacing={4}>
+                  <Text font="title2" fontWeight="bold">
+                    收藏 · {kind === "illustration" ? "插画·漫画" : "小说"}
+                  </Text>
+                  <Image
+                    systemName="chevron.down.circle.fill"
+                    font="caption"
+                    foregroundStyle="secondaryLabel"
+                  />
+                </HStack>
+              }
+            >
+              <Button
+                title="插画·漫画"
+                systemImage={kind === "illustration" ? "checkmark" : undefined}
+                action={() => setKind("illustration")}
+              />
+              <Button
+                title="小说"
+                systemImage={kind === "novel" ? "checkmark" : undefined}
+                action={() => setKind("novel")}
+              />
+            </Menu>
+          ) : (
+            <Text font="title2" fontWeight="bold">
+              收藏
+            </Text>
+          ),
+      }}
+      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
     >
-      <VStack alignment="leading" spacing={8}>
-        {hideNovels || isAppleMusic ? null : (
-          <BookmarkKindPicker kind={kind} onChanged={setKind} />
-        )}
-        <UserBookmarksFeed
-          userID={props.userID}
-          kind={kind}
-          onFirstImageUrlChange={setAmbientImageUrl}
-          onRegisterRefresh={(fn) => {
-            refreshHandlerRef.current = fn
-          }}
-        />
+      {/* 1. 插画·漫画收藏保活容器 */}
+      <VStack
+        frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+        opacity={kind === "illustration" ? 1 : 0}
+        zIndex={kind === "illustration" ? 1 : 0}
+        allowsHitTesting={kind === "illustration"}
+      >
+        <RefreshableScrollView refreshable={() => refreshHandlerRef.current()}>
+          <VStack alignment="leading" spacing={8}>
+            <UserBookmarksFeed
+              userID={props.userID}
+              kind="illustration"
+              onFirstImageUrlChange={(url) => {
+                if (kind === "illustration") setAmbientImageUrl(url)
+              }}
+              onRegisterRefresh={(fn) => {
+                if (kind === "illustration") refreshHandlerRef.current = fn
+              }}
+            />
+          </VStack>
+        </RefreshableScrollView>
       </VStack>
-    </RefreshableScrollView>
+
+      {/* 2. 小说收藏保活容器 */}
+      {visitedKinds.has("novel") ? (
+        <VStack
+          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          opacity={kind === "novel" ? 1 : 0}
+          zIndex={kind === "novel" ? 1 : 0}
+          allowsHitTesting={kind === "novel"}
+        >
+          <RefreshableScrollView refreshable={() => refreshHandlerRef.current()}>
+            <VStack alignment="leading" spacing={8}>
+              <UserBookmarksFeed
+                userID={props.userID}
+                kind="novel"
+                onFirstImageUrlChange={(url) => {
+                  if (kind === "novel") setAmbientImageUrl(url)
+                }}
+                onRegisterRefresh={(fn) => {
+                  if (kind === "novel") refreshHandlerRef.current = fn
+                }}
+              />
+            </VStack>
+          </RefreshableScrollView>
+        </VStack>
+      ) : null}
+    </ZStack>
   )
 }
 
@@ -284,20 +366,4 @@ function UserBookmarksFeed(props: {
   )
 }
 
-function BookmarkKindPicker(props: {
-  kind: BookmarkKind
-  onChanged: (kind: BookmarkKind) => void
-}) {
-  return (
-    <Picker
-      title="收藏类型"
-      value={props.kind}
-      onChanged={(value: string) => props.onChanged(value as BookmarkKind)}
-      pickerStyle="segmented"
-      padding={{ horizontal: 14 }}
-    >
-      <Text tag="illustration">插画·漫画</Text>
-      <Text tag="novel">小说</Text>
-    </Picker>
-  )
-}
+
