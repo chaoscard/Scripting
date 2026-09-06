@@ -64,17 +64,20 @@ export function requestPixivRoute(
   const targetTab = explicitTab || activeTabKind
   const tabNav = tabNavigators[targetTab]
   if (tabNav) {
-    // 延迟 120ms 派发，确保系统 Context Menu / 弹窗的 Dismiss 动画完成后无阻碍 Push
-    setTimeout(() => {
+    try {
       tabNav(route)
-    }, 120)
+    } catch {
+      setTimeout(() => tabNav(route), 0)
+    }
     return
   }
 
   if (globalNavigator) {
-    setTimeout(() => {
-      globalNavigator?.(route)
-    }, 120)
+    try {
+      globalNavigator(route)
+    } catch {
+      setTimeout(() => globalNavigator?.(route), 0)
+    }
     return
   }
 

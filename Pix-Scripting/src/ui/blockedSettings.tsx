@@ -23,15 +23,39 @@ import {
   unblockUser,
   type BlockedUser,
 } from "../store/blocklist"
+import { loadSettings, onSettingsChanged } from "../store/settings"
 import { AvatarImage, EmptyView } from "./components"
+import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
 
 type BlockedScope = "tag" | "user"
 
 export function BlockedSettingsView() {
   const [scope, setScope] = useState<BlockedScope>("tag")
   const [blocklist, setBlocklist] = useState(loadBlocklist())
+  const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
+  const isAppleMusic = pageLayout === "appleMusic"
 
   useEffect(() => onBlocklistChanged(() => setBlocklist(loadBlocklist())), [])
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      setPageLayout(loadSettings().pageLayout)
+    })
+  }, [])
+
+  const segmentedItems = [
+    { tag: "tag" as const, label: "屏蔽标签" },
+    { tag: "user" as const, label: "屏蔽用户" },
+  ]
+
+  useRegisterBottomAccessory(
+    "blockedSettings",
+    <DockSegmentedBar
+      items={segmentedItems}
+      value={scope}
+      onChanged={(val) => setScope(val as BlockedScope)}
+    />,
+    isAppleMusic
+  )
 
   function clearCurrent() {
     const next =
@@ -52,7 +76,7 @@ export function BlockedSettingsView() {
   return (
     <VStack
       spacing={0}
-      navigationTitle={scope === "tag" ? "屏蔽标签" : "屏蔽用户"}
+      navigationTitle="屏蔽设置"
       navigationBarTitleDisplayMode="inline"
       toolbar={{
         topBarTrailing: [
@@ -77,18 +101,20 @@ export function BlockedSettingsView() {
         ],
       }}
     >
-      <Picker
-        title="屏蔽类型"
-        value={scope}
-        onChanged={(value: string) => {
-          setScope(value as BlockedScope)
-        }}
-        pickerStyle="segmented"
-        padding={{ horizontal: 16, top: 6, bottom: 8 }}
-      >
-        <Text tag="tag">标签</Text>
-        <Text tag="user">用户</Text>
-      </Picker>
+      {isAppleMusic ? null : (
+        <Picker
+          title="屏蔽类型"
+          value={scope}
+          onChanged={(value: string) => {
+            setScope(value as BlockedScope)
+          }}
+          pickerStyle="segmented"
+          padding={{ horizontal: 16, top: 6, bottom: 8 }}
+        >
+          <Text tag="tag">标签</Text>
+          <Text tag="user">用户</Text>
+        </Picker>
+      )}
 
       <List frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
         {scope === "tag" ? (

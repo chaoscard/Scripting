@@ -204,6 +204,15 @@ function MainTabView(props: {
   }, [])
 
   useEffect(() => {
+    setActiveTabKind(selection.value as PixivTabKind)
+    return selection.subscribe
+      ? selection.subscribe(() => {
+          setActiveTabKind(selection.value as PixivTabKind)
+        })
+      : undefined
+  }, [selection])
+
+  useEffect(() => {
     const unregisterDiscovery = registerTabNavigator("discovery", (route) => {
       discoveryPath.setValue([...discoveryPath.value, route])
     })

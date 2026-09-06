@@ -26,6 +26,7 @@ import { getSeriesByWorkID, recordWorkSeriesAssociation } from "../../store/seri
 import { addNovelBookmark, bookmarkDetail, bookmarkTags, followUser, novelBookmarkDetail, novelBookmarkTags, removeNovelBookmark } from "../../api/pixiv"
 import { session } from "../../api/session"
 import { novelThumbUrlOf } from "../../image/imageLoader"
+import { cacheNovel } from "../../store/novelCache"
 import type { PixivNovel } from "../../types"
 export function NovelCard(props: {
   novel: PixivNovel
@@ -51,6 +52,8 @@ export function NovelCard(props: {
   if (markerPage != null && markerPage > 0) {
     recordNovelMarker(novel.id, markerPage)
   }
+
+  cacheNovel(novel)
 
   const episodeNumber =
     novel.episode_number ??

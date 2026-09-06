@@ -79,6 +79,7 @@ import {
   getCachedNovelMarker,
   recordNovelMarker,
 } from "../store/bookmarkSync"
+import { cacheNovel, getCachedNovel } from "../store/novelCache"
 import type { PixivNovel, PixivNovelDetail, TextEmbeddedImage } from "../types"
 import {
   loadSettings,
@@ -140,6 +141,7 @@ function isVirtualNode(v: unknown): v is VirtualNode {
 
 export function NovelDetailView(props: { novelID: number }) {
   const { novelID } = props
+  const cachedNovel = useMemo(() => getCachedNovel(novelID), [novelID])
   const [novel, setNovel] = useState<PixivNovelDetail | null>(null)
   const [text, setText] = useState("")
   const [textEmbeddedImages, setTextEmbeddedImages] = useState<Record<string, TextEmbeddedImage> | undefined>(undefined)
@@ -147,11 +149,22 @@ export function NovelDetailView(props: { novelID: number }) {
   const [readerReady, setReaderReady] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [bookmarked, setBookmarked] = useNovelBookmark(novelID, false)
+  const [bookmarked, setBookmarked] = useNovelBookmark(
+    novelID,
+    cachedNovel?.is_bookmarked ?? false
+  )
   const [bookmarkLoading, setBookmarkLoading] = useState(false)
   const [bookmarkLongPressLocked, setBookmarkLongPressLocked] = useState(false)
   const [showBookmarkDetail, setShowBookmarkDetail] = useState(false)
-  const [followed, setFollowed] = useState(false)
+  const [followed, setFollowed] = useState(() => {
+    if (cachedNovel?.user?.id) {
+      return (
+        isUserFollowed(cachedNovel.user.id) ||
+        Boolean(cachedNovel.user.is_followed)
+      )
+    }
+    return false
+  })
   const [followRestrict, setFollowRestrict] = useState<FollowRestrict | null>(null)
   const [followLoading, setFollowLoading] = useState(false)
   const [showRelatedUsers, setShowRelatedUsers] = useState(false)
@@ -325,6 +338,9 @@ export function NovelDetailView(props: { novelID: number }) {
         session.call((token) => novelViewerData(novelID, token)),
       ])
       if (!g.isCurrent()) return
+      if (detail) {
+        cacheNovel(detail)
+      }
       if (detail.user?.id) {
         recordUserFollowed(detail.user.id, detail.user.is_followed ?? false)
       }

@@ -68,7 +68,7 @@ export function MoreView(props: { onClose: () => void }) {
       },
       {
         key: "downloadManager",
-        label: "下载管理",
+        label: "下载与文件管理",
         icon: "arrow.down.circle",
         action: () => {
           try {

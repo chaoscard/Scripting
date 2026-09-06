@@ -42,6 +42,7 @@ import {
   isNovelContentVisible,
 } from "../store/contentFilter"
 import { cacheIllusts } from "../store/illustCache"
+import { cacheNovels } from "../store/novelCache"
 import { cacheSeriesNav } from "../store/seriesCache"
 import type {
   PixivIllustration,
@@ -333,6 +334,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
           series: { id: seriesID, title: sTitle },
           episode_number: idx + 1,
         }))
+        cacheNovels(novels)
         cacheSeriesNav(
           seriesID,
           "novel",

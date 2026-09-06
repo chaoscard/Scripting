@@ -484,7 +484,7 @@ export function CustomAISettingsView() {
 
   return (
     <List
-      navigationTitle="AI 模型配置"
+      navigationTitle="自定义AI模型"
       navigationBarTitleDisplayMode="inline"
       listSectionSpacing="compact"
     >

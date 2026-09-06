@@ -393,7 +393,7 @@ export function UserDetailView(props: { userID: number }) {
       } else {
         const confirmed = await Dialog.confirm({
           title: "确认打包全部插画？",
-          message: `将拉取用户「${detail.user.name}」全部静态插画原图并打包为 ZIP 归档，多页插画将归入独立子文件夹，请在“文件”App 或“下载管理”中查看。`,
+          message: `将拉取用户「${detail.user.name}」全部静态插画原图并打包为 ZIP 归档，多页插画将归入独立子文件夹，请在“文件”App 或“下载与文件管理”中查看。`,
           confirmLabel: "开始下载",
           cancelLabel: "取消",
         })

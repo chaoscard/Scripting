@@ -45,7 +45,11 @@ import {
   NovelCard,
   RefreshableScrollView,
 } from "./components"
-import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
+import {
+  DockInfoBar,
+  DockSegmentedBar,
+  useRegisterBottomAccessory,
+} from "./bottomAccessory"
 
 export type WorkTab = "illust" | "manga" | "novel"
 
@@ -135,7 +139,12 @@ export function UserWorksView(props: { userID?: number; title?: string }) {
 
   useRegisterBottomAccessory(
     "userWorks",
-    availableKinds.length <= 1 ? null : (
+    availableKinds.length <= 1 ? (
+      <DockInfoBar
+        icon={isOwn ? "photo.stack.fill" : "photo.stack"}
+        title={isOwn ? "我的作品" : (props.title || "作品列表")}
+      />
+    ) : (
       <DockSegmentedBar
         items={userWorkItems}
         value={activeTab}

@@ -31,8 +31,12 @@ import {
   isNovelContentVisible,
 } from "../store/contentFilter"
 import { destinationElement } from "./routes"
-import { setActiveTabKind } from "./routeNavigation"
-import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
+import { requestPixivRoute, setActiveTabKind } from "./routeNavigation"
+import {
+  DockActionBar,
+  DockSegmentedBar,
+  useRegisterBottomAccessory,
+} from "./bottomAccessory"
 import { useLatest, usePagedList, currentBatchSize, useExperimentalAmbientPalette } from "./hooks"
 import type {
   PixivIllustration,
@@ -50,6 +54,8 @@ import {
   RefreshableScrollView,
   PixivisionCard,
 } from "./components"
+
+declare const Haptics: any
 
 type ExploreMode = "recommended" | "latest" | "pixivision"
 type FeedMode = Exclude<ExploreMode, "pixivision">
@@ -93,15 +99,39 @@ export function DiscoveryView(props: { onClose: () => void }) {
     return items
   }, [hideNovels])
 
-  useRegisterBottomAccessory(
-    "discovery",
-    mode === "pixivision" || discoveryItems.length <= 1 ? null : (
+  const discoveryBottomAccessory = useMemo(() => {
+    if (mode === "pixivision") {
+      return (
+        <DockActionBar
+          items={[
+            {
+              key: "pixivisionBookmarks",
+              label: "特辑收藏",
+              icon: "heart",
+              color: "#3172EB",
+              action: () => {
+                try {
+                  void Haptics.transient()
+                } catch {}
+                requestPixivRoute("pixivisionBookmarks", "discovery")
+              },
+            },
+          ]}
+        />
+      )
+    }
+    return (
       <DockSegmentedBar
         items={discoveryItems}
         value={kind}
         onChanged={setKind}
       />
-    ),
+    )
+  }, [mode, discoveryItems, kind])
+
+  useRegisterBottomAccessory(
+    "discovery",
+    discoveryBottomAccessory,
     isAppleMusic
   )
 
