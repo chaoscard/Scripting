@@ -77,8 +77,8 @@ const FEATURE_LIST: FeatureItem[] = [
   {
     id: "moreFeatures",
     title: "还有更多",
-    subtitle: "桌面组件 · 灵动岛 · 原图寻源",
-    description: "小组件原地交互、SauceNAO 搜图等更多玩法等您探索。",
+    subtitle: "桌面组件 · 灵动岛 · 原图寻源 · 镜像图源",
+    description: "小组件原地交互、SauceNAO 搜图、镜像图源与自定义网关等更多玩法等您探索。",
     symbol: "ellipsis.circle.fill",
     iconColor: "white",
     iconBg: "systemTeal",

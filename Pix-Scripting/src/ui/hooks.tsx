@@ -202,50 +202,6 @@ export function useExperimentalAmbientPalette(
   const ambientBackground = useMemo(() => {
     if (!ambientEnabled || !effectivePalette) return undefined
 
-    // 当处于后台非激活状态时，返回 0 动画开销的同色系静态全屏渐变，杜绝后台多 Tab 堆叠跑动效
-    if (!active) {
-      const top =
-        ambientAlgorithm === "transcend" ||
-        ambientAlgorithm === "ultimate" ||
-        ambientAlgorithm === "geminiA" ||
-        ambientAlgorithm === "geminiB"
-          ? (effectivePalette.ultimateLeadingColor ?? effectivePalette.topColor)
-          : ambientAlgorithm === "explore"
-            ? (effectivePalette.exploreTopColor ?? effectivePalette.topColor)
-            : effectivePalette.topColor
-      const mid =
-        ambientAlgorithm === "transcend" ||
-        ambientAlgorithm === "ultimate" ||
-        ambientAlgorithm === "geminiA" ||
-        ambientAlgorithm === "geminiB"
-          ? (effectivePalette.ultimateMidColor ?? effectivePalette.midColor)
-          : ambientAlgorithm === "explore"
-            ? (effectivePalette.exploreMidColor ?? effectivePalette.midColor)
-            : effectivePalette.midColor
-      const bg =
-        ambientAlgorithm === "transcend" ||
-        ambientAlgorithm === "ultimate" ||
-        ambientAlgorithm === "geminiA" ||
-        ambientAlgorithm === "geminiB"
-          ? (effectivePalette.ultimateBgColor ?? effectivePalette.backgroundColor)
-          : ambientAlgorithm === "explore"
-            ? (effectivePalette.exploreBgColor ?? effectivePalette.backgroundColor)
-            : effectivePalette.backgroundColor
-
-      return (
-        <ZStack ignoresSafeArea={true}>
-          <Rectangle
-            fill={{
-              colors: [top, mid, bg, bg],
-              startPoint: "top",
-              endPoint: "bottom",
-            }}
-            ignoresSafeArea={true}
-          />
-        </ZStack>
-      )
-    }
-
     if (ambientAlgorithm === "geminiA" || ambientAlgorithm === "geminiB") {
       const primary = effectivePalette.ultimateLeadingColor ?? effectivePalette.topColor
       const secondary = effectivePalette.ultimatePrismColor ?? effectivePalette.exploreAccentColor ?? effectivePalette.topColor
@@ -455,50 +411,6 @@ export function useNovelExperimentalAmbientPalette(
 
   const ambientBackground = useMemo(() => {
     if (!ambientEnabled || !effectivePalette || novelAlgorithm === "off") return undefined
-
-    // 当处于后台非激活状态时，返回 0 动画开销的同色系静态全屏渐变
-    if (!active) {
-      const top =
-        novelAlgorithm === "transcend" ||
-        novelAlgorithm === "ultimate" ||
-        novelAlgorithm === "geminiA" ||
-        novelAlgorithm === "geminiB"
-          ? (effectivePalette.ultimateLeadingColor ?? effectivePalette.topColor)
-          : novelAlgorithm === "explore"
-            ? (effectivePalette.exploreTopColor ?? effectivePalette.topColor)
-            : effectivePalette.topColor
-      const mid =
-        novelAlgorithm === "transcend" ||
-        novelAlgorithm === "ultimate" ||
-        novelAlgorithm === "geminiA" ||
-        novelAlgorithm === "geminiB"
-          ? (effectivePalette.ultimateMidColor ?? effectivePalette.midColor)
-          : novelAlgorithm === "explore"
-            ? (effectivePalette.exploreMidColor ?? effectivePalette.midColor)
-            : effectivePalette.midColor
-      const bg =
-        novelAlgorithm === "transcend" ||
-        novelAlgorithm === "ultimate" ||
-        novelAlgorithm === "geminiA" ||
-        novelAlgorithm === "geminiB"
-          ? (effectivePalette.ultimateBgColor ?? effectivePalette.backgroundColor)
-          : novelAlgorithm === "explore"
-            ? (effectivePalette.exploreBgColor ?? effectivePalette.backgroundColor)
-            : effectivePalette.backgroundColor
-
-      return (
-        <ZStack ignoresSafeArea={true}>
-          <Rectangle
-            fill={{
-              colors: [top, mid, bg, bg],
-              startPoint: "top",
-              endPoint: "bottom",
-            }}
-            ignoresSafeArea={true}
-          />
-        </ZStack>
-      )
-    }
 
     if (novelAlgorithm === "geminiA" || novelAlgorithm === "geminiB") {
       const primary = effectivePalette.ultimateLeadingColor ?? effectivePalette.topColor
