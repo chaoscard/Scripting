@@ -361,10 +361,16 @@ export function SettingsView() {
             onChanged={(value) => update({ prefetchEnabled: value })}
           />
           <Toggle
-            title="快捷操作按钮"
             value={settings.quickActionButtonEnabled}
             onChanged={(value) => update({ quickActionButtonEnabled: value })}
-          />
+          >
+            <VStack alignment="leading" spacing={2}>
+              <Text font="body">快捷操作按钮</Text>
+              <Text font="caption" foregroundStyle="secondaryLabel">
+                苹果音乐样式下由该样式统一控制
+              </Text>
+            </VStack>
+          </Toggle>
           {settings.quickActionButtonEnabled ? (
             <Group>
               <Picker

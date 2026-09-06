@@ -819,7 +819,7 @@ export function NovelDetailView(props: { novelID: number }) {
   }
 
   function renderQuickActionButton() {
-    if (!quickActionEnabled || !current) return null
+    if (loadSettings().pageLayout === "appleMusic" || !quickActionEnabled || !current) return null
 
     let iconName = "heart"
     let iconColor: any = "label"

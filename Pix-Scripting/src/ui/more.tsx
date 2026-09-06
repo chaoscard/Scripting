@@ -12,6 +12,7 @@ import {
   VirtualNode,
   VStack,
   useEffect,
+  useMemo,
   useState,
   ZStack,
 } from "scripting"
@@ -19,7 +20,8 @@ import { session } from "../api/session"
 import { loadSettings, onSettingsChanged } from "../store/settings"
 import { appToolbar, AvatarImage } from "./components"
 import { destinationElement } from "./routes"
-import { setActiveTabKind } from "./routeNavigation"
+import { requestPixivRoute, setActiveTabKind } from "./routeNavigation"
+import { DockActionBar, useRegisterBottomAccessory, type DockActionItem } from "./bottomAccessory"
 import { useExperimentalAmbientPalette } from "./hooks"
 import { ReverseImageSearchSheet } from "./reverseImageSearchSheet"
 import { AccountSwitcherSheet } from "./accountSwitcherSheet"
@@ -37,15 +39,52 @@ export function MoreView(props: { onClose: () => void }) {
 
   const user = session.user
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
+  const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
+  const isAppleMusic = pageLayout === "appleMusic"
   const [activeSheet, setActiveSheet] = useState<"none" | "reverseSearch" | "accountSwitcher">("none")
   const avatarURL = user?.profile_image_urls?.px_170x170 ?? null
   const { ambientBackground } = useExperimentalAmbientPalette(avatarURL)
 
   useEffect(() => {
     return onSettingsChanged(() => {
-      setHideNovels(loadSettings().hideNovels)
+      const nextSettings = loadSettings()
+      setHideNovels(nextSettings.hideNovels)
+      setPageLayout(nextSettings.pageLayout)
     })
   }, [])
+
+  const moreDockItems = useMemo<DockActionItem[]>(() => {
+    return [
+      {
+        key: "reverseSearch",
+        label: "以图搜图",
+        icon: "photo.badge.magnifyingglass",
+        action: () => {
+          try {
+            void Haptics.transient()
+          } catch {}
+          setActiveSheet("reverseSearch")
+        },
+      },
+      {
+        key: "downloadManager",
+        label: "下载管理",
+        icon: "arrow.down.circle",
+        action: () => {
+          try {
+            void Haptics.transient()
+          } catch {}
+          requestPixivRoute("downloadManager", "more")
+        },
+      },
+    ]
+  }, [])
+
+  useRegisterBottomAccessory(
+    "more",
+    <DockActionBar items={moreDockItems} />,
+    isAppleMusic
+  )
 
   if (!user) {
     return (
