@@ -21,7 +21,7 @@ import { loadBlocklist, onBlocklistChanged } from "../../store/blocklist"
 import { isIllustContentVisible, isNovelContentVisible } from "../../store/contentFilter"
 import { isUserFollowed } from "../../store/userFollow"
 import { novelThumbUrlOf, thumbUrlOf } from "../../image/imageLoader"
-import { useUserFollow } from "../hooks"
+import { useLayoutMetrics, useUserFollow } from "../hooks"
 import { AvatarImage, CachedImage } from "./CachedImage"
 import type { PixivIllustration, PixivNovel, PixivUserPreview } from "../../types"
 
@@ -94,10 +94,11 @@ export function ConnectionRow(props: {
   const [followBusy, setFollowBusy] = useState(false)
   const [filterVersion, setFilterVersion] = useState(0)
 
+  const { width: screenWidth } = useLayoutMetrics()
   const defaultSide = Math.max(
     0,
     Math.floor(
-      (Device.screen.width -
+      (screenWidth -
         (CONNECTION_LIST_HORIZONTAL_PADDING + CONNECTION_CARD_HORIZONTAL_PADDING) * 2 -
         CONNECTION_PREVIEW_GAP * 2) /
         3

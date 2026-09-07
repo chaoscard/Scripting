@@ -75,6 +75,7 @@ import {
   useLatest,
   usePagedList,
   useExperimentalAmbientPalette,
+  useLayoutMetrics,
 } from "./hooks"
 import type {
   AdvancedSearchParams,
@@ -1565,8 +1566,9 @@ function TrendingHeroBanner(props: {
   onSelect: (tag: string) => void
 }) {
   const { item, onSelect } = props
+  const { width: screenWidth } = useLayoutMetrics()
   const heroUrl = trendingTagHeroUrl(item)
-  const bannerWidth = Math.max(0, Device.screen.width - 24)
+  const bannerWidth = Math.max(0, screenWidth - 24)
   const bannerHeight = Math.floor(bannerWidth * (9 / 16))
   const targetId = item.illust?.id ?? item.novel?.id
   const targetType = item.novel ? "novel" : "illust"
@@ -1766,12 +1768,13 @@ function TrendingSection(props: {
   onSelect: (tag: string) => void
 }) {
   const { tags, loading, error, onRetry, onSelect } = props
+  const { width: screenWidth } = useLayoutMetrics()
   const heroTag = tags[0]
   // 取 3 的倍数项，去除多余的单个尾项，确保网格每一行都是完整的 3 列
   const gridCount = Math.floor((tags.length - 1) / 3) * 3
   const gridTags = tags.slice(1, 1 + gridCount)
 
-  const cardSide = Math.max(0, Math.floor((Device.screen.width - 24 - 12) / 3))
+  const cardSide = Math.max(0, Math.floor((screenWidth - 24 - 12) / 3))
   const rows = useMemo(() => chunk(gridTags, 3), [gridTags])
 
   if (loading && tags.length === 0) {

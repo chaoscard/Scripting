@@ -1089,7 +1089,7 @@ function IllustRankingFeedContent(props: {
 
   const badgeOf = useCallback(
     (_: PixivIllustration, index: number) => {
-      if (heroFirst && index === 0) return undefined
+      if (!Device.isiPad && heroFirst && index === 0) return undefined
       return index < 50 ? <ImageNumberBadge number={index + 1} /> : undefined
     },
     [heroFirst]

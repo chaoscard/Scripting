@@ -10,31 +10,33 @@ import {
 } from "scripting"
 import { CachedImage } from "./CachedImage"
 import { TagChip } from "./TagChip"
+import { useLayoutMetrics } from "../hooks"
 import { recordPixivisionCoverUrl } from "../../image/imageLoader"
 import type { PixivisionArticle } from "../../types"
 
 const FLOW_HORIZONTAL_PADDING = 12
-const HERO_CARD_WIDTH = Math.floor(
-  Device.screen.width - FLOW_HORIZONTAL_PADDING * 2
-)
 const DEFAULT_ARTICLE_RATIO = 1200 / 630
 
 export function PixivisionCard(props: {
   article: PixivisionArticle
+  cardWidth?: number
   onAppear?: () => void
   priority?: number
 }) {
-  const { article, onAppear, priority } = props
+  const { article, cardWidth: customCardWidth, onAppear, priority } = props
+  const { width: screenWidth } = useLayoutMetrics()
+  const targetCardWidth = customCardWidth ?? Math.floor(screenWidth - FLOW_HORIZONTAL_PADDING * 2)
+
   if (article.id && article.imageURL) {
     recordPixivisionCoverUrl(article.id, article.imageURL)
   }
   // 遵循 Pixivision 官方标准卡片设计规范：所有特辑封面统一采用官方标准横幅比例（1200/630），
   // 非标封面自动居中裁切填充（object-fit: cover），确保信息流卡片高度规整一致且零排版跳变
   const imageRatio = DEFAULT_ARTICLE_RATIO
-  const cardFrame = { width: HERO_CARD_WIDTH }
+  const cardFrame = { width: targetCardWidth }
   const imageFrame = {
-    width: HERO_CARD_WIDTH,
-    height: Math.round(HERO_CARD_WIDTH / imageRatio),
+    width: targetCardWidth,
+    height: Math.round(targetCardWidth / imageRatio),
   }
 
   return (

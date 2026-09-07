@@ -524,7 +524,7 @@ export function SettingsView() {
                 <Text font="footnote" foregroundStyle="tertiaryLabel">
                   {[
                     settings.pageLayout === "appleMusic" ? "苹果音乐" : "经典样式",
-                    settings.heroFirstFeedCard ? "全宽" : "双列",
+                    !Device.isiPad && settings.heroFirstFeedCard ? "全宽" : "双列",
                     settings.compactIllustCard ? "简约" : null,
                     settings.ambientImmersion ? "沉浸" : null,
                   ]
@@ -546,10 +546,18 @@ export function SettingsView() {
             <Text tag="classic">经典样式</Text>
           </Picker>
           <Toggle
-            title="瀑布流首图全宽展示"
             value={settings.heroFirstFeedCard}
             onChanged={(value) => update({ heroFirstFeedCard: value })}
-          />
+          >
+            <VStack alignment="leading" spacing={2}>
+              <Text>瀑布流首图全宽展示</Text>
+              {Device.isiPad ? (
+                <Text font="caption2" foregroundStyle="secondaryLabel">
+                  此设置在 iPad 设备上不生效
+                </Text>
+              ) : null}
+            </VStack>
+          </Toggle>
           <Toggle
             title="简约图片卡片"
             value={settings.compactIllustCard}

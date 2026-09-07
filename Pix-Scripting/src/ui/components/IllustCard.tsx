@@ -24,7 +24,7 @@ import { BookmarkButton, BookmarkDetailSheet } from "./BookmarkDetailSheet"
 import { BlockWorkSheet } from "./BlockWorkSheet"
 import { FilteredContentNotice, LoadMoreTrigger } from "./RefreshableScrollView"
 import { CORNER_ICON_SIZE, formatNumber } from "./formatUtils"
-import { useIllustBookmark, useLatest, useUserFollow } from "../hooks"
+import { useIllustBookmark, useLatest, useLayoutMetrics, useUserFollow } from "../hooks"
 import { isUserFollowed, notifyUserFollowChanged } from "../../store/userFollow"
 import { cacheIllust, cacheIllusts } from "../../store/illustCache"
 import { recordWorkSeriesAssociation } from "../../store/seriesCache"
@@ -35,15 +35,21 @@ import { addBookmark, bookmarkDetail, bookmarkTags, followUser, removeBookmark }
 import { session } from "../../api/session"
 import { cardThumbUrlOf, heroCardThumbUrlOf } from "../../image/imageLoader"
 import type { PixivIllustration } from "../../types"
-const FLOW_HORIZONTAL_PADDING = 12
-const FLOW_COLUMN_SPACING = 12
-const FLOW_ROW_SPACING = 4
-const FLOW_CARD_WIDTH = Math.floor(
-  (Device.screen.width - FLOW_HORIZONTAL_PADDING * 2 - FLOW_COLUMN_SPACING) / 2
-)
-const HERO_CARD_WIDTH = Math.floor(
-  Device.screen.width - FLOW_HORIZONTAL_PADDING * 2
-)
+
+export const FLOW_HORIZONTAL_PADDING = 12
+export const FLOW_COLUMN_SPACING = 12
+export const FLOW_ROW_SPACING = 4
+
+export function calculateFlowCardWidth(screenWidth: number = Device.screen.width): number {
+  return Math.floor(
+    (screenWidth - FLOW_HORIZONTAL_PADDING * 2 - FLOW_COLUMN_SPACING) / 2
+  )
+}
+
+export function calculateHeroCardWidth(screenWidth: number = Device.screen.width): number {
+  return Math.floor(screenWidth - FLOW_HORIZONTAL_PADDING * 2)
+}
+
 // 流式布局允许最长 1:4 的竖图保留原始比例；更极端的图片仍受此下限保护。
 const MIN_FLOW_IMAGE_RATIO = 1 / 4
 const MAX_FLOW_IMAGE_RATIO = 2.5
@@ -63,6 +69,7 @@ export function IllustCard(props: {
   flow?: boolean
   hero?: boolean
   compact?: boolean
+  cardWidth?: number
   showBookmarkButton?: boolean
   priority?: number
   cornerBadge?: any
@@ -76,6 +83,7 @@ export function IllustCard(props: {
     flow = false,
     hero = false,
     compact,
+    cardWidth,
     showBookmarkButton = true,
     priority,
     cornerBadge,
@@ -108,14 +116,16 @@ export function IllustCard(props: {
   let imageFrame: { width?: number; height?: number } | undefined = undefined
   let cardFrame: { width?: number; maxWidth?: string } = { maxWidth: "infinity" }
 
+  const computedCardWidth = cardWidth ?? (hero ? calculateHeroCardWidth() : calculateFlowCardWidth())
+
   if (hero) {
-    cardFrame = { width: HERO_CARD_WIDTH }
+    cardFrame = { width: computedCardWidth }
     imageRatio = Math.min(Math.max(rawRatio, MIN_FLOW_IMAGE_RATIO), MAX_FLOW_IMAGE_RATIO)
-    imageFrame = { width: HERO_CARD_WIDTH, height: HERO_CARD_WIDTH / imageRatio }
+    imageFrame = { width: computedCardWidth, height: computedCardWidth / imageRatio }
   } else if (flow) {
-    cardFrame = { width: FLOW_CARD_WIDTH }
+    cardFrame = { width: computedCardWidth }
     imageRatio = Math.min(Math.max(rawRatio, MIN_FLOW_IMAGE_RATIO), MAX_FLOW_IMAGE_RATIO)
-    imageFrame = { width: FLOW_CARD_WIDTH, height: FLOW_CARD_WIDTH / imageRatio }
+    imageFrame = { width: computedCardWidth, height: computedCardWidth / imageRatio }
   }
 
   function handleAppear() {
@@ -467,14 +477,18 @@ export function IllustFlowFeed(props: {
   ) => any
 }) {
   cacheIllusts(props.items)
-  const isHeroActive = Boolean(props.enableHeroFirst && props.items.length > 0)
+  const { width: screenWidth, isiPad } = useLayoutMetrics()
+  const flowCardWidth = useMemo(() => calculateFlowCardWidth(screenWidth), [screenWidth])
+  const heroCardWidth = useMemo(() => calculateHeroCardWidth(screenWidth), [screenWidth])
+
+  const isHeroActive = !isiPad && Boolean(props.enableHeroFirst && props.items.length > 0)
   const heroItem = isHeroActive ? props.items[0] : null
   const waterfallItems = isHeroActive ? props.items.slice(1) : props.items
   const startIndex = isHeroActive ? 1 : 0
 
   const [leading, trailing] = useMemo(
-    () => distributeFlowItems(waterfallItems, startIndex),
-    [waterfallItems, startIndex]
+    () => distributeFlowItems(waterfallItems, startIndex, flowCardWidth),
+    [waterfallItems, startIndex, flowCardWidth]
   )
   const lastItem = props.items[props.items.length - 1]
   const lastId = lastItem ? lastItem.id : null
@@ -486,6 +500,7 @@ export function IllustFlowFeed(props: {
         <IllustCard
           key={illust.id}
           illust={illust}
+          cardWidth={flowCardWidth}
           flow={true}
           priority={index}
           cornerBadge={props.cornerBadgeOf?.(illust, index)}
@@ -497,7 +512,7 @@ export function IllustFlowFeed(props: {
       const triggerView = props.hasMore && triggerAnchor ? (
         <VStack
           key={`trigger:${triggerAnchor}`}
-          frame={{ width: FLOW_CARD_WIDTH, height: 1 }}
+          frame={{ width: flowCardWidth, height: 1 }}
           onAppear={() => props.onLoadMore(triggerAnchor)}
         />
       ) : null
@@ -506,7 +521,7 @@ export function IllustFlowFeed(props: {
           key="leading"
           alignment="leading"
           spacing={FLOW_ROW_SPACING}
-          frame={{ width: FLOW_CARD_WIDTH }}
+          frame={{ width: flowCardWidth }}
         >
           {leading.map(renderItem)}
           {triggerView}
@@ -515,7 +530,7 @@ export function IllustFlowFeed(props: {
           key="trailing"
           alignment="leading"
           spacing={FLOW_ROW_SPACING}
-          frame={{ width: FLOW_CARD_WIDTH }}
+          frame={{ width: flowCardWidth }}
         >
           {trailing.map(renderItem)}
           {triggerView}
@@ -525,6 +540,7 @@ export function IllustFlowFeed(props: {
     [
       leading,
       trailing,
+      flowCardWidth,
       triggerAnchor,
       props.hasMore,
       props.onLoadMore,
@@ -541,11 +557,12 @@ export function IllustFlowFeed(props: {
       <VStack
         key={`hero:${heroItem.id}`}
         padding={{ horizontal: FLOW_HORIZONTAL_PADDING }}
-        frame={{ width: Device.screen.width }}
+        frame={{ width: screenWidth }}
       >
         <IllustCard
           key={heroItem.id}
           illust={heroItem}
+          cardWidth={heroCardWidth}
           hero={true}
           priority={0}
           cornerBadge={props.cornerBadgeOf?.(heroItem, 0)}
@@ -557,6 +574,8 @@ export function IllustFlowFeed(props: {
     )
   }, [
     heroItem,
+    screenWidth,
+    heroCardWidth,
     props.cornerBadgeOf,
     props.footerTextOf,
     props.topTrailingActionOf,
@@ -571,14 +590,14 @@ export function IllustFlowFeed(props: {
           alignment="top"
           spacing={FLOW_COLUMN_SPACING}
           padding={{ horizontal: FLOW_HORIZONTAL_PADDING }}
-          frame={{ width: Device.screen.width }}
+          frame={{ width: screenWidth }}
         >
           {columnViews}
         </HStack>
       ) : props.hasMore && triggerAnchor ? (
         <VStack
           key={`hero-trigger:${triggerAnchor}`}
-          frame={{ width: FLOW_CARD_WIDTH, height: 1 }}
+          frame={{ width: flowCardWidth, height: 1 }}
           onAppear={() => props.onLoadMore(triggerAnchor)}
         />
       ) : null}
@@ -603,7 +622,8 @@ export function IllustFlowFeed(props: {
 
 function distributeFlowItems(
   items: PixivIllustration[],
-  startIndex = 0
+  startIndex = 0,
+  cardWidth: number = calculateFlowCardWidth()
 ): [IllustFlowItem[], IllustFlowItem[]] {
   const columns: [IllustFlowItem[], IllustFlowItem[]] = [[], []]
   const heights = [0, 0]
@@ -614,7 +634,7 @@ function distributeFlowItems(
       ? illust.width / illust.height
       : 0.75
     const ratio = Math.min(Math.max(rawRatio, MIN_FLOW_IMAGE_RATIO), MAX_FLOW_IMAGE_RATIO)
-    const imageHeight = FLOW_CARD_WIDTH / ratio
+    const imageHeight = cardWidth / ratio
     const textHeight = 62
     const footerHeight = 10
     const column = heights[0] <= heights[1] ? 0 : 1

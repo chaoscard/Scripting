@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useColorScheme, type Color, type KeywordPoint, Rectangle, ZStack } from "scripting"
+import { useCallback, useEffect, useMemo, useRef, useState, useColorScheme, Device, type Color, type KeywordPoint, Rectangle, ZStack } from "scripting"
 import { session } from "../api/session"
 import { getImageBatchSize, loadSettings, onSettingsChanged, type AmbientIntensity, type AmbientAlgorithm, type NovelReaderExperimentalAlgorithm } from "../store/settings"
 import { onBlocklistChanged } from "../store/blocklist"
@@ -1288,5 +1288,50 @@ export function useNovelMarker(
   }, [novelID, initialPage])
 
   return [markerPage, setMarkerPage]
+}
+
+export interface LayoutMetrics {
+  width: number
+  height: number
+  scale: number
+  isLandscape: boolean
+  isPortrait: boolean
+  isiPad: boolean
+  isiPhone: boolean
+}
+
+/**
+ * 监听设备旋转与屏幕尺寸变化的响应式 Hook
+ */
+export function useLayoutMetrics(): LayoutMetrics {
+  const [metrics, setMetrics] = useState<LayoutMetrics>(() => ({
+    width: Device.screen.width,
+    height: Device.screen.height,
+    scale: Device.screen.scale,
+    isLandscape: Device.isLandscape,
+    isPortrait: Device.isPortrait,
+    isiPad: Device.isiPad,
+    isiPhone: Device.isiPhone,
+  }))
+
+  useEffect(() => {
+    const updateMetrics = () => {
+      setMetrics({
+        width: Device.screen.width,
+        height: Device.screen.height,
+        scale: Device.screen.scale,
+        isLandscape: Device.isLandscape,
+        isPortrait: Device.isPortrait,
+        isiPad: Device.isiPad,
+        isiPhone: Device.isiPhone,
+      })
+    }
+    Device.addOrientationListener(updateMetrics)
+    return () => {
+      Device.removeOrientationListener(updateMetrics)
+    }
+  }, [])
+
+  return metrics
 }
 

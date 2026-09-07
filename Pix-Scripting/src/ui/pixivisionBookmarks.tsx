@@ -25,13 +25,12 @@ import {
 } from "../store/pixivisionBookmarks"
 import { CachedImage } from "./components/CachedImage"
 import { EmptyView, RefreshableScrollView } from "./components"
-import { useExperimentalAmbientPalette } from "./hooks"
+import { useExperimentalAmbientPalette, useLayoutMetrics } from "./hooks"
 import { recordPixivisionCoverUrl } from "../image/imageLoader"
 
 declare const Haptics: any
 
 const FLOW_HORIZONTAL_PADDING = 12
-const HERO_CARD_WIDTH = Math.floor(Device.screen.width - FLOW_HORIZONTAL_PADDING * 2)
 const DEFAULT_ARTICLE_RATIO = 1200 / 630
 
 export function PixivisionBookmarksView() {
@@ -98,16 +97,18 @@ function PixivisionBookmarkCard(props: {
   onRemove: () => void
 }) {
   const { item, priority, onRemove } = props
+  const { width: screenWidth } = useLayoutMetrics()
+  const heroCardWidth = Math.floor(screenWidth - FLOW_HORIZONTAL_PADDING * 2)
 
   if (item.id && item.thumbnailURL) {
     recordPixivisionCoverUrl(item.id, item.thumbnailURL)
   }
 
   const imageRatio = DEFAULT_ARTICLE_RATIO
-  const cardFrame = { width: HERO_CARD_WIDTH }
+  const cardFrame = { width: heroCardWidth }
   const imageFrame = {
-    width: HERO_CARD_WIDTH,
-    height: Math.round(HERO_CARD_WIDTH / imageRatio),
+    width: heroCardWidth,
+    height: Math.round(heroCardWidth / imageRatio),
   }
 
   return (
@@ -158,7 +159,7 @@ function PixivisionBookmarkCard(props: {
           alignment="leading"
           spacing={6}
           padding={{ horizontal: 8, top: 4, bottom: 6 }}
-          frame={{ width: HERO_CARD_WIDTH - 12 }}
+          frame={{ width: heroCardWidth - 12 }}
         >
           <HStack alignment="center" spacing={8} frame={{ maxWidth: "infinity" }}>
             {item.categoryLabel || item.category ? (

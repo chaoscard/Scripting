@@ -29,7 +29,7 @@ import { cacheIllust, getCachedIllust } from "../store/illustCache"
 import { cachedFilePath, derivePixivThumbUrl, getPixivisionCoverUrl, loadImage } from "../image/imageLoader"
 import { fetchImageBinaryWithRetry, saveImageToPixivAlbum, withAlbumKeepAlive } from "../downloader"
 import { renderDestination } from "./routes"
-import { useAsyncGuard, useExperimentalAmbientPalette } from "./hooks"
+import { useAsyncGuard, useExperimentalAmbientPalette, useLayoutMetrics } from "./hooks"
 import { IllustGalleryView } from "./IllustGalleryView"
 import type { PixivIllustration, PixivisionArticle, PixivisionArtwork, PixivisionBodyBlock, PixivisionDetail } from "../types"
 import {
@@ -56,7 +56,6 @@ declare const Pasteboard: any
 declare const Haptics: any
 
 const FLOW_HORIZONTAL_PADDING = 12
-const HERO_CARD_WIDTH = Math.floor(Device.screen.width - FLOW_HORIZONTAL_PADDING * 2)
 const MIN_FLOW_IMAGE_RATIO = 1 / 4
 const MAX_FLOW_IMAGE_RATIO = 2.5
 
@@ -66,6 +65,8 @@ function isVirtualNode(v: unknown): v is VirtualNode {
 
 export function PixivisionDetailView(props: { articleID: number }) {
   const { articleID } = props
+  const { width: screenWidth } = useLayoutMetrics()
+  const heroCardWidth = Math.floor(screenWidth - FLOW_HORIZONTAL_PADDING * 2)
   const [detail, setDetail] = useState<PixivisionDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -817,10 +818,11 @@ export function PixivisionDetailView(props: { articleID: number }) {
                           alignment="leading"
                           spacing={6}
                           padding={{ horizontal: FLOW_HORIZONTAL_PADDING }}
-                          frame={{ width: Device.screen.width }}
+                          frame={{ width: screenWidth }}
                         >
                           <IllustCard
                             hero={true}
+                            cardWidth={heroCardWidth}
                             compact={true}
                             showBookmarkButton={false}
                             illust={illust}
@@ -856,8 +858,8 @@ export function PixivisionDetailView(props: { articleID: number }) {
                           ? block.width / block.height
                           : 1
                       const imageRatio = Math.min(Math.max(rawRatio, MIN_FLOW_IMAGE_RATIO), MAX_FLOW_IMAGE_RATIO)
-                      const cardFrame = { width: HERO_CARD_WIDTH }
-                      const imageFrame = { width: HERO_CARD_WIDTH, height: HERO_CARD_WIDTH / imageRatio }
+                      const cardFrame = { width: heroCardWidth }
+                      const imageFrame = { width: heroCardWidth, height: heroCardWidth / imageRatio }
 
                       const handleImageTap = () => {
                         if (block.linkURL) {
@@ -873,7 +875,7 @@ export function PixivisionDetailView(props: { articleID: number }) {
                           alignment="leading"
                           spacing={6}
                           padding={{ horizontal: FLOW_HORIZONTAL_PADDING }}
-                          frame={{ width: Device.screen.width }}
+                          frame={{ width: screenWidth }}
                         >
                           <VStack
                             alignment="leading"
@@ -1049,10 +1051,11 @@ export function PixivisionDetailView(props: { articleID: number }) {
                           alignment="leading"
                           spacing={6}
                           padding={{ horizontal: FLOW_HORIZONTAL_PADDING }}
-                          frame={{ width: Device.screen.width }}
+                          frame={{ width: screenWidth }}
                         >
                           <IllustCard
                             hero={true}
+                            cardWidth={heroCardWidth}
                             compact={true}
                             showBookmarkButton={false}
                             illust={illust}
