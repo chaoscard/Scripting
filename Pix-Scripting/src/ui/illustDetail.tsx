@@ -874,6 +874,14 @@ export function IllustDetailView(props: { illustID: number }) {
         contextMenu = {
           menuItems: (
             <Group>
+              {pageCount > 1 && (
+                <Button
+                  title="打包为 ZIP 归档"
+                  systemImage="doc.zipper"
+                  disabled={downloading}
+                  action={handleDownloadIllustToZip}
+                />
+              )}
               <Button
                 title="下载为 CBZ 漫画包"
                 systemImage="doc.zipper"
@@ -1109,7 +1117,30 @@ export function IllustDetailView(props: { illustID: number }) {
                 />
               </Menu>
             ) : current.type === "manga" ? (
-              <Menu title="下载" systemImage="square.and.arrow.down">
+              <Menu title={downloading ? "下载中…" : "下载"} systemImage="square.and.arrow.down">
+                {pageCount > 1 ? (
+                  <Button
+                    title="下载全部至相簿"
+                    systemImage="photo.on.rectangle.angled"
+                    disabled={downloading}
+                    action={handleDownloadIllustToAlbum}
+                  />
+                ) : (
+                  <Button
+                    title="下载至相簿"
+                    systemImage="photo"
+                    disabled={downloading}
+                    action={handleDownloadIllustToAlbum}
+                  />
+                )}
+                {pageCount > 1 && (
+                  <Button
+                    title="打包为 ZIP 归档"
+                    systemImage="doc.zipper"
+                    disabled={downloading}
+                    action={handleDownloadIllustToZip}
+                  />
+                )}
                 <Button
                   title="下载为 CBZ 漫画包"
                   systemImage="doc.zipper"
@@ -1124,7 +1155,7 @@ export function IllustDetailView(props: { illustID: number }) {
                 />
               </Menu>
             ) : pageCount > 1 ? (
-              <Menu title="下载" systemImage="square.and.arrow.down">
+              <Menu title={downloading ? "下载中…" : "下载"} systemImage="square.and.arrow.down">
                 <Button
                   title="下载全部至相簿"
                   systemImage="photo.on.rectangle.angled"

@@ -84,8 +84,8 @@ export function drawOCROverlay(
     const scaledY = centerY - scaledH / 2
 
     // 边缘轻微内缩 1.5% 防相邻紧邻气泡粘连
-    const shrinkX = Math.min(1.5, scaledW * 0.015)
-    const shrinkY = Math.min(1.5, scaledH * 0.015)
+    const shrinkX = scaledW * 0.015
+    const shrinkY = scaledH * 0.015
     const x = scaledX + shrinkX
     const y = scaledY + shrinkY
     const w = Math.max(4, scaledW - shrinkX * 2)
@@ -106,7 +106,7 @@ export function drawOCROverlay(
 
     ctx.fillStyle = "rgba(255, 255, 255, 0.96)"
     ctx.strokeStyle = "rgba(0, 0, 0, 0.25)"
-    ctx.lineWidth = 0.85
+    ctx.lineWidth = Math.max(0.75, Math.min(w, h) * 0.025, size.width * 0.0018)
 
     if (effectiveShape === "ellipse") {
       const cx = x + w / 2
@@ -124,7 +124,7 @@ export function drawOCROverlay(
       ctx.fill()
       ctx.stroke()
     } else {
-      const radius = Math.min(w / 2, h / 2, Math.max(6, Math.min(w, h) * 0.35))
+      const radius = Math.min(w / 2, h / 2, Math.min(w, h) * 0.35)
       ctx.beginPath()
       ctx.moveTo(x + radius, y)
       ctx.lineTo(x + w - radius, y)
@@ -145,26 +145,31 @@ export function drawOCROverlay(
 
     // 文字排版安全边界（椭圆需要内缩约 28% 安全余量避免顶角溢出）
     const insetRatio = effectiveShape === "ellipse" ? 0.28 : 0.1
-    const maxTextWidth = Math.max(6, w * (1 - insetRatio))
-    const maxTextHeight = Math.max(6, h * (1 - insetRatio))
+    const maxTextWidth = Math.max(4, w * (1 - insetRatio))
+    const maxTextHeight = Math.max(4, h * (1 - insetRatio))
 
-    // 精细化字号自适应计算（基准范围 6.5~11pt，结合 scale 联动缩放）
+    // 基于气泡物理可用面积纯几何自适应计算字号，彻底解耦具体屏幕设备尺寸
     const cleanText = translation.trim()
     const charCount = Math.max(1, cleanText.length)
-    const baseFontSize = Math.min(11, Math.max(6.5, Math.floor(Math.sqrt((maxTextWidth * maxTextHeight) / (charCount * 1.8)))))
-    let fontSize = Math.max(4.5, baseFontSize * effectiveScale)
+    const idealFontSize = Math.sqrt((maxTextWidth * maxTextHeight) / (charCount * 1.5))
+    const upperLimit = Math.min(maxTextHeight * 0.7, maxTextWidth * 0.9)
+    const lowerLimit = Math.max(2, maxTextHeight * 0.08)
+    const initialFontSize = Math.min(upperLimit, Math.max(lowerLimit, idealFontSize)) * effectiveScale
+    const minFont = Math.max(2, lowerLimit * 0.5)
+
+    let fontSize = initialFontSize
     let lines: string[] = []
     let lineHeight = fontSize * 1.2
 
-    // 纯 JS 字符估算收敛字号，消除跨语言 bridge 调用风暴
-    for (let step = 0; step < 8; step++) {
+    // 纯 JS 字符几何等比收敛排版
+    for (let step = 0; step < 12; step++) {
       lines = layoutTextLines(cleanText, fontSize, maxTextWidth)
       lineHeight = fontSize * 1.2
       const totalTextHeight = lines.length * lineHeight
-      if (totalTextHeight <= maxTextHeight || fontSize <= 4.5) {
+      if (totalTextHeight <= maxTextHeight || fontSize <= minFont) {
         break
       }
-      fontSize = Math.max(4.5, fontSize - 0.5)
+      fontSize = Math.max(minFont, fontSize * 0.92)
     }
 
     ctx.font = fontSize

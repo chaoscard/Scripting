@@ -3,10 +3,6 @@ import type { OCRBubble } from "../../api/aiService"
 export type IllustAIMode = "caption" | "ocr" | "vision"
 export type NovelAIMode = "caption" | "translate" | "summary" | "continue"
 
-export interface ScreenshotMaker {
-  screenshot(): UIImage | null
-}
-
 export const PRESET_CONTINUE_PROMPTS = [
   "续写一个温馨甜蜜的日常结局",
   "续写一个意想不到的高能剧情反转",

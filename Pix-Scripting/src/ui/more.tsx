@@ -192,10 +192,10 @@ export function MoreView(props: { onClose: () => void }) {
 
       <Section header={<Text>其他</Text>}>
         <NavigationLink value="settings">
-          <MoreRow icon="gearshape.fill" iconColor="secondaryLabel" title="设置" />
+          <MoreRow icon="gearshape.fill" iconColor="secondaryLabel" title="应用设置" />
         </NavigationLink>
         <NavigationLink value="about">
-          <MoreRow icon="info.circle.fill" iconColor="#007AFF" title="关于" />
+          <MoreRow icon="info.circle.fill" iconColor="#007AFF" title="关于应用" />
         </NavigationLink>
         <Button
           buttonStyle="plain"

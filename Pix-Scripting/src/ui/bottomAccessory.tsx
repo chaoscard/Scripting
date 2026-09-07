@@ -617,9 +617,18 @@ export function IllustDetailDockBar(props: { illustID: number }) {
       }
     }
     if (current.type === "manga") {
+      const pageCount = current.page_count ?? 1
       return {
         menuItems: (
           <Group>
+            {pageCount > 1 && (
+              <Button
+                title="打包为 ZIP 归档"
+                systemImage="doc.zipper"
+                disabled={downloading}
+                action={() => void handleDownloadIllustToZip()}
+              />
+            )}
             <Button
               title="下载为 CBZ 漫画包"
               systemImage="doc.zipper"

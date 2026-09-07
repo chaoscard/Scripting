@@ -7,6 +7,7 @@ import {
   Group,
   HStack,
   Image,
+  ImageRenderer,
   NavigationStack,
   ProgressView,
   ScrollView,
@@ -35,10 +36,10 @@ import {
 import { saveImageToPixivAlbum, withAlbumKeepAlive } from "../../downloader/photoAlbum"
 import { CachedImage, ErrorView } from "../components"
 import { cachedFilePath, imageUrlOf, loadImage, pageThumbUrlOf } from "../../image/imageLoader"
-import { loadSettings } from "../../store/settings"
+import { getDownloadImageQuality, loadSettings } from "../../store/settings"
 import { drawOCROverlay } from "./OCRCanvas"
 import { createThrottledUpdater } from "./throttle"
-import type { IllustAIMode, PageTranslationCache, ScreenshotMaker } from "./types"
+import type { IllustAIMode, PageTranslationCache } from "./types"
 
 /** Google 经典四色配置与流光动效 */
 const GOOGLE_COLORS: Color[] = ["#4285F4", "#EA4335", "#FBBC05", "#34A853", "#4285F4"]
@@ -141,7 +142,6 @@ function IllustAIPageRow(props: {
   onToggleBubbleIndex: (pageIndex: number, hitIndex: number) => void
   onTapCanvasBubble: (pageIndex: number, touchPoint: { x: number; y: number }) => void
   onExecutePage: (pageIndex: number, force?: boolean) => void
-  onRegisterScreenshot: (pageIndex: number, maker: ScreenshotMaker | null) => void
   onRegisterCanvasSize: (pageIndex: number, size: { width: number; height: number }) => void
 }) {
   const {
@@ -157,7 +157,6 @@ function IllustAIPageRow(props: {
     onToggleBubbleIndex,
     onTapCanvasBubble,
     onExecutePage,
-    onRegisterScreenshot,
     onRegisterCanvasSize,
   } = props
 
@@ -240,14 +239,6 @@ function IllustAIPageRow(props: {
           frame={{ width: containerWidth, height: pageRenderHeight }}
         >
           <Canvas
-            screenshotRef={{
-              set current(val: ScreenshotMaker | null) {
-                onRegisterScreenshot(pageIndex, val)
-              },
-              get current() {
-                return null
-              },
-            }}
             aspectRatio={{ value: pageAspect, contentMode: "fit" }}
             onTapGesture={{
               count: 1,
@@ -428,7 +419,6 @@ export function IllustAISheet(props: {
   const pageTokensRef = useRef<Record<number, TaskToken>>({})
   const taskSeqRef = useRef(0)
   const isPresentedRef = useRef(isPresented)
-  const canvasScreenshotRefs = useRef<Record<number, ScreenshotMaker | null>>({})
   const canvasSizesRef = useRef<Record<number, { width: number; height: number }>>({})
 
   useEffect(() => {
@@ -782,7 +772,8 @@ export function IllustAISheet(props: {
             }
           }
         } else if (mode === "ocr") {
-          // 保存所有已翻译/已渲染的 Canvas 截图
+          // 保存所有已翻译/已渲染的 Canvas 图像（使用下载画质，默认原图 original，在高清原图上打印气泡与文字）
+          const downloadQuality = getDownloadImageQuality()
           for (let idx = 0; idx < pageCount; idx++) {
             const cache = pageCaches[idx]
             if (!cache?.imageFilePath && !cache?.bubbles?.length) continue
@@ -790,13 +781,67 @@ export function IllustAISheet(props: {
             const fileName = `${illust.id}_p${idx}_ocr.jpg`
             let imageToSave: Data | string | null = null
 
-            const screenshot = canvasScreenshotRefs.current[idx]?.screenshot()
-            if (screenshot) {
-              imageToSave = Data.fromJPEG(screenshot, 0.95) || Data.fromPNG(screenshot)
+            // 1. 获取下载画质（默认 original 原图）的高清底图
+            const downloadUrl =
+              imageUrlOf(illust, idx, downloadQuality) ??
+              imageUrlOf(illust, idx, "original") ??
+              imageUrlOf(illust, idx, "large")
+            let targetFilePath = downloadUrl ? cachedFilePath(downloadUrl) : null
+            if (!targetFilePath && downloadUrl) {
+              try {
+                targetFilePath = await loadImage(downloadUrl)
+              } catch {}
+            }
+            if (!targetFilePath) {
+              targetFilePath = cache.imageFilePath || null
             }
 
-            if (!imageToSave && cache.imageFilePath) {
-              imageToSave = cache.imageFilePath
+            if (!targetFilePath) continue
+
+            const isOverlayVisible = cache.showOverlay !== false && showAllOverlay
+            const hasBubbles = Boolean(cache.bubbles && cache.bubbles.length > 0)
+            const hiddenIndices = new Set(cache.hiddenBubbleIndices || [])
+
+            // 2. 若存在气泡且图层可见，使用 ImageRenderer 在原图全分辨率底图上离线合成打印译文气泡
+            if (isOverlayVisible && hasBubbles) {
+              try {
+                const img = UIImage.fromFile(targetFilePath)
+                const imgW = img?.width && img.width > 0 ? img.width : (illust.width || 1200)
+                const imgH = img?.height && img.height > 0 ? img.height : (illust.height || 1600)
+
+                const canvasElement = (
+                  <Canvas
+                    frame={{ width: imgW, height: imgH }}
+                    draw={(ctx, size) => {
+                      drawOCROverlay(
+                        ctx,
+                        size,
+                        targetFilePath!,
+                        cache.bubbles!,
+                        isOverlayVisible,
+                        hiddenIndices,
+                        fontScale
+                      )
+                    }}
+                  />
+                )
+
+                const jpegData = await ImageRenderer.toJPEGData(canvasElement, {
+                  scale: 1,
+                  compressionQuality: 0.98,
+                })
+
+                if (jpegData) {
+                  imageToSave = jpegData
+                }
+              } catch (renderErr) {
+                console.log("OCR Canvas ImageRenderer error:", renderErr)
+              }
+            }
+
+            // 3. 兜底：若无气泡或渲染失败，直接保存高清底图
+            if (!imageToSave) {
+              imageToSave = targetFilePath
             }
 
             if (imageToSave) {
@@ -1031,9 +1076,6 @@ export function IllustAISheet(props: {
                       onToggleBubbleIndex={handleToggleBubbleIndex}
                       onTapCanvasBubble={handleTapCanvasBubble}
                       onExecutePage={executePage}
-                      onRegisterScreenshot={(pIdx, maker) => {
-                        canvasScreenshotRefs.current[pIdx] = maker
-                      }}
                       onRegisterCanvasSize={(pIdx, size) => {
                         canvasSizesRef.current[pIdx] = size
                       }}
