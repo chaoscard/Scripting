@@ -1,5 +1,6 @@
 import {
   Button,
+  Group,
   HStack,
   Image,
   Label,
@@ -18,6 +19,7 @@ import {
 import {
   AI_PRESETS,
   deleteCustomAIProfile,
+  getCustomAIProviderName,
   getEffectiveGeneralEndpoint,
   getEffectiveImageGenEndpoint,
   getEffectiveImageGenKey,
@@ -30,6 +32,16 @@ import {
   type GeneralAIProtocol,
   type ImageGenAIProtocol,
 } from "../store/customAI"
+import {
+  loadSettings,
+  onSettingsChanged,
+  type AppSettings,
+} from "../store/settings"
+import {
+  DockActionBar,
+  useRegisterBottomAccessory,
+  type DockActionItem,
+} from "./bottomAccessory"
 import {
   fetchRemoteModelList,
   inferPresetModelEndpoint,
@@ -48,6 +60,7 @@ declare const Dialog: any
 
 export function CustomAISettingsView() {
   const [profile, setProfile] = useState<CustomAIProfile>(() => loadCustomAIProfile())
+  const [settings, setSettings] = useState<AppSettings>(() => loadSettings())
   const [showKeyText, setShowKeyText] = useState(false)
   const [showImageKeyText, setShowImageKeyText] = useState(false)
 
@@ -70,8 +83,12 @@ export function CustomAISettingsView() {
     const unsub = onCustomAIConfigChanged((updated) => {
       setProfile({ ...updated })
     })
+    const unsubSettings = onSettingsChanged(() => {
+      setSettings(loadSettings())
+    })
     return () => {
       unsub()
+      unsubSettings()
     }
   }, [])
 
@@ -482,6 +499,66 @@ export function CustomAISettingsView() {
     setImageFetchError(null)
   }
 
+  const isAppleMusic = settings.pageLayout === "appleMusic"
+  const providerName = useMemo(() => {
+    const raw = getCustomAIProviderName(profile)
+    if (raw === "OpenCode Zen") return "OC Zen"
+    if (raw === "OpenCode Go") return "OC Go"
+    if (raw === "Google Gemini") return "Gemini"
+    if (raw === "Anthropic Claude" || raw === "Anthropic") return "Claude"
+    return raw
+  }, [profile])
+
+  const clearContextMenu = useMemo(() => {
+    return {
+      menuItems: (
+        <Group>
+          <Button
+            title="清空所有自定义 AI 配置"
+            systemImage="trash"
+            role="destructive"
+            action={handleDeleteAll}
+          />
+        </Group>
+      ),
+    }
+  }, [profile])
+
+  const customAIDockAccessory = useMemo(() => {
+    const items: DockActionItem[] = [
+      {
+        key: "provider",
+        label: providerName,
+        icon: "sparkles",
+        color: "#EE2F49",
+        action: () => {
+          try {
+            void Haptics.transient()
+          } catch {}
+        },
+      },
+      {
+        key: "clear",
+        label: "清空配置",
+        icon: "trash",
+        color: "#3172EB",
+        action: () => {
+          try {
+            void Haptics.transient()
+          } catch {}
+        },
+        contextMenu: clearContextMenu,
+      },
+    ]
+    return <DockActionBar items={items} />
+  }, [providerName, clearContextMenu])
+
+  useRegisterBottomAccessory(
+    "customAISettings",
+    customAIDockAccessory,
+    isAppleMusic
+  )
+
   return (
     <List
       navigationTitle="自定义AI模型"
@@ -575,8 +652,8 @@ export function CustomAISettingsView() {
         >
           <Text tag="openai-responses">Responses API</Text>
           <Text tag="openai-chat">Chat Completions</Text>
-          <Text tag="gemini">Google Gemini</Text>
-          <Text tag="anthropic">Anthropic Claude</Text>
+          <Text tag="gemini">Gemini</Text>
+          <Text tag="anthropic">Claude</Text>
         </Picker>
 
         <TextField
@@ -763,7 +840,7 @@ export function CustomAISettingsView() {
             >
               <Text tag="openai-images">OpenAI Images</Text>
               <Text tag="openai-responses">OpenAI Responses</Text>
-              <Text tag="gemini-imagen">Google Gemini 图片</Text>
+              <Text tag="gemini-imagen">Gemini 图片</Text>
             </Picker>
 
             <TextField

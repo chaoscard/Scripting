@@ -167,6 +167,7 @@ export function getActiveAccessoryKey(
   if (top.startsWith("downloadCreator:")) return top
   if (top.startsWith("rankingCustomPicker:")) return top
   if (top === "settings") return "settings"
+  if (top === "customAISettings") return "customAISettings"
   return null
 }
 

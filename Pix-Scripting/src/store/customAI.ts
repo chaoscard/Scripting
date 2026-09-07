@@ -727,7 +727,6 @@ export function getCustomAIProviderName(profile: CustomAIProfile): string {
   }
   if (
     endpoint.includes("openai") ||
-    protocol === "openai-responses" ||
     model.startsWith("gpt") ||
     model.startsWith("o1") ||
     model.startsWith("o3") ||
@@ -744,6 +743,6 @@ export function getCustomAIProviderName(profile: CustomAIProfile): string {
   if (endpoint.includes("x.ai") || model.includes("grok")) return "xAI"
   if (endpoint.includes("together")) return "Together AI"
 
-  return "OpenAI 兼容"
+  return "自定义"
 }
 
