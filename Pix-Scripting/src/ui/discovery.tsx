@@ -665,7 +665,13 @@ function exploreToolbar(props: {
   const trailingMenuLabel = isiPad ? (
     <HStack alignment="center" spacing={4}>
       <Text font="subheadline" fontWeight="semibold">
-        {props.mode === "pixivision" ? "特辑" : `${baseTitle} · ${kindLabel}`}
+        {props.isAppleMusic
+          ? props.mode === "pixivision"
+            ? "特辑"
+            : baseTitle
+          : props.mode === "pixivision"
+            ? "特辑"
+            : `${baseTitle} · ${kindLabel}`}
       </Text>
       <Image
         systemName="chevron.down"
@@ -688,7 +694,7 @@ function exploreToolbar(props: {
         <Label tag="latest" title="最新" systemImage="clock" />
         <Label tag="pixivision" title="特辑" systemImage="rectangle.stack" />
       </Picker>
-      {props.mode !== "pixivision" && (
+      {isClassic && props.mode !== "pixivision" && (
         <Picker
           title="媒体类型"
           value={props.kind}

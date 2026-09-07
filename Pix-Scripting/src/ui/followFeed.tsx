@@ -351,7 +351,11 @@ function followToolbar(props: {
   const trailingMenuLabel = isiPad ? (
     <HStack alignment="center" spacing={4}>
       <Text font="subheadline" fontWeight="semibold">
-        {props.mode === "friends" ? "好友动态" : `${baseTitle} · ${kindLabel}`}
+        {props.mode === "friends"
+          ? "好友动态"
+          : props.isAppleMusic
+            ? baseTitle
+            : `${baseTitle} · ${kindLabel}`}
       </Text>
       <Image
         systemName="chevron.down"
@@ -400,29 +404,30 @@ function followToolbar(props: {
         systemImage="sparkles"
         action={props.onOpenRecommendedUsers}
       />
-      {props.mode === "watchlist" ? (
-        <Picker
-          title="媒体类型"
-          value={currentKind}
-          onChanged={(v: string) => props.onKindChange(v)}
-        >
-          <Label tag="manga" title="漫画" systemImage="photo.on.rectangle" />
-          {!props.hideNovels && (
-            <Label tag="novel" title="小说" systemImage="book" />
-          )}
-        </Picker>
-      ) : props.mode === "following" ? (
-        <Picker
-          title="媒体类型"
-          value={currentKind}
-          onChanged={(v: string) => props.onKindChange(v)}
-        >
-          <Label tag="illust" title="插画·漫画" systemImage="photo" />
-          {!props.hideNovels && (
-            <Label tag="novel" title="小说" systemImage="book" />
-          )}
-        </Picker>
-      ) : null}
+      {isClassic &&
+        (props.mode === "watchlist" ? (
+          <Picker
+            title="媒体类型"
+            value={currentKind}
+            onChanged={(v: string) => props.onKindChange(v)}
+          >
+            <Label tag="manga" title="漫画" systemImage="photo.on.rectangle" />
+            {!props.hideNovels && (
+              <Label tag="novel" title="小说" systemImage="book" />
+            )}
+          </Picker>
+        ) : props.mode === "following" ? (
+          <Picker
+            title="媒体类型"
+            value={currentKind}
+            onChanged={(v: string) => props.onKindChange(v)}
+          >
+            <Label tag="illust" title="插画·漫画" systemImage="photo" />
+            {!props.hideNovels && (
+              <Label tag="novel" title="小说" systemImage="book" />
+            )}
+          </Picker>
+        ) : null)}
     </Menu>
   )
 }

@@ -594,7 +594,7 @@ function rankingToolbar(props: {
   const trailingMenuLabel = isiPad ? (
     <HStack alignment="center" spacing={4}>
       <Text font="subheadline" fontWeight="semibold">
-        {props.kind === "advanced" || !modeTitle
+        {props.isAppleMusic || props.kind === "advanced" || !modeTitle
           ? baseTitle
           : `${baseTitle} · ${modeTitle}`}
       </Text>
@@ -633,7 +633,7 @@ function rankingToolbar(props: {
           systemImage="clock.arrow.circlepath"
         />
       </Picker>
-      {props.kind !== "advanced" && props.activeModes.length > 0 && (
+      {isClassic && props.kind !== "advanced" && props.activeModes.length > 0 && (
         <Picker
           title="榜单周期"
           value={props.selectedMode}

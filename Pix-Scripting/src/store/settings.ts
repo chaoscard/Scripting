@@ -166,6 +166,9 @@ export interface AppSettings {
   customRankingIllustModes: string[]
   customRankingMangaModes: string[]
   customRankingNovelModes: string[]
+  customRankingIllustModesIpad: string[]
+  customRankingMangaModesIpad: string[]
+  customRankingNovelModesIpad: string[]
   widgetSourceSmallIos: WidgetDefaultSource
   widgetSourceMediumIos: WidgetDefaultSource
   widgetSourceLargeIos: WidgetDefaultSource
@@ -253,6 +256,24 @@ const DEFAULT_SETTINGS: AppSettings = {
   customRankingIllustModes: ["day", "week", "month"],
   customRankingMangaModes: ["day_manga", "week_manga", "month_manga"],
   customRankingNovelModes: ["day", "week", "week_rookie"],
+  customRankingIllustModesIpad: [
+    "day",
+    "week",
+    "month",
+    "week_original",
+    "week_rookie",
+  ],
+  customRankingMangaModesIpad: [
+    "day_manga",
+    "week_manga",
+    "month_manga",
+    "week_rookie_manga",
+  ],
+  customRankingNovelModesIpad: [
+    "day",
+    "week",
+    "week_rookie",
+  ],
   widgetSourceSmallIos: "ranking_day",
   widgetSourceMediumIos: "pixivision",
   widgetSourceLargeIos: "ranking_week",
@@ -713,6 +734,18 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
     customRankingIllustModes: parseStringArray(stored?.customRankingIllustModes, DEFAULT_SETTINGS.customRankingIllustModes),
     customRankingMangaModes: parseStringArray(stored?.customRankingMangaModes, DEFAULT_SETTINGS.customRankingMangaModes),
     customRankingNovelModes: parseStringArray(stored?.customRankingNovelModes, DEFAULT_SETTINGS.customRankingNovelModes),
+    customRankingIllustModesIpad: parseStringArray(
+      stored?.customRankingIllustModesIpad,
+      DEFAULT_SETTINGS.customRankingIllustModesIpad
+    ),
+    customRankingMangaModesIpad: parseStringArray(
+      stored?.customRankingMangaModesIpad,
+      DEFAULT_SETTINGS.customRankingMangaModesIpad
+    ),
+    customRankingNovelModesIpad: parseStringArray(
+      stored?.customRankingNovelModesIpad,
+      DEFAULT_SETTINGS.customRankingNovelModesIpad
+    ),
     widgetSourceSmallIos: isOneOf(stored?.widgetSourceSmallIos, WIDGET_DEFAULT_SOURCE_VALUES)
       ? stored.widgetSourceSmallIos
       : DEFAULT_SETTINGS.widgetSourceSmallIos,
@@ -927,6 +960,27 @@ export const DEFAULT_NOVEL_RANKING_MODES = [
   "week_rookie",
 ]
 
+export const DEFAULT_ILLUST_RANKING_MODES_IPAD = [
+  "day",
+  "week",
+  "month",
+  "week_original",
+  "week_rookie",
+]
+
+export const DEFAULT_MANGA_RANKING_MODES_IPAD = [
+  "day_manga",
+  "week_manga",
+  "month_manga",
+  "week_rookie_manga",
+]
+
+export const DEFAULT_NOVEL_RANKING_MODES_IPAD = [
+  "day",
+  "week",
+  "week_rookie",
+]
+
 export interface CustomRankingTabItem {
   value: string
   title: string
@@ -935,6 +989,23 @@ export interface CustomRankingTabItem {
 export function resetCustomRankingKind(
   kind: "illust" | "manga" | "novel"
 ): AppSettings {
+  const isiPad = Device.isiPad
+  if (isiPad) {
+    if (kind === "illust") {
+      return updateSettings({
+        customRankingIllustModesIpad: [...DEFAULT_ILLUST_RANKING_MODES_IPAD],
+      })
+    } else if (kind === "manga") {
+      return updateSettings({
+        customRankingMangaModesIpad: [...DEFAULT_MANGA_RANKING_MODES_IPAD],
+      })
+    } else {
+      return updateSettings({
+        customRankingNovelModesIpad: [...DEFAULT_NOVEL_RANKING_MODES_IPAD],
+      })
+    }
+  }
+
   if (kind === "illust") {
     return updateSettings({
       customRankingIllustModes: [...DEFAULT_ILLUST_RANKING_MODES],
@@ -954,14 +1025,20 @@ export function getCustomRankingModesForKind(
   kind: "illustration" | "manga" | "novel",
   settings: AppSettings
 ): CustomRankingTabItem[] {
+  const isiPad = Device.isiPad
   const options =
     kind === "illustration"
       ? ALL_ILLUST_RANKING_OPTIONS
       : kind === "manga"
         ? ALL_MANGA_RANKING_OPTIONS
         : ALL_NOVEL_RANKING_OPTIONS
-  const selectedModes =
-    kind === "illustration"
+  const selectedModes = isiPad
+    ? kind === "illustration"
+      ? settings.customRankingIllustModesIpad
+      : kind === "manga"
+        ? settings.customRankingMangaModesIpad
+        : settings.customRankingNovelModesIpad
+    : kind === "illustration"
       ? settings.customRankingIllustModes
       : kind === "manga"
         ? settings.customRankingMangaModes
@@ -977,13 +1054,19 @@ export function getCustomRankingModesForKind(
     }
   }
 
-  // 每个类别最多截取 3 项
-  const limited = active.slice(0, 3)
+  // iPad 最多截取 5 项，iPhone 最多截取 3 项
+  const maxItems = isiPad ? 5 : 3
+  const limited = active.slice(0, maxItems)
   if (limited.length > 0) return limited
 
   // 如果用户未选任何有效项（如全部取消），回退到该类别的默认初始有效榜单列表
-  const defaultModes =
-    kind === "illustration"
+  const defaultModes = isiPad
+    ? kind === "illustration"
+      ? DEFAULT_ILLUST_RANKING_MODES_IPAD
+      : kind === "manga"
+        ? DEFAULT_MANGA_RANKING_MODES_IPAD
+        : DEFAULT_NOVEL_RANKING_MODES_IPAD
+    : kind === "illustration"
       ? DEFAULT_ILLUST_RANKING_MODES
       : kind === "manga"
         ? DEFAULT_MANGA_RANKING_MODES
@@ -1009,14 +1092,20 @@ export function formatCustomRankingSummary(
   kind: "illust" | "manga" | "novel",
   settings: AppSettings
 ): string {
+  const isiPad = Device.isiPad
   const options =
     kind === "illust"
       ? ALL_ILLUST_RANKING_OPTIONS
       : kind === "manga"
         ? ALL_MANGA_RANKING_OPTIONS
         : ALL_NOVEL_RANKING_OPTIONS
-  const selectedModes =
-    kind === "illust"
+  const selectedModes = isiPad
+    ? kind === "illust"
+      ? settings.customRankingIllustModesIpad
+      : kind === "manga"
+        ? settings.customRankingMangaModesIpad
+        : settings.customRankingNovelModesIpad
+    : kind === "illust"
       ? settings.customRankingIllustModes
       : kind === "manga"
         ? settings.customRankingMangaModes

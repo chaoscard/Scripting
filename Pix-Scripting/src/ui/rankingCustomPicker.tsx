@@ -1,5 +1,6 @@
 import {
   Button,
+  Device,
   Group,
   HStack,
   Image,
@@ -18,6 +19,9 @@ import {
   DEFAULT_ILLUST_RANKING_MODES,
   DEFAULT_MANGA_RANKING_MODES,
   DEFAULT_NOVEL_RANKING_MODES,
+  DEFAULT_ILLUST_RANKING_MODES_IPAD,
+  DEFAULT_MANGA_RANKING_MODES_IPAD,
+  DEFAULT_NOVEL_RANKING_MODES_IPAD,
   getVisibleRankingOptions,
   loadSettings,
   onSettingsChanged,
@@ -42,6 +46,9 @@ export function RankingCustomPickerView(props: { kind: CustomRankingPickerKind }
     })
   }, [])
 
+  const isiPad = Device.isiPad
+  const maxLimit = isiPad ? 5 : 3
+
   const title =
     kind === "illust" ? "插画" : kind === "manga" ? "漫画" : "小说"
 
@@ -52,20 +59,30 @@ export function RankingCustomPickerView(props: { kind: CustomRankingPickerKind }
   }, [kind])
 
   const defaultModes = useMemo<string[]>(() => {
+    if (isiPad) {
+      if (kind === "illust") return DEFAULT_ILLUST_RANKING_MODES_IPAD
+      if (kind === "manga") return DEFAULT_MANGA_RANKING_MODES_IPAD
+      return DEFAULT_NOVEL_RANKING_MODES_IPAD
+    }
     if (kind === "illust") return DEFAULT_ILLUST_RANKING_MODES
     if (kind === "manga") return DEFAULT_MANGA_RANKING_MODES
     return DEFAULT_NOVEL_RANKING_MODES
-  }, [kind])
+  }, [kind, isiPad])
 
   const visibleOptions = useMemo(() => {
     return getVisibleRankingOptions(allOptions, settings)
   }, [allOptions, settings])
 
   const selectedCurrentKind = useMemo(() => {
+    if (isiPad) {
+      if (kind === "illust") return settings.customRankingIllustModesIpad
+      if (kind === "manga") return settings.customRankingMangaModesIpad
+      return settings.customRankingNovelModesIpad
+    }
     if (kind === "illust") return settings.customRankingIllustModes
     if (kind === "manga") return settings.customRankingMangaModes
     return settings.customRankingNovelModes
-  }, [kind, settings])
+  }, [kind, settings, isiPad])
 
   // 计算当前类别已选中的有效数量
   const currentKindSelectedCount = useMemo(() => {
@@ -86,16 +103,26 @@ export function RankingCustomPickerView(props: { kind: CustomRankingPickerKind }
       // 取消选中（允许为空，静默更新）
       const next = selectedCurrentKind.filter((k) => k !== option.key)
 
-      if (kind === "illust") {
-        updateSettings({ customRankingIllustModes: next })
-      } else if (kind === "manga") {
-        updateSettings({ customRankingMangaModes: next })
+      if (isiPad) {
+        if (kind === "illust") {
+          updateSettings({ customRankingIllustModesIpad: next })
+        } else if (kind === "manga") {
+          updateSettings({ customRankingMangaModesIpad: next })
+        } else {
+          updateSettings({ customRankingNovelModesIpad: next })
+        }
       } else {
-        updateSettings({ customRankingNovelModes: next })
+        if (kind === "illust") {
+          updateSettings({ customRankingIllustModes: next })
+        } else if (kind === "manga") {
+          updateSettings({ customRankingMangaModes: next })
+        } else {
+          updateSettings({ customRankingNovelModes: next })
+        }
       }
     } else {
-      // 检查上限（当前类别最多选择 3 个，达到上限时提示语变红提醒）
-      if (currentKindSelectedCount >= 3) {
+      // 检查上限（iPad 最多 5 个，iPhone 最多 3 个）
+      if (currentKindSelectedCount >= maxLimit) {
         triggerLimitExceeded()
         return
       }
@@ -107,22 +134,32 @@ export function RankingCustomPickerView(props: { kind: CustomRankingPickerKind }
         (a, b) => orderKeys.indexOf(a) - orderKeys.indexOf(b)
       )
 
-      if (kind === "illust") {
-        updateSettings({ customRankingIllustModes: next })
-      } else if (kind === "manga") {
-        updateSettings({ customRankingMangaModes: next })
+      if (isiPad) {
+        if (kind === "illust") {
+          updateSettings({ customRankingIllustModesIpad: next })
+        } else if (kind === "manga") {
+          updateSettings({ customRankingMangaModesIpad: next })
+        } else {
+          updateSettings({ customRankingNovelModesIpad: next })
+        }
       } else {
-        updateSettings({ customRankingNovelModes: next })
+        if (kind === "illust") {
+          updateSettings({ customRankingIllustModes: next })
+        } else if (kind === "manga") {
+          updateSettings({ customRankingMangaModes: next })
+        } else {
+          updateSettings({ customRankingNovelModes: next })
+        }
       }
     }
   }
 
-  let headerText = "最多可选择 3 个，长按右上角重置按钮恢复默认。"
+  let headerText = `最多可选择 ${maxLimit} 个，长按右上角重置按钮恢复默认。`
   let headerColor: "systemRed" | "systemGreen" | "secondaryLabel" =
     "secondaryLabel"
 
   if (isLimitExceeded) {
-    headerText = "最多可选择3个排行榜单"
+    headerText = `最多可选择 ${maxLimit} 个排行榜单`
     headerColor = "systemRed"
   } else if (isResetSuccess) {
     headerText = "已重置回初始状态"

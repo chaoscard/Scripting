@@ -1238,10 +1238,17 @@ function searchToolbar(props: {
     titleNode = "搜索"
   }
 
+  const sortLabel =
+    props.sort === "date_desc"
+      ? "最新"
+      : props.sort === "popular_desc"
+        ? "热门"
+        : "最早"
+
   const trailingMenuLabel = isiPad ? (
     <HStack alignment="center" spacing={4}>
       <Text font="subheadline" fontWeight="semibold">
-        {scopeLabel}
+        {props.isAppleMusic ? sortLabel : scopeLabel}
       </Text>
       <Image
         systemName="chevron.down"
@@ -1257,17 +1264,19 @@ function searchToolbar(props: {
     props.onClose,
     titleNode,
     <Menu label={trailingMenuLabel}>
-      <Picker
-        title="搜索范围"
-        value={props.scope}
-        onChanged={(v: string) => props.onScopeChange(v as SearchScope)}
-      >
-        <Label tag="illust" title="插画·漫画" systemImage="photo" />
-        {!props.hideNovels && (
-          <Label tag="novel" title="小说" systemImage="book" />
-        )}
-        <Label tag="user" title="用户" systemImage="person.crop.circle" />
-      </Picker>
+      {isClassic && (
+        <Picker
+          title="搜索范围"
+          value={props.scope}
+          onChanged={(v: string) => props.onScopeChange(v as SearchScope)}
+        >
+          <Label tag="illust" title="插画·漫画" systemImage="photo" />
+          {!props.hideNovels && (
+            <Label tag="novel" title="小说" systemImage="book" />
+          )}
+          <Label tag="user" title="用户" systemImage="person.crop.circle" />
+        </Picker>
+      )}
       <Picker
         title="排序方式"
         value={props.sort}
