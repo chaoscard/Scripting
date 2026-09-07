@@ -96,8 +96,14 @@ function NotificationList(props: {
 
   return (
     <RefreshableScrollView
-      navigationTitle={props.title}
       navigationBarTitleDisplayMode="inline"
+      toolbar={{
+        principal: (
+          <Text font="title2" fontWeight="bold">
+            {props.title}
+          </Text>
+        ),
+      }}
       background={ambientBackground}
       refreshable={paged.refresh}
     >

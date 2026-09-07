@@ -6,6 +6,7 @@ import {
   LazyVStack,
   Menu,
   Picker,
+  Text,
   VStack,
   useEffect,
   useMemo,
@@ -114,18 +115,22 @@ export function UserConnectionsView(props: {
         )
         return (
           <RefreshableScrollView
-            navigationTitle={title}
             navigationBarTitleDisplayMode="inline"
             background={ambientBackground}
-            toolbar={
-              showVisibilityPicker
+            toolbar={{
+              principal: (
+                <Text font="title2" fontWeight="bold">
+                  {title}
+                </Text>
+              ),
+              topBarTrailing: showVisibilityPicker
                 ? connectionToolbar({
                     restrict,
                     onRestrictChange: setRestrict,
                     onOpenRecommendedUsers: () => setShowRecommendedUsers(true),
-                  })
-                : undefined
-            }
+                  }).topBarTrailing
+                : undefined,
+            }}
             refreshable={paged.refresh}
           >
             {paged.initialLoading ? (

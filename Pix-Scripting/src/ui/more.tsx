@@ -104,31 +104,10 @@ export function MoreView(props: { onClose: () => void }) {
   }
 
   return (
-    <ZStack navigationDestination={destinationElement}>
-      {isVirtualNode(ambientBackground) ? (
-        ambientBackground
-      ) : (
-        <Rectangle fill={ambientBackground ?? "clear"} ignoresSafeArea={true} />
-      )}
-      <List
-        navigationBarTitleDisplayMode="inline"
-        navigationDestination={destinationElement}
-        scrollContentBackground={ambientBackground ? "hidden" : undefined}
-        sheet={{
-          isPresented: activeSheet !== "none",
-          onChanged: (val: boolean) => {
-            if (!val) setActiveSheet("none")
-          },
-          content:
-            activeSheet === "reverseSearch" ? (
-              <ReverseImageSearchSheet onClose={() => setActiveSheet("none")} />
-            ) : activeSheet === "accountSwitcher" ? (
-              <AccountSwitcherSheet onClose={() => setActiveSheet("none")} />
-            ) : (
-              <VStack />
-            ),
-        }}
-        toolbar={appToolbar(
+    <ZStack
+      navigationBarTitleDisplayMode="inline"
+      navigationDestination={destinationElement}
+      toolbar={appToolbar(
         props.onClose,
         "我的",
         [
@@ -158,6 +137,28 @@ export function MoreView(props: { onClose: () => void }) {
         ]
       )}
     >
+      {isVirtualNode(ambientBackground) ? (
+        ambientBackground
+      ) : (
+        <Rectangle fill={ambientBackground ?? "clear"} ignoresSafeArea={true} />
+      )}
+      <List
+        scrollContentBackground={ambientBackground ? "hidden" : undefined}
+        sheet={{
+          isPresented: activeSheet !== "none",
+          onChanged: (val: boolean) => {
+            if (!val) setActiveSheet("none")
+          },
+          content:
+            activeSheet === "reverseSearch" ? (
+              <ReverseImageSearchSheet onClose={() => setActiveSheet("none")} />
+            ) : activeSheet === "accountSwitcher" ? (
+              <AccountSwitcherSheet onClose={() => setActiveSheet("none")} />
+            ) : (
+              <VStack />
+            ),
+        }}
+      >
       <Section header={<Text>浏览</Text>}>
         <NavigationLink value="library">
           <MoreRow icon="heart.fill" iconColor="#FF375F" title="我的收藏" />
@@ -210,7 +211,7 @@ export function MoreView(props: { onClose: () => void }) {
         >
           <MoreRow
             icon="person.2.circle.fill"
-            iconColor="#007AFF"
+            iconColor="systemYellow"
             title="账号管理"
             showChevron
           />

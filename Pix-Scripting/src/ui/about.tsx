@@ -32,7 +32,16 @@ export function AboutView() {
   }, [])
 
   return (
-    <List navigationTitle="关于" navigationBarTitleDisplayMode="inline">
+    <List
+      navigationBarTitleDisplayMode="inline"
+      toolbar={{
+        principal: (
+          <Text font="title2" fontWeight="bold">
+            关于应用
+          </Text>
+        ),
+      }}
+    >
       <Section header={<Text>关于</Text>}>
         <InfoRow title="作者" value="chaoscard" />
         <HomeLinkRow />

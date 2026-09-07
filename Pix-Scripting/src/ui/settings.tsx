@@ -234,7 +234,6 @@ export function SettingsView() {
 
   return (
     <List
-      navigationTitle="设置"
       navigationBarTitleDisplayMode="inline"
       listSectionSpacing={6}
       sheet={{
@@ -252,6 +251,11 @@ export function SettingsView() {
         ),
       }}
       toolbar={{
+        principal: (
+          <Text font="title2" fontWeight="bold">
+            应用设置
+          </Text>
+        ),
         topBarTrailing: [
           <Button
             action={toggleExpandAll}

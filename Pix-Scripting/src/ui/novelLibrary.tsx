@@ -1,5 +1,6 @@
 import {
   LazyVStack,
+  Text,
   useEffect,
 } from "scripting"
 import { nextNovelMarkers, novelMarkers } from "../api/pixiv"
@@ -60,8 +61,14 @@ export function NovelLibraryView() {
 
   return (
     <RefreshableScrollView
-      navigationTitle="小说书签"
       navigationBarTitleDisplayMode="inline"
+      toolbar={{
+        principal: (
+          <Text font="title2" fontWeight="bold">
+            小说书签
+          </Text>
+        ),
+      }}
       background={ambientBackground}
       refreshable={paged.refresh}
       navigationDestination={destinationElement}
