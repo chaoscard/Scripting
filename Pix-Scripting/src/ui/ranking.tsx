@@ -1,5 +1,6 @@
 import {
   Button,
+  Device,
   HStack,
   Image,
   Label,
@@ -535,6 +536,7 @@ function rankingToolbar(props: {
   onOpenAdvancedSheet: () => void
   onClose: () => void
 }) {
+  const isiPad = Device.isiPad
   const isClassic = !props.isAppleMusic
   const baseTitle =
     props.kind === "illustration"
@@ -549,7 +551,17 @@ function rankingToolbar(props: {
   const modeTitle = currentModeObj?.title ?? ""
 
   let titleNode: any
-  if (isClassic && props.kind !== "advanced" && props.activeModes.length > 0) {
+  if (isiPad) {
+    const promptText =
+      props.kind === "advanced" || !modeTitle
+        ? baseTitle
+        : `${baseTitle} · ${modeTitle}`
+    titleNode = (
+      <Text font="headline" fontWeight="bold">
+        {promptText}
+      </Text>
+    )
+  } else if (isClassic && props.kind !== "advanced" && props.activeModes.length > 0) {
     titleNode = (
       <Menu
         label={
@@ -579,6 +591,23 @@ function rankingToolbar(props: {
     titleNode = baseTitle
   }
 
+  const trailingMenuLabel = isiPad ? (
+    <HStack alignment="center" spacing={4}>
+      <Text font="subheadline" fontWeight="semibold">
+        {props.kind === "advanced" || !modeTitle
+          ? baseTitle
+          : `${baseTitle} · ${modeTitle}`}
+      </Text>
+      <Image
+        systemName="chevron.down"
+        font="caption2"
+        foregroundStyle="secondaryLabel"
+      />
+    </HStack>
+  ) : (
+    <Image systemName="ellipsis.circle" />
+  )
+
   const trailingItems = [
     props.kind === "advanced" ? (
       <Button
@@ -587,7 +616,7 @@ function rankingToolbar(props: {
         action={props.onOpenAdvancedSheet}
       />
     ) : null,
-    <Menu label={<Image systemName="ellipsis.circle" />}>
+    <Menu label={trailingMenuLabel}>
       <Picker
         title="排行榜类型"
         value={props.kind}
@@ -604,6 +633,22 @@ function rankingToolbar(props: {
           systemImage="clock.arrow.circlepath"
         />
       </Picker>
+      {props.kind !== "advanced" && props.activeModes.length > 0 && (
+        <Picker
+          title="榜单周期"
+          value={props.selectedMode}
+          onChanged={(value: string) => props.onModeChange(value)}
+        >
+          {props.activeModes.map((m) => (
+            <Label
+              key={m.value}
+              tag={m.value}
+              title={m.title}
+              systemImage="chart.bar"
+            />
+          ))}
+        </Picker>
+      )}
     </Menu>,
   ].filter(Boolean)
 

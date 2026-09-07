@@ -289,6 +289,7 @@ function MainTabView(props: {
   const tabViewProps: any = {
     selection,
     tabBarMinimizeBehavior: "onScrollDown",
+    tabViewStyle: "sidebarAdaptable",
   }
 
   if (isAppleMusic) {

@@ -1183,6 +1183,7 @@ function searchToolbar(props: {
   onSortChange: (sort: SearchSort) => void
   onAdvanced: () => void
 }) {
+  const isiPad = Device.isiPad
   const isClassic = !props.isAppleMusic
   const scopeLabel =
     props.scope === "illust"
@@ -1192,7 +1193,13 @@ function searchToolbar(props: {
         : "用户"
 
   let titleNode: any
-  if (isClassic) {
+  if (isiPad) {
+    titleNode = (
+      <Text font="headline" fontWeight="bold">
+        搜索 · {scopeLabel}
+      </Text>
+    )
+  } else if (isClassic) {
     titleNode = (
       <Menu
         label={
@@ -1231,10 +1238,36 @@ function searchToolbar(props: {
     titleNode = "搜索"
   }
 
+  const trailingMenuLabel = isiPad ? (
+    <HStack alignment="center" spacing={4}>
+      <Text font="subheadline" fontWeight="semibold">
+        {scopeLabel}
+      </Text>
+      <Image
+        systemName="chevron.down"
+        font="caption2"
+        foregroundStyle="secondaryLabel"
+      />
+    </HStack>
+  ) : (
+    <Image systemName="ellipsis.circle" />
+  )
+
   return appToolbar(
     props.onClose,
     titleNode,
-    <Menu label={<Image systemName="ellipsis.circle" />}>
+    <Menu label={trailingMenuLabel}>
+      <Picker
+        title="搜索范围"
+        value={props.scope}
+        onChanged={(v: string) => props.onScopeChange(v as SearchScope)}
+      >
+        <Label tag="illust" title="插画·漫画" systemImage="photo" />
+        {!props.hideNovels && (
+          <Label tag="novel" title="小说" systemImage="book" />
+        )}
+        <Label tag="user" title="用户" systemImage="person.crop.circle" />
+      </Picker>
       <Picker
         title="排序方式"
         value={props.sort}

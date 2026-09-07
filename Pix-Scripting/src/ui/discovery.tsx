@@ -1,5 +1,6 @@
 import {
   Button,
+  Device,
   HStack,
   Image,
   Label,
@@ -602,13 +603,27 @@ function exploreToolbar(props: {
   onKindChange: (kind: FeedKind) => void
   onClose: () => void
 }) {
+  const isiPad = Device.isiPad
   const isClassic = !props.isAppleMusic
   const kindLabel =
     props.kind === "illustration" ? "插画" : props.kind === "manga" ? "漫画" : "小说"
+  const baseTitle =
+    props.mode === "recommended"
+      ? "推荐"
+      : props.mode === "latest"
+        ? "最新"
+        : "特辑"
 
   let titleNode: any
-  if (isClassic && (props.mode === "recommended" || props.mode === "latest")) {
-    const baseTitle = props.mode === "recommended" ? "推荐" : "最新"
+  if (isiPad) {
+    const promptText =
+      props.mode === "pixivision" ? "特辑" : `${baseTitle} · ${kindLabel}`
+    titleNode = (
+      <Text font="headline" fontWeight="bold">
+        {promptText}
+      </Text>
+    )
+  } else if (isClassic && (props.mode === "recommended" || props.mode === "latest")) {
     titleNode = (
       <Menu
         label={
@@ -644,18 +659,26 @@ function exploreToolbar(props: {
       </Menu>
     )
   } else {
-    titleNode =
-      props.mode === "recommended"
-        ? "推荐"
-        : props.mode === "latest"
-          ? "最新"
-          : "特辑"
+    titleNode = baseTitle
   }
 
-  return appToolbar(
-    props.onClose,
-    titleNode,
-    <Menu label={<Image systemName="ellipsis.circle" />}>
+  const trailingMenuLabel = isiPad ? (
+    <HStack alignment="center" spacing={4}>
+      <Text font="subheadline" fontWeight="semibold">
+        {props.mode === "pixivision" ? "特辑" : `${baseTitle} · ${kindLabel}`}
+      </Text>
+      <Image
+        systemName="chevron.down"
+        font="caption2"
+        foregroundStyle="secondaryLabel"
+      />
+    </HStack>
+  ) : (
+    <Image systemName="ellipsis.circle" />
+  )
+
+  const trailingMenu = (
+    <Menu label={trailingMenuLabel}>
       <Picker
         title="探索类型"
         value={props.mode}
@@ -665,8 +688,23 @@ function exploreToolbar(props: {
         <Label tag="latest" title="最新" systemImage="clock" />
         <Label tag="pixivision" title="特辑" systemImage="rectangle.stack" />
       </Picker>
+      {props.mode !== "pixivision" && (
+        <Picker
+          title="媒体类型"
+          value={props.kind}
+          onChanged={(value: string) => props.onKindChange(value as FeedKind)}
+        >
+          <Label tag="illustration" title="插画" systemImage="photo" />
+          <Label tag="manga" title="漫画" systemImage="photo.on.rectangle" />
+          {!props.hideNovels && (
+            <Label tag="novel" title="小说" systemImage="book" />
+          )}
+        </Picker>
+      )}
     </Menu>
   )
+
+  return appToolbar(props.onClose, titleNode, trailingMenu)
 }
 
 function IllustFeedContent(props: {

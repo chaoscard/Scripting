@@ -1,11 +1,19 @@
-import { Button, Script, Text } from "scripting"
+import { Button, Device, Script, Text } from "scripting"
 import { loadSettings } from "../../store/settings"
 import { abortAllAITasks } from "../../api/aiService"
 
-export function appToolbar(dismiss: () => void, title?: any, trailing?: any, principal?: any) {
+export function appToolbar(
+  dismiss: () => void,
+  title?: any,
+  trailing?: any,
+  principal?: any
+) {
+  const isiPad = Device.isiPad
+
   return {
     topBarLeading: [
       <Button
+        key="app-toolbar-close"
         title="关闭"
         systemImage="xmark"
         action={() => {
@@ -26,21 +34,23 @@ export function appToolbar(dismiss: () => void, title?: any, trailing?: any, pri
         ? trailing
         : [trailing]
       : undefined,
-    principal: principal
-      ? Array.isArray(principal)
-        ? principal
-        : [principal]
-      : title
-        ? Array.isArray(title)
-          ? title
-          : typeof title === "string"
-            ? [
-                <Text font="title2" fontWeight="bold">
-                  {title}
-                </Text>,
-              ]
-            : [title]
-        : undefined,
+    principal: isiPad
+      ? undefined
+      : principal
+        ? Array.isArray(principal)
+          ? principal
+          : [principal]
+        : title
+          ? Array.isArray(title)
+            ? title
+            : typeof title === "string"
+              ? [
+                  <Text font="title2" fontWeight="bold">
+                    {title}
+                  </Text>,
+                ]
+              : [title]
+          : undefined,
   }
 }
 
