@@ -257,7 +257,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   widgetReloadIntervalMinutes: 60,
   quickActionButtonEnabled: true,
   quickActionButtonAction: "bookmark",
-  quickActionButtonPosition: "trailing",
+  quickActionButtonPosition: "leading",
   imageSourceMode: "official",
   customImageBaseUrl: "",
   apiGatewayMode: "official",
@@ -292,8 +292,8 @@ const QUICK_ACTION_BUTTON_ACTION_VALUES: readonly QuickActionButtonAction[] = [
   "download",
 ]
 const QUICK_ACTION_BUTTON_POSITION_VALUES: readonly QuickActionButtonPosition[] = [
-  "trailing",
   "leading",
+  "trailing",
 ]
 const AMBIENT_INTENSITY_VALUES: readonly AmbientIntensity[] = ["low", "medium", "high"]
 const GEMINI_MOTION_SPEED_VALUES: readonly GeminiMotionSpeed[] = [

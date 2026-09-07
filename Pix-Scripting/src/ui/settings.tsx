@@ -416,8 +416,8 @@ export function SettingsView() {
                   update({ quickActionButtonPosition: value as QuickActionButtonPosition })
                 }
               >
-                <Text tag="trailing">右下角</Text>
                 <Text tag="leading">左下角</Text>
+                <Text tag="trailing">右下角</Text>
               </Picker>
             </Group>
           ) : null}

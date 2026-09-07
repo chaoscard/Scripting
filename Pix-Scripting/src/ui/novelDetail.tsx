@@ -884,6 +884,13 @@ export function NovelDetailView(props: { novelID: number }) {
       contextMenu = {
         menuItems: (
           <Group>
+            {current.user?.id ? (
+              <Button
+                title="查看主页"
+                systemImage="person.crop.circle"
+                action={() => void requestPixivRoute(`user:${current.user?.id}`)}
+              />
+            ) : null}
             {followed ? (
               followRestrict === "private" ? (
                 <Button

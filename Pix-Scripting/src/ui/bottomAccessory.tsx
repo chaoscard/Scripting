@@ -565,6 +565,11 @@ export function IllustDetailDockBar(props: { illustID: number }) {
     return {
       menuItems: (
         <Group>
+          <Button
+            title="查看主页"
+            systemImage="person.crop.circle"
+            action={() => void requestPixivRoute(`user:${userID}`)}
+          />
           {followed ? (
             followRestrict === "private" ? (
               <Button
@@ -867,6 +872,11 @@ export function NovelDetailDockBar(props: { novelID: number }) {
     return {
       menuItems: (
         <Group>
+          <Button
+            title="查看主页"
+            systemImage="person.crop.circle"
+            action={() => void requestPixivRoute(`user:${userID}`)}
+          />
           {followed ? (
             followRestrict === "private" ? (
               <Button
