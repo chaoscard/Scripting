@@ -618,22 +618,24 @@ export function SettingsView() {
                 title="横屏图片列数"
                 value={String(settings.waterfallColumnsIpadLandscape)}
                 onChanged={(value: string) =>
-                  update({ waterfallColumnsIpadLandscape: Number(value) as 2 | 3 | 4 })
+                  update({ waterfallColumnsIpadLandscape: Number(value) as 2 | 3 | 4 | 5 })
                 }
               >
                 <Text tag="2">2 列</Text>
                 <Text tag="3">3 列</Text>
                 <Text tag="4">4 列</Text>
+                <Text tag="5">5 列</Text>
               </Picker>
               <Picker
                 title="竖屏图片列数"
                 value={String(settings.waterfallColumnsIpadPortrait)}
                 onChanged={(value: string) =>
-                  update({ waterfallColumnsIpadPortrait: Number(value) as 2 | 3 })
+                  update({ waterfallColumnsIpadPortrait: Number(value) as 2 | 3 | 4 })
                 }
               >
                 <Text tag="2">2 列</Text>
                 <Text tag="3">3 列</Text>
+                <Text tag="4">4 列</Text>
               </Picker>
             </>
           ) : null}
@@ -645,7 +647,7 @@ export function SettingsView() {
               <Text>瀑布流首图全宽展示</Text>
               {Device.isiPad ? (
                 <Text font="caption2" foregroundStyle="secondaryLabel">
-                  此设置在 iPad 设备上不生效
+                  此设置在 iPad / Mac 设备上不生效
                 </Text>
               ) : null}
             </VStack>

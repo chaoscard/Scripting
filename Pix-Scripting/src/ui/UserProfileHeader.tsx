@@ -377,6 +377,23 @@ export function UserProfileHeader(props: {
         padding={{ top: ringSize / 2 + 14, horizontal: 16, bottom: 8 }}
         frame={{ maxWidth: "infinity" }}
       >
+        {/* 用户名称：居中毛玻璃胶囊 */}
+        <HStack
+          alignment="center"
+          frame={{ maxWidth: "infinity", alignment: "center" }}
+        >
+          <HStack
+            alignment="center"
+            spacing={6}
+            padding={{ horizontal: 16, vertical: 6 }}
+            glassEffect="capsule"
+          >
+            <Text font="headline" fontWeight="bold">
+              {user.name}
+            </Text>
+          </HStack>
+        </HStack>
+
         {/* 社媒图标栏：居中展示，距离头像有段呼吸空间 */}
         <UserSocialBar socials={socialLinks} />
 

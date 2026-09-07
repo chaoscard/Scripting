@@ -89,8 +89,8 @@ export const ALL_NOVEL_RANKING_OPTIONS: ReadonlyArray<RankingOptionDef> = [
   { key: "week_r18g", title: "R18G每周", type: "novel", requiresR18: true, requiresR18G: true },
 ]
 
-export type WaterfallColumnsIpadLandscape = 2 | 3 | 4
-export type WaterfallColumnsIpadPortrait = 2 | 3
+export type WaterfallColumnsIpadLandscape = 2 | 3 | 4 | 5
+export type WaterfallColumnsIpadPortrait = 2 | 3 | 4
 
 export interface ActiveCustomRankingTab {
   id: string
@@ -359,7 +359,7 @@ const API_GATEWAY_MODE_VALUES: readonly ApiGatewayMode[] = [
 
 function parseWaterfallColumnsIpadLandscape(value: unknown): WaterfallColumnsIpadLandscape {
   const num = typeof value === "string" ? Number(value) : value
-  if (num === 2 || num === 3 || num === 4) {
+  if (num === 2 || num === 3 || num === 4 || num === 5) {
     return num
   }
   return DEFAULT_SETTINGS.waterfallColumnsIpadLandscape
@@ -367,7 +367,7 @@ function parseWaterfallColumnsIpadLandscape(value: unknown): WaterfallColumnsIpa
 
 function parseWaterfallColumnsIpadPortrait(value: unknown): WaterfallColumnsIpadPortrait {
   const num = typeof value === "string" ? Number(value) : value
-  if (num === 2 || num === 3) {
+  if (num === 2 || num === 3 || num === 4) {
     return num
   }
   return DEFAULT_SETTINGS.waterfallColumnsIpadPortrait

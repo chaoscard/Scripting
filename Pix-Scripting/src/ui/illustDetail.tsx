@@ -1307,6 +1307,11 @@ export function IllustDetailView(props: { illustID: number }) {
         </VStack>
 
         <VStack alignment="leading" spacing={8} padding={{ horizontal: 14 }} frame={{ maxWidth: "infinity", alignment: "leading" }}>
+          {/* 作品标题 */}
+          <Text font="subheadline" fontWeight="semibold" foregroundStyle="secondaryLabel">
+            {current.title}
+          </Text>
+
           {/* 统计指标 */}
           <HStack spacing={10}>
             <HStack spacing={3}>

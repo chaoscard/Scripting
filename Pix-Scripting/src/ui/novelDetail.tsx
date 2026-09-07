@@ -1370,6 +1370,11 @@ export function NovelDetailView(props: { novelID: number }) {
         scrollTargetLayout={true}
       >
         <VStack key="novel-header-content" alignment="leading" spacing={8} padding={{ horizontal: 14, top: 12 }}>
+          {/* 小说标题 */}
+          <Text font="subheadline" fontWeight="semibold" foregroundStyle="secondaryLabel">
+            {current.title}
+          </Text>
+
           {/* 统计指标 */}
           <HStack spacing={10}>
             <HStack spacing={3}>

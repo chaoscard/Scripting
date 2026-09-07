@@ -18,6 +18,7 @@ import {
 } from "scripting"
 import { requestPixivRoute } from "./routeNavigation"
 import { CachedImage, presentExternalURL, routeForDescriptionLink } from "./components"
+import { useLayoutMetrics } from "./hooks"
 import { session } from "../api/session"
 import { illustrationDetail } from "../api/pixiv"
 import { imageUrlOf, pageThumbUrlOf, cachedFilePath, loadImage } from "../image/imageLoader"
@@ -1251,6 +1252,13 @@ function NovelVerticalReaderView(props: {
     onJumpToPage,
   } = props
 
+  const { height: screenHeight, isiPad, isLandscape } = useLayoutMetrics()
+
+  const containerHeight = useMemo(() => {
+    const margin = isiPad ? (isLandscape ? 180 : 220) : 200
+    return Math.max(480, Math.round(screenHeight - margin))
+  }, [screenHeight, isiPad, isLandscape])
+
   const [imageCache, setImageCache] = useState<
     Record<
       string,
@@ -1468,7 +1476,7 @@ function NovelVerticalReaderView(props: {
   return (
     <VStack
       key="novel-webview-vertical"
-      frame={{ maxWidth: "infinity", height: 620 }}
+      frame={{ maxWidth: "infinity", height: containerHeight }}
     >
       <WebView controller={controller} />
     </VStack>
