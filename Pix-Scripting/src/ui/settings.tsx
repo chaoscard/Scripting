@@ -528,7 +528,9 @@ export function SettingsView() {
                 <Text font="footnote" foregroundStyle="tertiaryLabel">
                   {[
                     settings.pageLayout === "appleMusic" ? "苹果音乐" : "经典样式",
-                    !Device.isiPad && settings.heroFirstFeedCard ? "全宽" : "双列",
+                    Device.isiPad
+                      ? `${settings.waterfallColumnsIpadLandscape}横/${settings.waterfallColumnsIpadPortrait}竖`
+                      : settings.heroFirstFeedCard ? "全宽" : "双列",
                     settings.compactIllustCard ? "简约" : null,
                     settings.ambientImmersion ? "沉浸" : null,
                   ]
@@ -549,6 +551,31 @@ export function SettingsView() {
             <Text tag="appleMusic">苹果音乐</Text>
             <Text tag="classic">经典样式</Text>
           </Picker>
+          {Device.isiPad ? (
+            <>
+              <Picker
+                title="横屏图片列数"
+                value={String(settings.waterfallColumnsIpadLandscape)}
+                onChanged={(value: string) =>
+                  update({ waterfallColumnsIpadLandscape: Number(value) as 2 | 3 | 4 })
+                }
+              >
+                <Text tag="2">2 列</Text>
+                <Text tag="3">3 列</Text>
+                <Text tag="4">4 列</Text>
+              </Picker>
+              <Picker
+                title="竖屏图片列数"
+                value={String(settings.waterfallColumnsIpadPortrait)}
+                onChanged={(value: string) =>
+                  update({ waterfallColumnsIpadPortrait: Number(value) as 2 | 3 })
+                }
+              >
+                <Text tag="2">2 列</Text>
+                <Text tag="3">3 列</Text>
+              </Picker>
+            </>
+          ) : null}
           <Toggle
             value={settings.heroFirstFeedCard}
             onChanged={(value) => update({ heroFirstFeedCard: value })}

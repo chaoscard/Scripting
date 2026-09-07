@@ -40,9 +40,14 @@ export const FLOW_HORIZONTAL_PADDING = 12
 export const FLOW_COLUMN_SPACING = 12
 export const FLOW_ROW_SPACING = 4
 
-export function calculateFlowCardWidth(screenWidth: number = Device.screen.width): number {
+export function calculateFlowCardWidth(
+  screenWidth: number = Device.screen.width,
+  columnCount: number = 2
+): number {
+  const count = Math.max(1, columnCount)
+  const totalSpacing = (count - 1) * FLOW_COLUMN_SPACING
   return Math.floor(
-    (screenWidth - FLOW_HORIZONTAL_PADDING * 2 - FLOW_COLUMN_SPACING) / 2
+    (screenWidth - FLOW_HORIZONTAL_PADDING * 2 - totalSpacing) / count
   )
 }
 
@@ -477,8 +482,26 @@ export function IllustFlowFeed(props: {
   ) => any
 }) {
   cacheIllusts(props.items)
-  const { width: screenWidth, isiPad } = useLayoutMetrics()
-  const flowCardWidth = useMemo(() => calculateFlowCardWidth(screenWidth), [screenWidth])
+  const { width: screenWidth, isiPad, isLandscape } = useLayoutMetrics()
+  const [settings, setSettings] = useState(() => loadSettings())
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      setSettings(loadSettings())
+    })
+  }, [])
+
+  const columnCount = useMemo(() => {
+    if (!isiPad) return 2
+    return isLandscape
+      ? (settings.waterfallColumnsIpadLandscape ?? 3)
+      : (settings.waterfallColumnsIpadPortrait ?? 3)
+  }, [isiPad, isLandscape, settings.waterfallColumnsIpadLandscape, settings.waterfallColumnsIpadPortrait])
+
+  const flowCardWidth = useMemo(
+    () => calculateFlowCardWidth(screenWidth, columnCount),
+    [screenWidth, columnCount]
+  )
   const heroCardWidth = useMemo(() => calculateHeroCardWidth(screenWidth), [screenWidth])
 
   const isHeroActive = !isiPad && Boolean(props.enableHeroFirst && props.items.length > 0)
@@ -486,9 +509,9 @@ export function IllustFlowFeed(props: {
   const waterfallItems = isHeroActive ? props.items.slice(1) : props.items
   const startIndex = isHeroActive ? 1 : 0
 
-  const [leading, trailing] = useMemo(
-    () => distributeFlowItems(waterfallItems, startIndex, flowCardWidth),
-    [waterfallItems, startIndex, flowCardWidth]
+  const columns = useMemo(
+    () => distributeFlowItems(waterfallItems, startIndex, flowCardWidth, columnCount),
+    [waterfallItems, startIndex, flowCardWidth, columnCount]
   )
   const lastItem = props.items[props.items.length - 1]
   const lastId = lastItem ? lastItem.id : null
@@ -516,30 +539,20 @@ export function IllustFlowFeed(props: {
           onAppear={() => props.onLoadMore(triggerAnchor)}
         />
       ) : null
-      return [
+      return columns.map((colItems, colIndex) => (
         <LazyVStack
-          key="leading"
+          key={`flow-col-${colIndex}`}
           alignment="leading"
           spacing={FLOW_ROW_SPACING}
           frame={{ width: flowCardWidth }}
         >
-          {leading.map(renderItem)}
+          {colItems.map(renderItem)}
           {triggerView}
-        </LazyVStack>,
-        <LazyVStack
-          key="trailing"
-          alignment="leading"
-          spacing={FLOW_ROW_SPACING}
-          frame={{ width: flowCardWidth }}
-        >
-          {trailing.map(renderItem)}
-          {triggerView}
-        </LazyVStack>,
-      ]
+        </LazyVStack>
+      ))
     },
     [
-      leading,
-      trailing,
+      columns,
       flowCardWidth,
       triggerAnchor,
       props.hasMore,
@@ -623,10 +636,12 @@ export function IllustFlowFeed(props: {
 function distributeFlowItems(
   items: PixivIllustration[],
   startIndex = 0,
-  cardWidth: number = calculateFlowCardWidth()
-): [IllustFlowItem[], IllustFlowItem[]] {
-  const columns: [IllustFlowItem[], IllustFlowItem[]] = [[], []]
-  const heights = [0, 0]
+  cardWidth: number = calculateFlowCardWidth(),
+  columnCount: number = 2
+): IllustFlowItem[][] {
+  const count = Math.max(1, columnCount)
+  const columns: IllustFlowItem[][] = Array.from({ length: count }, () => [])
+  const heights = new Array(count).fill(0)
   for (let i = 0; i < items.length; i++) {
     const illust = items[i]
     const index = startIndex + i
@@ -637,9 +652,14 @@ function distributeFlowItems(
     const imageHeight = cardWidth / ratio
     const textHeight = 62
     const footerHeight = 10
-    const column = heights[0] <= heights[1] ? 0 : 1
-    columns[column].push({ illust, index })
-    heights[column] += imageHeight + textHeight + footerHeight
+    let minCol = 0
+    for (let c = 1; c < count; c++) {
+      if (heights[c] < heights[minCol]) {
+        minCol = c
+      }
+    }
+    columns[minCol].push({ illust, index })
+    heights[minCol] += imageHeight + textHeight + footerHeight
   }
   return columns
 }

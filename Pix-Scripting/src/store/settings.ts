@@ -89,6 +89,9 @@ export const ALL_NOVEL_RANKING_OPTIONS: ReadonlyArray<RankingOptionDef> = [
   { key: "week_r18g", title: "R18G每周", type: "novel", requiresR18: true, requiresR18G: true },
 ]
 
+export type WaterfallColumnsIpadLandscape = 2 | 3 | 4
+export type WaterfallColumnsIpadPortrait = 2 | 3
+
 export interface ActiveCustomRankingTab {
   id: string
   type: "illust" | "manga" | "novel"
@@ -106,6 +109,8 @@ export interface AppSettings {
   exemptFilterForPersonal: boolean
   hideNovels: boolean
   pageLayout: PageLayout
+  waterfallColumnsIpadLandscape: WaterfallColumnsIpadLandscape
+  waterfallColumnsIpadPortrait: WaterfallColumnsIpadPortrait
   heroFirstFeedCard: boolean
   compactIllustCard: boolean
   ambientImmersion: boolean
@@ -191,6 +196,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   exemptFilterForPersonal: true,
   hideNovels: false,
   pageLayout: "appleMusic",
+  waterfallColumnsIpadLandscape: 3,
+  waterfallColumnsIpadPortrait: 3,
   heroFirstFeedCard: true,
   compactIllustCard: true,
   ambientImmersion: true,
@@ -328,6 +335,22 @@ const API_GATEWAY_MODE_VALUES: readonly ApiGatewayMode[] = [
   "official",
   "custom",
 ]
+
+function parseWaterfallColumnsIpadLandscape(value: unknown): WaterfallColumnsIpadLandscape {
+  const num = typeof value === "string" ? Number(value) : value
+  if (num === 2 || num === 3 || num === 4) {
+    return num
+  }
+  return DEFAULT_SETTINGS.waterfallColumnsIpadLandscape
+}
+
+function parseWaterfallColumnsIpadPortrait(value: unknown): WaterfallColumnsIpadPortrait {
+  const num = typeof value === "string" ? Number(value) : value
+  if (num === 2 || num === 3) {
+    return num
+  }
+  return DEFAULT_SETTINGS.waterfallColumnsIpadPortrait
+}
 
 export function getImageBatchSize(level?: number): number {
   if (typeof level === "number" && Number.isFinite(level) && level > 0) {
@@ -550,6 +573,12 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
     pageLayout: isOneOf(stored?.pageLayout, PAGE_LAYOUT_VALUES)
       ? stored.pageLayout
       : DEFAULT_SETTINGS.pageLayout,
+    waterfallColumnsIpadLandscape: parseWaterfallColumnsIpadLandscape(
+      stored?.waterfallColumnsIpadLandscape
+    ),
+    waterfallColumnsIpadPortrait: parseWaterfallColumnsIpadPortrait(
+      stored?.waterfallColumnsIpadPortrait
+    ),
     heroFirstFeedCard: boolOr(stored?.heroFirstFeedCard, DEFAULT_SETTINGS.heroFirstFeedCard),
     compactIllustCard: boolOr(stored?.compactIllustCard, DEFAULT_SETTINGS.compactIllustCard),
     ambientImmersion: boolOr(stored?.ambientImmersion, DEFAULT_SETTINGS.ambientImmersion),
