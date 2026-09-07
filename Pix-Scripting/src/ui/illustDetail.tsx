@@ -475,21 +475,21 @@ export function IllustDetailView(props: { illustID: number }) {
 
   if (loading && !illust) {
     return (
-      <ScrollView navigationTitle="作品详情" navigationBarTitleDisplayMode="inline">
+      <ScrollView navigationTitle="" navigationBarTitleDisplayMode="inline">
         <LoadingView />
       </ScrollView>
     )
   }
   if (error && !illust) {
     return (
-      <ScrollView navigationTitle="作品详情" navigationBarTitleDisplayMode="inline">
+      <ScrollView navigationTitle="" navigationBarTitleDisplayMode="inline">
         <ErrorView message={error} onRetry={() => load(true)} />
       </ScrollView>
     )
   }
   if (!illust) {
     return (
-      <ScrollView navigationTitle="作品详情" navigationBarTitleDisplayMode="inline">
+      <ScrollView navigationTitle="" navigationBarTitleDisplayMode="inline">
         <ErrorView message="作品不存在" onRetry={() => load(true)} />
       </ScrollView>
     )
@@ -953,8 +953,8 @@ export function IllustDetailView(props: { illustID: number }) {
   return (
     <ZStack alignment={quickActionPos === "leading" ? "bottomLeading" : "bottomTrailing"}>
       <ScrollView
-        navigationTitle={current.title}
-      navigationBarTitleDisplayMode="inline"
+        navigationTitle=""
+        navigationBarTitleDisplayMode="inline"
       ignoresSafeArea={{ edges: "bottom" }}
       toolbarBackground={
         ambientEnabled && ambientPalette

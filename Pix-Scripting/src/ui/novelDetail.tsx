@@ -829,7 +829,7 @@ export function NovelDetailView(props: { novelID: number }) {
   if (loading) {
     return (
       <ScrollView
-        navigationTitle="小说"
+        navigationTitle=""
         navigationBarTitleDisplayMode="inline"
       >
         <LoadingView />
@@ -839,7 +839,7 @@ export function NovelDetailView(props: { novelID: number }) {
   if (error || !novel) {
     return (
       <ScrollView
-        navigationTitle="小说"
+        navigationTitle=""
         navigationBarTitleDisplayMode="inline"
       >
         <ErrorView message={error ?? "小说不存在"} onRetry={load} />
@@ -981,8 +981,8 @@ export function NovelDetailView(props: { novelID: number }) {
                 anchor: "top",
               }}
               ignoresSafeArea={{ edges: "bottom" }}
-            navigationTitle={current.title}
-            navigationBarTitleDisplayMode="inline"
+              navigationTitle=""
+              navigationBarTitleDisplayMode="inline"
             onAppear={() => {
               isDisappearedRef.current = false
               const saved = getNovelProgress(novelID)

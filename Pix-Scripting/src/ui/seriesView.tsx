@@ -1,5 +1,6 @@
 import {
   Button,
+  Device,
   HStack,
   Image,
   LazyVStack,
@@ -480,7 +481,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
   if (paged.initialLoading) {
     return (
       <ScrollView
-        navigationTitle="系列详情"
+        navigationTitle=""
         navigationBarTitleDisplayMode="inline"
         toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
       >
@@ -492,7 +493,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
   if (paged.error) {
     return (
       <ScrollView
-        navigationTitle="系列详情"
+        navigationTitle=""
         navigationBarTitleDisplayMode="inline"
         toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
       >
@@ -503,7 +504,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
 
   return (
     <ScrollView
-      navigationTitle={title}
+      navigationTitle=""
       navigationBarTitleDisplayMode="inline"
       toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
       ignoresSafeArea={{ edges: ["top", "bottom"] }}

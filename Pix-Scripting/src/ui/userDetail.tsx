@@ -1,5 +1,6 @@
 import {
   Button,
+  Device,
   Divider,
   Group,
   HStack,
@@ -610,7 +611,7 @@ export function UserDetailView(props: { userID: number }) {
   if (!detail) {
     if (detailError) {
       return (
-        <ScrollView navigationTitle="用户主页" navigationBarTitleDisplayMode="inline">
+        <ScrollView navigationTitle="" navigationBarTitleDisplayMode="inline">
           <ErrorView message={detailError} onRetry={loadDetail} />
         </ScrollView>
       )
@@ -624,7 +625,7 @@ export function UserDetailView(props: { userID: number }) {
 
   return (
     <ZStack
-      navigationTitle={detail.user.name}
+      navigationTitle=""
       navigationBarTitleDisplayMode="inline"
       toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
       ignoresSafeArea={{ edges: ["top", "bottom"] }}

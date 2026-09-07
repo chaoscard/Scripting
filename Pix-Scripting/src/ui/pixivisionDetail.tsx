@@ -354,7 +354,7 @@ export function PixivisionDetailView(props: { articleID: number }) {
         ) : (
           <Rectangle fill={ambientBackground ?? "clear"} ignoresSafeArea={true} />
         )}
-        <ScrollView navigationTitle="特辑详情" navigationBarTitleDisplayMode="inline">
+        <ScrollView navigationTitle="" navigationBarTitleDisplayMode="inline">
           <LoadingView />
         </ScrollView>
       </ZStack>
@@ -369,7 +369,7 @@ export function PixivisionDetailView(props: { articleID: number }) {
         ) : (
           <Rectangle fill={ambientBackground ?? "clear"} ignoresSafeArea={true} />
         )}
-        <ScrollView navigationTitle="特辑详情" navigationBarTitleDisplayMode="inline">
+        <ScrollView navigationTitle="" navigationBarTitleDisplayMode="inline">
           <ErrorView message={error ?? "特辑不存在或已下架"} onRetry={load} />
         </ScrollView>
       </ZStack>
@@ -388,7 +388,7 @@ export function PixivisionDetailView(props: { articleID: number }) {
           proxyRef.current = proxy
           return (
             <ScrollView
-            navigationTitle={detail.title}
+            navigationTitle=""
             navigationBarTitleDisplayMode="inline"
             toolbar={{
               topBarTrailing: [
