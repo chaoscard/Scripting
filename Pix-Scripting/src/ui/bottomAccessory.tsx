@@ -57,6 +57,7 @@ import {
 } from "../downloader"
 import { imageUrlOf } from "../image/imageLoader"
 import { requestPixivRoute } from "./routeNavigation"
+import { renderTagContextMenu } from "./components/TagChip"
 import {
   getCustomRankingModesForKind,
   getDownloadImageQuality,
@@ -152,6 +153,20 @@ export function getActiveAccessoryKey(
     top.startsWith("userWorks:")
   )
     return "userWorks"
+  if (
+    top === "connections:following" ||
+    top.startsWith("userConnections:following:")
+  )
+    return "connections:following"
+  if (top === "pixivisionBookmarks") return "pixivisionBookmarks"
+  if (top === "novelBookmarks") return "novelBookmarks"
+  if (top === "notifications") return "notifications"
+  if (top.startsWith("notificationsMore:")) return top
+  if (top === "downloadManager") return "downloadManager"
+  if (top.startsWith("downloadDetail:")) return top
+  if (top.startsWith("downloadCreator:")) return top
+  if (top.startsWith("rankingCustomPicker:")) return top
+  if (top === "settings") return "settings"
   return null
 }
 
@@ -1197,6 +1212,26 @@ export function SeriesDetailDockBar(props: {
   return <DockActionBar items={items} />
 }
 
+export function TagFeedDockBar(props: { tagName: string }) {
+  const { tagName } = props
+  const contextMenu = useMemo(() => renderTagContextMenu(tagName), [tagName])
+  const items: DockActionItem[] = [
+    {
+      key: "tag",
+      label: tagName ? `#${tagName}` : "#标签",
+      icon: "number",
+      color: "#3172EB",
+      action: () => {
+        try {
+          void Haptics.transient()
+        } catch {}
+      },
+      contextMenu,
+    },
+  ]
+  return <DockActionBar items={items} />
+}
+
 export function renderRouteInfoBar(top: string) {
   if (!top) return null
 
@@ -1222,7 +1257,7 @@ export function renderRouteInfoBar(top: string) {
       decoded = decoded.split("?")[0]
     }
     decoded = decoded.replace(/^#+/, "").trim()
-    return <DockInfoBar icon="number" title={decoded || "标签"} />
+    return <TagFeedDockBar key={`tag-${decoded}`} tagName={decoded} />
   }
 
   // 2. 相关作品

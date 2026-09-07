@@ -15,6 +15,7 @@ import {
   Toggle,
   Widget,
   useEffect,
+  useMemo,
   useState,
   VStack,
 } from "scripting"
@@ -40,6 +41,14 @@ import {
   type WidgetDefaultSource,
 } from "../store/settings"
 import { loadBlocklist, onBlocklistChanged } from "../store/blocklist"
+import {
+  DockActionBar,
+  useRegisterBottomAccessory,
+  type DockActionItem,
+} from "./bottomAccessory"
+
+declare const Dialog: any
+declare const Haptics: any
 import {
   loadCustomAIProfile,
   onCustomAIConfigChanged,
@@ -183,6 +192,58 @@ export function SettingsView() {
     setExperimentalImmersionKey((k) => k + 1)
     setShowHighlights(true)
   }
+
+  const resetContextMenu = useMemo(() => {
+    return {
+      menuItems: (
+        <Group>
+          <Button
+            title="重置为默认设置"
+            systemImage="arrow.counterclockwise"
+            role="destructive"
+            action={handleResetSettings}
+          />
+        </Group>
+      ),
+    }
+  }, [])
+
+  const isAppleMusic = settings.pageLayout === "appleMusic"
+
+  const settingsDockAccessory = useMemo(() => {
+    const items: DockActionItem[] = [
+      {
+        key: "title",
+        label: "应用设置",
+        icon: "gearshape.fill",
+        color: "#EE2F49",
+        action: () => {
+          try {
+            void Haptics.transient()
+          } catch {}
+        },
+      },
+      {
+        key: "reset",
+        label: "重置设置",
+        icon: "arrow.counterclockwise",
+        color: "#3172EB",
+        action: () => {
+          try {
+            void Haptics.transient()
+          } catch {}
+        },
+        contextMenu: resetContextMenu,
+      },
+    ]
+    return <DockActionBar items={items} />
+  }, [resetContextMenu])
+
+  useRegisterBottomAccessory(
+    "settings",
+    settingsDockAccessory,
+    isAppleMusic
+  )
 
   function clearAllCaches() {
     clearCache()

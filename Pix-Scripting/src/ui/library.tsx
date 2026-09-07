@@ -52,9 +52,10 @@ import {
 } from "./components"
 import { requestPixivRoute } from "./routeNavigation"
 import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
+import { PixivisionBookmarksContent } from "./pixivisionBookmarks"
 
 type Visibility = "public" | "private"
-type LibraryKind = "illustration" | "novel"
+type LibraryKind = "illustration" | "novel" | "pixivision"
 
 const MAX_TAG_CHIPS = 20
 
@@ -96,12 +97,13 @@ export function LibraryView() {
     if (!hideNovels) {
       items.push({ tag: "novel", label: "小说" })
     }
+    items.push({ tag: "pixivision", label: "特辑" })
     return items
   }, [hideNovels])
 
   useRegisterBottomAccessory(
     "library",
-    hideNovels || libraryItems.length <= 1 ? null : (
+    libraryItems.length <= 1 ? null : (
       <DockSegmentedBar
         items={libraryItems}
         value={kind}
@@ -176,6 +178,23 @@ export function LibraryView() {
           </RefreshableScrollView>
         </VStack>
       ) : null}
+
+      {/* 3. 特辑收藏保活容器 */}
+      {visitedKinds.has("pixivision") ? (
+        <VStack
+          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          opacity={kind === "pixivision" ? 1 : 0}
+          hidden={kind !== "pixivision"}
+          zIndex={kind === "pixivision" ? 1 : 0}
+          allowsHitTesting={kind === "pixivision"}
+        >
+          <PixivisionBookmarksContent
+            onFirstImageUrlChange={(url) => {
+              if (kind === "pixivision") setAmbientImageUrl(url)
+            }}
+          />
+        </VStack>
+      ) : null}
     </ZStack>
   )
 }
@@ -189,11 +208,16 @@ function libraryToolbar(props: {
   onRestrictChange: (restrict: Visibility) => void
 }) {
   const isClassic = !props.isAppleMusic
-  const kindLabel = props.kind === "illustration" ? "插画·漫画" : "小说"
+  const kindLabel =
+    props.kind === "illustration"
+      ? "插画·漫画"
+      : props.kind === "novel"
+      ? "小说"
+      : "特辑"
 
   return {
     principal:
-      isClassic && !props.hideNovels ? (
+      isClassic ? (
         <Menu
           label={
             <HStack alignment="center" spacing={4}>
@@ -213,10 +237,17 @@ function libraryToolbar(props: {
             systemImage={props.kind === "illustration" ? "checkmark" : undefined}
             action={() => props.onKindChange("illustration")}
           />
+          {!props.hideNovels && (
+            <Button
+              title="小说"
+              systemImage={props.kind === "novel" ? "checkmark" : undefined}
+              action={() => props.onKindChange("novel")}
+            />
+          )}
           <Button
-            title="小说"
-            systemImage={props.kind === "novel" ? "checkmark" : undefined}
-            action={() => props.onKindChange("novel")}
+            title="特辑"
+            systemImage={props.kind === "pixivision" ? "checkmark" : undefined}
+            action={() => props.onKindChange("pixivision")}
           />
         </Menu>
       ) : (
@@ -234,13 +265,6 @@ function libraryToolbar(props: {
           <Label tag="public" title="公开收藏" systemImage="globe" />
           <Label tag="private" title="私密收藏" systemImage="lock" />
         </Picker>
-        <Button
-          title="特辑收藏"
-          systemImage="rectangle.stack"
-          action={() => {
-            requestPixivRoute("pixivisionBookmarks")
-          }}
-        />
       </Menu>,
     ],
   }

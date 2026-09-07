@@ -2,6 +2,8 @@ import {
   LazyVStack,
   Text,
   useEffect,
+  useMemo,
+  useState,
 } from "scripting"
 import { nextNovelMarkers, novelMarkers } from "../api/pixiv"
 import { novelThumbUrlOf, prefetch } from "../image/imageLoader"
@@ -13,7 +15,14 @@ import { isNovelContentVisible } from "../store/contentFilter"
 import { onNovelMarkerChanged } from "../store/bookmarkSync"
 import { useLatest, usePagedList, currentBatchSize, useExperimentalAmbientPalette } from "./hooks"
 import { destinationElement } from "./routes"
+import {
+  DockActionBar,
+  useRegisterBottomAccessory,
+  type DockActionItem,
+} from "./bottomAccessory"
 import type { PixivNovelMarker } from "../types"
+
+declare const Haptics: any
 import {
   EmptyView,
   ErrorView,
@@ -45,7 +54,57 @@ export function NovelLibraryView() {
   })
 
   const pagedRef = useLatest(paged)
-  const firstNovelUrl = paged.items[0] ? novelThumbUrlOf(paged.items[0].novel) : null
+  const [isAscending, setIsAscending] = useState(false)
+  const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
+  const isAppleMusic = pageLayout === "appleMusic"
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      setPageLayout(loadSettings().pageLayout)
+    })
+  }, [])
+
+  const sortedItems = useMemo(() => {
+    if (!isAscending) return paged.items
+    return [...paged.items].reverse()
+  }, [paged.items, isAscending])
+
+  const novelBookmarkAccessory = useMemo(() => {
+    const items: DockActionItem[] = [
+      {
+        key: "title",
+        label: "小说书签",
+        icon: "book.pages.fill",
+        color: "#EE2F49",
+        action: () => {
+          try {
+            void Haptics.transient()
+          } catch {}
+        },
+      },
+      {
+        key: "sort",
+        label: isAscending ? "正序" : "倒序",
+        icon: isAscending ? "arrow.up" : "arrow.down",
+        color: "#3172EB",
+        action: () => {
+          try {
+            void Haptics.transient()
+          } catch {}
+          setIsAscending((v) => !v)
+        },
+      },
+    ]
+    return <DockActionBar items={items} />
+  }, [isAscending])
+
+  useRegisterBottomAccessory(
+    "novelBookmarks",
+    novelBookmarkAccessory,
+    isAppleMusic
+  )
+
+  const firstNovelUrl = sortedItems[0] ? novelThumbUrlOf(sortedItems[0].novel) : null
   const { ambientBackground } = useExperimentalAmbientPalette(firstNovelUrl)
   useEffect(() => {
     return onSettingsChanged(() => {
@@ -81,7 +140,7 @@ export function NovelLibraryView() {
         <EmptyView text="暂无小说书签" systemImage="book.pages" />
       ) : (
         <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
-          {paged.items.map((item, index) => (
+          {sortedItems.map((item, index) => (
             <NovelCard
               key={item.novel.id}
               novel={item.novel}
@@ -91,7 +150,7 @@ export function NovelLibraryView() {
             />
           ))}
           <LoadMoreTrigger
-            anchor={paged.items[paged.items.length - 1].novel.id}
+            anchor={sortedItems[sortedItems.length - 1]?.novel.id ?? 0}
             onLoadMore={paged.loadMore}
             hasMore={paged.hasMore}
             isLoading={paged.loadingMore}

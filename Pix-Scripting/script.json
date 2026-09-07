@@ -1,5 +1,5 @@
 {
-  "version": "0.9.4",
+  "version": "0.9.5",
   "permissions": null,
   "intentInputTypes": [],
   "iconImage": null,
@@ -9,7 +9,7 @@
   "remoteResource": {
     "autoUpdateInterval": null,
     "url": "https://raw.githubusercontent.com/chaoscard/Scripting/main/Release/Pix-Scripting.scripting",
-    "hash": "0a06f0c1bb13160a1c540cbab783fc47"
+    "hash": "83006f63507c69b60858999df3cd3b68"
   },
   "localizedNames": {
     "zh": ""

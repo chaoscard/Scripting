@@ -7,6 +7,7 @@ import {
   Text,
   VStack,
   ZStack,
+  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -19,6 +20,12 @@ import {
 } from "../api/pixiv"
 import { currentBatchSize, useExperimentalAmbientPalette, usePagedList } from "./hooks"
 import { prefetch } from "../image/imageLoader"
+import { loadSettings, onSettingsChanged } from "../store/settings"
+import {
+  DockActionBar,
+  useRegisterBottomAccessory,
+  type DockActionItem,
+} from "./bottomAccessory"
 import {
   AvatarImage,
   CachedImage,
@@ -30,6 +37,8 @@ import {
   LoadingView,
   RefreshableScrollView,
 } from "./components"
+
+declare const Haptics: any
 
 export function NotificationsView() {
   return (
@@ -70,6 +79,14 @@ function NotificationList(props: {
 }) {
   const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(null)
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
+  const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
+  const isAppleMusic = pageLayout === "appleMusic"
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      setPageLayout(loadSettings().pageLayout)
+    })
+  }, [])
 
   const paged = usePagedList<PixivNotification>({
     first: props.first,
@@ -79,6 +96,57 @@ function NotificationList(props: {
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(notificationThumbUrlOf)).cancel,
   })
+
+  const [refreshing, setRefreshing] = useState(false)
+  const isRefreshing = refreshing || paged.initialLoading
+
+  const handleRefresh = useCallback(async () => {
+    if (refreshing) return
+    try {
+      void Haptics.transient()
+    } catch {}
+    setRefreshing(true)
+    try {
+      await paged.refresh()
+    } finally {
+      setRefreshing(false)
+    }
+  }, [refreshing, paged.refresh])
+
+  const notificationAccessory = useMemo(() => {
+    const items: DockActionItem[] = [
+      {
+        key: "title",
+        label: props.title,
+        icon: "bell.fill",
+        color: "#EE2F49",
+        action: () => {
+          try {
+            void Haptics.transient()
+          } catch {}
+        },
+      },
+      {
+        key: "refresh",
+        label: isRefreshing ? "刷新中…" : "刷新",
+        icon: "arrow.clockwise",
+        color: isRefreshing ? "secondaryLabel" : "#3172EB",
+        disabled: isRefreshing,
+        action: () => {
+          void handleRefresh()
+        },
+      },
+    ]
+    return <DockActionBar items={items} />
+  }, [props.title, isRefreshing, handleRefresh])
+
+  const accessoryKey = props.notificationID ? `notificationsMore:${props.notificationID}` : "notifications"
+
+  useRegisterBottomAccessory(
+    accessoryKey,
+    notificationAccessory,
+    isAppleMusic
+  )
 
   const firstImageUrl = useMemo(() => {
     if (paged.items.length === 0) return null

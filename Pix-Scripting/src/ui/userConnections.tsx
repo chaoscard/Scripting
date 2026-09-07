@@ -36,6 +36,13 @@ import {
 } from "./components"
 import { prefetch } from "../image/imageLoader"
 import { currentBatchSize, useExperimentalAmbientPalette, usePagedList } from "./hooks"
+import {
+  DockActionBar,
+  useRegisterBottomAccessory,
+  type DockActionItem,
+} from "./bottomAccessory"
+
+declare const Haptics: any
 
 export type ConnectionRouteKind = "following" | "follower" | "mypixiv"
 type ConnectionVisibility = Extract<Visibility, "public" | "private">
@@ -66,17 +73,71 @@ export function UserConnectionsView(props: {
           : "好友")
   const [restrict, setRestrict] = useState<ConnectionVisibility>("public")
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
+  const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
+  const isAppleMusic = pageLayout === "appleMusic"
+  const isMyFollowing = props.kind === "following" && (props.userID == null || props.userID === session.userID)
   const [showRecommendedUsers, setShowRecommendedUsers] = useState(false)
   const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(null)
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
   const showVisibilityPicker =
-    props.showVisibilityPicker ?? (props.kind === "following" && props.userID == null)
+    props.showVisibilityPicker ?? isMyFollowing
 
   useEffect(() => {
     return onSettingsChanged(() => {
-      setHideNovels(loadSettings().hideNovels)
+      const next = loadSettings()
+      setHideNovels(next.hideNovels)
+      setPageLayout(next.pageLayout)
     })
   }, [])
+
+  const myFollowingAccessory = useMemo(() => {
+    if (!isMyFollowing) return null
+    const items: DockActionItem[] = [
+      {
+        key: "public",
+        label: "公开",
+        icon: "globe",
+        color: restrict === "public" ? "#EE2F49" : "#3172EB",
+        action: () => {
+          try {
+            void Haptics.transient()
+          } catch {}
+          setRestrict("public")
+        },
+      },
+      {
+        key: "private",
+        label: "私密",
+        icon: "lock",
+        color: restrict === "private" ? "#EE2F49" : "#3172EB",
+        action: () => {
+          try {
+            void Haptics.transient()
+          } catch {}
+          setRestrict("private")
+        },
+      },
+      {
+        key: "recommended",
+        label: "推荐",
+        icon: "sparkles",
+        color: "#3172EB",
+        action: () => {
+          try {
+            void Haptics.transient()
+          } catch {}
+          setShowRecommendedUsers(true)
+        },
+      },
+    ]
+    return <DockActionBar items={items} />
+  }, [isMyFollowing, restrict])
+
+  useRegisterBottomAccessory(
+    "connections:following",
+    myFollowingAccessory,
+    isAppleMusic && isMyFollowing
+  )
 
   const paged = usePagedList<ConnectionPreview>({
     first: async (token) =>

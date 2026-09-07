@@ -45,6 +45,16 @@ import {
 } from "../downloader/downloadTaskManager"
 import { appToolbar } from "./components"
 import { destinationElement } from "./routes"
+import { loadSettings, onSettingsChanged } from "../store/settings"
+import {
+  DockActionBar,
+  useRegisterBottomAccessory,
+  type DockActionItem,
+} from "./bottomAccessory"
+import { requestPixivRoute } from "./routeNavigation"
+
+declare const Dialog: any
+declare const Haptics: any
 
 // ============================================================================
 // 1. 二级总览页：下载与本地文件管理 (DownloadManagerView)
@@ -54,6 +64,14 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
   const [overview, setOverview] = useState<StorageOverview | null>(null)
   const [cleaning, setCleaning] = useState(false)
   const [activeTasksCount, setActiveTasksCount] = useState(0)
+  const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
+  const isAppleMusic = pageLayout === "appleMusic"
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      setPageLayout(loadSettings().pageLayout)
+    })
+  }, [])
 
   async function loadOverviewData(forceRefresh = false) {
     try {
@@ -142,6 +160,43 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
       <Image systemName="trash" foregroundStyle="systemRed" />
     </Button>,
   ]
+
+  const downloadManagerDockAccessory = useMemo(() => {
+    const items: DockActionItem[] = [
+      {
+        key: "tasks",
+        label: activeTasksCount > 0 ? `任务 (${activeTasksCount})` : "任务列表",
+        icon: activeTasksCount > 0 ? "hourglass" : "list.clipboard",
+        color: activeTasksCount > 0 ? "#EE2F49" : "#3172EB",
+        action: () => {
+          try {
+            void Haptics.transient()
+          } catch {}
+          requestPixivRoute("downloadTasks")
+        },
+      },
+      {
+        key: "clean",
+        label: cleaning ? "清理中…" : "清理缓存",
+        icon: "trash",
+        color: "#3172EB",
+        disabled: cleaning,
+        action: () => {
+          try {
+            void Haptics.transient()
+          } catch {}
+          void handleCleanTemp()
+        },
+      },
+    ]
+    return <DockActionBar items={items} />
+  }, [activeTasksCount, cleaning])
+
+  useRegisterBottomAccessory(
+    "downloadManager",
+    downloadManagerDockAccessory,
+    isAppleMusic
+  )
 
   return (
     <List
@@ -747,6 +802,14 @@ export function DownloadDetailListView(props: {
   const [sortMode, setSortMode] = useState<SortMode>("date_desc")
   const [isEditing, setIsEditing] = useState(false)
   const [selectedPaths, setSelectedPaths] = useState<string[]>([])
+  const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
+  const isAppleMusic = pageLayout === "appleMusic"
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      setPageLayout(loadSettings().pageLayout)
+    })
+  }, [])
 
   const pageTitle = useMemo(() => {
     if (props.title) return props.title
@@ -881,6 +944,120 @@ export function DownloadDetailListView(props: {
     }
     await openFileExternal(item)
   }
+
+  const sortContextMenu = useMemo(() => {
+    return {
+      menuItems: (
+        <Group>
+          <Button
+            title="修改时间（最新在前）"
+            systemImage={sortMode === "date_desc" ? "checkmark" : "clock"}
+            action={() => setSortMode("date_desc")}
+          />
+          <Button
+            title="修改时间（最旧在前）"
+            systemImage={sortMode === "date_asc" ? "checkmark" : "clock.arrow.circlepath"}
+            action={() => setSortMode("date_asc")}
+          />
+          <Button
+            title="文件大小（从大到小）"
+            systemImage={sortMode === "size_desc" ? "checkmark" : "arrow.down"}
+            action={() => setSortMode("size_desc")}
+          />
+          <Button
+            title="文件大小（从小到大）"
+            systemImage={sortMode === "size_asc" ? "checkmark" : "arrow.up"}
+            action={() => setSortMode("size_asc")}
+          />
+          <Button
+            title="文件名称（A → Z）"
+            systemImage={sortMode === "name_asc" ? "checkmark" : "textformat.abc"}
+            action={() => setSortMode("name_asc")}
+          />
+          <Button
+            title="文件名称（Z → A）"
+            systemImage={sortMode === "name_desc" ? "checkmark" : "textformat.abc"}
+            action={() => setSortMode("name_desc")}
+          />
+        </Group>
+      ),
+    }
+  }, [sortMode])
+
+  const categoryIcon = useMemo(() => {
+    if (creatorFolder) return "person.2.fill"
+    if (category === "illustrations") return "photo.fill"
+    if (category === "ugoira") return "play.circle.fill"
+    if (category === "manga") return "photo.on.rectangle.fill"
+    if (category === "novels") return "book.fill"
+    return "folder.fill"
+  }, [creatorFolder, category])
+
+  const sortInfo = useMemo(() => {
+    switch (sortMode) {
+      case "date_desc":
+        return { label: "最新", icon: "clock" }
+      case "date_asc":
+        return { label: "最旧", icon: "clock.arrow.circlepath" }
+      case "size_desc":
+        return { label: "最大", icon: "arrow.down" }
+      case "size_asc":
+        return { label: "最小", icon: "arrow.up" }
+      case "name_asc":
+        return { label: "A-Z", icon: "textformat.abc" }
+      case "name_desc":
+        return { label: "Z-A", icon: "textformat.abc" }
+      default:
+        return { label: "排序", icon: "arrow.up.arrow.down" }
+    }
+  }, [sortMode])
+
+  const detailDockAccessory = useMemo(() => {
+    const items: DockActionItem[] = [
+      {
+        key: "count",
+        label: `${pageTitle} (${files.length})`,
+        icon: categoryIcon,
+        color: "#EE2F49",
+        action: () => {
+          try {
+            void Haptics.transient()
+          } catch {}
+        },
+      },
+      {
+        key: "sort",
+        label: sortInfo.label,
+        icon: sortInfo.icon,
+        color: "#3172EB",
+        action: () => {
+          try {
+            void Haptics.transient()
+          } catch {}
+          setSortMode((prev) => {
+            if (prev === "date_desc") return "date_asc"
+            if (prev === "date_asc") return "size_desc"
+            if (prev === "size_desc") return "size_asc"
+            if (prev === "size_asc") return "name_asc"
+            if (prev === "name_asc") return "name_desc"
+            return "date_desc"
+          })
+        },
+        contextMenu: sortContextMenu,
+      },
+    ]
+    return <DockActionBar items={items} />
+  }, [pageTitle, files.length, categoryIcon, sortInfo, sortContextMenu])
+
+  const accessoryKey = creatorFolder
+    ? `downloadCreator:${creatorFolder}`
+    : `downloadDetail:${category}`
+
+  useRegisterBottomAccessory(
+    accessoryKey,
+    detailDockAccessory,
+    isAppleMusic
+  )
 
   return (
     <List

@@ -31,6 +31,13 @@ import {
   type RankingOptionDef,
 } from "../store/settings"
 import { useTimedFlag } from "./hooks"
+import {
+  DockActionBar,
+  useRegisterBottomAccessory,
+  type DockActionItem,
+} from "./bottomAccessory"
+
+declare const Haptics: any
 
 export type CustomRankingPickerKind = "illust" | "manga" | "novel"
 
@@ -91,10 +98,63 @@ export function RankingCustomPickerView(props: { kind: CustomRankingPickerKind }
     ).length
   }, [selectedCurrentKind, visibleOptions])
 
+  const pageLayout = settings.pageLayout
+  const isAppleMusic = pageLayout === "appleMusic"
+
   function handleReset() {
     resetCustomRankingKind(kind)
     triggerResetSuccess()
   }
+
+  const resetContextMenu = useMemo(() => {
+    return {
+      menuItems: (
+        <Group>
+          <Button
+            title="恢复默认榜单"
+            systemImage="arrow.counterclockwise"
+            role="destructive"
+            action={handleReset}
+          />
+        </Group>
+      ),
+    }
+  }, [kind])
+
+  const pickerDockAccessory = useMemo(() => {
+    const items: DockActionItem[] = [
+      {
+        key: "count",
+        label: `${title}榜 (${currentKindSelectedCount}/${maxLimit})`,
+        icon: "slider.horizontal.3",
+        color: "#EE2F49",
+        action: () => {
+          try {
+            void Haptics.transient()
+          } catch {}
+        },
+      },
+      {
+        key: "reset",
+        label: "恢复默认",
+        icon: "arrow.counterclockwise",
+        color: "#3172EB",
+        action: () => {
+          try {
+            void Haptics.transient()
+          } catch {}
+        },
+        contextMenu: resetContextMenu,
+      },
+    ]
+    return <DockActionBar items={items} />
+  }, [title, currentKindSelectedCount, maxLimit, resetContextMenu])
+
+  useRegisterBottomAccessory(
+    `rankingCustomPicker:${kind}`,
+    pickerDockAccessory,
+    isAppleMusic
+  )
 
   function handleToggle(option: RankingOptionDef) {
     const isSelected = selectedCurrentKind.includes(option.key)

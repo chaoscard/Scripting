@@ -27,6 +27,13 @@ import { CachedImage } from "./components/CachedImage"
 import { EmptyView, RefreshableScrollView } from "./components"
 import { useExperimentalAmbientPalette, useLayoutMetrics } from "./hooks"
 import { recordPixivisionCoverUrl } from "../image/imageLoader"
+import { loadSettings, onSettingsChanged } from "../store/settings"
+import {
+  DockActionBar,
+  useRegisterBottomAccessory,
+  type DockActionItem,
+} from "./bottomAccessory"
+import { requestPixivRoute } from "./routeNavigation"
 
 declare const Haptics: any
 
@@ -35,6 +42,9 @@ const DEFAULT_ARTICLE_RATIO = 1200 / 630
 
 export function PixivisionBookmarksView() {
   const [items, setItems] = useState<PixivisionBookmarkItem[]>(() => loadPixivisionBookmarks())
+  const [isAscending, setIsAscending] = useState(false)
+  const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
+  const isAppleMusic = pageLayout === "appleMusic"
 
   useEffect(() => {
     void preparePixivisionBookmarksStorage().then(() => {
@@ -45,9 +55,70 @@ export function PixivisionBookmarksView() {
     })
   }, [])
 
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      setPageLayout(loadSettings().pageLayout)
+    })
+  }, [])
+
+  const sortedItems = useMemo(() => {
+    return [...items].sort((a, b) => {
+      const timeA = a.bookmarkedAt ?? 0
+      const timeB = b.bookmarkedAt ?? 0
+      return isAscending ? timeA - timeB : timeB - timeA
+    })
+  }, [items, isAscending])
+
+  const bookmarkDockAccessory = useMemo(() => {
+    const dockItems: DockActionItem[] = [
+      {
+        key: "title",
+        label: "特辑收藏",
+        icon: "heart.fill",
+        color: "#EE2F49",
+        action: () => {
+          try {
+            void Haptics.transient()
+          } catch {}
+        },
+      },
+      {
+        key: "sort",
+        label: isAscending ? "正序" : "倒序",
+        icon: isAscending ? "arrow.up" : "arrow.down",
+        color: "#3172EB",
+        action: () => {
+          try {
+            void Haptics.transient()
+          } catch {}
+          setIsAscending((v) => !v)
+        },
+      },
+      {
+        key: "latest",
+        label: "最新特辑",
+        icon: "safari",
+        color: "#3172EB",
+        action: () => {
+          try {
+            void Haptics.transient()
+          } catch {}
+          requestPixivRoute("pixivisionTag:all", "discovery")
+        },
+      },
+    ]
+    return <DockActionBar items={dockItems} />
+  }, [isAscending])
+
+  useRegisterBottomAccessory(
+    "pixivisionBookmarks",
+    bookmarkDockAccessory,
+    isAppleMusic
+  )
+
   const firstImageUrl = useMemo(() => {
-    return items[0]?.thumbnailURL ?? null
-  }, [items])
+    return sortedItems[0]?.thumbnailURL ?? null
+  }, [sortedItems])
 
   const { ambientBackground } = useExperimentalAmbientPalette(firstImageUrl)
 
@@ -64,14 +135,80 @@ export function PixivisionBookmarksView() {
       refreshable={handleRefresh}
     >
       <VStack alignment="leading" spacing={12} padding={{ horizontal: FLOW_HORIZONTAL_PADDING, top: 8, bottom: 24 }}>
-        {items.length === 0 ? (
+        {sortedItems.length === 0 ? (
           <EmptyView
             text="暂无收藏的特辑"
             systemImage="rectangle.stack"
           />
         ) : (
           <LazyVStack alignment="leading" spacing={14} frame={{ maxWidth: "infinity" }}>
-            {items.map((item, index) => (
+            {sortedItems.map((item, index) => (
+              <PixivisionBookmarkCard
+                key={item.id}
+                item={item}
+                priority={index}
+                onRemove={() => {
+                  try {
+                    void Haptics.transient()
+                  } catch {}
+                  removePixivisionBookmark(item.id)
+                }}
+              />
+            ))}
+          </LazyVStack>
+        )}
+      </VStack>
+    </RefreshableScrollView>
+  )
+}
+
+export function PixivisionBookmarksContent(props: {
+  onFirstImageUrlChange?: (url: string | null) => void
+}) {
+  const [items, setItems] = useState<PixivisionBookmarkItem[]>(() => loadPixivisionBookmarks())
+  const [isAscending, setIsAscending] = useState(false)
+
+  useEffect(() => {
+    void preparePixivisionBookmarksStorage().then(() => {
+      setItems(loadPixivisionBookmarks())
+    })
+    return onPixivisionBookmarksChanged(() => {
+      setItems(loadPixivisionBookmarks())
+    })
+  }, [])
+
+  const sortedItems = useMemo(() => {
+    return [...items].sort((a, b) => {
+      const timeA = a.bookmarkedAt ?? 0
+      const timeB = b.bookmarkedAt ?? 0
+      return isAscending ? timeA - timeB : timeB - timeA
+    })
+  }, [items, isAscending])
+
+  const firstImageUrl = useMemo(() => {
+    return sortedItems[0]?.thumbnailURL ?? null
+  }, [sortedItems])
+
+  useEffect(() => {
+    props.onFirstImageUrlChange?.(firstImageUrl)
+  }, [firstImageUrl, props.onFirstImageUrlChange])
+
+  const handleRefresh = useCallback(async () => {
+    await preparePixivisionBookmarksStorage()
+    setItems(loadPixivisionBookmarks())
+  }, [])
+
+  return (
+    <RefreshableScrollView refreshable={handleRefresh}>
+      <VStack alignment="leading" spacing={12} padding={{ horizontal: FLOW_HORIZONTAL_PADDING, top: 8, bottom: 24 }}>
+        {sortedItems.length === 0 ? (
+          <EmptyView
+            text="暂无收藏的特辑"
+            systemImage="rectangle.stack"
+          />
+        ) : (
+          <LazyVStack alignment="leading" spacing={14} frame={{ maxWidth: "infinity" }}>
+            {sortedItems.map((item, index) => (
               <PixivisionBookmarkCard
                 key={item.id}
                 item={item}
