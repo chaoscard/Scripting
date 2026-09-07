@@ -61,24 +61,6 @@ import {
 
 type RankingKind = "illustration" | "manga" | "novel" | "advanced"
 
-const DEFAULT_ILLUSTRATION_MODES: ReadonlyArray<{ value: string; title: string }> = [
-  { value: "day", title: "每日" },
-  { value: "week", title: "每周" },
-  { value: "month", title: "每月" },
-]
-
-const DEFAULT_MANGA_MODES: ReadonlyArray<{ value: string; title: string }> = [
-  { value: "day_manga", title: "每日" },
-  { value: "week_manga", title: "每周" },
-  { value: "month_manga", title: "每月" },
-]
-
-const DEFAULT_NOVEL_MODES: ReadonlyArray<{ value: string; title: string }> = [
-  { value: "day", title: "每日" },
-  { value: "week", title: "每周" },
-  { value: "week_rookie", title: "新人" },
-]
-
 function getRankingModeTitle(
   category: "illustration" | "manga" | "novel",
   mode: string
@@ -137,21 +119,11 @@ export function RankingView(props: { onClose: () => void }) {
     })
   }, [kind, advancedParams.category])
 
-  // 获取当前分类下可用的模式列表（受自定义设置与内容显示设置联动）
+  // 获取当前分类下可用的模式列表（受自定义设置、设备类型与内容显示设置联动）
   const activeModes =
-    kind === "illustration"
-      ? settings.customRankingEnabled
-        ? getCustomRankingModesForKind("illustration", settings)
-        : DEFAULT_ILLUSTRATION_MODES
-      : kind === "manga"
-        ? settings.customRankingEnabled
-          ? getCustomRankingModesForKind("manga", settings)
-          : DEFAULT_MANGA_MODES
-        : kind === "novel"
-          ? settings.customRankingEnabled
-            ? getCustomRankingModesForKind("novel", settings)
-            : DEFAULT_NOVEL_MODES
-          : null
+    kind === "illustration" || kind === "manga" || kind === "novel"
+      ? getCustomRankingModesForKind(kind, settings)
+      : null
 
   const selectedMode =
     kind === "illustration"

@@ -1032,6 +1032,38 @@ export function getCustomRankingModesForKind(
       : kind === "manga"
         ? ALL_MANGA_RANKING_OPTIONS
         : ALL_NOVEL_RANKING_OPTIONS
+
+  const defaultModes = isiPad
+    ? kind === "illustration"
+      ? DEFAULT_ILLUST_RANKING_MODES_IPAD
+      : kind === "manga"
+        ? DEFAULT_MANGA_RANKING_MODES_IPAD
+        : DEFAULT_NOVEL_RANKING_MODES_IPAD
+    : kind === "illustration"
+      ? DEFAULT_ILLUST_RANKING_MODES
+      : kind === "manga"
+        ? DEFAULT_MANGA_RANKING_MODES
+        : DEFAULT_NOVEL_RANKING_MODES
+
+  const visible = getVisibleRankingOptions(options, settings)
+
+  // 如果用户未开启自定义榜单，直接按照设备默认预设榜单（受内容显示过滤联动）呈现
+  if (!settings.customRankingEnabled) {
+    const list: CustomRankingTabItem[] = []
+    for (const mode of defaultModes) {
+      const found = visible.find((o) => o.key === mode)
+      if (found) {
+        list.push({ value: found.key, title: found.title })
+      }
+    }
+    if (list.length > 0) return list
+    if (visible.length > 0) {
+      return [{ value: visible[0].key, title: visible[0].title }]
+    }
+    return []
+  }
+
+  // 用户开启了自定义榜单：读取设备对应的自定义选择
   const selectedModes = isiPad
     ? kind === "illustration"
       ? settings.customRankingIllustModesIpad
@@ -1044,7 +1076,6 @@ export function getCustomRankingModesForKind(
         ? settings.customRankingMangaModes
         : settings.customRankingNovelModes
 
-  const visible = getVisibleRankingOptions(options, settings)
   const active: CustomRankingTabItem[] = []
 
   for (const mode of selectedModes) {
@@ -1059,19 +1090,7 @@ export function getCustomRankingModesForKind(
   const limited = active.slice(0, maxItems)
   if (limited.length > 0) return limited
 
-  // 如果用户未选任何有效项（如全部取消），回退到该类别的默认初始有效榜单列表
-  const defaultModes = isiPad
-    ? kind === "illustration"
-      ? DEFAULT_ILLUST_RANKING_MODES_IPAD
-      : kind === "manga"
-        ? DEFAULT_MANGA_RANKING_MODES_IPAD
-        : DEFAULT_NOVEL_RANKING_MODES_IPAD
-    : kind === "illustration"
-      ? DEFAULT_ILLUST_RANKING_MODES
-      : kind === "manga"
-        ? DEFAULT_MANGA_RANKING_MODES
-        : DEFAULT_NOVEL_RANKING_MODES
-
+  // 如果用户开启了自定义但未选任何有效项（如全部取消），回退到该类别的设备默认初始有效榜单列表
   const fallbackList: CustomRankingTabItem[] = []
   for (const mode of defaultModes) {
     const found = visible.find((o) => o.key === mode)

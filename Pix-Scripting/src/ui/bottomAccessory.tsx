@@ -58,6 +58,7 @@ import {
 import { imageUrlOf } from "../image/imageLoader"
 import { requestPixivRoute } from "./routeNavigation"
 import {
+  getCustomRankingModesForKind,
   getDownloadImageQuality,
   loadSettings,
   onSettingsChanged,
@@ -1360,20 +1361,10 @@ function renderDefaultRootTabAccessory(activeTab: string) {
   }
 
   if (activeTab === "ranking") {
-    const modes = (settings.customRankingIllustModes || []).slice(0, 3)
-    const labelMap: Record<string, string> = {
-      day: "日榜",
-      week: "周榜",
-      month: "月榜",
-      day_male: "男性向",
-      day_female: "女性向",
-      week_original: "原创",
-      week_rookie: "新人",
-      day_ai: "AI 日榜",
-    }
+    const modes = getCustomRankingModesForKind("illustration", settings)
     const items = modes.map((m) => ({
-      tag: m,
-      label: labelMap[m] || m,
+      tag: m.value,
+      label: m.title.includes("榜") || m.title.length > 2 ? m.title : `${m.title}榜`,
     }))
     const defaultItems =
       items.length > 0
