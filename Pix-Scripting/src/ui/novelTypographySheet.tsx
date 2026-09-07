@@ -104,7 +104,7 @@ export function NovelTypographySheet(props: { onClose?: () => void }) {
 
   return (
     <NavigationStack
-      presentationDetents={["medium", "large"]}
+      presentationDetents={[0.65, "large"]}
       presentationDragIndicator="visible"
     >
       <ScrollView
