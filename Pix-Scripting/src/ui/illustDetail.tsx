@@ -1,5 +1,6 @@
 import {
   Button,
+  Device,
   Divider,
   FlowLayout,
   Group,
@@ -1057,6 +1058,15 @@ export function IllustDetailView(props: { illustID: number }) {
           </Button>,
           <Menu label={<Image systemName="ellipsis.circle" />}>
             <Button
+              title="主页"
+              systemImage="person.crop.circle"
+              action={() => {
+                if (current.user?.id) {
+                  void requestPixivRoute(`user:${current.user.id}`)
+                }
+              }}
+            />
+            <Button
               title="评论"
               systemImage="bubble.left"
               action={() => setShowComments(true)}
@@ -1221,12 +1231,16 @@ export function IllustDetailView(props: { illustID: number }) {
               )}
             </Menu>
           </Menu>,
-          <NavigationLink value={`user:${current.user?.id ?? 0}`}>
-            <AvatarImage
-              url={current.user?.profile_image_urls?.medium ?? null}
-              size={28}
-            />
-          </NavigationLink>,
+          ...(Device.isiPad
+            ? []
+            : [
+                <NavigationLink value={`user:${current.user?.id ?? 0}`}>
+                  <AvatarImage
+                    url={current.user?.profile_image_urls?.medium ?? null}
+                    size={28}
+                  />
+                </NavigationLink>,
+              ]),
         ],
       }}
      

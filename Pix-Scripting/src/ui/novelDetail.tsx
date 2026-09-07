@@ -1,5 +1,6 @@
 import {
   Button,
+  Device,
   Divider,
   DragGesture,
   FlowLayout,
@@ -1227,6 +1228,15 @@ export function NovelDetailView(props: { novelID: number }) {
                 </Button>,
                 <Menu label={<Image systemName="ellipsis.circle" />}>
                   <Button
+                    title="主页"
+                    systemImage="person.crop.circle"
+                    action={() => {
+                      if (current.user?.id) {
+                        void requestPixivRoute(`user:${current.user.id}`)
+                      }
+                    }}
+                  />
+                  <Button
                     title="评论"
                     systemImage="bubble.left"
                     action={() => setShowComments(true)}
@@ -1340,12 +1350,16 @@ export function NovelDetailView(props: { novelID: number }) {
               )}
             </Menu>
           </Menu>,
-          <NavigationLink value={`user:${current.user.id}`}>
-            <AvatarImage
-              url={current.user.profile_image_urls?.medium ?? null}
-              size={28}
-            />
-          </NavigationLink>,
+          ...(Device.isiPad
+            ? []
+            : [
+                <NavigationLink value={`user:${current.user.id}`}>
+                  <AvatarImage
+                    url={current.user.profile_image_urls?.medium ?? null}
+                    size={28}
+                  />
+                </NavigationLink>,
+              ]),
         ],
       }}
     >
