@@ -5,6 +5,7 @@ import {
 import { PixivTaskLiveActivity, type TaskLiveActivityState } from "../../live_activity"
 import { loadSettings } from "../store/settings"
 import { triggerHaptic } from "../utils/haptics"
+import { isScriptingProUser } from "../utils/pro"
 
 export interface BackgroundTaskOptions {
   taskId?: string
@@ -43,20 +44,22 @@ export async function beginBackgroundTask(
   const taskId = options.taskId || `task_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
   const settings = loadSettings()
   
-  // 1. 开启系统后台保活（校验返回值与多任务安全配对）
+  // 1. 开启系统后台保活（仅针对 PRO 用户，非 PRO 用户静默跳过，防止原生内购弹窗拦截）
   let isKeptAlive = false
-  try {
-    if (typeof BackgroundKeeper !== "undefined" && typeof BackgroundKeeper.keepAlive === "function") {
-      const started = await BackgroundKeeper.keepAlive()
-      if (started) {
-        isKeptAlive = true
-        activeTasksCount++
-      } else {
-        console.log("BackgroundKeeper.keepAlive: system refused or non-PRO mode active")
+  if (isScriptingProUser()) {
+    try {
+      if (typeof BackgroundKeeper !== "undefined" && typeof BackgroundKeeper.keepAlive === "function") {
+        const started = await BackgroundKeeper.keepAlive()
+        if (started) {
+          isKeptAlive = true
+          activeTasksCount++
+        } else {
+          console.log("BackgroundKeeper.keepAlive: system refused")
+        }
       }
+    } catch (e: any) {
+      console.log("BackgroundKeeper.keepAlive error:", e?.message ?? e)
     }
-  } catch (e: any) {
-    console.log("BackgroundKeeper.keepAlive error:", e?.message ?? e)
   }
 
   // 2. 检查灵动岛能力与用户设置

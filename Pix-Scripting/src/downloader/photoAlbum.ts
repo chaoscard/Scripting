@@ -3,6 +3,7 @@ import { cachedFilePath, imageUrlOf } from "../image/imageLoader"
 import { fetchImageBinaryWithRetry, runConcurrentTasks } from "./downloadHelper"
 import type { PixivIllustration } from "../types"
 import type { TaskControlToken } from "./downloadTaskManager"
+import { isScriptingProUser } from "../utils/pro"
 
 /**
  * 相册保存专用后台保活引用计数管理器
@@ -11,6 +12,7 @@ import type { TaskControlToken } from "./downloadTaskManager"
 let albumKeepAliveRefCount = 0
 
 export async function acquireAlbumKeepAlive(): Promise<void> {
+  if (!isScriptingProUser()) return
   albumKeepAliveRefCount++
   if (albumKeepAliveRefCount === 1) {
     try {
@@ -24,6 +26,7 @@ export async function acquireAlbumKeepAlive(): Promise<void> {
 }
 
 export async function releaseAlbumKeepAlive(): Promise<void> {
+  if (!isScriptingProUser()) return
   albumKeepAliveRefCount = Math.max(0, albumKeepAliveRefCount - 1)
   if (albumKeepAliveRefCount === 0) {
     try {

@@ -1,4 +1,7 @@
 import { Script } from "scripting"
+import { isScriptingProUser } from "./pro"
+
+export { isScriptingProUser }
 
 // Scripting 全局运行时原生类型声明
 declare const Haptics: any
@@ -14,21 +17,6 @@ export type HapticFeedbackType =
   | "success"
   | "warning"
   | "error"
-
-/**
- * 判断当前环境是否具备 Scripting PRO 完整会员权限
- */
-export function isScriptingProUser(): boolean {
-  try {
-    return (
-      typeof Script !== "undefined" &&
-      typeof Script.hasFullAccess === "function" &&
-      Boolean(Script.hasFullAccess())
-    )
-  } catch {
-    return false
-  }
-}
 
 /**
  * 统一自适应触觉反馈调度器
