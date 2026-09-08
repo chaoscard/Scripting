@@ -8,6 +8,7 @@ import {
   Label,
   Menu,
   NavigationLink,
+  Picker,
   ScrollView,
   Text,
   useCallback,
@@ -73,7 +74,7 @@ import {
 } from "./components"
 import { UserProfileHeader } from "./UserProfileHeader"
 import { UserWorkTagFilterBar } from "./UserWorkTagFilterBar"
-import { UserWorksFeedSection, UserWorkPicker, type UserWorkKind } from "./UserWorksFeedSection"
+import { UserWorksFeedSection, type UserWorkKind } from "./UserWorksFeedSection"
 import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
 
 export function UserDetailView(props: { userID: number }) {
@@ -96,7 +97,6 @@ export function UserDetailView(props: { userID: number }) {
   const isAppleMusic = pageLayout === "appleMusic"
   const [emptyKinds, setEmptyKinds] = useState<Partial<Record<UserWorkKind, boolean>>>({})
   const { ambientBackground } = useUserAmbientPalette(detail?.profile.background_image_url)
-  const [visitedKinds, setVisitedKinds] = useState<Set<UserWorkKind>>(() => new Set(["illust"]))
 
   const baseKinds = useMemo<UserWorkKind[]>(() => {
     if (!detail) return []
@@ -127,15 +127,6 @@ export function UserDetailView(props: { userID: number }) {
       setKind(availableKinds[0])
     }
   }, [availableKinds, kind])
-
-  useEffect(() => {
-    setVisitedKinds((prev) => {
-      if (prev.has(activeKind)) return prev
-      const next = new Set(prev)
-      next.add(activeKind)
-      return next
-    })
-  }, [activeKind])
 
   useEffect(() => {
     setSelectedTag(null)
@@ -677,35 +668,79 @@ export function UserDetailView(props: { userID: number }) {
               />
             </Button>,
           ] : []),
-          ...(Device.isiPad
-            ? []
-            : [
+          ...(!Device.isiPad || isAppleMusic || availableKinds.length <= 1
+            ? [
                 <Button
+                  key="download-button"
+                  disabled={downloading}
                   action={() => {
                     void Haptics.transient()
-                    void ShareSheet.present([`https://www.pixiv.net/users/${userID}`])
+                    void handleDownloadClick()
                   }}
                 >
-                  <Image systemName="square.and.arrow.up" />
+                  <Image systemName={downloading ? "arrow.down.circle.fill" : "square.and.arrow.down"} />
                 </Button>,
-              ]),
-          <Button
-            disabled={downloading}
-            action={() => {
-              void Haptics.transient()
-              void handleDownloadClick()
-            }}
-          >
-            <Image systemName={downloading ? "arrow.down.circle.fill" : "square.and.arrow.down"} />
-          </Button>,
+              ]
+            : []),
+          ...(!isAppleMusic && availableKinds.length > 1
+            ? [
+                <Menu
+                  key="work-type-menu"
+                  label={
+                    <Image
+                      systemName={
+                        activeKind === "illust"
+                          ? "photo"
+                          : activeKind === "manga"
+                            ? "photo.on.rectangle"
+                            : "book"
+                      }
+                    />
+                  }
+                >
+                  <Picker
+                    title="作品类型"
+                    value={activeKind}
+                    onChanged={(newK: string) => {
+                      setSelectedTag(null)
+                      setKind(newK as UserWorkKind)
+                    }}
+                  >
+                    {availableKinds.map((k) => (
+                      <Label
+                        key={k}
+                        tag={k}
+                        title={k === "illust" ? "插画" : k === "manga" ? "漫画" : "小说"}
+                        systemImage={
+                          k === "illust"
+                            ? "photo"
+                            : k === "manga"
+                              ? "photo.on.rectangle"
+                              : "book"
+                        }
+                      />
+                    ))}
+                  </Picker>
+                </Menu>,
+              ]
+            : []),
           <Menu label={<Image systemName="ellipsis.circle" />}>
-            {Device.isiPad ? (
+            <Button
+              title="分享"
+              systemImage="square.and.arrow.up"
+              action={() => {
+                void Haptics.transient()
+                void ShareSheet.present([`https://www.pixiv.net/users/${userID}`])
+              }}
+            />
+            {Device.isiPad && !isAppleMusic && availableKinds.length > 1 ? (
               <Button
-                title="分享"
-                systemImage="square.and.arrow.up"
+                title={downloading ? (downloadStatusText || "正在下载…") : "批量下载作品"}
+                systemImage={downloading ? "arrow.down.circle.fill" : "square.and.arrow.down"}
+                disabled={downloading}
                 action={() => {
                   void Haptics.transient()
-                  void ShareSheet.present([`https://www.pixiv.net/users/${userID}`])
+                  void handleDownloadClick()
                 }}
               />
             ) : null}
@@ -798,79 +833,55 @@ export function UserDetailView(props: { userID: number }) {
           </VStack>
         </RefreshableScrollView>
       ) : (
-        availableKinds.map((k) => {
-          if (!visitedKinds.has(k)) return null
-          const isCurrent = activeKind === k
-          return (
-            <VStack
-              key={k}
-              frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-              opacity={isCurrent ? 1 : 0}
-              zIndex={isCurrent ? 1 : 0}
-              allowsHitTesting={isCurrent}
-            >
-              <RefreshableScrollView
-                refreshable={handleRefresh}
+        <RefreshableScrollView
+          refreshable={handleRefresh}
+        >
+          <VStack
+            alignment="leading"
+            spacing={12}
+            padding={{ top: 0, bottom: 20 }}
+            frame={{ maxWidth: "infinity" }}
+          >
+            <UserProfileHeader detail={detail} webDetail={webDetail} />
+            <UserWorkTagFilterBar
+              tags={tagsByKind[activeKind] ?? []}
+              selectedTag={selectedTag}
+              onSelectTag={setSelectedTag}
+            />
+
+            {downloading ? (
+              <HStack
+                spacing={8}
+                padding={{ horizontal: 16, vertical: 10 }}
+                background="systemGray6"
+                clipShape={{ type: "rect", cornerRadius: 10 }}
+                frame={{ maxWidth: "infinity" }}
+                alignment="center"
               >
-                <VStack
-                  alignment="leading"
-                  spacing={12}
-                  padding={{ top: 0, bottom: 20 }}
-                  frame={{ maxWidth: "infinity" }}
+                <Image systemName="arrow.down.circle.fill" foregroundStyle="tintColor" />
+                <Text
+                  font="footnote"
+                  foregroundStyle="secondaryLabel"
+                  lineLimit={1}
                 >
-                  <UserProfileHeader detail={detail} webDetail={webDetail} />
-                  <UserWorkTagFilterBar
-                    tags={tagsByKind[k] ?? []}
-                    selectedTag={isCurrent ? selectedTag : null}
-                    onSelectTag={setSelectedTag}
-                  />
+                  {downloadStatusText || "正在下载作品…"}
+                </Text>
+              </HStack>
+            ) : null}
 
-                  {downloading ? (
-                    <HStack
-                      spacing={8}
-                      padding={{ horizontal: 16, vertical: 10 }}
-                      background="systemGray6"
-                      clipShape={{ type: "rect", cornerRadius: 10 }}
-                      frame={{ maxWidth: "infinity" }}
-                      alignment="center"
-                    >
-                      <Image systemName="arrow.down.circle.fill" foregroundStyle="tintColor" />
-                      <Text
-                        font="footnote"
-                        foregroundStyle="secondaryLabel"
-                        lineLimit={1}
-                      >
-                        {downloadStatusText || "正在下载作品…"}
-                      </Text>
-                    </HStack>
-                  ) : null}
-
-                  {isAppleMusic ? null : (
-                    <UserWorkPicker
-                      availableKinds={availableKinds}
-                      kind={activeKind}
-                      onChanged={(newK) => {
-                        setSelectedTag(null)
-                        setKind(newK)
-                      }}
-                    />
-                  )}
-
-                  <UserWorksFeedSection
-                    userID={userID}
-                    kind={k}
-                    selectedTag={isCurrent ? selectedTag : null}
-                    isAuthorFollowed={followed || isOwnProfile}
-                    onKindEmpty={handleKindEmpty}
-                    onRegisterRefresh={(fn) => {
-                      if (isCurrent) worksRefreshRef.current = fn
-                    }}
-                  />
-                </VStack>
-              </RefreshableScrollView>
-            </VStack>
-          )
-        })
+            <UserWorksFeedSection
+              key={activeKind}
+              userID={userID}
+              kind={activeKind}
+              selectedTag={selectedTag}
+              isAuthorFollowed={followed || isOwnProfile}
+              onKindEmpty={handleKindEmpty}
+              onRegisterRefresh={(fn) => {
+                worksRefreshRef.current = fn
+              }}
+            />
+          </VStack>
+        </RefreshableScrollView>
       )}
 
       <VStack

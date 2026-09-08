@@ -4,7 +4,9 @@ import {
   Group,
   HStack,
   Image,
+  Label,
   List,
+  Menu,
   NavigationLink,
   Picker,
   Section,
@@ -65,6 +67,31 @@ export function BlockedSettingsView() {
     setBlocklist(next)
   }
 
+  async function handleClearConfirm() {
+    if (currentCount === 0) return
+    try {
+      void Haptics.transient()
+    } catch {}
+    const scopeLabel = scope === "tag" ? "标签" : "用户"
+    let confirmed = false
+    if (typeof Dialog !== "undefined" && typeof Dialog.confirm === "function") {
+      confirmed = await Dialog.confirm({
+        title: `清空已屏蔽${scopeLabel}`,
+        message: `确定要清空全部已屏蔽${scopeLabel}吗？`,
+        confirmLabel: "清空",
+        cancelLabel: "取消",
+      })
+    } else {
+      confirmed = true
+    }
+    if (confirmed) {
+      try {
+        void (Haptics as any)?.notification?.("warning")
+      } catch {}
+      clearCurrent()
+    }
+  }
+
   const empty =
     scope === "tag"
       ? { text: "暂无已屏蔽标签", systemImage: "tag" }
@@ -76,46 +103,49 @@ export function BlockedSettingsView() {
   return (
     <VStack
       spacing={0}
-      navigationTitle="屏蔽设置"
       navigationBarTitleDisplayMode="inline"
       toolbar={{
+        principal: (
+          <Text font="title2" fontWeight="bold">
+            {!isAppleMusic ? `屏蔽设置 · ${scope === "tag" ? "标签" : "用户"}` : "屏蔽设置"}
+          </Text>
+        ),
         topBarTrailing: [
-          <Button
-            action={() => {}}
-            disabled={currentCount === 0}
-            contextMenu={{
-              menuItems: (
-                <Group>
-                  <Button
-                    title={`清空已屏蔽${scope === "tag" ? "标签" : "用户"}`}
-                    systemImage="trash"
-                    role="destructive"
-                    action={clearCurrent}
-                  />
-                </Group>
-              ),
-            }}
-          >
-            <Image systemName="trash" />
-          </Button>,
+          isAppleMusic ? (
+            <Button
+              key="clear-button"
+              disabled={currentCount === 0}
+              action={handleClearConfirm}
+            >
+              <Image
+                systemName="trash"
+                foregroundStyle={currentCount === 0 ? "secondaryLabel" : "systemRed"}
+              />
+            </Button>
+          ) : (
+            <Menu key="more-menu" label={<Image systemName="ellipsis.circle" />}>
+              <Picker
+                title="屏蔽类型"
+                value={scope}
+                onChanged={(value: string) => {
+                  setScope(value as BlockedScope)
+                }}
+              >
+                <Label tag="tag" title="屏蔽标签" systemImage="tag" />
+                <Label tag="user" title="屏蔽用户" systemImage="person.crop.circle.badge.xmark" />
+              </Picker>
+              <Button
+                title={`清空已屏蔽${scope === "tag" ? "标签" : "用户"}`}
+                systemImage="trash"
+                role="destructive"
+                disabled={currentCount === 0}
+                action={handleClearConfirm}
+              />
+            </Menu>
+          ),
         ],
       }}
     >
-      {isAppleMusic ? null : (
-        <Picker
-          title="屏蔽类型"
-          value={scope}
-          onChanged={(value: string) => {
-            setScope(value as BlockedScope)
-          }}
-          pickerStyle="segmented"
-          padding={{ horizontal: 16, top: 6, bottom: 8 }}
-        >
-          <Text tag="tag">标签</Text>
-          <Text tag="user">用户</Text>
-        </Picker>
-      )}
-
       <List frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
         {scope === "tag" ? (
           blocklist.blockedTags.length === 0 ? (

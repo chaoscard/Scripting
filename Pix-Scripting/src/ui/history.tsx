@@ -341,8 +341,12 @@ function historyToolbar(props: {
       </Text>
     ),
     topBarTrailing: [
-      <Menu key="more-menu" label={<Image systemName="ellipsis.circle" />}>
-        {isClassic && (
+      props.isAppleMusic ? (
+        <Button key="clear-button" action={handleClearConfirm}>
+          <Image systemName="trash" foregroundStyle="systemRed" />
+        </Button>
+      ) : (
+        <Menu key="more-menu" label={<Image systemName="ellipsis.circle" />}>
           <Picker
             title="记录类型"
             value={props.kind}
@@ -354,14 +358,14 @@ function historyToolbar(props: {
               <Label tag="novel" title="小说" systemImage="book" />
             )}
           </Picker>
-        )}
-        <Button
-          title={`清空${kindLabel}记录`}
-          systemImage="trash"
-          role="destructive"
-          action={handleClearConfirm}
-        />
-      </Menu>,
+          <Button
+            title={`清空${kindLabel}记录`}
+            systemImage="trash"
+            role="destructive"
+            action={handleClearConfirm}
+          />
+        </Menu>
+      ),
     ],
   }
 }

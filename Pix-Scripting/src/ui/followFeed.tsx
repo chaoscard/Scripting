@@ -55,7 +55,6 @@ import {
   LoadMoreTrigger,
   IllustFlowFeed,
   NovelCard,
-  RecommendedUsersSheet,
   RefreshableScrollView,
   WatchlistSeriesCard,
 } from "./components"
@@ -83,7 +82,6 @@ export function FollowFeedView(props: {
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
   const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
   const isAppleMusic = pageLayout === "appleMusic"
-  const [showRecommendedUsers, setShowRecommendedUsers] = useState(false)
   const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(null)
   const isTabActive = useIsCurrentTab("following")
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl, isTabActive)
@@ -166,7 +164,6 @@ export function FollowFeedView(props: {
         onModeChange: setMode,
         onScopeChange: setScope,
         onKindChange: selectSegmentedKind,
-        onOpenRecommendedUsers: () => setShowRecommendedUsers(true),
         onClose: props.onClose,
       })}
       onAppear={() => {
@@ -237,18 +234,6 @@ export function FollowFeedView(props: {
           />
         </VStack>
       ) : null}
-
-      <VStack
-        sheet={{
-          content: (
-            <RecommendedUsersSheet
-              onClose={() => setShowRecommendedUsers(false)}
-            />
-          ),
-          isPresented: showRecommendedUsers,
-          onChanged: setShowRecommendedUsers,
-        }}
-      />
     </ZStack>
   )
 }
@@ -264,14 +249,15 @@ function followToolbar(props: {
   onModeChange: (mode: FollowMode) => void
   onScopeChange: (scope: FollowScope) => void
   onKindChange: (kind: string) => void
-  onOpenRecommendedUsers: () => void
   onClose: () => void
 }) {
   const isiPad = Device.isiPad
   const isClassic = !props.isAppleMusic
   const baseTitle =
     props.mode === "following"
-      ? "关注"
+      ? props.scope === "private"
+        ? "私密关注"
+        : "关注"
       : props.mode === "watchlist"
         ? "追更"
         : "好友"
@@ -314,43 +300,39 @@ function followToolbar(props: {
     <Image systemName="ellipsis.circle" />
   )
 
+  const activeModeKey =
+    props.mode === "following"
+      ? props.scope === "private"
+        ? "following_private"
+        : "following_all"
+      : props.mode
+
   return appToolbar(
     props.onClose,
     titleNode,
     <Menu label={trailingMenuLabel}>
-      <Menu title="关注" systemImage="person.2">
-        <Button
-          title="公开"
-          systemImage="globe"
-          action={() => {
+      <Picker
+        title="动态类型"
+        value={activeModeKey}
+        onChanged={(value: string) => {
+          if (value === "following_all") {
             props.onModeChange("following")
             props.onScopeChange("all")
-          }}
-        />
-        <Button
-          title="私密"
-          systemImage="lock"
-          action={() => {
+          } else if (value === "following_private") {
             props.onModeChange("following")
             props.onScopeChange("private")
-          }}
-        />
-      </Menu>
-      <Button
-        title="追更"
-        systemImage="bookmark"
-        action={() => props.onModeChange("watchlist")}
-      />
-      <Button
-        title="好友"
-        systemImage="person.2.badge.gearshape"
-        action={() => props.onModeChange("friends")}
-      />
-      <Button
-        title="推荐"
-        systemImage="sparkles"
-        action={props.onOpenRecommendedUsers}
-      />
+          } else if (value === "watchlist") {
+            props.onModeChange("watchlist")
+          } else if (value === "friends") {
+            props.onModeChange("friends")
+          }
+        }}
+      >
+        <Label tag="following_all" title="公开关注" systemImage="globe" />
+        <Label tag="following_private" title="私密关注" systemImage="lock" />
+        <Label tag="watchlist" title="追更" systemImage="bookmark" />
+        <Label tag="friends" title="好友动态" systemImage="person.2.badge.gearshape" />
+      </Picker>
       {isClassic &&
         (props.mode === "watchlist" ? (
           <Picker

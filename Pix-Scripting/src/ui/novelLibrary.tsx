@@ -1,4 +1,6 @@
 import {
+  Button,
+  Image,
   LazyVStack,
   Text,
   useEffect,
@@ -127,6 +129,21 @@ export function NovelLibraryView() {
             小说书签
           </Text>
         ),
+        topBarTrailing: !isAppleMusic
+          ? [
+              <Button
+                key="sort-btn"
+                action={() => {
+                  try {
+                    void Haptics.transient()
+                  } catch {}
+                  setIsAscending((v) => !v)
+                }}
+              >
+                <Image systemName={isAscending ? "arrow.up" : "arrow.down"} />
+              </Button>,
+            ]
+          : undefined,
       }}
       background={ambientBackground}
       refreshable={paged.refresh}

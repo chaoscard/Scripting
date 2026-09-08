@@ -1,4 +1,5 @@
 import {
+  Button,
   HStack,
   Image,
   LazyVStack,
@@ -171,6 +172,19 @@ function NotificationList(props: {
             {props.title}
           </Text>
         ),
+        topBarTrailing: !isAppleMusic
+          ? [
+              <Button
+                key="refresh-btn"
+                disabled={isRefreshing}
+                action={() => {
+                  void handleRefresh()
+                }}
+              >
+                <Image systemName="arrow.clockwise" />
+              </Button>,
+            ]
+          : undefined,
       }}
       background={ambientBackground}
       refreshable={paged.refresh}
