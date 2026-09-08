@@ -23,8 +23,7 @@ import {
   type DockActionItem,
 } from "./bottomAccessory"
 import type { PixivNovelMarker } from "../types"
-
-declare const Haptics: any
+import { triggerHaptic } from "../utils/haptics"
 import {
   EmptyView,
   ErrorView,
@@ -80,7 +79,7 @@ export function NovelLibraryView() {
         color: "#EE2F49",
         action: () => {
           try {
-            void Haptics.transient()
+            triggerHaptic("selection")
           } catch {}
         },
       },
@@ -91,7 +90,7 @@ export function NovelLibraryView() {
         color: "#3172EB",
         action: () => {
           try {
-            void Haptics.transient()
+            triggerHaptic("selection")
           } catch {}
           setIsAscending((v) => !v)
         },
@@ -135,7 +134,7 @@ export function NovelLibraryView() {
                 key="sort-btn"
                 action={() => {
                   try {
-                    void Haptics.transient()
+                    triggerHaptic("selection")
                   } catch {}
                   setIsAscending((v) => !v)
                 }}

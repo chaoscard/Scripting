@@ -4,6 +4,7 @@ import {
 } from "scripting"
 import { PixivTaskLiveActivity, type TaskLiveActivityState } from "../../live_activity"
 import { loadSettings } from "../store/settings"
+import { triggerHaptic } from "../utils/haptics"
 
 export interface BackgroundTaskOptions {
   taskId?: string
@@ -195,15 +196,11 @@ export async function beginBackgroundTask(
 
     // 触感反馈（取消不触发错误触感）
     if (!isCanceled) {
-      try {
-        if (typeof HapticFeedback !== "undefined") {
-          if (finishOptions.success) {
-            HapticFeedback.notificationSuccess()
-          } else {
-            HapticFeedback.notificationError()
-          }
-        }
-      } catch {}
+      if (finishOptions.success) {
+        triggerHaptic("success")
+      } else {
+        triggerHaptic("error")
+      }
     }
 
     // 4.3 释放后台保活

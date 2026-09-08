@@ -28,6 +28,7 @@ import {
 import { loadSettings, onSettingsChanged } from "../store/settings"
 import { AvatarImage, EmptyView } from "./components"
 import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
+import { triggerHaptic } from "../utils/haptics"
 
 type BlockedScope = "tag" | "user"
 
@@ -70,7 +71,7 @@ export function BlockedSettingsView() {
   async function handleClearConfirm() {
     if (currentCount === 0) return
     try {
-      void Haptics.transient()
+      triggerHaptic("light")
     } catch {}
     const scopeLabel = scope === "tag" ? "标签" : "用户"
     let confirmed = false
@@ -86,7 +87,7 @@ export function BlockedSettingsView() {
     }
     if (confirmed) {
       try {
-        void (Haptics as any)?.notification?.("warning")
+        triggerHaptic("warning")
       } catch {}
       clearCurrent()
     }

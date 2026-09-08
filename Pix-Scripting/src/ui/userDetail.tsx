@@ -38,6 +38,7 @@ import {
   unfollowUser,
   userDetail,
 } from "../api/pixiv"
+import { triggerHaptic } from "../utils/haptics"
 import { session } from "../api/session"
 import {
   cachedFileExists,
@@ -276,7 +277,7 @@ export function UserDetailView(props: { userID: number }) {
 
   async function followWithVisibility(restrict: "public" | "private") {
     if (followBusy || isOwnProfile) return
-    void Haptics.transient()
+    triggerHaptic("medium")
     followStateVersionRef.current++
     setFollowBusy(true)
     try {
@@ -299,7 +300,7 @@ export function UserDetailView(props: { userID: number }) {
       await followWithVisibility("public")
       return
     }
-    void Haptics.transient()
+    triggerHaptic("medium")
     followStateVersionRef.current++
     setFollowBusy(true)
     try {
@@ -687,7 +688,7 @@ export function UserDetailView(props: { userID: number }) {
                   key="download-button"
                   disabled={downloading}
                   action={() => {
-                    void Haptics.transient()
+                    triggerHaptic("light")
                     void handleDownloadClick()
                   }}
                 >
@@ -742,7 +743,7 @@ export function UserDetailView(props: { userID: number }) {
               title="分享"
               systemImage="square.and.arrow.up"
               action={() => {
-                void Haptics.transient()
+                triggerHaptic("selection")
                 void ShareSheet.present([`https://www.pixiv.net/users/${userID}`])
               }}
             />
@@ -752,7 +753,7 @@ export function UserDetailView(props: { userID: number }) {
                 systemImage={downloading ? "arrow.down.circle.fill" : "square.and.arrow.down"}
                 disabled={downloading}
                 action={() => {
-                  void Haptics.transient()
+                  triggerHaptic("light")
                   void handleDownloadClick()
                 }}
               />

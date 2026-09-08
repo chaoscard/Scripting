@@ -38,6 +38,7 @@ import { TagChip } from "./TagChip"
 import { CachedImage } from "./CachedImage"
 import { LoadingView } from "./StatusViews"
 import { CORNER_ICON_SIZE } from "./formatUtils"
+import { triggerHaptic } from "../../utils/haptics"
 import type {
   PixivBookmarkDetail,
   PixivBookmarkTag,
@@ -160,7 +161,7 @@ export function BookmarkDetailSheet(props: {
 
   async function save() {
     if (saving) return
-    void Haptics.transient()
+    triggerHaptic("medium")
     setSaving(true)
     setError(null)
     try {
@@ -401,7 +402,7 @@ export function BookmarkButton(props: {
     >
       <Button
         action={() => {
-          void Haptics.transient()
+          triggerHaptic("light")
           props.onTap()
         }}
         buttonStyle="plain"

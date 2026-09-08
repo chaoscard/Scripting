@@ -29,8 +29,7 @@ import { useExperimentalAmbientPalette, useLayoutMetrics } from "./hooks"
 import { recordPixivisionCoverUrl } from "../image/imageLoader"
 import { loadSettings, onSettingsChanged } from "../store/settings"
 import { LibraryView } from "./library"
-
-declare const Haptics: any
+import { triggerHaptic } from "../utils/haptics"
 
 const FLOW_HORIZONTAL_PADDING = 12
 const DEFAULT_ARTICLE_RATIO = 1200 / 630
@@ -93,7 +92,7 @@ export function PixivisionBookmarksContent(props: {
                 priority={index}
                 onRemove={() => {
                   try {
-                    void Haptics.transient()
+                    triggerHaptic("medium")
                   } catch {}
                   removePixivisionBookmark(item.id)
                 }}

@@ -15,6 +15,7 @@ import {
   VStack,
 } from "scripting"
 import { isScriptingPro } from "../store/customAI"
+import { triggerHaptic } from "../utils/haptics"
 import {
   DEFAULT_NOVEL_READER_SETTINGS,
   loadNovelReaderSettings,
@@ -91,13 +92,7 @@ export function NovelTypographySheet(props: { onClose?: () => void }) {
   }, [isPickingFont, updateSetting])
 
   const handleReset = useCallback(() => {
-    try {
-      if (typeof HapticFeedback !== "undefined") {
-        HapticFeedback.notificationWarning()
-      }
-    } catch {
-      // 忽略震动异常
-    }
+    triggerHaptic("warning")
     const updated = saveNovelReaderSettings(DEFAULT_NOVEL_READER_SETTINGS)
     setSettings(updated)
   }, [])
@@ -125,13 +120,7 @@ export function NovelTypographySheet(props: { onClose?: () => void }) {
               title="重置"
               systemImage="arrow.counterclockwise"
               primaryAction={() => {
-                try {
-                  if (typeof HapticFeedback !== "undefined") {
-                    HapticFeedback.mediumImpact()
-                  }
-                } catch {
-                  // 忽略震动异常
-                }
+                triggerHaptic("medium")
               }}
             >
               <Button

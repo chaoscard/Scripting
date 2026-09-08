@@ -59,8 +59,7 @@ import {
   RefreshableScrollView,
   PixivisionCard,
 } from "./components"
-
-declare const Haptics: any
+import { triggerHaptic } from "../utils/haptics"
 
 type ExploreMode = "recommended" | "latest" | "pixivision"
 type FeedMode = Exclude<ExploreMode, "pixivision">
@@ -117,7 +116,7 @@ export function DiscoveryView(props: { onClose: () => void }) {
               color: "#3172EB",
               action: () => {
                 try {
-                  void Haptics.transient()
+                  triggerHaptic("selection")
                 } catch {}
                 requestPixivRoute("library:pixivision", "discovery")
               },

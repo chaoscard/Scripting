@@ -29,6 +29,7 @@ import { session } from "../../api/session"
 import { novelThumbUrlOf } from "../../image/imageLoader"
 import { cacheNovel } from "../../store/novelCache"
 import type { PixivNovel } from "../../types"
+import { triggerHaptic } from "../../utils/haptics"
 export function NovelCard(props: {
   novel: PixivNovel
   onAppear?: () => void
@@ -87,7 +88,7 @@ export function NovelCard(props: {
   function handleNovelBookmarkLongPress() {
     const action = loadSettings().longPressBookmarkAction
     if (action === "off") return
-    void Haptics.transient()
+    triggerHaptic("medium")
     if (action === "follow") {
       void bookmarkAndFollowNovel()
     } else {

@@ -1,7 +1,6 @@
 import { AppIntentManager, AppIntentProtocol, Widget } from "scripting"
 import { advanceWidgetArtwork, toggleWidgetArtworkBookmark } from "./src/store/widgetStore"
-
-declare const Haptics: any
+import { triggerHaptic } from "./src/utils/haptics"
 
 export const NextArtworkIntent = AppIntentManager.register({
   name: "PixivNextArtworkIntent",
@@ -9,7 +8,7 @@ export const NextArtworkIntent = AppIntentManager.register({
   perform: async (param?: string) => {
     try {
       try {
-        void Haptics.transient()
+        triggerHaptic("light")
       } catch {}
       await advanceWidgetArtwork(param)
       Widget.reloadAll()
@@ -25,7 +24,7 @@ export const BookmarkArtworkIntent = AppIntentManager.register({
   perform: async (param?: string) => {
     try {
       try {
-        void Haptics.transient(0.8, 0.8)
+        triggerHaptic("heavy")
       } catch {}
       let poolParam = param || ""
       let targetId: number | undefined = undefined

@@ -35,6 +35,7 @@ import { addBookmark, bookmarkDetail, bookmarkTags, followUser, removeBookmark }
 import { session } from "../../api/session"
 import { cardThumbUrlOf, heroCardThumbUrlOf } from "../../image/imageLoader"
 import type { PixivIllustration } from "../../types"
+import { triggerHaptic } from "../../utils/haptics"
 
 export const FLOW_HORIZONTAL_PADDING = 12
 export const FLOW_COLUMN_SPACING = 12
@@ -179,7 +180,7 @@ export function IllustCard(props: {
   function handleBookmarkLongPress() {
     const action = loadSettings().longPressBookmarkAction
     if (action === "off") return
-    void Haptics.transient()
+    triggerHaptic("medium")
     if (action === "follow") {
       void bookmarkAndFollow()
     } else {
@@ -189,19 +190,19 @@ export function IllustCard(props: {
 
   const handleDownload = useCallback(async () => {
     if (downloading) return
-    void Haptics.transient()
+    triggerHaptic("light")
     setDownloading(true)
     try {
       if (illust.type === "ugoira") {
         const res = await exportUgoiraToAlbum(illust)
         if (res.success) {
-          void Haptics.transient()
+          triggerHaptic("success")
         }
       } else {
         const quality = getDownloadImageQuality()
         const ok = await downloadIllustToAlbum(illust, quality)
         if (ok) {
-          void Haptics.transient()
+          triggerHaptic("success")
         }
       }
     } catch (err: any) {
@@ -218,11 +219,11 @@ export function IllustCard(props: {
   const handleFollowUser = useCallback(async () => {
     if (!illust.user || followed || followBusy) return
     setFollowBusy(true)
-    void Haptics.transient()
+    triggerHaptic("light")
     try {
       await session.call((token) => followUser(illust.user.id, "public", token))
       setFollowed(true)
-      void Haptics.transient()
+      triggerHaptic("success")
     } catch (err: any) {
       console.log("IllustCard followUser error:", err?.message ?? err)
     } finally {

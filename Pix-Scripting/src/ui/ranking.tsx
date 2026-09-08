@@ -19,7 +19,7 @@ import {
 } from "scripting"
 
 import { useIsCurrentTab } from "./routeNavigation"
-declare const Haptics: any
+import { triggerHaptic } from "../utils/haptics"
 import { nextIllustrations, nextNovels, novelRanking, ranking } from "../api/pixiv"
 import { cardThumbUrlOf, novelThumbUrlOf, prefetch } from "../image/imageLoader"
 import {
@@ -218,7 +218,7 @@ export function RankingView(props: { onClose: () => void }) {
           frame={{ maxWidth: "infinity" }}
           action={() => {
             try {
-              void Haptics.transient()
+              triggerHaptic("selection")
             } catch {}
             setIsAdvancedSheetOpen(true)
           }}
@@ -249,7 +249,7 @@ export function RankingView(props: { onClose: () => void }) {
           buttonStyle="plain"
           action={() => {
             try {
-              void Haptics.transient()
+              triggerHaptic("selection")
             } catch {}
             setKind("illustration")
           }}
@@ -969,7 +969,7 @@ function NovelRankingFeedContent(props: {
                   buttonStyle="bordered"
                   action={() => {
                     try {
-                      void Haptics.transient()
+                      triggerHaptic("light")
                     } catch {}
                     onBackToDefault()
                   }}
@@ -1018,7 +1018,7 @@ function NovelRankingFeedContent(props: {
                 buttonStyle="bordered"
                 action={() => {
                   try {
-                    void Haptics.transient()
+                    triggerHaptic("light")
                   } catch {}
                   onBackToDefault()
                 }}
@@ -1121,7 +1121,7 @@ function IllustRankingFeedContent(props: {
                   buttonStyle="bordered"
                   action={() => {
                     try {
-                      void Haptics.transient()
+                      triggerHaptic("light")
                     } catch {}
                     onBackToDefault()
                   }}
@@ -1170,7 +1170,7 @@ function IllustRankingFeedContent(props: {
                 buttonStyle="bordered"
                 action={() => {
                   try {
-                    void Haptics.transient()
+                    triggerHaptic("light")
                   } catch {}
                   onBackToDefault()
                 }}

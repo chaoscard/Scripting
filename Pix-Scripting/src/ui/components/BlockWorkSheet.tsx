@@ -17,6 +17,7 @@ import {
   updateBlocklist,
 } from "../../store/blocklist"
 import type { PixivTag, PixivUser } from "../../types"
+import { triggerHaptic } from "../../utils/haptics"
 
 export function BlockWorkSheet(props: {
   user?:
@@ -53,7 +54,7 @@ export function BlockWorkSheet(props: {
   const toggleTag = useCallback((rawName: string) => {
     const name = rawName.trim()
     if (!name) return
-    void Haptics.transient()
+    triggerHaptic("selection")
     setSelectedTags((prev) => {
       const next = new Set(prev)
       if (next.has(name)) {
@@ -66,7 +67,7 @@ export function BlockWorkSheet(props: {
   }, [])
 
   const toggleUser = useCallback(() => {
-    void Haptics.transient()
+    triggerHaptic("selection")
     setBlockUserSelected((prev) => !prev)
   }, [])
 
@@ -97,7 +98,7 @@ export function BlockWorkSheet(props: {
 
     if (changed) {
       updateBlocklist({ blockedTags: mergedTags })
-      void Haptics.transient()
+      triggerHaptic("medium")
     }
 
     onClose()

@@ -54,7 +54,7 @@ import {
 import { requestPixivRoute } from "./routeNavigation"
 
 declare const Dialog: any
-declare const Haptics: any
+import { triggerHaptic } from "../utils/haptics"
 
 // ============================================================================
 // 1. 二级总览页：下载与本地文件管理 (DownloadManagerView)
@@ -170,7 +170,7 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
         color: activeTasksCount > 0 ? "#EE2F49" : "#3172EB",
         action: () => {
           try {
-            void Haptics.transient()
+            triggerHaptic("selection")
           } catch {}
           requestPixivRoute("downloadTasks")
         },
@@ -183,7 +183,7 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
         disabled: cleaning,
         action: () => {
           try {
-            void Haptics.transient()
+            triggerHaptic("selection")
           } catch {}
           void handleCleanTemp()
         },
@@ -1021,7 +1021,7 @@ export function DownloadDetailListView(props: {
         color: "#EE2F49",
         action: () => {
           try {
-            void Haptics.transient()
+            triggerHaptic("selection")
           } catch {}
         },
       },
@@ -1032,7 +1032,7 @@ export function DownloadDetailListView(props: {
         color: "#3172EB",
         action: () => {
           try {
-            void Haptics.transient()
+            triggerHaptic("selection")
           } catch {}
           setSortMode((prev) => {
             if (prev === "date_desc") return "date_asc"

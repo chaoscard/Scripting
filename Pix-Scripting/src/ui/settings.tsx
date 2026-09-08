@@ -48,7 +48,7 @@ import {
 } from "./bottomAccessory"
 
 declare const Dialog: any
-declare const Haptics: any
+import { triggerHaptic } from "../utils/haptics"
 import {
   loadCustomAIProfile,
   onCustomAIConfigChanged,
@@ -219,7 +219,7 @@ export function SettingsView() {
         color: "#EE2F49",
         action: () => {
           try {
-            void Haptics.transient()
+            triggerHaptic("selection")
           } catch {}
         },
       },
@@ -230,7 +230,7 @@ export function SettingsView() {
         color: "#3172EB",
         action: () => {
           try {
-            void Haptics.transient()
+            triggerHaptic("selection")
           } catch {}
         },
         contextMenu: resetContextMenu,
@@ -285,7 +285,7 @@ export function SettingsView() {
   const isAllExpanded = activeKeys.every((key) => expanded[key])
 
   function toggleExpandAll() {
-    void Haptics.transient()
+    triggerHaptic("selection")
     if (isAllExpanded) {
       collapseAll()
     } else {
@@ -327,7 +327,7 @@ export function SettingsView() {
           </Button>,
           <Button
             action={() => {
-              void Haptics.transient()
+              triggerHaptic("light")
               setShowHighlights(true)
             }}
           >
@@ -539,11 +539,11 @@ export function SettingsView() {
               disabled={syncingWebCookie}
               action={async () => {
                 setSyncingWebCookie(true)
-                void Haptics.transient()
+                triggerHaptic("light")
                 try {
                   const ok = await syncWebCookies()
                   if (ok) {
-                    void Haptics.transient()
+                    triggerHaptic("success")
                   }
                   setWebCookieVersion((v) => v + 1)
                 } catch (e: any) {
@@ -1055,7 +1055,7 @@ export function SettingsView() {
               buttonStyle="glass"
               controlSize="small"
               action={() => {
-                void Haptics.transient()
+                triggerHaptic("light")
                 try {
                   Widget.reloadAll()
                   setWidgetRefreshed()

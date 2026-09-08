@@ -14,6 +14,7 @@ import {
 import { SCRIPT_VERSION } from "../config"
 import { loadSettings, onSettingsChanged, updateSettings } from "../store/settings"
 import { AvatarImage, presentExternalURL } from "./components"
+import { triggerHaptic } from "../utils/haptics"
 
 const GITHUB_AVATAR_URL = "https://avatars.githubusercontent.com/u/16934707?v=4"
 const HANA_IRO_AVATAR_URL = "https://github.com/youshen2.png?size=128"
@@ -122,14 +123,14 @@ function VersionRow(props: {
     if (clickCountRef.current >= 5) {
       clickCountRef.current = 0
       props.onUnlock()
-      void Haptics.transient(1.0, 1.0)
+      triggerHaptic(1.0, 1.0)
       void Dialog.alert({
         title: "提示",
         message: "已解锁调试功能，请前往设置查看",
         buttonLabel: "好",
       })
     } else {
-      void Haptics.transient(0.4, 0.4)
+      triggerHaptic(0.4, 0.4)
       timerRef.current = setTimeout(() => {
         clickCountRef.current = 0
       }, 2000)

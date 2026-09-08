@@ -9,8 +9,7 @@ import {
   ZStack,
   type Color,
 } from "scripting"
-
-declare const Haptics: any
+import { triggerHaptic } from "../../utils/haptics"
 
 interface FeatureItem {
   id: string
@@ -91,7 +90,7 @@ export function FeatureHighlightsSheet(props: { onClose: () => void }) {
 
   const handleDismiss = () => {
     try {
-      void Haptics.transient()
+      triggerHaptic("light")
     } catch {}
     onClose()
   }

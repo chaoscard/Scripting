@@ -67,7 +67,7 @@ import { destinationElement } from "./routes"
 import { requestPixivRoute, setActiveTabKind } from "./routeNavigation"
 
 declare const Pasteboard: any
-declare const HapticFeedback: any
+import { triggerHaptic } from "../utils/haptics"
 import {
   currentBatchSize,
   dedupeByID,
@@ -378,7 +378,6 @@ function filterUserPreviews(items: UserItem[]): UserItem[] {
     }))
 }
 
-declare const Haptics: any
 declare const Dialog: any
 declare const Animation: any
 
@@ -723,7 +722,7 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
   function selectSort(value: SearchSort) {
     if (value === "popular_desc" && !session.user?.is_premium) {
       try {
-        void Haptics.transient()
+        triggerHaptic("warning")
       } catch {}
       if (typeof Dialog !== "undefined" && typeof Dialog.alert === "function") {
         void Dialog.alert({
@@ -1420,7 +1419,7 @@ function SearchHistorySection(props: {
 
   const handleClear = async () => {
     try {
-      void Haptics.transient(0.8, 0.8)
+      triggerHaptic("heavy")
     } catch {}
     let confirmed = false
     try {
@@ -1524,7 +1523,7 @@ function SearchHistorySection(props: {
                               if (typeof Pasteboard !== "undefined") {
                                 void Pasteboard.setString(item)
                               }
-                              void Haptics.transient()
+                              triggerHaptic("selection")
                             } catch {}
                           }}
                         />
@@ -1534,7 +1533,7 @@ function SearchHistorySection(props: {
                           role="destructive"
                           action={() => {
                             try {
-                              void Haptics.transient()
+                              triggerHaptic("medium")
                             } catch {}
                             onRemove(item)
                           }}
@@ -1560,7 +1559,7 @@ function SearchHistorySection(props: {
                   buttonStyle="plain"
                   action={() => {
                     try {
-                      void Haptics.transient()
+                      triggerHaptic("medium")
                     } catch {}
                     onRemove(item)
                   }}
@@ -1627,9 +1626,7 @@ function TrendingHeroBanner(props: {
                 if (typeof Pasteboard !== "undefined") {
                   void Pasteboard.setString(item.tag)
                 }
-                if (typeof HapticFeedback !== "undefined") {
-                  HapticFeedback.lightImpact()
-                }
+                triggerHaptic("light")
               }}
             />
           </Group>
@@ -1726,9 +1723,7 @@ function TrendingGridCard(props: {
                 if (typeof Pasteboard !== "undefined") {
                   void Pasteboard.setString(item.tag)
                 }
-                if (typeof HapticFeedback !== "undefined") {
-                  HapticFeedback.lightImpact()
-                }
+                triggerHaptic("light")
               }}
             />
           </Group>

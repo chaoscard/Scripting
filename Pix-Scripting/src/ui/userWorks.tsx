@@ -38,6 +38,7 @@ import {
 import { isUserFollowed, onUserFollowChanged } from "../store/userFollow"
 import { useAsyncGuard, useLatest, usePagedList, currentBatchSize, useExperimentalAmbientPalette } from "./hooks"
 import type { PixivIllustration, PixivNovel, PixivUserDetail } from "../types"
+import { triggerHaptic } from "../utils/haptics"
 import {
   EmptyView,
   ErrorView,
@@ -461,7 +462,7 @@ function UserWorksFeed(props: {
 
     try {
       await session.call((token) => deleteIllust(illust.id, token))
-      void Haptics.transient()
+      triggerHaptic("medium")
       if (tab === "illust") {
         illustPagedRef.current.removeItem(illust.id)
       } else if (tab === "manga") {
@@ -487,7 +488,7 @@ function UserWorksFeed(props: {
 
     try {
       await session.call((token) => deleteNovel(novel.id, token))
-      void Haptics.transient()
+      triggerHaptic("medium")
       novelPagedRef.current.removeItem(novel.id)
     } catch (err: any) {
       void Dialog.alert({

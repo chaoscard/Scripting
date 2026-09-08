@@ -41,8 +41,7 @@ import {
   useRegisterBottomAccessory,
   type DockActionItem,
 } from "./bottomAccessory"
-
-declare const Haptics: any
+import { triggerHaptic } from "../utils/haptics"
 
 export type ConnectionRouteKind = "following" | "follower" | "mypixiv"
 type ConnectionVisibility = Extract<Visibility, "public" | "private">
@@ -100,7 +99,7 @@ export function UserConnectionsView(props: {
         color: restrict === "public" ? "#EE2F49" : "#3172EB",
         action: () => {
           try {
-            void Haptics.transient()
+            triggerHaptic("selection")
           } catch {}
           setRestrict("public")
         },
@@ -112,7 +111,7 @@ export function UserConnectionsView(props: {
         color: restrict === "private" ? "#EE2F49" : "#3172EB",
         action: () => {
           try {
-            void Haptics.transient()
+            triggerHaptic("selection")
           } catch {}
           setRestrict("private")
         },
@@ -124,7 +123,7 @@ export function UserConnectionsView(props: {
         color: "#3172EB",
         action: () => {
           try {
-            void Haptics.transient()
+            triggerHaptic("selection")
           } catch {}
           setShowRecommendedUsers(true)
         },

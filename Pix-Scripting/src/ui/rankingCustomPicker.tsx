@@ -36,8 +36,7 @@ import {
   useRegisterBottomAccessory,
   type DockActionItem,
 } from "./bottomAccessory"
-
-declare const Haptics: any
+import { triggerHaptic } from "../utils/haptics"
 
 export type CustomRankingPickerKind = "illust" | "manga" | "novel"
 
@@ -130,7 +129,7 @@ export function RankingCustomPickerView(props: { kind: CustomRankingPickerKind }
         color: "#EE2F49",
         action: () => {
           try {
-            void Haptics.transient()
+            triggerHaptic("selection")
           } catch {}
         },
       },
@@ -141,7 +140,7 @@ export function RankingCustomPickerView(props: { kind: CustomRankingPickerKind }
         color: "#3172EB",
         action: () => {
           try {
-            void Haptics.transient()
+            triggerHaptic("selection")
           } catch {}
         },
         contextMenu: resetContextMenu,

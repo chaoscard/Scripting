@@ -53,7 +53,7 @@ import {
 } from "../store/pixivisionBookmarks"
 
 declare const Pasteboard: any
-declare const Haptics: any
+import { triggerHaptic } from "../utils/haptics"
 
 const FLOW_HORIZONTAL_PADDING = 12
 const MIN_FLOW_IMAGE_RATIO = 1 / 4
@@ -413,7 +413,7 @@ export function PixivisionDetailView(props: { articleID: number }) {
                   key="bookmark"
                   action={() => {
                     try {
-                      void Haptics.transient()
+                      triggerHaptic("medium")
                     } catch {}
                     if (!detail) return
                     const next = togglePixivisionBookmark({
@@ -897,7 +897,7 @@ export function PixivisionDetailView(props: { articleID: number }) {
                                         title="保存至相册"
                                         systemImage="square.and.arrow.down"
                                         action={async () => {
-                                          void Haptics.transient()
+                                          triggerHaptic("light")
                                           await withAlbumKeepAlive(async () => {
                                             const cached = cachedFilePath(block.src) || cachedFilePath(block.thumbURL ?? "")
                                             const fileName = `pixivision_${detail?.id ?? "image"}_${idx}.jpg`
@@ -911,7 +911,7 @@ export function PixivisionDetailView(props: { articleID: number }) {
                                               }
                                             }
                                             if (ok) {
-                                              void Haptics.transient()
+                                              triggerHaptic("success")
                                             }
                                           })
                                         }}

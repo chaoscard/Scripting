@@ -19,8 +19,7 @@ import { session } from "../api/session"
 import type { StoredAccountProfile } from "../api/auth"
 import { AvatarImage } from "./components/CachedImage"
 import { LoginView } from "./login"
-
-declare const Haptics: any
+import { triggerHaptic } from "../utils/haptics"
 
 export function AccountSwitcherSheet(props: {
   onClose: () => void
@@ -45,13 +44,13 @@ export function AccountSwitcherSheet(props: {
       setSwitchingId(targetId)
       setError(null)
       try {
-        void Haptics.transient()
+        triggerHaptic("light")
       } catch {}
       try {
         const ok = await session.switchAccount(targetId)
         if (ok) {
           try {
-            void Haptics.transient(0.8, 0.8)
+            triggerHaptic("success")
           } catch {}
           onClose()
         } else {
@@ -68,7 +67,7 @@ export function AccountSwitcherSheet(props: {
 
   const handleRemoveAccount = useCallback((targetId: string) => {
     try {
-      void Haptics.transient()
+      triggerHaptic("medium")
     } catch {}
     session.removeAccount(targetId)
     setAccounts(session.getAllAccounts())
@@ -76,7 +75,7 @@ export function AccountSwitcherSheet(props: {
 
   const handleSignOutCurrent = useCallback(() => {
     try {
-      void Haptics.transient()
+      triggerHaptic("medium")
     } catch {}
     session.signOut(false)
     onClose()
@@ -259,7 +258,7 @@ export function AccountSwitcherSheet(props: {
               buttonStyle="plain"
               action={() => {
                 try {
-                  void Haptics.transient()
+                  triggerHaptic("light")
                 } catch {}
                 setIsAddingAccount(true)
               }}

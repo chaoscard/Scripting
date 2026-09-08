@@ -18,6 +18,7 @@ import {
   onSettingsChanged,
   type AppSettings,
 } from "../store/settings"
+import { triggerHaptic } from "../utils/haptics"
 
 export function LoginNetworkSheet(props: { onClose: () => void }) {
   const [settings, setSettings] = useState<AppSettings>(() => loadSettings())
@@ -35,7 +36,7 @@ export function LoginNetworkSheet(props: { onClose: () => void }) {
 
   function handleReset() {
     try {
-      void Haptics.transient()
+      triggerHaptic("selection")
     } catch {}
     const next = resetNetworkSettings()
     setSettings(next)

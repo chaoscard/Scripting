@@ -37,6 +37,7 @@ import {
   unfollowUser,
 } from "../api/pixiv"
 import { session } from "../api/session"
+import { triggerHaptic } from "../utils/haptics"
 import {
   downloadIllustToAlbum,
   exportIllustToZip,
@@ -553,7 +554,7 @@ export function IllustDetailView(props: { illustID: number }) {
 
   async function toggleBookmark() {
     if (bookmarkLoading) return
-    void Haptics.transient()
+    triggerHaptic("medium")
     setBookmarkLoading(true)
     try {
       if (bookmarked) {
@@ -600,7 +601,7 @@ export function IllustDetailView(props: { illustID: number }) {
   function handleBookmarkLongPress() {
     const action = loadSettings().longPressBookmarkAction
     if (action === "off") return
-    void Haptics.transient()
+    triggerHaptic("medium")
     if (action === "follow") {
       void bookmarkAndFollow()
     } else {
@@ -612,12 +613,12 @@ export function IllustDetailView(props: { illustID: number }) {
 
   async function handleDownloadUgoira() {
     if (downloading) return
-    void Haptics.transient()
+    triggerHaptic("light")
     setDownloading(true)
     try {
       const res = await exportUgoiraToAlbum(current)
       if (res.success) {
-        void Haptics.transient()
+        triggerHaptic("success")
       }
     } finally {
       setDownloading(false)
@@ -626,12 +627,12 @@ export function IllustDetailView(props: { illustID: number }) {
 
   async function handleDownloadUgoiraZip() {
     if (downloading) return
-    void Haptics.transient()
+    triggerHaptic("light")
     setDownloading(true)
     try {
       const res = await exportUgoiraZip(current)
       if (res.success && res.savedPath) {
-        void Haptics.transient()
+        triggerHaptic("success")
         await ShareSheet.present([res.savedPath])
       }
     } finally {
@@ -641,13 +642,13 @@ export function IllustDetailView(props: { illustID: number }) {
 
   async function handleDownloadIllustToAlbum() {
     if (downloading) return
-    void Haptics.transient()
+    triggerHaptic("light")
     setDownloading(true)
     const downloadQuality = getDownloadImageQuality()
     try {
       const ok = await downloadIllustToAlbum(current, downloadQuality)
       if (ok) {
-        void Haptics.transient()
+        triggerHaptic("success")
       }
     } finally {
       setDownloading(false)
@@ -656,7 +657,7 @@ export function IllustDetailView(props: { illustID: number }) {
 
   async function handleDownloadIllustToZip() {
     if (downloading) return
-    void Haptics.transient()
+    triggerHaptic("light")
     setDownloading(true)
     const downloadQuality = getDownloadImageQuality()
     try {
@@ -670,7 +671,7 @@ export function IllustDetailView(props: { illustID: number }) {
         imageUrls: urls,
       })
       if (res.success && res.path) {
-        void Haptics.transient()
+        triggerHaptic("success")
         await ShareSheet.present([res.path])
       }
     } finally {
@@ -680,7 +681,7 @@ export function IllustDetailView(props: { illustID: number }) {
 
   async function handleDownloadManga(format: "cbz" | "epub") {
     if (downloading) return
-    void Haptics.transient()
+    triggerHaptic("light")
     setDownloading(true)
     const downloadQuality = getDownloadImageQuality()
     try {
@@ -723,7 +724,7 @@ export function IllustDetailView(props: { illustID: number }) {
       }
 
       if (filePath) {
-        void Haptics.transient()
+        triggerHaptic("success")
         await ShareSheet.present([filePath])
       }
     } finally {
@@ -733,7 +734,7 @@ export function IllustDetailView(props: { illustID: number }) {
 
   async function followWithVisibility(restrict: "public" | "private") {
     if (followLoading) return
-    void Haptics.transient()
+    triggerHaptic("medium")
     setFollowLoading(true)
     try {
       await session.call((token) => followUser(current.user.id, restrict, token))
@@ -755,7 +756,7 @@ export function IllustDetailView(props: { illustID: number }) {
       await followWithVisibility("public")
       return
     }
-    void Haptics.transient()
+    triggerHaptic("medium")
     setFollowLoading(true)
     try {
       await session.call((token) => unfollowUser(current.user.id, token))
@@ -769,7 +770,7 @@ export function IllustDetailView(props: { illustID: number }) {
   }
 
   async function shareIllust() {
-    void Haptics.transient()
+    triggerHaptic("selection")
     await ShareSheet.present([`https://www.pixiv.net/artworks/${current.id}`])
   }
 

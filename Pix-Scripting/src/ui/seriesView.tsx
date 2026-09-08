@@ -34,6 +34,7 @@ import {
   novelSeries,
 } from "../api/pixiv"
 import { session } from "../api/session"
+import { triggerHaptic } from "../utils/haptics"
 import {
   loadSettings,
   onSettingsChanged,
@@ -403,7 +404,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
 
   async function handleExportSeries() {
     if (seriesDownloading) return
-    void Haptics.transient()
+    triggerHaptic("light")
 
     if (kind === "novel") {
       const confirmed = await Dialog.confirm({
@@ -418,7 +419,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
       try {
         const filePath = await downloadEntireNovelSeries(seriesID, title)
         if (filePath) {
-          void Haptics.transient()
+          triggerHaptic("success")
           await ShareSheet.present([filePath])
         }
       } finally {
@@ -439,7 +440,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
       try {
         const filePath = await downloadEntireMangaSeries(seriesID, title, format)
         if (filePath) {
-          void Haptics.transient()
+          triggerHaptic("success")
           await ShareSheet.present([filePath])
         }
       } finally {
@@ -450,7 +451,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
 
   async function toggleWatchlist() {
     if (watchLoading) return
-    void Haptics.transient()
+    triggerHaptic("medium")
     setWatchLoading(true)
     const nextState = !isWatched
     try {
@@ -517,7 +518,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
     <Button
       key="series-share"
       action={() => {
-        void Haptics.transient()
+        triggerHaptic("selection")
         void ShareSheet.present([shareUrl])
       }}
     >
@@ -553,7 +554,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
         <Button
           key="series-sort"
           action={() => {
-            void Haptics.transient()
+            triggerHaptic("selection")
             const nextAsc = !isAscending
             setIsAscending(nextAsc)
             updateSettings({ watchlistSortOrder: nextAsc ? "asc" : "desc" })
@@ -577,7 +578,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
                   title="分享"
                   systemImage="square.and.arrow.up"
                   action={() => {
-                    void Haptics.transient()
+                    triggerHaptic("selection")
                     void ShareSheet.present([shareUrl])
                   }}
                 />

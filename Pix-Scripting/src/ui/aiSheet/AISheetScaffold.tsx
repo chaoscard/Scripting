@@ -19,6 +19,7 @@ import {
 } from "scripting"
 import { isAIAvailable } from "../../api/aiService"
 import { ErrorView } from "../components"
+import { triggerHaptic } from "../../utils/haptics"
 
 /**
  * 极简微光骨架呼吸条
@@ -76,7 +77,7 @@ export function OriginalCaptionCollapsible(props: {
       <Button
         action={() => {
           onToggle()
-          void Haptics.transient(0.3, 0.3)
+          triggerHaptic(0.3, 0.3)
         }}
       >
         <HStack spacing={6} alignment="center">
@@ -162,7 +163,7 @@ export function AISheetScaffold(props: {
   function handleCopy() {
     if (!resultText) return
     Pasteboard.setString(resultText)
-    void Haptics.transient()
+    triggerHaptic("selection")
   }
 
   const isDownload = actionButtonType === "download"

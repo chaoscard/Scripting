@@ -24,8 +24,8 @@ import type {
   SearchSort,
 } from "../types"
 import type { AppSettings } from "../store/settings"
+import { triggerHaptic } from "../utils/haptics"
 
-declare const Haptics: any
 declare const Dialog: any
 
 export function formatDateToPixivDate(timestamp: number): string {
@@ -336,7 +336,7 @@ export function SearchAdvancedSheet(props: {
             onChanged={(val: string) => {
               if (val === "popular_desc" && !session.user?.is_premium) {
                 try {
-                  void Haptics.transient()
+                  triggerHaptic("warning")
                 } catch {}
                 if (typeof Dialog !== "undefined" && typeof Dialog.alert === "function") {
                   void Dialog.alert({

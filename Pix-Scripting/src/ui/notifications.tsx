@@ -38,8 +38,7 @@ import {
   LoadingView,
   RefreshableScrollView,
 } from "./components"
-
-declare const Haptics: any
+import { triggerHaptic } from "../utils/haptics"
 
 export function NotificationsView() {
   return (
@@ -104,7 +103,7 @@ function NotificationList(props: {
   const handleRefresh = useCallback(async () => {
     if (refreshing) return
     try {
-      void Haptics.transient()
+      triggerHaptic("light")
     } catch {}
     setRefreshing(true)
     try {
@@ -123,7 +122,7 @@ function NotificationList(props: {
         color: "#EE2F49",
         action: () => {
           try {
-            void Haptics.transient()
+            triggerHaptic("selection")
           } catch {}
         },
       },

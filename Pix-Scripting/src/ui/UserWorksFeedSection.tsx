@@ -36,6 +36,7 @@ import {
   NovelCard,
 } from "./components"
 import type { PixivIllustration, PixivNovel } from "../types"
+import { triggerHaptic } from "../utils/haptics"
 
 export type UserWorkKind = "illust" | "manga" | "novel"
 
@@ -152,7 +153,7 @@ export function UserWorksFeedSection(props: {
 
     try {
       await session.call((token) => deleteIllust(illust.id, token))
-      void Haptics.transient()
+      triggerHaptic("medium")
       if (kind === "illust") {
         illustPagedRef.current.removeItem(illust.id)
       } else if (kind === "manga") {
@@ -178,7 +179,7 @@ export function UserWorksFeedSection(props: {
 
     try {
       await session.call((token) => deleteNovel(novel.id, token))
-      void Haptics.transient()
+      triggerHaptic("medium")
       novelPagedRef.current.removeItem(novel.id)
     } catch (err: any) {
       void Dialog.alert({

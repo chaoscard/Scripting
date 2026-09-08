@@ -32,6 +32,7 @@ import {
 import { ErrorView } from "../components"
 import { createThrottledUpdater } from "./throttle"
 import { PRESET_CONTINUE_PROMPTS, type NovelAIMode } from "./types"
+import { triggerHaptic } from "../../utils/haptics"
 
 interface NovelPageCache {
   translateText?: string
@@ -240,7 +241,7 @@ export function NovelAISheet(props: {
         })
         if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
           throttler.flush(finalResult)
-          void Haptics.transient(0.8, 0.8)
+          triggerHaptic(0.8, 0.8)
         }
       } else if (mode === "translate") {
         if (!cleanedText) {
@@ -265,7 +266,7 @@ export function NovelAISheet(props: {
         })
         if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
           throttler.flush(finalResult)
-          void Haptics.transient(0.8, 0.8)
+          triggerHaptic(0.8, 0.8)
         }
       } else if (mode === "summary") {
         if (!cleanedText) {
@@ -291,7 +292,7 @@ export function NovelAISheet(props: {
         })
         if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
           throttler.flush(finalResult)
-          void Haptics.transient(0.8, 0.8)
+          triggerHaptic(0.8, 0.8)
         }
       } else if (mode === "continue") {
         if (!cleanedText) {
@@ -315,7 +316,7 @@ export function NovelAISheet(props: {
         })
         if (activeTaskTokenRef.current.id === taskToken.id && !taskToken.aborted) {
           throttler.flush(finalResult)
-          void Haptics.transient(0.8, 0.8)
+          triggerHaptic(0.8, 0.8)
         }
       }
     } catch (e: any) {
@@ -406,7 +407,7 @@ export function NovelAISheet(props: {
             disabled={selectedPage <= 1 || loading || streaming}
             action={() => {
               setSelectedPage((p) => Math.max(1, p - 1))
-              void Haptics.transient(0.3, 0.3)
+              triggerHaptic(0.3, 0.3)
             }}
           />
           <Spacer />
@@ -420,7 +421,7 @@ export function NovelAISheet(props: {
             disabled={selectedPage >= totalPages || loading || streaming}
             action={() => {
               setSelectedPage((p) => Math.min(totalPages, p + 1))
-              void Haptics.transient(0.3, 0.3)
+              triggerHaptic(0.3, 0.3)
             }}
           />
         </HStack>
@@ -440,7 +441,7 @@ export function NovelAISheet(props: {
                     buttonStyle={isSelected ? "borderedProminent" : "bordered"}
                     action={() => {
                       setContinueInstruction(isSelected ? "" : prompt)
-                      void Haptics.transient(0.3, 0.3)
+                      triggerHaptic(0.3, 0.3)
                     }}
                   />
                 )

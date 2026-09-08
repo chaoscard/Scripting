@@ -25,8 +25,7 @@ import { DockActionBar, useRegisterBottomAccessory, type DockActionItem } from "
 import { useExperimentalAmbientPalette } from "./hooks"
 import { ReverseImageSearchSheet } from "./reverseImageSearchSheet"
 import { AccountSwitcherSheet } from "./accountSwitcherSheet"
-
-declare const Haptics: any
+import { triggerHaptic } from "../utils/haptics"
 
 function isVirtualNode(v: unknown): v is VirtualNode {
   return !!v && typeof v === "object" && ("render" in v || "isInternal" in v || "props" in v)
@@ -62,7 +61,7 @@ export function MoreView(props: { onClose: () => void }) {
         icon: "photo.badge.magnifyingglass",
         action: () => {
           try {
-            void Haptics.transient()
+            triggerHaptic("selection")
           } catch {}
           setActiveSheet("reverseSearch")
         },
@@ -73,7 +72,7 @@ export function MoreView(props: { onClose: () => void }) {
         icon: "arrow.down.circle",
         action: () => {
           try {
-            void Haptics.transient()
+            triggerHaptic("selection")
           } catch {}
           requestPixivRoute("downloadManager", "more")
         },
@@ -115,7 +114,7 @@ export function MoreView(props: { onClose: () => void }) {
             key="reverse-search"
             action={() => {
               try {
-                void Haptics.transient()
+                triggerHaptic("selection")
               } catch {}
               setActiveSheet("reverseSearch")
             }}
@@ -202,7 +201,7 @@ export function MoreView(props: { onClose: () => void }) {
           buttonStyle="plain"
           action={() => {
             try {
-              void Haptics.transient()
+              triggerHaptic("selection")
             } catch {}
             setActiveSheet("accountSwitcher")
           }}

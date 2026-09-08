@@ -19,6 +19,7 @@ import {
 } from "../../downloader"
 import { recordWorkSeriesAssociation } from "../../store/seriesCache"
 import type { PixivWatchlistSeries } from "../../types"
+import { triggerHaptic } from "../../utils/haptics"
 function formatWatchlistDate(dateStr?: string | null): string {
   if (!dateStr) return ""
   try {
@@ -65,7 +66,7 @@ export function WatchlistSeriesCard(props: {
   const formattedDate = formatWatchlistDate(item.last_published_content_datetime)
 
   async function handleExportSeries() {
-    void Haptics.transient()
+    triggerHaptic("light")
     if (isNovel) {
       const confirmed = await Dialog.confirm({
         title: "下载整本小说",
@@ -76,7 +77,7 @@ export function WatchlistSeriesCard(props: {
       if (!confirmed) return
       const filePath = await downloadEntireNovelSeries(item.id, item.title)
       if (filePath) {
-        void Haptics.transient()
+        triggerHaptic("success")
         await ShareSheet.present([filePath])
       }
     } else {
@@ -91,7 +92,7 @@ export function WatchlistSeriesCard(props: {
       const format: "cbz" | "epub" = choice === 0 ? "cbz" : "epub"
       const filePath = await downloadEntireMangaSeries(item.id, item.title, format)
       if (filePath) {
-        void Haptics.transient()
+        triggerHaptic("success")
         await ShareSheet.present([filePath])
       }
     }
@@ -128,7 +129,7 @@ export function WatchlistSeriesCard(props: {
                 title="分享系列链接"
                 systemImage="square.and.arrow.up"
                 action={() => {
-                  void Haptics.transient()
+                  triggerHaptic("selection")
                   const shareUrl = isNovel
                     ? `https://www.pixiv.net/novel/series/${item.id}`
                     : `https://www.pixiv.net/user_series/${item.id}`

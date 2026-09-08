@@ -36,7 +36,7 @@ import { EmptyView, ErrorView, LoadingView, presentExternalURL } from "./compone
 import { destinationElement } from "./routes"
 
 declare const Photos: any
-declare const Haptics: any
+import { triggerHaptic } from "../utils/haptics"
 declare const Dialog: any
 declare const Pasteboard: any
 
@@ -108,7 +108,7 @@ export function ReverseImageSearchSheet(props: {
       }
       setResults(resp.results)
       try {
-        void Haptics.transient()
+        triggerHaptic("success")
       } catch {}
     } catch (err: any) {
       if (err?.message === "NEED_API_KEY") {
@@ -140,7 +140,7 @@ export function ReverseImageSearchSheet(props: {
 
   const handlePickFromPhotos = useCallback(async () => {
     try {
-      void Haptics.transient()
+      triggerHaptic("light")
     } catch {}
     try {
       const picked = await Photos.pickPhotos(1)
@@ -187,7 +187,7 @@ export function ReverseImageSearchSheet(props: {
                 systemImage="gearshape"
                 action={() => {
                   try {
-                    void Haptics.transient()
+                    triggerHaptic("selection")
                   } catch {}
                   setShowConfig(true)
                 }}
@@ -319,7 +319,7 @@ export function ReverseImageSearchSheet(props: {
                     buttonStyle="plain"
                     action={() => {
                       try {
-                        void Haptics.transient()
+                        triggerHaptic("selection")
                       } catch {}
                       setShowConfig(true)
                     }}
@@ -431,7 +431,7 @@ function SauceNAOConfigView(props: {
           if (trimmed) {
             setNewKeyInput(trimmed)
             try {
-              void Haptics.transient(0.3, 0.3)
+              triggerHaptic(0.3, 0.3)
             } catch {}
           }
         }
@@ -463,7 +463,7 @@ function SauceNAOConfigView(props: {
     setNewKeyInput("")
     setKeys(getSauceNaoApiKeys())
     try {
-      void Haptics.notification("success")
+      triggerHaptic("success")
     } catch {}
     if (typeof Dialog !== "undefined" && typeof Dialog.alert === "function") {
       await Dialog.alert({
@@ -484,7 +484,7 @@ function SauceNAOConfigView(props: {
       }
     }
     try {
-      void Haptics.notification("success")
+      triggerHaptic("success")
     } catch {}
     onKeyUpdated()
     onBack()
@@ -492,7 +492,7 @@ function SauceNAOConfigView(props: {
 
   const handleRemoveKey = useCallback(async (targetKey: string) => {
     try {
-      void Haptics.impact("medium")
+      triggerHaptic("medium")
     } catch {}
     let confirmed = true
     if (typeof Dialog !== "undefined" && typeof Dialog.confirm === "function") {
@@ -509,14 +509,14 @@ function SauceNAOConfigView(props: {
     removeSauceNaoApiKey(targetKey)
     setKeys(getSauceNaoApiKeys())
     try {
-      void Haptics.notification("success")
+      triggerHaptic("success")
     } catch {}
     onKeyUpdated()
   }, [onKeyUpdated])
 
   const handleClearAll = useCallback(async () => {
     try {
-      void Haptics.impact("medium")
+      triggerHaptic("medium")
     } catch {}
     let confirmed = true
     if (typeof Dialog !== "undefined" && typeof Dialog.confirm === "function") {
@@ -533,7 +533,7 @@ function SauceNAOConfigView(props: {
     setKeys([])
     setNewKeyInput("")
     try {
-      void Haptics.notification("success")
+      triggerHaptic("success")
     } catch {}
     onKeyUpdated()
   }, [onKeyUpdated])
@@ -705,7 +705,7 @@ function SauceNAOMatchCard(props: {
         await Pasteboard.setString(fullText)
       }
       try {
-        void Haptics.notification("success")
+        triggerHaptic("success")
       } catch {}
       if (typeof Dialog !== "undefined" && typeof Dialog.alert === "function") {
         await Dialog.alert({

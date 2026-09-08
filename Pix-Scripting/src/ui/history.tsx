@@ -53,7 +53,7 @@ import type { PixivIllustration, PixivNovel } from "../types"
 export type HistoryKind = HistoryContentKind
 
 declare const Dialog: any
-declare const Haptics: any
+import { triggerHaptic } from "../utils/haptics"
 
 export interface HistoryIllustItem extends PixivIllustration {
   viewedAt: number
@@ -309,7 +309,7 @@ function historyToolbar(props: {
 
   async function handleClearConfirm() {
     try {
-      void Haptics.transient()
+      triggerHaptic("light")
     } catch {}
     const targetLabel = historyKindTitle(props.kind)
     let confirmed = false
@@ -325,7 +325,7 @@ function historyToolbar(props: {
     }
     if (confirmed) {
       try {
-        void Haptics.notification("warning")
+        triggerHaptic("warning")
       } catch {}
       props.onClear()
     }

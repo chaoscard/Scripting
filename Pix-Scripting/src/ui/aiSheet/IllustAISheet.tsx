@@ -38,6 +38,7 @@ import { CachedImage, ErrorView } from "../components"
 import { cachedFilePath, imageUrlOf, loadImage, pageThumbUrlOf } from "../../image/imageLoader"
 import { getDownloadImageQuality, loadSettings } from "../../store/settings"
 import { drawOCROverlay } from "./OCRCanvas"
+import { triggerHaptic } from "../../utils/haptics"
 import { createThrottledUpdater } from "./throttle"
 import type { IllustAIMode, PageTranslationCache } from "./types"
 
@@ -497,7 +498,7 @@ export function IllustAISheet(props: {
         },
       }
     })
-    void Haptics.transient(0.3, 0.3)
+    triggerHaptic(0.3, 0.3)
   }
 
   // 点击坐标碰撞检测气泡（备用兜底）
@@ -538,7 +539,7 @@ export function IllustAISheet(props: {
     if (translatingIndices.includes(targetIndex) && !force) return
 
     // 触感反馈
-    void Haptics.transient(0.6, 0.6)
+    triggerHaptic(0.6, 0.6)
 
     // 中止该页的旧任务
     handleStopPage(targetIndex)
@@ -608,7 +609,7 @@ export function IllustAISheet(props: {
         })
         if (pageTokensRef.current[targetIndex]?.id === taskToken.id && !taskToken.aborted) {
           throttler.flush(finalResult)
-          void Haptics.transient(0.8, 0.8)
+          triggerHaptic(0.8, 0.8)
         }
       } else if (mode === "ocr") {
         const finalResult = await streamVisionTranslateImage(illust, targetIndex, {
@@ -643,7 +644,7 @@ export function IllustAISheet(props: {
         })
         if (pageTokensRef.current[targetIndex]?.id === taskToken.id && !taskToken.aborted) {
           throttler.flush(finalResult)
-          void Haptics.transient(0.9, 0.9)
+          triggerHaptic(0.9, 0.9)
         }
       } else if (mode === "vision") {
         const finalResult = await streamGenerateTranslatedImage(illust, targetIndex, {
@@ -668,7 +669,7 @@ export function IllustAISheet(props: {
         })
         if (pageTokensRef.current[targetIndex]?.id === taskToken.id && !taskToken.aborted) {
           throttler.flush(finalResult)
-          void Haptics.transient(0.9, 0.9)
+          triggerHaptic(0.9, 0.9)
         }
       }
     } catch (e: any) {
@@ -704,7 +705,7 @@ export function IllustAISheet(props: {
 
   // 一键并发翻译所有未翻译的页面（OCR / 生图模式共用）
   async function handleTranslateAll() {
-    void Haptics.transient(0.6, 0.6)
+    triggerHaptic(0.6, 0.6)
 
     // 1. 找出所有尚未完成翻译/生成的页面
     const targetIndices = Array.from({ length: pageCount }, (_, i) => i).filter(
@@ -853,7 +854,7 @@ export function IllustAISheet(props: {
       })
 
       if (savedCount > 0) {
-        void Haptics.transient(0.8, 0.8)
+        triggerHaptic(0.8, 0.8)
       }
     } catch (e: any) {
       console.log("save photo error:", e?.message || e)
@@ -954,7 +955,7 @@ export function IllustAISheet(props: {
                       systemImage={showAllOverlay ? "eye" : "eye.slash"}
                       action={() => {
                         setShowAllOverlay(!showAllOverlay)
-                        void Haptics.transient(0.4, 0.4)
+                        triggerHaptic(0.4, 0.4)
                       }}
                     />
                   )}
@@ -1026,7 +1027,7 @@ export function IllustAISheet(props: {
                           action={() => {
                             const next = Math.max(0.7, Number((fontScale - 0.05).toFixed(2)))
                             setFontScale(next)
-                            void Haptics.transient(0.3, 0.3)
+                            triggerHaptic(0.3, 0.3)
                           }}
                         >
                           <Text font="subheadline" fontWeight="bold" foregroundStyle="#007AFF">
@@ -1047,7 +1048,7 @@ export function IllustAISheet(props: {
                           action={() => {
                             const next = Math.min(1.5, Number((fontScale + 0.05).toFixed(2)))
                             setFontScale(next)
-                            void Haptics.transient(0.3, 0.3)
+                            triggerHaptic(0.3, 0.3)
                           }}
                         >
                           <Text font="subheadline" fontWeight="bold" foregroundStyle="#007AFF">

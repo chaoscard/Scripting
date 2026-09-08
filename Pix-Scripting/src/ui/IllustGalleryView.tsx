@@ -33,6 +33,7 @@ import {
   saveImageToPixivAlbum,
   withAlbumKeepAlive,
 } from "../downloader"
+import { triggerHaptic } from "../utils/haptics"
 import {
   getDetailImageQuality,
   getDownloadImageQuality,
@@ -471,7 +472,7 @@ export function IllustGalleryView(props: {
 
   async function handleDownloadSingle(pageIdx: number) {
     if (downloading) return
-    void Haptics.transient()
+    triggerHaptic("light")
     setDownloading(true)
     try {
       await withAlbumKeepAlive(async () => {
@@ -490,7 +491,7 @@ export function IllustGalleryView(props: {
           }
         }
         if (ok) {
-          void Haptics.transient()
+          triggerHaptic("success")
         }
       })
     } catch (err: any) {
@@ -502,12 +503,12 @@ export function IllustGalleryView(props: {
 
   async function handleDownloadAll() {
     if (downloading) return
-    void Haptics.transient()
+    triggerHaptic("light")
     setDownloading(true)
     try {
       const ok = await downloadIllustToAlbum(illust, getDownloadImageQuality())
       if (ok) {
-        void Haptics.transient()
+        triggerHaptic("success")
       }
     } catch (err: any) {
       console.log("handleDownloadAll error:", err?.message ?? err)

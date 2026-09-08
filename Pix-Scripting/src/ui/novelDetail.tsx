@@ -46,6 +46,7 @@ import {
   unfollowUser,
 } from "../api/pixiv"
 import { session } from "../api/session"
+import { triggerHaptic } from "../utils/haptics"
 import { exportNovelToEpub } from "../downloader"
 import {
   currentBatchSize,
@@ -549,7 +550,7 @@ export function NovelDetailView(props: { novelID: number }) {
 
   async function toggleBookmark() {
     if (!novel || bookmarkLoading) return
-    void Haptics.transient()
+    triggerHaptic("medium")
     setBookmarkLoading(true)
     try {
       if (bookmarked) {
@@ -595,7 +596,7 @@ export function NovelDetailView(props: { novelID: number }) {
   function handleBookmarkLongPress() {
     const action = loadSettings().longPressBookmarkAction
     if (action === "off") return
-    void Haptics.transient()
+    triggerHaptic("medium")
     if (action === "follow") {
       void bookmarkAndFollow()
     } else {
@@ -605,7 +606,7 @@ export function NovelDetailView(props: { novelID: number }) {
 
   async function followWithVisibility(restrict: "public" | "private") {
     if (!novel || followLoading) return
-    void Haptics.transient()
+    triggerHaptic("medium")
     setFollowLoading(true)
     try {
       await session.call((token) => followUser(novel.user.id, restrict, token))
@@ -627,7 +628,7 @@ export function NovelDetailView(props: { novelID: number }) {
       await followWithVisibility("public")
       return
     }
-    void Haptics.transient()
+    triggerHaptic("medium")
     setFollowLoading(true)
     try {
       await session.call((token) => unfollowUser(novel.user.id, token))
@@ -706,7 +707,7 @@ export function NovelDetailView(props: { novelID: number }) {
 
   async function handleToggleSpecificPageMarker(targetPage: number) {
     if (!novel || markerBusy) return
-    void Haptics.transient()
+    triggerHaptic("light")
     setMarkerBusy(true)
     try {
       if (markerPage === targetPage) {
@@ -732,7 +733,7 @@ export function NovelDetailView(props: { novelID: number }) {
 
   async function handleDownloadNovelEpub() {
     if (downloadingEpub) return
-    void Haptics.transient()
+    triggerHaptic("light")
     setDownloadingEpub(true)
     try {
       let fullText = text
@@ -810,7 +811,7 @@ export function NovelDetailView(props: { novelID: number }) {
       })
 
       if (filePath) {
-        void Haptics.transient()
+        triggerHaptic("success")
         await ShareSheet.present([filePath])
       }
     } catch (e: any) {
@@ -822,7 +823,7 @@ export function NovelDetailView(props: { novelID: number }) {
 
   async function shareNovel() {
     if (!novel) return
-    void Haptics.transient()
+    triggerHaptic("selection")
     await ShareSheet.present([`https://www.pixiv.net/novel/show.php?id=${novel.id}`])
   }
 

@@ -71,8 +71,8 @@ import type {
   PixivNovelDetail,
   PixivisionDetail,
 } from "../types"
+import { triggerHaptic } from "../utils/haptics"
 
-declare const Haptics: any
 declare const ShareSheet: any
 declare const Dialog: any
 
@@ -383,7 +383,7 @@ export function IllustDetailDockBar(props: { illustID: number }) {
   async function toggleBookmark() {
     if (bookmarkLoading || bookmarkLongPressLocked) return
     try {
-      void Haptics.transient()
+      triggerHaptic("selection")
     } catch {}
     setBookmarkLoading(true)
     try {
@@ -404,7 +404,7 @@ export function IllustDetailDockBar(props: { illustID: number }) {
   async function bookmarkAndFollow() {
     if (bookmarkLoading || followLoading) return
     try {
-      void Haptics.transient()
+      triggerHaptic("selection")
     } catch {}
     setBookmarkLoading(true)
     setFollowLoading(true)
@@ -429,7 +429,7 @@ export function IllustDetailDockBar(props: { illustID: number }) {
     const action = loadSettings().longPressBookmarkAction
     if (action === "off") return
     try {
-      void Haptics.transient()
+      triggerHaptic("selection")
     } catch {}
     if (action === "follow") {
       void bookmarkAndFollow()
@@ -441,7 +441,7 @@ export function IllustDetailDockBar(props: { illustID: number }) {
   async function toggleFollow() {
     if (!userID || followLoading) return
     try {
-      void Haptics.transient()
+      triggerHaptic("selection")
     } catch {}
     setFollowLoading(true)
     try {
@@ -461,7 +461,7 @@ export function IllustDetailDockBar(props: { illustID: number }) {
   async function followWithVisibility(visibility: "public" | "private") {
     if (!userID || followLoading) return
     try {
-      void Haptics.transient()
+      triggerHaptic("selection")
     } catch {}
     setFollowLoading(true)
     try {
@@ -478,7 +478,7 @@ export function IllustDetailDockBar(props: { illustID: number }) {
     const current = illust ?? cached
     if (downloading || !current) return
     try {
-      void Haptics.transient()
+      triggerHaptic("selection")
     } catch {}
     setDownloading(true)
     try {
@@ -496,7 +496,7 @@ export function IllustDetailDockBar(props: { illustID: number }) {
     const current = illust ?? cached
     if (downloading || !current) return
     try {
-      void Haptics.transient()
+      triggerHaptic("selection")
     } catch {}
     setDownloading(true)
     try {
@@ -510,7 +510,7 @@ export function IllustDetailDockBar(props: { illustID: number }) {
     const current = illust ?? cached
     if (downloading || !current) return
     try {
-      void Haptics.transient()
+      triggerHaptic("selection")
     } catch {}
     setDownloading(true)
     const downloadQuality = getDownloadImageQuality()
@@ -534,7 +534,7 @@ export function IllustDetailDockBar(props: { illustID: number }) {
     const current = illust ?? cached
     if (downloading || !current) return
     try {
-      void Haptics.transient()
+      triggerHaptic("selection")
     } catch {}
     setDownloading(true)
     const downloadQuality = getDownloadImageQuality()
@@ -758,7 +758,7 @@ export function NovelDetailDockBar(props: { novelID: number }) {
   async function toggleBookmark() {
     if (bookmarkLoading || bookmarkLongPressLocked) return
     try {
-      void Haptics.transient()
+      triggerHaptic("selection")
     } catch {}
     setBookmarkLoading(true)
     try {
@@ -779,7 +779,7 @@ export function NovelDetailDockBar(props: { novelID: number }) {
   async function bookmarkAndFollow() {
     if (bookmarkLoading || followLoading) return
     try {
-      void Haptics.transient()
+      triggerHaptic("selection")
     } catch {}
     setBookmarkLoading(true)
     setFollowLoading(true)
@@ -804,7 +804,7 @@ export function NovelDetailDockBar(props: { novelID: number }) {
     const action = loadSettings().longPressBookmarkAction
     if (action === "off") return
     try {
-      void Haptics.transient()
+      triggerHaptic("selection")
     } catch {}
     if (action === "follow") {
       void bookmarkAndFollow()
@@ -816,7 +816,7 @@ export function NovelDetailDockBar(props: { novelID: number }) {
   async function toggleFollow() {
     if (!userID || followLoading) return
     try {
-      void Haptics.transient()
+      triggerHaptic("selection")
     } catch {}
     setFollowLoading(true)
     try {
@@ -836,7 +836,7 @@ export function NovelDetailDockBar(props: { novelID: number }) {
   async function followWithVisibility(visibility: "public" | "private") {
     if (!userID || followLoading) return
     try {
-      void Haptics.transient()
+      triggerHaptic("selection")
     } catch {}
     setFollowLoading(true)
     try {
@@ -852,7 +852,7 @@ export function NovelDetailDockBar(props: { novelID: number }) {
   async function handleDownload() {
     if (downloading) return
     try {
-      void Haptics.transient()
+      triggerHaptic("selection")
     } catch {}
     setDownloading(true)
     try {
@@ -996,7 +996,7 @@ export function PixivisionDetailDockBar(props: { articleID: number }) {
 
   const toggleBookmark = () => {
     try {
-      void Haptics.transient()
+      triggerHaptic("selection")
     } catch {}
     const title = detail?.title || `特辑 #${articleID}`
     const next = togglePixivisionBookmark({
@@ -1014,7 +1014,7 @@ export function PixivisionDetailDockBar(props: { articleID: number }) {
 
   const handleShare = () => {
     try {
-      void Haptics.transient()
+      triggerHaptic("selection")
     } catch {}
     const shareUrl = `https://www.pixivision.net/zh/a/${articleID}`
     const shareText = detail?.title ? `${detail.title}\n${shareUrl}` : shareUrl
@@ -1104,7 +1104,7 @@ export function SeriesDetailDockBar(props: {
   async function toggleWatchlist() {
     if (watchLoading) return
     try {
-      void Haptics.transient()
+      triggerHaptic("selection")
     } catch {}
     setWatchLoading(true)
     const nextState = !isWatched
@@ -1124,7 +1124,7 @@ export function SeriesDetailDockBar(props: {
 
   function toggleSortOrder() {
     try {
-      void Haptics.transient()
+      triggerHaptic("selection")
     } catch {}
     const nextAsc = !isAscending
     setIsAscending(nextAsc)
@@ -1134,7 +1134,7 @@ export function SeriesDetailDockBar(props: {
   async function handleDownloadSeries() {
     if (seriesDownloading) return
     try {
-      void Haptics.transient()
+      triggerHaptic("selection")
     } catch {}
 
     if (kind === "novel") {
@@ -1151,7 +1151,7 @@ export function SeriesDetailDockBar(props: {
         const filePath = await downloadEntireNovelSeries(seriesID, seriesTitle)
         if (filePath) {
           try {
-            void Haptics.transient()
+            triggerHaptic("selection")
           } catch {}
           await ShareSheet.present([filePath])
         }
@@ -1175,7 +1175,7 @@ export function SeriesDetailDockBar(props: {
         )
         if (filePath) {
           try {
-            void Haptics.transient()
+            triggerHaptic("selection")
           } catch {}
           await ShareSheet.present([filePath])
         }
@@ -1225,7 +1225,7 @@ export function TagFeedDockBar(props: { tagName: string }) {
       color: "#3172EB",
       action: () => {
         try {
-          void Haptics.transient()
+          triggerHaptic("selection")
         } catch {}
       },
       contextMenu,
@@ -1440,7 +1440,7 @@ function renderDefaultRootTabAccessory(activeTab: string) {
             icon: "photo.badge.magnifyingglass",
             action: () => {
               try {
-                void Haptics.transient()
+                triggerHaptic("selection")
               } catch {}
               requestPixivRoute("reverseImageSearch", "more")
             },
@@ -1451,7 +1451,7 @@ function renderDefaultRootTabAccessory(activeTab: string) {
             icon: "arrow.down.circle",
             action: () => {
               try {
-                void Haptics.transient()
+                triggerHaptic("selection")
               } catch {}
               requestPixivRoute("downloadManager", "more")
             },
