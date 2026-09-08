@@ -18,6 +18,7 @@ import {
   type VirtualNode,
 } from "scripting"
 import { isAIAvailable } from "../../api/aiService"
+import { isScriptingPro } from "../../utils/pro"
 import { ErrorView } from "../components"
 import { triggerHaptic } from "../../utils/haptics"
 
@@ -159,6 +160,7 @@ export function AISheetScaffold(props: {
   } = props
 
   const available = isAIAvailable()
+  const isPro = isScriptingPro()
 
   function handleCopy() {
     if (!resultText) return
@@ -240,15 +242,19 @@ export function AISheetScaffold(props: {
               <Image
                 systemName="sparkles"
                 font="largeTitle"
-                foregroundStyle="secondaryLabel"
+                foregroundStyle={isPro ? "secondaryLabel" : "systemPurple"}
               />
-              <Text font="title3" fontWeight="bold">未检测到可用 AI 模型</Text>
+              <Text font="title3" fontWeight="bold">
+                {isPro ? "未检测到可用 AI 模型" : "需配置自定义 AI"}
+              </Text>
               <Text
                 font="footnote"
                 foregroundStyle="secondaryLabel"
                 multilineTextAlignment="center"
               >
-                Pix-Scripting 直接调用 Scripting App 的内置 AI 能力。请在 Scripting 设置中配置 AI 提供商（如 OpenAI、Gemini、Claude、DeepSeek 等）后重试。
+                {isPro
+                  ? "当前已激活 Scripting PRO 会员，但原生 AI 助手未就绪。请在 Scripting App 设置中配置 AI 模型，或前往 Pix-Scripting「设置 ➔ 智能助手」开启自定义模型。"
+                  : "当前未开通 Scripting PRO 会员（Scripting 原生 AI 属于 PRO 专享功能）。\n\n您可以前往本脚本「设置 ➔ 智能助手」开启自定义 AI，填入您自己的 API 密钥（支持 DeepSeek、OpenAI、Gemini、Claude 等），无需开通 PRO 即可完全免费解锁完整 AI 功能。"}
               </Text>
             </VStack>
           ) : (

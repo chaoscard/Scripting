@@ -49,11 +49,11 @@ import {
 
 declare const Dialog: any
 import { triggerHaptic } from "../utils/haptics"
+import { isScriptingPro } from "../utils/pro"
 import {
   loadCustomAIProfile,
   onCustomAIConfigChanged,
   updateCustomAIProfile,
-  isScriptingPro,
   getCustomAIProviderName,
   type CustomAIProfile,
 } from "../store/customAI"
@@ -1492,12 +1492,25 @@ export function SettingsView() {
                 <Spacer />
                 {!expanded.debug ? (
                   <Text font="footnote" foregroundStyle="tertiaryLabel">
-                    {settings.geminiCustomParamsEnabled ? "22 项参数 (含Gemini)" : "12 项参数"}
+                    {settings.geminiCustomParamsEnabled ? "23 项参数 (含Gemini)" : "13 项参数"}
                   </Text>
                 ) : null}
               </HStack>
             }
           >
+            <Toggle
+              value={settings.mockFreeUser}
+              onChanged={(val) => update({ mockFreeUser: val })}
+            >
+              <VStack alignment="leading" spacing={2}>
+                <Text font="body">模拟普通用户</Text>
+                {settings.mockFreeUser ? (
+                  <Text font="caption" foregroundStyle="secondaryLabel">
+                    已开启模拟普通用户
+                  </Text>
+                ) : null}
+              </VStack>
+            </Toggle>
             <AdvancedNumberRow
               title="小组件池大小"
               unit="张"

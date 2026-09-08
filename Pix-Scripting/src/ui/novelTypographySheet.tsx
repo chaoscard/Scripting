@@ -14,7 +14,7 @@ import {
   useState,
   VStack,
 } from "scripting"
-import { isScriptingPro } from "../store/customAI"
+import { isScriptingPro } from "../utils/pro"
 import { triggerHaptic } from "../utils/haptics"
 import {
   DEFAULT_NOVEL_READER_SETTINGS,

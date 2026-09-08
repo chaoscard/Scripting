@@ -161,6 +161,7 @@ export interface AppSettings {
   enableLiveActivity: boolean
   enableTaskNotification: boolean
   advancedSettingsUnlocked: boolean
+  mockFreeUser: boolean
   hasSeenFeatureHighlights: boolean
   customRankingEnabled: boolean
   customRankingIllustModes: string[]
@@ -251,6 +252,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   enableLiveActivity: true,
   enableTaskNotification: true,
   advancedSettingsUnlocked: false,
+  mockFreeUser: false,
   hasSeenFeatureHighlights: false,
   customRankingEnabled: false,
   customRankingIllustModes: ["day", "week", "month"],
@@ -726,6 +728,7 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
       DEFAULT_SETTINGS.enableTaskNotification
     ),
     advancedSettingsUnlocked: boolOr(stored?.advancedSettingsUnlocked, DEFAULT_SETTINGS.advancedSettingsUnlocked),
+    mockFreeUser: boolOr(stored?.mockFreeUser, DEFAULT_SETTINGS.mockFreeUser),
     hasSeenFeatureHighlights: boolOr(
       stored?.hasSeenFeatureHighlights,
       DEFAULT_SETTINGS.hasSeenFeatureHighlights

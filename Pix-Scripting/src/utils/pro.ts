@@ -1,4 +1,5 @@
 import { Script } from "scripting"
+import { loadSettings } from "../store/settings"
 
 /**
  * Scripting PRO 权限探测工具
@@ -7,6 +8,10 @@ import { Script } from "scripting"
  */
 export function isScriptingProUser(): boolean {
   try {
+    if (loadSettings().mockFreeUser) {
+      return false
+    }
+
     return (
       typeof Script !== "undefined" &&
       typeof Script.hasFullAccess === "function" &&
@@ -16,3 +21,9 @@ export function isScriptingProUser(): boolean {
     return false
   }
 }
+
+/**
+ * 等价别名，统一全工程 PRO 权限探测入口
+ */
+export const isScriptingPro = isScriptingProUser
+

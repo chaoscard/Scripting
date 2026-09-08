@@ -6,12 +6,12 @@
 import { AbortController } from "scripting"
 import { loadImage, imageUrlOf } from "../image/imageLoader"
 import type { PixivIllustration } from "../types"
+import { isScriptingPro } from "../utils/pro"
 import {
   loadCustomAIProfile,
   isCustomAIConfigured,
   getEffectiveImageGenKey,
   getEffectiveImageGenEndpoint,
-  isScriptingPro,
 } from "../store/customAI"
 import {
   streamCustomChat,

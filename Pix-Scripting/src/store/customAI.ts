@@ -2,7 +2,6 @@
  * 自定义 AI 助手存储与安全管理层
  * 负责通用模型与生图模型配置的持久化、Keychain 加密存储与 iCloud 钥匙串双向同步
  */
-import { Script } from "scripting"
 
 export type GeneralAIProtocol =
   | "openai-responses"
@@ -634,20 +633,6 @@ export function deleteCustomAIProfile(): void {
   notifyListeners(cachedProfile)
 }
 
-/**
- * 检查当前用户是否具备 Scripting PRO 会员完整权限
- */
-export function isScriptingPro(): boolean {
-  try {
-    return (
-      typeof Script !== "undefined" &&
-      typeof Script.hasFullAccess === "function" &&
-      Boolean(Script.hasFullAccess())
-    )
-  } catch {
-    return false
-  }
-}
 
 /**
  * 获取通用模型的有效端点（若未填写自定义端点，则自动回退到预设或协议默认端点）
