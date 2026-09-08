@@ -5,7 +5,6 @@ import { session } from "../api/session"
 import { NotFoundRouteView } from "./components/StatusViews"
 import { IllustDetailView } from "./illustDetail"
 import { PixivisionDetailView } from "./pixivisionDetail"
-import { PixivisionBookmarksView } from "./pixivisionBookmarks"
 import { UserDetailView } from "./userDetail"
 import { NovelDetailView } from "./novelDetail"
 import { TagFeedView } from "./tagFeed"
@@ -152,9 +151,10 @@ export function renderDestination(rawPage: string) {
   if (page.startsWith("pixivision-tag:")) {
     return <TagFeedView tag={decodeTag(page.slice("pixivision-tag:".length))} kind="pixivision" />
   }
-  if (page === "pixivisionBookmarks") return <PixivisionBookmarksView />
+  if (page === "pixivisionBookmarks" || page === "library:pixivision") return <LibraryView initialKind="pixivision" />
   if (page === "novelBookmarks") return <NovelLibraryView />
-  if (page === "library") return <LibraryView />
+  if (page === "library:novel") return <LibraryView initialKind="novel" />
+  if (page === "library:illustration" || page === "library:illust" || page === "library") return <LibraryView initialKind="illustration" />
   if (page === "history") return <HistoryView key={`history-${Date.now()}`} />
   if (page === "notifications") return <NotificationsView />
   if (page.startsWith("notificationsMore:")) {

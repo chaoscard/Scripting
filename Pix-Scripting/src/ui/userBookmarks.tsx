@@ -2,6 +2,7 @@ import {
   Button,
   HStack,
   Image,
+  Label,
   LazyVStack,
   Menu,
   Picker,
@@ -105,38 +106,28 @@ export function UserBookmarksView(props: { userID: number }) {
       navigationBarTitleDisplayMode="inline"
       background={ambientBackground}
       toolbar={{
-        principal:
-          !isAppleMusic && !hideNovels ? (
-            <Menu
-              label={
-                <HStack alignment="center" spacing={4}>
-                  <Text font="title2" fontWeight="bold">
-                    收藏 · {kind === "illustration" ? "插画·漫画" : "小说"}
-                  </Text>
-                  <Image
-                    systemName="chevron.down.circle.fill"
-                    font="caption"
-                    foregroundStyle="secondaryLabel"
-                  />
-                </HStack>
-              }
-            >
-              <Button
-                title="插画·漫画"
-                systemImage={kind === "illustration" ? "checkmark" : undefined}
-                action={() => setKind("illustration")}
-              />
-              <Button
-                title="小说"
-                systemImage={kind === "novel" ? "checkmark" : undefined}
-                action={() => setKind("novel")}
-              />
-            </Menu>
-          ) : (
-            <Text font="title2" fontWeight="bold">
-              收藏
-            </Text>
-          ),
+        principal: (
+          <Text font="title2" fontWeight="bold">
+            {!isAppleMusic && !hideNovels
+              ? `收藏 · ${kind === "illustration" ? "插画·漫画" : "小说"}`
+              : "收藏"}
+          </Text>
+        ),
+        topBarTrailing:
+          !isAppleMusic && !hideNovels
+            ? [
+                <Menu key="more-menu" label={<Image systemName="ellipsis.circle" />}>
+                  <Picker
+                    title="收藏类型"
+                    value={kind}
+                    onChanged={(v: string) => setKind(v as BookmarkKind)}
+                  >
+                    <Label tag="illustration" title="插画·漫画" systemImage="photo.on.rectangle" />
+                    <Label tag="novel" title="小说" systemImage="book" />
+                  </Picker>
+                </Menu>,
+              ]
+            : undefined,
       }}
       frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
     >

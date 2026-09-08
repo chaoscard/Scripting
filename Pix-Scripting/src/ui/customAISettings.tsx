@@ -468,6 +468,9 @@ export function CustomAISettingsView() {
   }
 
   async function handleDeleteAll() {
+    try {
+      void Haptics.transient()
+    } catch {}
     const confirmed = await Dialog.confirm({
       title: "清空所有自定义 AI 配置",
       message:
@@ -477,6 +480,9 @@ export function CustomAISettingsView() {
     })
 
     if (confirmed) {
+      try {
+        void Haptics.notification("warning")
+      } catch {}
       deleteCustomAIProfile()
       setProfile(loadCustomAIProfile())
       setRemoteModels([])
@@ -509,21 +515,6 @@ export function CustomAISettingsView() {
     return raw
   }, [profile])
 
-  const clearContextMenu = useMemo(() => {
-    return {
-      menuItems: (
-        <Group>
-          <Button
-            title="清空所有自定义 AI 配置"
-            systemImage="trash"
-            role="destructive"
-            action={handleDeleteAll}
-          />
-        </Group>
-      ),
-    }
-  }, [profile])
-
   const customAIDockAccessory = useMemo(() => {
     const items: DockActionItem[] = [
       {
@@ -537,21 +528,9 @@ export function CustomAISettingsView() {
           } catch {}
         },
       },
-      {
-        key: "clear",
-        label: "清空配置",
-        icon: "trash",
-        color: "#3172EB",
-        action: () => {
-          try {
-            void Haptics.transient()
-          } catch {}
-        },
-        contextMenu: clearContextMenu,
-      },
     ]
     return <DockActionBar items={items} />
-  }, [providerName, clearContextMenu])
+  }, [providerName])
 
   useRegisterBottomAccessory(
     "customAISettings",
@@ -564,6 +543,16 @@ export function CustomAISettingsView() {
       navigationTitle="自定义AI模型"
       navigationBarTitleDisplayMode="inline"
       listSectionSpacing="compact"
+      toolbar={{
+        topBarTrailing: [
+          <Button
+            key="clear-ai-profile"
+            action={handleDeleteAll}
+          >
+            <Image systemName="trash" foregroundStyle="systemRed" />
+          </Button>,
+        ],
+      }}
     >
       {/* 1. 通用模型 */}
       <Section
@@ -993,15 +982,6 @@ export function CustomAISettingsView() {
             ) : null}
           </>
         ) : null}
-      </Section>
-
-      {/* 3. 清空配置 */}
-      <Section>
-        <Button
-          title="清空所有自定义 AI 配置"
-          role="destructive"
-          action={handleDeleteAll}
-        />
       </Section>
     </List>
   )

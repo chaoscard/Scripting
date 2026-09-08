@@ -158,7 +158,8 @@ export function getActiveAccessoryKey(
     top.startsWith("userConnections:following:")
   )
     return "connections:following"
-  if (top === "pixivisionBookmarks") return "pixivisionBookmarks"
+  if (top === "library" || top.startsWith("library:") || top === "pixivisionBookmarks")
+    return "library"
   if (top === "novelBookmarks") return "novelBookmarks"
   if (top === "notifications") return "notifications"
   if (top.startsWith("notificationsMore:")) return top
@@ -1361,12 +1362,8 @@ export function renderRouteInfoBar(top: string) {
     return <DockInfoBar icon="info.circle.fill" title="关于 Pix-Scripting" />
 
   // 8. 收藏与历史
-  if (top === "library")
+  if (top === "library" || top.startsWith("library:") || top === "pixivisionBookmarks")
     return <DockInfoBar icon="heart.fill" title="我的收藏" />
-  if (top === "history")
-    return <DockInfoBar icon="clock.fill" title="浏览记录" />
-  if (top === "pixivisionBookmarks")
-    return <DockInfoBar icon="heart.fill" title="特辑收藏" />
   if (top === "novelBookmarks")
     return <DockInfoBar icon="book.pages.fill" title="小说书签" />
   if (top.startsWith("userBookmarks:"))

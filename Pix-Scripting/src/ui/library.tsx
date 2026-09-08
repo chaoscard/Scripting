@@ -59,22 +59,13 @@ type LibraryKind = "illustration" | "novel" | "pixivision"
 
 const MAX_TAG_CHIPS = 20
 
-export function LibraryView() {
+export function LibraryView(props?: { initialKind?: LibraryKind }) {
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
-  const [kind, setKind] = useState<LibraryKind>("illustration")
+  const [kind, setKind] = useState<LibraryKind>(() => props?.initialKind ?? "illustration")
   const [restrict, setRestrict] = useState<Visibility>("public")
+  const [isAscending, setIsAscending] = useState(false)
   const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
   const isAppleMusic = pageLayout === "appleMusic"
-  const [visitedKinds, setVisitedKinds] = useState<Set<LibraryKind>>(() => new Set([kind]))
-
-  useEffect(() => {
-    setVisitedKinds((prev) => {
-      if (prev.has(kind)) return prev
-      const next = new Set(prev)
-      next.add(kind)
-      return next
-    })
-  }, [kind])
   const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(null)
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
@@ -122,79 +113,60 @@ export function LibraryView() {
         hideNovels,
         isAppleMusic,
         restrict,
+        isAscending,
         onKindChange: setKind,
         onRestrictChange: setRestrict,
+        onAscendingChange: setIsAscending,
       })}
       frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
     >
-      {/* 1. 插画·漫画收藏保活容器 */}
-      <VStack
-        frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-        opacity={kind === "illustration" ? 1 : 0}
-        hidden={kind !== "illustration"}
-        zIndex={kind === "illustration" ? 1 : 0}
-        allowsHitTesting={kind === "illustration"}
-      >
-        <RefreshableScrollView refreshable={() => refreshHandlerRef.current()}>
-          <VStack alignment="leading" spacing={8}>
-            <LibraryFeed
-              key={`library-illust:${restrict}`}
-              kind="illustration"
-              restrict={restrict}
-              onFirstImageUrlChange={(url) => {
-                if (kind === "illustration") setAmbientImageUrl(url)
-              }}
-              onRegisterRefresh={(fn) => {
-                if (kind === "illustration") refreshHandlerRef.current = fn
-              }}
-            />
-          </VStack>
-        </RefreshableScrollView>
-      </VStack>
+      {/* 1. 插画·漫画收藏 */}
+      {kind === "illustration" && (
+        <VStack frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
+          <RefreshableScrollView refreshable={() => refreshHandlerRef.current()}>
+            <VStack alignment="leading" spacing={8}>
+              <LibraryFeed
+                key={`library-illust:${restrict}`}
+                kind="illustration"
+                restrict={restrict}
+                onFirstImageUrlChange={setAmbientImageUrl}
+                onRegisterRefresh={(fn) => {
+                  refreshHandlerRef.current = fn
+                }}
+              />
+            </VStack>
+          </RefreshableScrollView>
+        </VStack>
+      )}
 
-      {/* 2. 小说收藏保活容器 */}
-      {visitedKinds.has("novel") ? (
-        <VStack
-          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-          opacity={kind === "novel" ? 1 : 0}
-          hidden={kind !== "novel"}
-          zIndex={kind === "novel" ? 1 : 0}
-          allowsHitTesting={kind === "novel"}
-        >
+      {/* 2. 小说收藏 */}
+      {!hideNovels && kind === "novel" && (
+        <VStack frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
           <RefreshableScrollView refreshable={() => refreshHandlerRef.current()}>
             <VStack alignment="leading" spacing={8}>
               <LibraryFeed
                 key={`library-novel:${restrict}`}
                 kind="novel"
                 restrict={restrict}
-                onFirstImageUrlChange={(url) => {
-                  if (kind === "novel") setAmbientImageUrl(url)
-                }}
+                onFirstImageUrlChange={setAmbientImageUrl}
                 onRegisterRefresh={(fn) => {
-                  if (kind === "novel") refreshHandlerRef.current = fn
+                  refreshHandlerRef.current = fn
                 }}
               />
             </VStack>
           </RefreshableScrollView>
         </VStack>
-      ) : null}
+      )}
 
-      {/* 3. 特辑收藏保活容器 */}
-      {visitedKinds.has("pixivision") ? (
-        <VStack
-          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-          opacity={kind === "pixivision" ? 1 : 0}
-          hidden={kind !== "pixivision"}
-          zIndex={kind === "pixivision" ? 1 : 0}
-          allowsHitTesting={kind === "pixivision"}
-        >
+      {/* 3. 特辑收藏 */}
+      {kind === "pixivision" && (
+        <VStack frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
           <PixivisionBookmarksContent
-            onFirstImageUrlChange={(url) => {
-              if (kind === "pixivision") setAmbientImageUrl(url)
-            }}
+            isAscending={isAscending}
+            onFirstImageUrlChange={setAmbientImageUrl}
           />
         </VStack>
-      ) : null}
+      )}
     </ZStack>
   )
 }
@@ -204,8 +176,10 @@ function libraryToolbar(props: {
   hideNovels: boolean
   isAppleMusic?: boolean
   restrict: Visibility
+  isAscending: boolean
   onKindChange: (kind: LibraryKind) => void
   onRestrictChange: (restrict: Visibility) => void
+  onAscendingChange: (isAscending: boolean) => void
 }) {
   const isClassic = !props.isAppleMusic
   const kindLabel =
@@ -216,55 +190,45 @@ function libraryToolbar(props: {
       : "特辑"
 
   return {
-    principal:
-      isClassic ? (
-        <Menu
-          label={
-            <HStack alignment="center" spacing={4}>
-              <Text font="title2" fontWeight="bold">
-                我的收藏 · {kindLabel}
-              </Text>
-              <Image
-                systemName="chevron.down.circle.fill"
-                font="caption"
-                foregroundStyle="secondaryLabel"
-              />
-            </HStack>
-          }
-        >
-          <Button
-            title="插画·漫画"
-            systemImage={props.kind === "illustration" ? "checkmark" : undefined}
-            action={() => props.onKindChange("illustration")}
-          />
-          {!props.hideNovels && (
-            <Button
-              title="小说"
-              systemImage={props.kind === "novel" ? "checkmark" : undefined}
-              action={() => props.onKindChange("novel")}
-            />
-          )}
-          <Button
-            title="特辑"
-            systemImage={props.kind === "pixivision" ? "checkmark" : undefined}
-            action={() => props.onKindChange("pixivision")}
-          />
-        </Menu>
-      ) : (
-        <Text font="title2" fontWeight="bold">
-          我的收藏
-        </Text>
-      ),
+    principal: (
+      <Text font="title2" fontWeight="bold">
+        {isClassic ? `我的收藏 · ${kindLabel}` : "我的收藏"}
+      </Text>
+    ),
     topBarTrailing: [
-      <Menu label={<Image systemName="ellipsis.circle" />}>
-        <Picker
-          title="收藏范围"
-          value={props.restrict}
-          onChanged={(value: string) => props.onRestrictChange(value as Visibility)}
-        >
-          <Label tag="public" title="公开收藏" systemImage="globe" />
-          <Label tag="private" title="私密收藏" systemImage="lock" />
-        </Picker>
+      <Menu key="more-menu" label={<Image systemName="ellipsis.circle" />}>
+        {isClassic && (
+          <Picker
+            title="收藏类型"
+            value={props.kind}
+            onChanged={(value: string) => props.onKindChange(value as LibraryKind)}
+          >
+            <Label tag="illustration" title="插画·漫画" systemImage="photo.on.rectangle" />
+            {!props.hideNovels && (
+              <Label tag="novel" title="小说" systemImage="book" />
+            )}
+            <Label tag="pixivision" title="特辑" systemImage="rectangle.stack" />
+          </Picker>
+        )}
+        {props.kind === "pixivision" ? (
+          <Picker
+            title="排序方式"
+            value={props.isAscending ? "asc" : "desc"}
+            onChanged={(value: string) => props.onAscendingChange(value === "asc")}
+          >
+            <Label tag="desc" title="最新在前" systemImage="arrow.down" />
+            <Label tag="asc" title="最早在前" systemImage="arrow.up" />
+          </Picker>
+        ) : (
+          <Picker
+            title="收藏范围"
+            value={props.restrict}
+            onChanged={(value: string) => props.onRestrictChange(value as Visibility)}
+          >
+            <Label tag="public" title="公开收藏" systemImage="globe" />
+            <Label tag="private" title="私密收藏" systemImage="lock" />
+          </Picker>
+        )}
       </Menu>,
     ],
   }

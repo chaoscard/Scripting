@@ -522,46 +522,16 @@ function rankingToolbar(props: {
   const currentModeObj = props.activeModes.find((m) => m.value === props.selectedMode)
   const modeTitle = currentModeObj?.title ?? ""
 
-  let titleNode: any
-  if (isiPad) {
-    const promptText =
-      props.kind === "advanced" || !modeTitle
-        ? baseTitle
-        : `${baseTitle} · ${modeTitle}`
-    titleNode = (
-      <Text font="headline" fontWeight="bold">
-        {promptText}
-      </Text>
-    )
-  } else if (isClassic && props.kind !== "advanced" && props.activeModes.length > 0) {
-    titleNode = (
-      <Menu
-        label={
-          <HStack alignment="center" spacing={4}>
-            <Text font="title2" fontWeight="bold">
-              {baseTitle} · {modeTitle}
-            </Text>
-            <Image
-              systemName="chevron.down.circle.fill"
-              font="caption"
-              foregroundStyle="secondaryLabel"
-            />
-          </HStack>
-        }
-      >
-        {props.activeModes.map((m) => (
-          <Button
-            key={m.value}
-            title={m.title}
-            systemImage={props.selectedMode === m.value ? "checkmark" : undefined}
-            action={() => props.onModeChange(m.value)}
-          />
-        ))}
-      </Menu>
-    )
-  } else {
-    titleNode = baseTitle
-  }
+  const fullTitle =
+    props.kind === "advanced" || !modeTitle
+      ? baseTitle
+      : `${baseTitle} · ${modeTitle}`
+
+  const titleNode = (
+    <Text font={isiPad ? "headline" : "title2"} fontWeight="bold">
+      {isClassic ? fullTitle : baseTitle}
+    </Text>
+  )
 
   const trailingMenuLabel = isiPad ? (
     <HStack alignment="center" spacing={4}>

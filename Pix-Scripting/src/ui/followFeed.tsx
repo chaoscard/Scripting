@@ -286,67 +286,14 @@ function followToolbar(props: {
   const kindLabel =
     currentKind === "illust" ? "插画·漫画" : currentKind === "manga" ? "漫画" : "小说"
 
-  let titleNode: any
-  if (isiPad) {
-    const promptText =
-      props.mode === "friends" ? "好友动态" : `${baseTitle} · ${kindLabel}`
-    titleNode = (
-      <Text font="headline" fontWeight="bold">
-        {promptText}
-      </Text>
-    )
-  } else if (isClassic) {
-    titleNode = (
-      <Menu
-        label={
-          <HStack alignment="center" spacing={4}>
-            <Text font="title2" fontWeight="bold">
-              {baseTitle} · {kindLabel}
-            </Text>
-            <Image
-              systemName="chevron.down.circle.fill"
-              font="caption"
-              foregroundStyle="secondaryLabel"
-            />
-          </HStack>
-        }
-      >
-        {props.mode === "watchlist" ? (
-          <>
-            <Button
-              title="漫画"
-              systemImage={currentKind === "manga" ? "checkmark" : undefined}
-              action={() => props.onKindChange("manga")}
-            />
-            {!props.hideNovels && (
-              <Button
-                title="小说"
-                systemImage={currentKind === "novel" ? "checkmark" : undefined}
-                action={() => props.onKindChange("novel")}
-              />
-            )}
-          </>
-        ) : (
-          <>
-            <Button
-              title="插画·漫画"
-              systemImage={currentKind === "illust" ? "checkmark" : undefined}
-              action={() => props.onKindChange("illust")}
-            />
-            {!props.hideNovels && (
-              <Button
-                title="小说"
-                systemImage={currentKind === "novel" ? "checkmark" : undefined}
-                action={() => props.onKindChange("novel")}
-              />
-            )}
-          </>
-        )}
-      </Menu>
-    )
-  } else {
-    titleNode = baseTitle
-  }
+  const fullTitle =
+    props.mode === "friends" ? "好友动态" : `${baseTitle} · ${kindLabel}`
+
+  const titleNode = (
+    <Text font={isiPad ? "headline" : "title2"} fontWeight="bold">
+      {isClassic ? fullTitle : baseTitle}
+    </Text>
+  )
 
   const trailingMenuLabel = isiPad ? (
     <HStack alignment="center" spacing={4}>

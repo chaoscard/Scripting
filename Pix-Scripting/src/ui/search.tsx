@@ -1146,51 +1146,13 @@ function searchToolbar(props: {
         ? "小说"
         : "用户"
 
-  let titleNode: any
-  if (isiPad) {
-    titleNode = (
-      <Text font="headline" fontWeight="bold">
-        搜索 · {scopeLabel}
-      </Text>
-    )
-  } else if (isClassic) {
-    titleNode = (
-      <Menu
-        label={
-          <HStack alignment="center" spacing={4}>
-            <Text font="title2" fontWeight="bold">
-              搜索 · {scopeLabel}
-            </Text>
-            <Image
-              systemName="chevron.down.circle.fill"
-              font="caption"
-              foregroundStyle="secondaryLabel"
-            />
-          </HStack>
-        }
-      >
-        <Button
-          title="插画·漫画"
-          systemImage={props.scope === "illust" ? "checkmark" : undefined}
-          action={() => props.onScopeChange("illust")}
-        />
-        {!props.hideNovels && (
-          <Button
-            title="小说"
-            systemImage={props.scope === "novel" ? "checkmark" : undefined}
-            action={() => props.onScopeChange("novel")}
-          />
-        )}
-        <Button
-          title="用户"
-          systemImage={props.scope === "user" ? "checkmark" : undefined}
-          action={() => props.onScopeChange("user")}
-        />
-      </Menu>
-    )
-  } else {
-    titleNode = "搜索"
-  }
+  const fullTitle = `搜索 · ${scopeLabel}`
+
+  const titleNode = (
+    <Text font={isiPad ? "headline" : "title2"} fontWeight="bold">
+      {isClassic ? fullTitle : "搜索"}
+    </Text>
+  )
 
   const sortLabel =
     props.sort === "date_desc"

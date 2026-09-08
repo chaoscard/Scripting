@@ -3,6 +3,7 @@ import {
   Group,
   HStack,
   Image,
+  Label,
   LazyVStack,
   Menu,
   Picker,
@@ -177,51 +178,63 @@ export function UserWorksView(props: { userID?: number; title?: string }) {
     const baseTitle = props.title ?? (isOwn ? "我的作品" : "作品")
     const tabName = activeTab === "illust" ? "插画" : activeTab === "manga" ? "漫画" : "小说"
     const isClassic = !isAppleMusic
+    const fullTitle = isClassic && availableKinds.length > 1 ? `${baseTitle} · ${tabName}` : baseTitle
 
-    let principalNode: any
+    const principalNode = (
+      <Text font="title2" fontWeight="bold">
+        {fullTitle}
+      </Text>
+    )
+
+    const trailingButtons: any[] = []
+
     if (isClassic && availableKinds.length > 1) {
-      principalNode = (
-        <Menu
-          label={
-            <HStack alignment="center" spacing={4}>
-              <Text font="title2" fontWeight="bold">
-                {baseTitle} · {tabName}
-              </Text>
-              <Image
-                systemName="chevron.down.circle.fill"
-                font="caption"
-                foregroundStyle="secondaryLabel"
+      trailingButtons.push(
+        <Menu key="more-menu" label={<Image systemName="ellipsis.circle" />}>
+          <Picker
+            title="作品类型"
+            value={activeTab}
+            onChanged={(k: string) => setTab(k as WorkTab)}
+          >
+            {availableKinds.map((k) => (
+              <Label
+                key={k}
+                tag={k}
+                title={k === "illust" ? "插画" : k === "manga" ? "漫画" : "小说"}
+                systemImage={k === "illust" ? "photo" : k === "manga" ? "photo.on.rectangle" : "book"}
               />
-            </HStack>
-          }
-        >
-          {availableKinds.map((k) => (
-            <Button
-              key={k}
-              title={k === "illust" ? "插画" : k === "manga" ? "漫画" : "小说"}
-              systemImage={activeTab === k ? "checkmark" : undefined}
-              action={() => setTab(k)}
-            />
-          ))}
+            ))}
+          </Picker>
+          {isOwn && (
+            <Menu title="投稿" systemImage="square.and.pencil">
+              <Button
+                title="插画投稿"
+                systemImage="photo"
+                action={() => {
+                  void Safari.present("https://www.pixiv.net/upload.php", false)
+                }}
+              />
+              <Button
+                title="漫画投稿"
+                systemImage="photo.on.rectangle"
+                action={() => {
+                  void Safari.present("https://www.pixiv.net/upload.php?uptype=manga", false)
+                }}
+              />
+              <Button
+                title="小说投稿"
+                systemImage="book"
+                action={() => {
+                  void Safari.present("https://www.pixiv.net/novel/upload.php", false)
+                }}
+              />
+            </Menu>
+          )}
         </Menu>
       )
-    } else {
-      principalNode = (
-        <Text font="title2" fontWeight="bold">
-          {baseTitle}
-        </Text>
-      )
-    }
-
-    if (!isOwn) {
-      return {
-        principal: principalNode,
-      }
-    }
-    return {
-      principal: principalNode,
-      topBarTrailing: [
-        <Menu label={<Image systemName="square.and.pencil" />}>
+    } else if (isOwn) {
+      trailingButtons.push(
+        <Menu key="upload-menu" label={<Image systemName="square.and.pencil" />}>
           <Button
             title="插画投稿"
             systemImage="photo"
@@ -243,8 +256,13 @@ export function UserWorksView(props: { userID?: number; title?: string }) {
               void Safari.present("https://www.pixiv.net/novel/upload.php", false)
             }}
           />
-        </Menu>,
-      ],
+        </Menu>
+      )
+    }
+
+    return {
+      principal: principalNode,
+      topBarTrailing: trailingButtons.length > 0 ? trailingButtons : undefined,
     }
   }, [isOwn, isAppleMusic, availableKinds, activeTab, props.title])
 

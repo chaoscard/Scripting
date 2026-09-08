@@ -3,6 +3,7 @@ import {
   Group,
   HStack,
   Image,
+  Label,
   LazyVStack,
   Menu,
   Picker,
@@ -50,6 +51,9 @@ import { currentBatchSize, useLatest, usePagedList, useExperimentalAmbientPalett
 import type { PixivIllustration, PixivNovel } from "../types"
 
 export type HistoryKind = HistoryContentKind
+
+declare const Dialog: any
+declare const Haptics: any
 
 export interface HistoryIllustItem extends PixivIllustration {
   viewedAt: number
@@ -306,63 +310,58 @@ function historyToolbar(props: {
   const isClassic = !props.isAppleMusic
   const kindLabel = historyKindTitle(props.kind)
 
+  async function handleClearConfirm() {
+    try {
+      void Haptics.transient()
+    } catch {}
+    const targetLabel = historyKindTitle(props.kind)
+    let confirmed = false
+    if (typeof Dialog !== "undefined" && typeof Dialog.confirm === "function") {
+      confirmed = await Dialog.confirm({
+        title: `清空${targetLabel}浏览记录`,
+        message: `确定要清空全部${targetLabel}浏览记录吗？`,
+        confirmLabel: "清空",
+        cancelLabel: "取消",
+      })
+    } else {
+      confirmed = true
+    }
+    if (confirmed) {
+      try {
+        void Haptics.notification("warning")
+      } catch {}
+      props.onClear()
+    }
+  }
+
   return {
-    principal: isClassic ? (
-      <Menu
-        label={
-          <HStack alignment="center" spacing={4}>
-            <Text font="title2" fontWeight="bold">
-              浏览记录 · {kindLabel}
-            </Text>
-            <Image
-              systemName="chevron.down.circle.fill"
-              font="caption"
-              foregroundStyle="secondaryLabel"
-            />
-          </HStack>
-        }
-      >
-        <Button
-          title="插画"
-          systemImage={props.kind === "illustration" ? "checkmark" : undefined}
-          action={() => props.onKindChange("illustration")}
-        />
-        <Button
-          title="漫画"
-          systemImage={props.kind === "manga" ? "checkmark" : undefined}
-          action={() => props.onKindChange("manga")}
-        />
-        {!props.hideNovels && (
-          <Button
-            title="小说"
-            systemImage={props.kind === "novel" ? "checkmark" : undefined}
-            action={() => props.onKindChange("novel")}
-          />
-        )}
-      </Menu>
-    ) : (
+    principal: (
       <Text font="title2" fontWeight="bold">
-        浏览记录
+        {isClassic ? `浏览记录 · ${kindLabel}` : "浏览记录"}
       </Text>
     ),
     topBarTrailing: [
-      <Button
-        action={() => {}}
-        contextMenu={{
-          menuItems: (
-            <Group>
-              <Button
-                title={`删除${historyKindTitle(props.kind)}浏览记录`}
-                systemImage="trash"
-                role="destructive"
-                action={props.onClear}
-              />
-            </Group>
-          ),
-        }}
-      >
-        <Image systemName="trash" />
-      </Button>,
+      <Menu key="more-menu" label={<Image systemName="ellipsis.circle" />}>
+        {isClassic && (
+          <Picker
+            title="记录类型"
+            value={props.kind}
+            onChanged={(v: string) => props.onKindChange(v as HistoryKind)}
+          >
+            <Label tag="illustration" title="插画" systemImage="photo" />
+            <Label tag="manga" title="漫画" systemImage="photo.on.rectangle" />
+            {!props.hideNovels && (
+              <Label tag="novel" title="小说" systemImage="book" />
+            )}
+          </Picker>
+        )}
+        <Button
+          title={`清空${kindLabel}记录`}
+          systemImage="trash"
+          role="destructive"
+          action={handleClearConfirm}
+        />
+      </Menu>,
     ],
   }
 }

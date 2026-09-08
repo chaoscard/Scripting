@@ -130,7 +130,7 @@ export function DiscoveryView(props: { onClose: () => void }) {
                 try {
                   void Haptics.transient()
                 } catch {}
-                requestPixivRoute("pixivisionBookmarks", "discovery")
+                requestPixivRoute("library:pixivision", "discovery")
               },
             },
           ]}
@@ -614,53 +614,14 @@ function exploreToolbar(props: {
         ? "最新"
         : "特辑"
 
-  let titleNode: any
-  if (isiPad) {
-    const promptText =
-      props.mode === "pixivision" ? "特辑" : `${baseTitle} · ${kindLabel}`
-    titleNode = (
-      <Text font="headline" fontWeight="bold">
-        {promptText}
-      </Text>
-    )
-  } else if (isClassic && (props.mode === "recommended" || props.mode === "latest")) {
-    titleNode = (
-      <Menu
-        label={
-          <HStack alignment="center" spacing={4}>
-            <Text font="title2" fontWeight="bold">
-              {baseTitle} · {kindLabel}
-            </Text>
-            <Image
-              systemName="chevron.down.circle.fill"
-              font="caption"
-              foregroundStyle="secondaryLabel"
-            />
-          </HStack>
-        }
-      >
-        <Button
-          title="插画"
-          systemImage={props.kind === "illustration" ? "checkmark" : undefined}
-          action={() => props.onKindChange("illustration")}
-        />
-        <Button
-          title="漫画"
-          systemImage={props.kind === "manga" ? "checkmark" : undefined}
-          action={() => props.onKindChange("manga")}
-        />
-        {!props.hideNovels && (
-          <Button
-            title="小说"
-            systemImage={props.kind === "novel" ? "checkmark" : undefined}
-            action={() => props.onKindChange("novel")}
-          />
-        )}
-      </Menu>
-    )
-  } else {
-    titleNode = baseTitle
-  }
+  const fullTitle =
+    props.mode === "pixivision" ? "特辑" : `${baseTitle} · ${kindLabel}`
+
+  const titleNode = (
+    <Text font={isiPad ? "headline" : "title2"} fontWeight="bold">
+      {isClassic ? fullTitle : baseTitle}
+    </Text>
+  )
 
   const trailingMenuLabel = isiPad ? (
     <HStack alignment="center" spacing={4}>
