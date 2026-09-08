@@ -16,6 +16,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "scripting"
 import {
@@ -45,7 +46,7 @@ import {
 } from "../downloader/downloadTaskManager"
 import { appToolbar } from "./components"
 import { destinationElement } from "./routes"
-import { loadSettings, onSettingsChanged } from "../store/settings"
+import { loadSettings, onSettingsChanged, updateSettings } from "../store/settings"
 import {
   DockActionBar,
   useRegisterBottomAccessory,
@@ -65,7 +66,19 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
   const [cleaning, setCleaning] = useState(false)
   const [activeTasksCount, setActiveTasksCount] = useState(0)
   const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
+  const [showNoticeAlert, setShowNoticeAlert] = useState(false)
+  const hasCheckedNoticeRef = useRef(false)
   const isAppleMusic = pageLayout === "appleMusic"
+
+  useEffect(() => {
+    if (!hasCheckedNoticeRef.current) {
+      hasCheckedNoticeRef.current = true
+      const settings = loadSettings()
+      if (!settings.dismissDownloadManagerNotice) {
+        setShowNoticeAlert(true)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     return onSettingsChanged(() => {
@@ -211,6 +224,33 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
         await loadOverviewData(true)
         updateTasksCount()
       }}
+      alert={{
+        title: "下载与文件管理说明",
+        message: (
+          <Text>
+            这里展示的是下载或导出的插画、动图ZIP归档，漫画EPUB、CBZ归档、小说EPUB和创作者归档，可在“文件”APP内查看，默认目录是/Scripting/Pix-Scripting；以图片或者视频格式下载的插画、漫画、动图，请在“照片”APP内查看。
+          </Text>
+        ),
+        isPresented: showNoticeAlert,
+        onChanged: (val) => setShowNoticeAlert(val),
+        actions: (
+          <Group>
+            <Button
+              title="永久关闭"
+              action={() => {
+                updateSettings({ dismissDownloadManagerNotice: true })
+                setShowNoticeAlert(false)
+              }}
+            />
+            <Button
+              title="本次关闭"
+              action={() => {
+                setShowNoticeAlert(false)
+              }}
+            />
+          </Group>
+        ),
+      }}
       toolbar={
         props.onClose
           ? appToolbar(props.onClose, "下载与文件管理", topTrailingControls[0])
@@ -327,7 +367,14 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
       </Section>
 
       {/* 全部文件入口 */}
-      <Section header={<Text>全局索引</Text>}>
+      <Section
+        header={<Text>全局索引</Text>}
+        footer={
+          <Text font="footnote" foregroundStyle="secondaryLabel">
+            提示：这里展示的是下载或导出的插画/动图 ZIP 归档、漫画 EPUB/CBZ 归档、小说 EPUB 与创作者归档，可在“文件”APP内（/Scripting/Pix-Scripting）查看；以图片或视频格式下载的插画、漫画、动图，请在“照片”APP内查看。
+          </Text>
+        }
+      >
         <NavigationLink value="downloadDetail:all">
           <DownloadCategoryRow
             icon="folder.fill"
@@ -993,6 +1040,15 @@ export function DownloadDetailListView(props: {
     return "folder.fill"
   }, [creatorFolder, category])
 
+  const categoryColor = useMemo(() => {
+    if (creatorFolder) return "#FF2D55"
+    if (category === "illustrations") return "#0096FA"
+    if (category === "ugoira") return "#FF9500"
+    if (category === "manga") return "#34C759"
+    if (category === "novels") return "#AF52DE"
+    return "secondaryLabel"
+  }, [creatorFolder, category])
+
   const sortInfo = useMemo(() => {
     switch (sortMode) {
       case "date_desc":
@@ -1012,13 +1068,19 @@ export function DownloadDetailListView(props: {
     }
   }, [sortMode])
 
+  const dockTitle = useMemo(() => {
+    if (creatorFolder) return `创作者 (${files.length})`
+    if (category === "all") return `全部 (${files.length})`
+    return `${pageTitle} (${files.length})`
+  }, [creatorFolder, category, pageTitle, files.length])
+
   const detailDockAccessory = useMemo(() => {
     const items: DockActionItem[] = [
       {
         key: "count",
-        label: `${pageTitle} (${files.length})`,
+        label: dockTitle,
         icon: categoryIcon,
-        color: "#EE2F49",
+        color: categoryColor,
         action: () => {
           try {
             triggerHaptic("selection")
@@ -1047,7 +1109,7 @@ export function DownloadDetailListView(props: {
       },
     ]
     return <DockActionBar items={items} />
-  }, [pageTitle, files.length, categoryIcon, sortInfo, sortContextMenu])
+  }, [dockTitle, categoryIcon, categoryColor, sortInfo, sortContextMenu])
 
   const accessoryKey = creatorFolder
     ? `downloadCreator:${creatorFolder}`
@@ -1395,6 +1457,14 @@ export function DownloadCreatorsListView(props: { onClose?: () => void }) {
   const [sortMode, setSortMode] = useState<SortMode>("size_desc")
   const [isEditing, setIsEditing] = useState(false)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
+  const isAppleMusic = pageLayout === "appleMusic"
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      setPageLayout(loadSettings().pageLayout)
+    })
+  }, [])
 
   async function loadCreators(forceRefresh = false) {
     setLoading(true)
@@ -1492,6 +1562,91 @@ export function DownloadCreatorsListView(props: { onClose?: () => void }) {
       }
     }
   }
+
+  const sortContextMenu = useMemo(() => {
+    return {
+      menuItems: (
+        <Group>
+          <Button
+            title="占用空间（从大到小）"
+            systemImage={sortMode === "size_desc" ? "checkmark" : "arrow.down"}
+            action={() => setSortMode("size_desc")}
+          />
+          <Button
+            title="占用空间（从小到大）"
+            systemImage={sortMode === "size_asc" ? "checkmark" : "arrow.up"}
+            action={() => setSortMode("size_asc")}
+          />
+          <Button
+            title="创作者名（A → Z）"
+            systemImage={sortMode === "name_asc" ? "checkmark" : "textformat.abc"}
+            action={() => setSortMode("name_asc")}
+          />
+          <Button
+            title="创作者名（Z → A）"
+            systemImage={sortMode === "name_desc" ? "checkmark" : "textformat.abc"}
+            action={() => setSortMode("name_desc")}
+          />
+        </Group>
+      ),
+    }
+  }, [sortMode])
+
+  const sortInfo = useMemo(() => {
+    switch (sortMode) {
+      case "size_desc":
+        return { label: "最大", icon: "arrow.down" }
+      case "size_asc":
+        return { label: "最小", icon: "arrow.up" }
+      case "name_asc":
+        return { label: "A-Z", icon: "textformat.abc" }
+      case "name_desc":
+        return { label: "Z-A", icon: "textformat.abc" }
+      default:
+        return { label: "排序", icon: "arrow.up.arrow.down" }
+    }
+  }, [sortMode])
+
+  const creatorsDockAccessory = useMemo(() => {
+    const items: DockActionItem[] = [
+      {
+        key: "count",
+        label: `创作者 (${creators.length})`,
+        icon: "person.2.fill",
+        color: "#FF2D55",
+        action: () => {
+          try {
+            triggerHaptic("selection")
+          } catch {}
+        },
+      },
+      {
+        key: "sort",
+        label: sortInfo.label,
+        icon: sortInfo.icon,
+        color: "#3172EB",
+        action: () => {
+          try {
+            triggerHaptic("selection")
+          } catch {}
+          setSortMode((prev) => {
+            if (prev === "size_desc") return "size_asc"
+            if (prev === "size_asc") return "name_asc"
+            if (prev === "name_asc") return "name_desc"
+            return "size_desc"
+          })
+        },
+        contextMenu: sortContextMenu,
+      },
+    ]
+    return <DockActionBar items={items} />
+  }, [creators.length, sortInfo, sortContextMenu])
+
+  useRegisterBottomAccessory(
+    "downloadCreators",
+    creatorsDockAccessory,
+    isAppleMusic
+  )
 
   return (
     <List

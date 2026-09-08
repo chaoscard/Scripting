@@ -348,13 +348,22 @@ export function PixivisionDetailView(props: { articleID: number }) {
 
   if (loading) {
     return (
-      <ZStack>
+      <ZStack
+        toolbarBackground="clear"
+        toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+      >
         {isVirtualNode(ambientBackground) ? (
           ambientBackground
         ) : (
           <Rectangle fill={ambientBackground ?? "clear"} ignoresSafeArea={true} />
         )}
-        <ScrollView navigationTitle="" navigationBarTitleDisplayMode="inline">
+        <ScrollView
+          navigationTitle=""
+          navigationBarTitleDisplayMode="inline"
+          toolbarBackground="clear"
+          toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+          scrollContentBackground="hidden"
+        >
           <LoadingView />
         </ScrollView>
       </ZStack>
@@ -363,13 +372,22 @@ export function PixivisionDetailView(props: { articleID: number }) {
 
   if (error || !detail) {
     return (
-      <ZStack>
+      <ZStack
+        toolbarBackground="clear"
+        toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+      >
         {isVirtualNode(ambientBackground) ? (
           ambientBackground
         ) : (
           <Rectangle fill={ambientBackground ?? "clear"} ignoresSafeArea={true} />
         )}
-        <ScrollView navigationTitle="" navigationBarTitleDisplayMode="inline">
+        <ScrollView
+          navigationTitle=""
+          navigationBarTitleDisplayMode="inline"
+          toolbarBackground="clear"
+          toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+          scrollContentBackground="hidden"
+        >
           <ErrorView message={error ?? "特辑不存在或已下架"} onRetry={load} />
         </ScrollView>
       </ZStack>
@@ -393,6 +411,7 @@ export function PixivisionDetailView(props: { articleID: number }) {
             <ScrollView
             navigationTitle=""
             navigationBarTitleDisplayMode="inline"
+            scrollContentBackground="hidden"
             toolbarBackground="clear"
             toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
             toolbar={{

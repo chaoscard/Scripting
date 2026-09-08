@@ -832,22 +832,38 @@ export function NovelDetailView(props: { novelID: number }) {
 
   if (loading) {
     return (
-      <ScrollView
-        navigationTitle=""
-        navigationBarTitleDisplayMode="inline"
-      >
-        <LoadingView />
-      </ScrollView>
+      <ZStack>
+        {isVirtualNode(ambientBackground) ? (
+          ambientBackground
+        ) : (
+          <Rectangle fill={ambientBackground ?? "clear"} ignoresSafeArea={true} />
+        )}
+        <ScrollView
+          navigationTitle=""
+          navigationBarTitleDisplayMode="inline"
+          scrollContentBackground="hidden"
+        >
+          <LoadingView />
+        </ScrollView>
+      </ZStack>
     )
   }
   if (error || !novel) {
     return (
-      <ScrollView
-        navigationTitle=""
-        navigationBarTitleDisplayMode="inline"
-      >
-        <ErrorView message={error ?? "小说不存在"} onRetry={load} />
-      </ScrollView>
+      <ZStack>
+        {isVirtualNode(ambientBackground) ? (
+          ambientBackground
+        ) : (
+          <Rectangle fill={ambientBackground ?? "clear"} ignoresSafeArea={true} />
+        )}
+        <ScrollView
+          navigationTitle=""
+          navigationBarTitleDisplayMode="inline"
+          scrollContentBackground="hidden"
+        >
+          <ErrorView message={error ?? "小说不存在"} onRetry={load} />
+        </ScrollView>
+      </ZStack>
     )
   }
 
@@ -980,6 +996,7 @@ export function NovelDetailView(props: { novelID: number }) {
           proxyRef.current = proxy
           return (
             <ScrollView
+              scrollContentBackground="hidden"
               scrollPosition={{
                 value: scrollPos,
                 anchor: "top",

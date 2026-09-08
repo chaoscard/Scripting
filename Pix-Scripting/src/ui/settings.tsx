@@ -1583,7 +1583,7 @@ export function SettingsView() {
               title="淡入动画时长"
               unit="ms"
               value={settings.imageFadeInDuration}
-              defaultValue={100}
+              defaultValue={65}
               min={1}
               max={500}
               onSave={(val) => update({ imageFadeInDuration: val })}
@@ -1592,7 +1592,7 @@ export function SettingsView() {
               title="模糊消融时长"
               unit="ms"
               value={settings.blurCrossFadeDuration}
-              defaultValue={100}
+              defaultValue={80}
               min={0}
               max={250}
               onSave={(val) => update({ blurCrossFadeDuration: val })}

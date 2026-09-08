@@ -497,25 +497,88 @@ export function IllustDetailView(props: { illustID: number }) {
     })
   }, [bookmarked, followed])
 
+  const ambientBackgroundNode =
+    ambientEnabled && ambientPalette ? (
+      experimentalEnabled ? (
+        renderAmbientBackground({
+          ambientPalette,
+          ambientAlgorithm,
+          isDark,
+          ambientIntensity: experimentalIntensity,
+          active: true,
+        })
+      ) : (
+        <Rectangle
+          fill={{
+            colors: [
+              ambientPalette.topColor,
+              ambientPalette.midColor,
+              ambientPalette.backgroundColor,
+              ambientPalette.backgroundColor,
+            ],
+            startPoint: "top",
+            endPoint: "bottom",
+          }}
+          ignoresSafeArea={true}
+        />
+      )
+    ) : null
+
   if (loading && !illust) {
     return (
-      <ScrollView navigationTitle="" navigationBarTitleDisplayMode="inline">
-        <LoadingView />
-      </ScrollView>
+      <ZStack
+        toolbarBackground="clear"
+        toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+      >
+        {ambientBackgroundNode}
+        <ScrollView
+          navigationTitle=""
+          navigationBarTitleDisplayMode="inline"
+          toolbarBackground="clear"
+          toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+          scrollContentBackground="hidden"
+        >
+          <LoadingView />
+        </ScrollView>
+      </ZStack>
     )
   }
   if (error && !illust) {
     return (
-      <ScrollView navigationTitle="" navigationBarTitleDisplayMode="inline">
-        <ErrorView message={error} onRetry={() => load(true)} />
-      </ScrollView>
+      <ZStack
+        toolbarBackground="clear"
+        toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+      >
+        {ambientBackgroundNode}
+        <ScrollView
+          navigationTitle=""
+          navigationBarTitleDisplayMode="inline"
+          toolbarBackground="clear"
+          toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+          scrollContentBackground="hidden"
+        >
+          <ErrorView message={error} onRetry={() => load(true)} />
+        </ScrollView>
+      </ZStack>
     )
   }
   if (!illust) {
     return (
-      <ScrollView navigationTitle="" navigationBarTitleDisplayMode="inline">
-        <ErrorView message="作品不存在" onRetry={() => load(true)} />
-      </ScrollView>
+      <ZStack
+        toolbarBackground="clear"
+        toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+      >
+        {ambientBackgroundNode}
+        <ScrollView
+          navigationTitle=""
+          navigationBarTitleDisplayMode="inline"
+          toolbarBackground="clear"
+          toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+          scrollContentBackground="hidden"
+        >
+          <ErrorView message="作品不存在" onRetry={() => load(true)} />
+        </ScrollView>
+      </ZStack>
     )
   }
 
@@ -995,31 +1058,7 @@ export function IllustDetailView(props: { illustID: number }) {
       toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
     >
       {/* 1. 独立全屏底层：铺满屏幕（含顶部状态栏与灵动岛背后），实现状态栏追色沉浸 */}
-      {ambientEnabled && ambientPalette ? (
-        experimentalEnabled ? (
-          renderAmbientBackground({
-            ambientPalette,
-            ambientAlgorithm,
-            isDark,
-            ambientIntensity: experimentalIntensity,
-            active: true,
-          })
-        ) : (
-          <Rectangle
-            fill={{
-              colors: [
-                ambientPalette.topColor,
-                ambientPalette.midColor,
-                ambientPalette.backgroundColor,
-                ambientPalette.backgroundColor,
-              ],
-              startPoint: "top",
-              endPoint: "bottom",
-            }}
-            ignoresSafeArea={true}
-          />
-        )
-      ) : null}
+      {ambientBackgroundNode}
 
       {/* 2. 滚动内容层：受顶部安全区保护，插画图片与主要内容从安全区下方正常排版，绝不被灵动岛遮挡 */}
       <ScrollView

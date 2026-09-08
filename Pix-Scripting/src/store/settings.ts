@@ -164,6 +164,7 @@ export interface AppSettings {
   advancedSettingsUnlocked: boolean
   mockFreeUser: boolean
   hasSeenFeatureHighlights: boolean
+  dismissDownloadManagerNotice: boolean
   customRankingEnabled: boolean
   customRankingIllustModes: string[]
   customRankingMangaModes: string[]
@@ -245,8 +246,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   aiTranslateConcurrency: 4,
   imageDownloadConcurrencyRatio: 100,
   imagePrefetchConcurrencyRatio: 100,
-  imageFadeInDuration: 100,
-  blurCrossFadeDuration: 100,
+  imageFadeInDuration: 65,
+  blurCrossFadeDuration: 80,
   backgroundPreheatDuration: 1000,
   loadingAnimationDuration: 400,
   novelLoadingDuration: 1000,
@@ -256,6 +257,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   advancedSettingsUnlocked: false,
   mockFreeUser: false,
   hasSeenFeatureHighlights: false,
+  dismissDownloadManagerNotice: false,
   customRankingEnabled: false,
   customRankingIllustModes: ["day", "week", "month"],
   customRankingMangaModes: ["day_manga", "week_manga", "month_manga"],
@@ -738,6 +740,10 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
     hasSeenFeatureHighlights: boolOr(
       stored?.hasSeenFeatureHighlights,
       DEFAULT_SETTINGS.hasSeenFeatureHighlights
+    ),
+    dismissDownloadManagerNotice: boolOr(
+      stored?.dismissDownloadManagerNotice,
+      DEFAULT_SETTINGS.dismissDownloadManagerNotice
     ),
     customRankingEnabled: boolOr(stored?.customRankingEnabled, DEFAULT_SETTINGS.customRankingEnabled),
     customRankingIllustModes: parseStringArray(stored?.customRankingIllustModes, DEFAULT_SETTINGS.customRankingIllustModes),

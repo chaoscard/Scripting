@@ -164,6 +164,7 @@ export function getActiveAccessoryKey(
   if (top === "notifications") return "notifications"
   if (top.startsWith("notificationsMore:")) return top
   if (top === "downloadManager") return "downloadManager"
+  if (top === "downloadCreators") return "downloadCreators"
   if (top.startsWith("downloadDetail:")) return top
   if (top.startsWith("downloadCreator:")) return top
   if (top.startsWith("rankingCustomPicker:")) return top

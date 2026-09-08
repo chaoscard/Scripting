@@ -21,12 +21,12 @@ import {
 import { loadSettings } from "../../store/settings"
 import { useLatest } from "../hooks"
 function imageFadeDurationSec(): number {
-  const ms = loadSettings().imageFadeInDuration ?? 100
+  const ms = loadSettings().imageFadeInDuration ?? 65
   return Math.max(0.001, Math.min(0.5, ms / 1000))
 }
 
 function blurCrossFadeDurationSec(): number {
-  const ms = loadSettings().blurCrossFadeDuration ?? 100
+  const ms = loadSettings().blurCrossFadeDuration ?? 80
   return Math.max(0, Math.min(0.25, ms / 1000))
 }
 
