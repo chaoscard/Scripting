@@ -87,16 +87,6 @@ export function FollowFeedView(props: {
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl, isTabActive)
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
-  const [visitedModes, setVisitedModes] = useState<Set<FollowMode>>(() => new Set([mode]))
-  useEffect(() => {
-    setVisitedModes((prev) => {
-      if (prev.has(mode)) return prev
-      const next = new Set(prev)
-      next.add(mode)
-      return next
-    })
-  }, [mode])
-
   useEffect(() => {
     return onSettingsChanged(() => {
       const nextSettings = loadSettings()
@@ -170,70 +160,42 @@ export function FollowFeedView(props: {
         if (!activated) setActivated(true)
       }}
     >
-      {/* 1. 关注动态模式保活 */}
-      <VStack
-        frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-        opacity={mode === "following" ? 1 : 0}
-        hidden={mode !== "following"}
-        zIndex={mode === "following" ? 1 : 0}
-        allowsHitTesting={mode === "following"}
-      >
+      {/* 1. 关注动态模式（即刻挂载与卸载） */}
+      {mode === "following" && (
         <FollowingFeed
-          enabled={activated && mode === "following"}
+          enabled={activated}
           kind={followingKind}
           scope={scope}
           hideNovels={hideNovels}
           isAppleMusic={isAppleMusic}
           onKindChange={setFollowingKind}
-          onFirstImageUrlChange={(url) => {
-            if (mode === "following") setAmbientImageUrl(url)
-          }}
+          onFirstImageUrlChange={setAmbientImageUrl}
         />
-      </VStack>
+      )}
 
-      {/* 2. 追更列表模式保活 */}
-      {visitedModes.has("watchlist") ? (
-        <VStack
-          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-          opacity={mode === "watchlist" ? 1 : 0}
-          hidden={mode !== "watchlist"}
-          zIndex={mode === "watchlist" ? 1 : 0}
-          allowsHitTesting={mode === "watchlist"}
-        >
-          <WatchlistFeed
-            enabled={activated && mode === "watchlist"}
-            kind={watchKind}
-            hideNovels={hideNovels}
-            isAppleMusic={isAppleMusic}
-            onKindChange={setWatchKind}
-            onFirstImageUrlChange={(url) => {
-              if (mode === "watchlist") setAmbientImageUrl(url)
-            }}
-          />
-        </VStack>
-      ) : null}
+      {/* 2. 追更列表模式（即刻挂载与卸载） */}
+      {mode === "watchlist" && (
+        <WatchlistFeed
+          enabled={activated}
+          kind={watchKind}
+          hideNovels={hideNovels}
+          isAppleMusic={isAppleMusic}
+          onKindChange={setWatchKind}
+          onFirstImageUrlChange={setAmbientImageUrl}
+        />
+      )}
 
-      {/* 3. 好友动态模式保活 */}
-      {visitedModes.has("friends") ? (
-        <VStack
-          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-          opacity={mode === "friends" ? 1 : 0}
-          hidden={mode !== "friends"}
-          zIndex={mode === "friends" ? 1 : 0}
-          allowsHitTesting={mode === "friends"}
-        >
-          <FriendsFeed
-            enabled={activated && mode === "friends"}
-            kind={friendKind}
-            hideNovels={hideNovels}
-            isAppleMusic={isAppleMusic}
-            onKindChange={setFriendKind}
-            onFirstImageUrlChange={(url) => {
-              if (mode === "friends") setAmbientImageUrl(url)
-            }}
-          />
-        </VStack>
-      ) : null}
+      {/* 3. 好友动态模式（即刻挂载与卸载） */}
+      {mode === "friends" && (
+        <FriendsFeed
+          enabled={activated}
+          kind={friendKind}
+          hideNovels={hideNovels}
+          isAppleMusic={isAppleMusic}
+          onKindChange={setFriendKind}
+          onFirstImageUrlChange={setAmbientImageUrl}
+        />
+      )}
     </ZStack>
   )
 }
@@ -448,7 +410,6 @@ function FollowingFeed(props: {
       <VStack
         frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
         opacity={kind === "illust" ? 1 : 0}
-        hidden={kind !== "illust"}
         zIndex={kind === "illust" ? 1 : 0}
         allowsHitTesting={kind === "illust"}
       >
@@ -484,7 +445,6 @@ function FollowingFeed(props: {
         <VStack
           frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
           opacity={kind === "novel" ? 1 : 0}
-          hidden={kind !== "novel"}
           zIndex={kind === "novel" ? 1 : 0}
           allowsHitTesting={kind === "novel"}
         >
@@ -614,7 +574,6 @@ function WatchlistFeed(props: {
       <VStack
         frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
         opacity={kind === "manga" ? 1 : 0}
-        hidden={kind !== "manga"}
         zIndex={kind === "manga" ? 1 : 0}
         allowsHitTesting={kind === "manga"}
       >
@@ -648,7 +607,6 @@ function WatchlistFeed(props: {
         <VStack
           frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
           opacity={kind === "novel" ? 1 : 0}
-          hidden={kind !== "novel"}
           zIndex={kind === "novel" ? 1 : 0}
           allowsHitTesting={kind === "novel"}
         >
@@ -766,7 +724,6 @@ function FriendsFeed(props: {
       <VStack
         frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
         opacity={kind === "illust" ? 1 : 0}
-        hidden={kind !== "illust"}
         zIndex={kind === "illust" ? 1 : 0}
         allowsHitTesting={kind === "illust"}
       >
@@ -802,7 +759,6 @@ function FriendsFeed(props: {
         <VStack
           frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
           opacity={kind === "novel" ? 1 : 0}
-          hidden={kind !== "novel"}
           zIndex={kind === "novel" ? 1 : 0}
           allowsHitTesting={kind === "novel"}
         >

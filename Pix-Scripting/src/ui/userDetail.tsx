@@ -124,6 +124,17 @@ export function UserDetailView(props: { userID: number }) {
     return availableKinds[0]
   }, [availableKinds, baseKinds, kind])
 
+  const [visitedKinds, setVisitedKinds] = useState<Set<UserWorkKind>>(() => new Set(["illust"]))
+
+  useEffect(() => {
+    setVisitedKinds((prev) => {
+      if (prev.has(activeKind)) return prev
+      const next = new Set(prev)
+      next.add(activeKind)
+      return next
+    })
+  }, [activeKind])
+
   useEffect(() => {
     if (availableKinds.length > 0 && !availableKinds.includes(kind)) {
       setKind(availableKinds[0])
@@ -835,55 +846,68 @@ export function UserDetailView(props: { userID: number }) {
           </VStack>
         </RefreshableScrollView>
       ) : (
-        <RefreshableScrollView
-          refreshable={handleRefresh}
-        >
-          <VStack
-            alignment="leading"
-            spacing={12}
-            padding={{ top: 0, bottom: 20 }}
-            frame={{ maxWidth: "infinity" }}
-          >
-            <UserProfileHeader detail={detail} webDetail={webDetail} />
-            <UserWorkTagFilterBar
-              tags={tagsByKind[activeKind] ?? []}
-              selectedTag={selectedTag}
-              onSelectTag={setSelectedTag}
-            />
-
-            {downloading ? (
-              <HStack
-                spacing={8}
-                padding={{ horizontal: 16, vertical: 10 }}
-                background="systemGray6"
-                clipShape={{ type: "rect", cornerRadius: 10 }}
-                frame={{ maxWidth: "infinity" }}
-                alignment="center"
+        availableKinds.map((k) => {
+          if (!visitedKinds.has(k)) return null
+          const isCurrent = activeKind === k
+          return (
+            <VStack
+              key={k}
+              frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+              opacity={isCurrent ? 1 : 0}
+              zIndex={isCurrent ? 1 : 0}
+              allowsHitTesting={isCurrent}
+            >
+              <RefreshableScrollView
+                refreshable={handleRefresh}
               >
-                <Image systemName="arrow.down.circle.fill" foregroundStyle="tintColor" />
-                <Text
-                  font="footnote"
-                  foregroundStyle="secondaryLabel"
-                  lineLimit={1}
+                <VStack
+                  alignment="leading"
+                  spacing={12}
+                  padding={{ top: 0, bottom: 20 }}
+                  frame={{ maxWidth: "infinity" }}
                 >
-                  {downloadStatusText || "正在下载作品…"}
-                </Text>
-              </HStack>
-            ) : null}
+                  <UserProfileHeader detail={detail} webDetail={webDetail} />
+                  <UserWorkTagFilterBar
+                    tags={tagsByKind[k] ?? []}
+                    selectedTag={isCurrent ? selectedTag : null}
+                    onSelectTag={setSelectedTag}
+                  />
 
-            <UserWorksFeedSection
-              key={activeKind}
-              userID={userID}
-              kind={activeKind}
-              selectedTag={selectedTag}
-              isAuthorFollowed={followed || isOwnProfile}
-              onKindEmpty={handleKindEmpty}
-              onRegisterRefresh={(fn) => {
-                worksRefreshRef.current = fn
-              }}
-            />
-          </VStack>
-        </RefreshableScrollView>
+                  {downloading ? (
+                    <HStack
+                      spacing={8}
+                      padding={{ horizontal: 16, vertical: 10 }}
+                      background="systemGray6"
+                      clipShape={{ type: "rect", cornerRadius: 10 }}
+                      frame={{ maxWidth: "infinity" }}
+                      alignment="center"
+                    >
+                      <Image systemName="arrow.down.circle.fill" foregroundStyle="tintColor" />
+                      <Text
+                        font="footnote"
+                        foregroundStyle="secondaryLabel"
+                        lineLimit={1}
+                      >
+                        {downloadStatusText || "正在下载作品…"}
+                      </Text>
+                    </HStack>
+                  ) : null}
+
+                  <UserWorksFeedSection
+                    userID={userID}
+                    kind={k}
+                    selectedTag={isCurrent ? selectedTag : null}
+                    isAuthorFollowed={followed || isOwnProfile}
+                    onKindEmpty={handleKindEmpty}
+                    onRegisterRefresh={(fn) => {
+                      if (isCurrent) worksRefreshRef.current = fn
+                    }}
+                  />
+                </VStack>
+              </RefreshableScrollView>
+            </VStack>
+          )
+        })
       )}
 
       <VStack

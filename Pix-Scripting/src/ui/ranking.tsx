@@ -343,7 +343,6 @@ export function RankingView(props: { onClose: () => void }) {
       <VStack
         frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
         opacity={kind === "illustration" ? 1 : 0}
-        hidden={kind !== "illustration"}
         zIndex={kind === "illustration" ? 1 : 0}
         allowsHitTesting={kind === "illustration"}
       >
@@ -362,7 +361,6 @@ export function RankingView(props: { onClose: () => void }) {
         <VStack
           frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
           opacity={kind === "manga" ? 1 : 0}
-          hidden={kind !== "manga"}
           zIndex={kind === "manga" ? 1 : 0}
           allowsHitTesting={kind === "manga"}
         >
@@ -382,7 +380,6 @@ export function RankingView(props: { onClose: () => void }) {
         <VStack
           frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
           opacity={kind === "novel" ? 1 : 0}
-          hidden={kind !== "novel"}
           zIndex={kind === "novel" ? 1 : 0}
           allowsHitTesting={kind === "novel"}
         >
@@ -640,7 +637,6 @@ function IllustRankingSection(props: {
             key={m}
             frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
             opacity={isCurrent ? 1 : 0}
-            hidden={!isCurrent}
             zIndex={isCurrent ? 1 : 0}
             allowsHitTesting={isCurrent}
           >
@@ -687,7 +683,6 @@ function NovelRankingSection(props: {
             key={m}
             frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
             opacity={isCurrent ? 1 : 0}
-            hidden={!isCurrent}
             zIndex={isCurrent ? 1 : 0}
             allowsHitTesting={isCurrent}
           >

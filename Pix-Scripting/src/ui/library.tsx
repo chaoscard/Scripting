@@ -67,6 +67,16 @@ export function LibraryView(props?: { initialKind?: LibraryKind }) {
   const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
   const isAppleMusic = pageLayout === "appleMusic"
   const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(null)
+  const [visitedKinds, setVisitedKinds] = useState<Set<LibraryKind>>(() => new Set([kind]))
+
+  useEffect(() => {
+    setVisitedKinds((prev) => {
+      if (prev.has(kind)) return prev
+      const next = new Set(prev)
+      next.add(kind)
+      return next
+    })
+  }, [kind])
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
@@ -121,52 +131,71 @@ export function LibraryView(props?: { initialKind?: LibraryKind }) {
       frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
     >
       {/* 1. 插画·漫画收藏 */}
-      {kind === "illustration" && (
-        <VStack frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
-          <RefreshableScrollView refreshable={() => refreshHandlerRef.current()}>
-            <VStack alignment="leading" spacing={8}>
-              <LibraryFeed
-                key={`library-illust:${restrict}`}
-                kind="illustration"
-                restrict={restrict}
-                onFirstImageUrlChange={setAmbientImageUrl}
-                onRegisterRefresh={(fn) => {
-                  refreshHandlerRef.current = fn
-                }}
-              />
-            </VStack>
-          </RefreshableScrollView>
-        </VStack>
-      )}
+      <VStack
+        frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+        opacity={kind === "illustration" ? 1 : 0}
+        zIndex={kind === "illustration" ? 1 : 0}
+        allowsHitTesting={kind === "illustration"}
+      >
+        <RefreshableScrollView refreshable={() => refreshHandlerRef.current()}>
+          <VStack alignment="leading" spacing={8}>
+            <LibraryFeed
+              key={`library-illust:${restrict}`}
+              kind="illustration"
+              restrict={restrict}
+              onFirstImageUrlChange={(url) => {
+                if (kind === "illustration") setAmbientImageUrl(url)
+              }}
+              onRegisterRefresh={(fn) => {
+                if (kind === "illustration") refreshHandlerRef.current = fn
+              }}
+            />
+          </VStack>
+        </RefreshableScrollView>
+      </VStack>
 
       {/* 2. 小说收藏 */}
-      {!hideNovels && kind === "novel" && (
-        <VStack frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
+      {!hideNovels && visitedKinds.has("novel") ? (
+        <VStack
+          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          opacity={kind === "novel" ? 1 : 0}
+          zIndex={kind === "novel" ? 1 : 0}
+          allowsHitTesting={kind === "novel"}
+        >
           <RefreshableScrollView refreshable={() => refreshHandlerRef.current()}>
             <VStack alignment="leading" spacing={8}>
               <LibraryFeed
                 key={`library-novel:${restrict}`}
                 kind="novel"
                 restrict={restrict}
-                onFirstImageUrlChange={setAmbientImageUrl}
+                onFirstImageUrlChange={(url) => {
+                  if (kind === "novel") setAmbientImageUrl(url)
+                }}
                 onRegisterRefresh={(fn) => {
-                  refreshHandlerRef.current = fn
+                  if (kind === "novel") refreshHandlerRef.current = fn
                 }}
               />
             </VStack>
           </RefreshableScrollView>
         </VStack>
-      )}
+      ) : null}
 
       {/* 3. 特辑收藏 */}
-      {kind === "pixivision" && (
-        <VStack frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
+      {visitedKinds.has("pixivision") ? (
+        <VStack
+          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          opacity={kind === "pixivision" ? 1 : 0}
+          zIndex={kind === "pixivision" ? 1 : 0}
+          allowsHitTesting={kind === "pixivision"}
+        >
           <PixivisionBookmarksContent
             isAscending={isAscending}
-            onFirstImageUrlChange={setAmbientImageUrl}
+            onFirstImageUrlChange={(url) => {
+              if (kind === "pixivision") setAmbientImageUrl(url)
+            }}
           />
         </VStack>
-      )}
+      ) : null}
     </ZStack>
   )
 }

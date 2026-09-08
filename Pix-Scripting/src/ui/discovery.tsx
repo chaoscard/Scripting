@@ -83,17 +83,6 @@ export function DiscoveryView(props: { onClose: () => void }) {
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl, isTabActive)
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
-  // 模式保活机制：惰性挂载，访问后永久保留在内存中
-  const [visitedModes, setVisitedModes] = useState<Set<ExploreMode>>(() => new Set([mode]))
-  useEffect(() => {
-    setVisitedModes((prev) => {
-      if (prev.has(mode)) return prev
-      const next = new Set(prev)
-      next.add(mode)
-      return next
-    })
-  }, [mode])
-
   useEffect(() => {
     return onSettingsChanged(() => {
       const nextSettings = loadSettings()
@@ -171,65 +160,37 @@ export function DiscoveryView(props: { onClose: () => void }) {
         if (!activated) setActivated(true)
       }}
     >
-      {/* 1. 推荐模式（默认常驻保活） */}
-      <VStack
-        frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-        opacity={mode === "recommended" ? 1 : 0}
-        hidden={mode !== "recommended"}
-        zIndex={mode === "recommended" ? 1 : 0}
-        allowsHitTesting={mode === "recommended"}
-      >
+      {/* 1. 推荐模式（即刻挂载与卸载） */}
+      {mode === "recommended" && (
         <RecommendedExploreFeed
           kind={kind}
-          enabled={activated && mode === "recommended"}
+          enabled={activated}
           hideNovels={hideNovels}
           isAppleMusic={isAppleMusic}
           onKindChange={setKind}
-          onFirstImageUrlChange={(url) => {
-            if (mode === "recommended") setAmbientImageUrl(url)
-          }}
+          onFirstImageUrlChange={setAmbientImageUrl}
         />
-      </VStack>
+      )}
 
-      {/* 2. 最新模式（访问后永久保活） */}
-      {visitedModes.has("latest") ? (
-        <VStack
-          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-          opacity={mode === "latest" ? 1 : 0}
-          hidden={mode !== "latest"}
-          zIndex={mode === "latest" ? 1 : 0}
-          allowsHitTesting={mode === "latest"}
-        >
-          <LatestExploreFeed
-            kind={kind}
-            enabled={activated && mode === "latest"}
-            hideNovels={hideNovels}
-            isAppleMusic={isAppleMusic}
-            onKindChange={setKind}
-            onFirstImageUrlChange={(url) => {
-              if (mode === "latest") setAmbientImageUrl(url)
-            }}
-          />
-        </VStack>
-      ) : null}
+      {/* 2. 最新模式（即刻挂载与卸载） */}
+      {mode === "latest" && (
+        <LatestExploreFeed
+          kind={kind}
+          enabled={activated}
+          hideNovels={hideNovels}
+          isAppleMusic={isAppleMusic}
+          onKindChange={setKind}
+          onFirstImageUrlChange={setAmbientImageUrl}
+        />
+      )}
 
-      {/* 3. 特辑模式（访问后永久保活） */}
-      {visitedModes.has("pixivision") ? (
-        <VStack
-          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-          opacity={mode === "pixivision" ? 1 : 0}
-          hidden={mode !== "pixivision"}
-          zIndex={mode === "pixivision" ? 1 : 0}
-          allowsHitTesting={mode === "pixivision"}
-        >
-          <PixivisionExploreFeed
-            enabled={activated && mode === "pixivision"}
-            onFirstImageUrlChange={(url) => {
-              if (mode === "pixivision") setAmbientImageUrl(url)
-            }}
-          />
-        </VStack>
-      ) : null}
+      {/* 3. 特辑模式（即刻挂载与卸载） */}
+      {mode === "pixivision" && (
+        <PixivisionExploreFeed
+          enabled={activated}
+          onFirstImageUrlChange={setAmbientImageUrl}
+        />
+      )}
     </ZStack>
   )
 }
@@ -356,7 +317,6 @@ function RecommendedExploreFeed(props: {
       <VStack
         frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
         opacity={kind === "illustration" ? 1 : 0}
-        hidden={kind !== "illustration"}
         zIndex={kind === "illustration" ? 1 : 0}
         allowsHitTesting={kind === "illustration"}
       >
@@ -370,7 +330,6 @@ function RecommendedExploreFeed(props: {
         <VStack
           frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
           opacity={kind === "manga" ? 1 : 0}
-          hidden={kind !== "manga"}
           zIndex={kind === "manga" ? 1 : 0}
           allowsHitTesting={kind === "manga"}
         >
@@ -385,7 +344,6 @@ function RecommendedExploreFeed(props: {
         <VStack
           frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
           opacity={kind === "novel" ? 1 : 0}
-          hidden={kind !== "novel"}
           zIndex={kind === "novel" ? 1 : 0}
           allowsHitTesting={kind === "novel"}
         >
@@ -520,7 +478,6 @@ function LatestExploreFeed(props: {
       <VStack
         frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
         opacity={kind === "illustration" ? 1 : 0}
-        hidden={kind !== "illustration"}
         zIndex={kind === "illustration" ? 1 : 0}
         allowsHitTesting={kind === "illustration"}
       >
@@ -534,7 +491,6 @@ function LatestExploreFeed(props: {
         <VStack
           frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
           opacity={kind === "manga" ? 1 : 0}
-          hidden={kind !== "manga"}
           zIndex={kind === "manga" ? 1 : 0}
           allowsHitTesting={kind === "manga"}
         >
@@ -549,7 +505,6 @@ function LatestExploreFeed(props: {
         <VStack
           frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
           opacity={kind === "novel" ? 1 : 0}
-          hidden={kind !== "novel"}
           zIndex={kind === "novel" ? 1 : 0}
           allowsHitTesting={kind === "novel"}
         >
