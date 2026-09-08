@@ -1397,20 +1397,13 @@ function renderDefaultRootTabAccessory(activeTab: string) {
     const modes = getCustomRankingModesForKind("illustration", settings)
     const items = modes.map((m) => ({
       tag: m.value,
-      label: m.title.includes("榜") || m.title.length > 2 ? m.title : `${m.title}榜`,
+      label: m.title,
     }))
-    const defaultItems =
-      items.length > 0
-        ? items
-        : [
-            { tag: "day", label: "日榜" },
-            { tag: "week", label: "周榜" },
-            { tag: "month", label: "月榜" },
-          ]
+    if (items.length <= 1) return null
     return (
       <DockSegmentedBar
-        items={defaultItems}
-        value={defaultItems[0].tag}
+        items={items}
+        value={items[0].tag}
         onChanged={() => {}}
       />
     )

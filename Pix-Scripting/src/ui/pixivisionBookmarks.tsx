@@ -78,14 +78,14 @@ export function PixivisionBookmarksContent(props: {
 
   return (
     <RefreshableScrollView refreshable={handleRefresh}>
-      <VStack alignment="leading" spacing={12} padding={{ horizontal: FLOW_HORIZONTAL_PADDING, top: 8, bottom: 24 }}>
+      <VStack alignment="leading" spacing={8} padding={{ horizontal: FLOW_HORIZONTAL_PADDING, top: 4, bottom: 24 }}>
         {sortedItems.length === 0 ? (
           <EmptyView
             text="暂无收藏的特辑"
             systemImage="rectangle.stack"
           />
         ) : (
-          <LazyVStack alignment="leading" spacing={14} frame={{ maxWidth: "infinity" }}>
+          <LazyVStack alignment="leading" spacing={8} frame={{ maxWidth: "infinity" }}>
             {sortedItems.map((item, index) => (
               <PixivisionBookmarkCard
                 key={item.id}

@@ -84,9 +84,21 @@ export function RankingView(props: { onClose: () => void }) {
   const [activated, setActivated] = useState(isLaunchTab)
   const [settings, setSettings] = useState<AppSettings>(() => loadSettings())
   const [kind, setKind] = useState<RankingKind>("illustration")
-  const [illustrationMode, setIllustrationMode] = useState<string>("day")
-  const [mangaMode, setMangaMode] = useState<string>("day_manga")
-  const [novelMode, setNovelMode] = useState<string>("day")
+  const [illustrationMode, setIllustrationMode] = useState<string>(() => {
+    const initialSettings = loadSettings()
+    const modes = getCustomRankingModesForKind("illustration", initialSettings)
+    return modes[0]?.value ?? "day"
+  })
+  const [mangaMode, setMangaMode] = useState<string>(() => {
+    const initialSettings = loadSettings()
+    const modes = getCustomRankingModesForKind("manga", initialSettings)
+    return modes[0]?.value ?? "day_manga"
+  })
+  const [novelMode, setNovelMode] = useState<string>(() => {
+    const initialSettings = loadSettings()
+    const modes = getCustomRankingModesForKind("novel", initialSettings)
+    return modes[0]?.value ?? "day"
+  })
 
   // 高级模式状态
   const [advancedParams, setAdvancedParams] = useState<AdvancedRankingParams>(

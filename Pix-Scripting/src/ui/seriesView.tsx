@@ -226,6 +226,8 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
   )
   const isAscendingRef = useRef(isAscending)
   isAscendingRef.current = isAscending
+  const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
+  const isAppleMusic = pageLayout === "appleMusic"
 
   const { ambientBackground } = useUserAmbientPalette(coverPreviewUrl || coverUrl)
 
@@ -469,6 +471,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
   useEffect(() => {
     return onSettingsChanged(() => {
       const nextSettings = loadSettings()
+      setPageLayout(nextSettings.pageLayout)
       const targetAsc = nextSettings.watchlistSortOrder === "asc"
       setIsAscending(targetAsc)
       pagedRef.current.reapplyFilter()
@@ -504,6 +507,105 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
     )
   }
 
+  const shareUrl = kind === "novel"
+    ? `https://www.pixiv.net/novel/series/${seriesID}`
+    : (author?.id
+        ? `https://www.pixiv.net/user/${author.id}/series/${seriesID}`
+        : `https://www.pixiv.net/series/${seriesID}`)
+
+  const shareButton = (
+    <Button
+      key="series-share"
+      action={() => {
+        void Haptics.transient()
+        void ShareSheet.present([shareUrl])
+      }}
+    >
+      <Image systemName="square.and.arrow.up" />
+    </Button>
+  )
+
+  const authorAvatar = author ? (
+    <NavigationLink
+      key="series-author"
+      value={`user:${author.id}`}
+    >
+      <AvatarImage
+        url={author.profile_image_urls?.medium ?? null}
+        size={28}
+      />
+    </NavigationLink>
+  ) : null
+
+  const trailingButtons = isAppleMusic
+    ? [shareButton, ...(authorAvatar ? [authorAvatar] : [])]
+    : [
+        <Button
+          key="series-watch"
+          disabled={watchLoading}
+          action={toggleWatchlist}
+        >
+          <Image
+            systemName={isWatched ? "bookmark.fill" : "bookmark"}
+            foregroundStyle={isWatched ? "#0096FA" : undefined}
+          />
+        </Button>,
+        <Button
+          key="series-sort"
+          action={() => {
+            void Haptics.transient()
+            const nextAsc = !isAscending
+            setIsAscending(nextAsc)
+            updateSettings({ watchlistSortOrder: nextAsc ? "asc" : "desc" })
+          }}
+        >
+          <Image systemName={isAscending ? "arrow.up" : "arrow.down"} />
+        </Button>,
+        ...(Device.isiPad
+          ? [
+              <Menu key="series-more-menu" label={<Image systemName="ellipsis.circle" />}>
+                {author ? (
+                  <Button
+                    title="主页"
+                    systemImage="person.crop.circle"
+                    action={() => {
+                      void requestPixivRoute(`user:${author.id}`)
+                    }}
+                  />
+                ) : null}
+                <Button
+                  title="分享"
+                  systemImage="square.and.arrow.up"
+                  action={() => {
+                    void Haptics.transient()
+                    void ShareSheet.present([shareUrl])
+                  }}
+                />
+                <Button
+                  title="下载"
+                  systemImage={seriesDownloading ? "arrow.down.circle.fill" : "square.and.arrow.down"}
+                  foregroundStyle={seriesDownloading ? "systemBlue" : undefined}
+                  disabled={seriesDownloading}
+                  action={handleExportSeries}
+                />
+              </Menu>,
+            ]
+          : [
+              shareButton,
+              <Button
+                key="series-download"
+                disabled={seriesDownloading}
+                action={handleExportSeries}
+              >
+                <Image
+                  systemName={seriesDownloading ? "arrow.down.circle.fill" : "square.and.arrow.down"}
+                  foregroundStyle={seriesDownloading ? "systemBlue" : undefined}
+                />
+              </Button>,
+              ...(authorAvatar ? [authorAvatar] : []),
+            ]),
+      ]
+
   return (
     <ScrollView
       navigationTitle=""
@@ -513,99 +615,10 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
       background={ambientBackground}
       refreshable={handleRefresh}
       toolbar={{
-        topBarTrailing: [
-          <Button
-            disabled={watchLoading}
-            action={toggleWatchlist}
-          >
-            <Image
-              systemName={isWatched ? "bookmark.fill" : "bookmark"}
-              foregroundStyle={isWatched ? "#0096FA" : undefined}
-            />
-          </Button>,
-          <Button
-            action={() => {
-              void Haptics.transient()
-              const nextAsc = !isAscending
-              setIsAscending(nextAsc)
-              updateSettings({ watchlistSortOrder: nextAsc ? "asc" : "desc" })
-            }}
-          >
-            <Image systemName={isAscending ? "arrow.up" : "arrow.down"} />
-          </Button>,
-          ...(Device.isiPad
-            ? [
-                <Menu label={<Image systemName="ellipsis.circle" />}>
-                  {author ? (
-                    <Button
-                      title="主页"
-                      systemImage="person.crop.circle"
-                      action={() => {
-                        void requestPixivRoute(`user:${author.id}`)
-                      }}
-                    />
-                  ) : null}
-                  <Button
-                    title="分享"
-                    systemImage="square.and.arrow.up"
-                    action={() => {
-                      void Haptics.transient()
-                      const shareUrl = kind === "novel"
-                        ? `https://www.pixiv.net/novel/series/${seriesID}`
-                        : (author?.id
-                            ? `https://www.pixiv.net/user/${author.id}/series/${seriesID}`
-                            : `https://www.pixiv.net/series/${seriesID}`)
-                      void ShareSheet.present([shareUrl])
-                    }}
-                  />
-                  <Button
-                    title="下载"
-                    systemImage={seriesDownloading ? "arrow.down.circle.fill" : "square.and.arrow.down"}
-                    foregroundStyle={seriesDownloading ? "systemBlue" : undefined}
-                    disabled={seriesDownloading}
-                    action={handleExportSeries}
-                  />
-                </Menu>,
-              ]
-            : [
-                <Button
-                  action={() => {
-                    void Haptics.transient()
-                    const shareUrl = kind === "novel"
-                      ? `https://www.pixiv.net/novel/series/${seriesID}`
-                      : (author?.id
-                          ? `https://www.pixiv.net/user/${author.id}/series/${seriesID}`
-                          : `https://www.pixiv.net/series/${seriesID}`)
-                    void ShareSheet.present([shareUrl])
-                  }}
-                >
-                  <Image systemName="square.and.arrow.up" />
-                </Button>,
-                <Button
-                  disabled={seriesDownloading}
-                  action={handleExportSeries}
-                >
-                  <Image
-                    systemName={seriesDownloading ? "arrow.down.circle.fill" : "square.and.arrow.down"}
-                    foregroundStyle={seriesDownloading ? "systemBlue" : undefined}
-                  />
-                </Button>,
-                ...(author ? [
-                  <NavigationLink
-                    key="series-author"
-                    value={`user:${author.id}`}
-                  >
-                    <AvatarImage
-                      url={author.profile_image_urls?.medium ?? null}
-                      size={28}
-                    />
-                  </NavigationLink>
-                ] : []),
-              ]),
-        ],
+        topBarTrailing: trailingButtons,
       }}
     >
-      <VStack alignment="leading" spacing={0} frame={{ maxWidth: "infinity" }}>
+      <VStack alignment="leading" spacing={0} frame={{ maxWidth: "infinity" }} padding={{ bottom: isAppleMusic ? 70 : 16 }}>
         {/* 沉浸式顶部背景图与居中悬浮胶囊标题 */}
         <ImmersiveHeaderBanner url={coverUrl} previewUrl={coverPreviewUrl}>
           <HStack
