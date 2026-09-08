@@ -96,7 +96,9 @@ export function UserDetailView(props: { userID: number }) {
   const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
   const isAppleMusic = pageLayout === "appleMusic"
   const [emptyKinds, setEmptyKinds] = useState<Partial<Record<UserWorkKind, boolean>>>({})
-  const { ambientBackground } = useUserAmbientPalette(detail?.profile.background_image_url)
+  const { ambientBackground } = useUserAmbientPalette(
+    detail?.profile.background_image_url || detail?.user.profile_image_urls?.medium
+  )
 
   const baseKinds = useMemo<UserWorkKind[]>(() => {
     if (!detail) return []

@@ -955,45 +955,27 @@ export function IllustDetailView(props: { illustID: number }) {
       <ScrollView
         navigationTitle=""
         navigationBarTitleDisplayMode="inline"
-      ignoresSafeArea={{ edges: "bottom" }}
-      toolbarBackground={
-        ambientEnabled && ambientPalette
-          ? {
-              style: ambientPalette.topColor,
-              bars: ["navigationBar"],
-            }
-          : undefined
-      }
-      toolbarBackgroundVisibility={
-        ambientEnabled && ambientPalette
-          ? {
-              visibility: "visible",
-              bars: ["navigationBar"],
-            }
-          : {
-              visibility: "hidden",
-              bars: ["navigationBar"],
-            }
-      }
-      background={
-        ambientEnabled && ambientPalette ? (
-          <ZStack ignoresSafeArea={true}>
-            <Rectangle
-              fill={{
-                colors: [
-                  ambientPalette.topColor,
-                  ambientPalette.midColor,
-                  ambientPalette.backgroundColor,
-                  ambientPalette.backgroundColor,
-                ],
-                startPoint: "top",
-                endPoint: "bottom",
-              }}
-              ignoresSafeArea={true}
-            />
-          </ZStack>
-        ) : undefined
-      }
+        ignoresSafeArea={{ edges: "bottom" }}
+        toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+        background={
+          ambientEnabled && ambientPalette ? (
+            <ZStack ignoresSafeArea={true}>
+              <Rectangle
+                fill={{
+                  colors: [
+                    ambientPalette.topColor,
+                    ambientPalette.midColor,
+                    ambientPalette.backgroundColor,
+                    ambientPalette.backgroundColor,
+                  ],
+                  startPoint: "top",
+                  endPoint: "bottom",
+                }}
+                ignoresSafeArea={true}
+              />
+            </ZStack>
+          ) : undefined
+        }
       toolbar={{
         topBarTrailing: [
           <Button

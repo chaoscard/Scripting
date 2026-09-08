@@ -1220,7 +1220,7 @@ export function TagFeedDockBar(props: { tagName: string }) {
   const items: DockActionItem[] = [
     {
       key: "tag",
-      label: tagName ? `#${tagName}` : "#标签",
+      label: tagName || "标签",
       icon: "number",
       color: "#3172EB",
       action: () => {

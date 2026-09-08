@@ -6,6 +6,7 @@ import {
   Text,
   VStack,
   ZStack,
+  useColorScheme,
   useMemo,
 } from "scripting"
 import type { PixivUserDetail, PixivWebUserDetail } from "../types"
@@ -318,6 +319,9 @@ export function UserProfileHeader(props: {
     [detail, webDetail]
   )
 
+  const colorScheme = useColorScheme()
+  const isDark = colorScheme === "dark"
+
   const commentHtml =
     webDetail?.commentHtml || webDetail?.comment || user.comment || ""
   const rawComment = webDetail?.comment || user.comment || ""
@@ -334,23 +338,41 @@ export function UserProfileHeader(props: {
       {/* 沉浸式顶部背景图与居中悬浮头像 */}
       <ZStack alignment="bottom" frame={{ maxWidth: "infinity" }}>
         {profile.background_image_url ? (
-          <CachedImage
-            url={profile.background_image_url}
-            useIntrinsicAspectRatio={true}
-            aspectRatioValue={2.4}
-            contentMode="fill"
-            cornerRadius={0}
-            priority={0}
+          <ZStack
+            alignment="bottom"
             frame={{ maxWidth: "infinity" }}
-          />
+            clipShape={{
+              type: "rect",
+              cornerRadii: { topLeading: 0, topTrailing: 0, bottomLeading: 8, bottomTrailing: 8 },
+            }}
+          >
+            <CachedImage
+              url={profile.background_image_url}
+              useIntrinsicAspectRatio={true}
+              aspectRatioValue={2.4}
+              contentMode="fill"
+              cornerRadius={{ topLeading: 0, topTrailing: 0, bottomLeading: 8, bottomTrailing: 8 }}
+              priority={0}
+              frame={{ maxWidth: "infinity" }}
+            />
+            {/* 底部羽化过渡遮罩：让封面图与下方环境底色自然交融 */}
+            <VStack
+              frame={{ maxWidth: "infinity", height: 70 }}
+              background={{
+                colors: [
+                  "rgba(0, 0, 0, 0)",
+                  isDark ? "rgba(0, 0, 0, 0.35)" : "rgba(255, 255, 255, 0.45)",
+                  isDark ? "rgba(0, 0, 0, 0.85)" : "rgba(255, 255, 255, 0.90)",
+                ],
+                startPoint: "top",
+                endPoint: "bottom",
+              }}
+            />
+          </ZStack>
         ) : (
           <VStack
-            frame={{ maxWidth: "infinity", height: 160 }}
-            background={{
-              colors: ["rgba(0, 150, 250, 0.18)", "rgba(0, 150, 250, 0.04)"],
-              startPoint: "topLeading",
-              endPoint: "bottomTrailing",
-            }}
+            frame={{ maxWidth: "infinity", height: 130 }}
+            background="clear"
           />
         )}
 

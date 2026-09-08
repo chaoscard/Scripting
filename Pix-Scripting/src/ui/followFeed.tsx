@@ -259,7 +259,7 @@ function followToolbar(props: {
         ? "私密关注"
         : "关注"
       : props.mode === "watchlist"
-        ? "追更"
+        ? "追更列表"
         : "好友动态"
 
   const currentKind =
@@ -326,7 +326,7 @@ function followToolbar(props: {
       >
         <Label tag="following_all" title="公开关注" systemImage="globe" />
         <Label tag="following_private" title="私密关注" systemImage="lock" />
-        <Label tag="watchlist" title="追更" systemImage="bookmark" />
+        <Label tag="watchlist" title="追更列表" systemImage="bookmark" />
         <Label tag="friends" title="好友动态" systemImage="person.2.badge.gearshape" />
       </Picker>
       {isClassic &&
