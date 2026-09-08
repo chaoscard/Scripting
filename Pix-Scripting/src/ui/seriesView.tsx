@@ -491,6 +491,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
         navigationBarTitleDisplayMode="inline"
         toolbarBackground="clear"
         toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+        scrollContentBackground="hidden"
       >
         <LoadingView />
       </ScrollView>
@@ -504,6 +505,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
         navigationBarTitleDisplayMode="inline"
         toolbarBackground="clear"
         toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+        scrollContentBackground="hidden"
       >
         <ErrorView message={paged.error} onRetry={handleRefresh} />
       </ScrollView>
@@ -615,6 +617,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
       navigationBarTitleDisplayMode="inline"
       toolbarBackground="clear"
       toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+      scrollContentBackground="hidden"
       ignoresSafeArea={{ edges: ["top", "bottom"] }}
       background={ambientBackground}
       refreshable={handleRefresh}

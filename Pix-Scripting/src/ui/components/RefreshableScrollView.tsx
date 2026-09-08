@@ -131,6 +131,7 @@ export function RefreshableScrollView(props: {
               ignoresSafeArea={props.ignoresSafeArea}
               toolbarBackground={activeToolbarBackground}
               toolbarBackgroundVisibility={activeToolbarBackgroundVisibility}
+              scrollContentBackground="hidden"
             >
               <VStack
                 key={REFRESH_TOP_KEY}

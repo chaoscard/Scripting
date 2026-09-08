@@ -616,13 +616,25 @@ export function UserDetailView(props: { userID: number }) {
   if (!detail) {
     if (detailError) {
       return (
-        <ScrollView navigationTitle="" navigationBarTitleDisplayMode="inline">
+        <ScrollView
+          navigationTitle=""
+          navigationBarTitleDisplayMode="inline"
+          toolbarBackground="clear"
+          toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+          scrollContentBackground="hidden"
+        >
           <ErrorView message={detailError} onRetry={loadDetail} />
         </ScrollView>
       )
     }
     return (
-      <ScrollView navigationTitle="用户主页" navigationBarTitleDisplayMode="inline">
+      <ScrollView
+        navigationTitle="用户主页"
+        navigationBarTitleDisplayMode="inline"
+        toolbarBackground="clear"
+        toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+        scrollContentBackground="hidden"
+      >
         <LoadingView />
       </ScrollView>
     )

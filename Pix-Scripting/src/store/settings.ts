@@ -116,6 +116,7 @@ export interface AppSettings {
   ambientImmersion: boolean
   ambientIntensity: AmbientIntensity
   experimentalImmersion: boolean
+  overrideSecondaryPagesImmersion: boolean
   experimentalImmersionIntensity: AmbientIntensity
   experimentalImmersionAlgorithm: AmbientAlgorithm
   novelReaderExperimentalAlgorithm: NovelReaderExperimentalAlgorithm
@@ -207,6 +208,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   ambientImmersion: true,
   ambientIntensity: "medium",
   experimentalImmersion: false,
+  overrideSecondaryPagesImmersion: false,
   experimentalImmersionIntensity: "medium",
   experimentalImmersionAlgorithm: "classic",
   novelReaderExperimentalAlgorithm: "off",
@@ -614,6 +616,10 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
           DEFAULT_SETTINGS.experimentalImmersion
         )
       : false,
+    overrideSecondaryPagesImmersion: boolOr(
+      stored?.overrideSecondaryPagesImmersion,
+      DEFAULT_SETTINGS.overrideSecondaryPagesImmersion
+    ),
     experimentalImmersionIntensity: isOneOf(
       stored?.experimentalImmersionIntensity,
       AMBIENT_INTENSITY_VALUES

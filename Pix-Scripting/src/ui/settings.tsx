@@ -665,6 +665,7 @@ export function SettingsView() {
                 update({
                   ambientImmersion: false,
                   experimentalImmersion: false,
+                  overrideSecondaryPagesImmersion: false,
                 })
               } else {
                 update({ ambientImmersion: true })
@@ -705,15 +706,28 @@ export function SettingsView() {
                       update({ experimentalImmersion: true })
                     } else {
                       setExperimentalImmersionKey((k) => k + 1)
-                      update({ experimentalImmersion: false })
+                      update({
+                        experimentalImmersion: false,
+                        overrideSecondaryPagesImmersion: false,
+                      })
                     }
                   } else {
-                    update({ experimentalImmersion: false })
+                    update({
+                      experimentalImmersion: false,
+                      overrideSecondaryPagesImmersion: false,
+                    })
                   }
                 }}
               />
               {settings.experimentalImmersion ? (
                 <>
+                  <Toggle
+                    title="覆盖原有沉浸效果页面"
+                    value={settings.overrideSecondaryPagesImmersion}
+                    onChanged={(value) => {
+                      update({ overrideSecondaryPagesImmersion: value })
+                    }}
+                  />
                   <Picker
                     title="实验性沉浸效果算法"
                     value={settings.experimentalImmersionAlgorithm}

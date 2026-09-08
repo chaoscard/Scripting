@@ -16,6 +16,7 @@ import {
   ScrollView,
   Spacer,
   Text,
+  useCallback,
   useColorScheme,
   useEffect,
   useMemo,
@@ -67,6 +68,7 @@ import {
   getDownloadImageQuality,
   loadSettings,
   onSettingsChanged,
+  type AmbientAlgorithm,
   type AmbientIntensity,
 } from "../store/settings"
 import {
@@ -90,7 +92,7 @@ import {
 } from "../store/illustCache"
 import { getCachedIllustBookmark } from "../store/bookmarkSync"
 import { getSeriesByWorkID, recordWorkSeriesAssociation } from "../store/seriesCache"
-import { useAsyncGuard, useIllustBookmark, useLatest, useOpenBookmarkDetailListener, usePagedList, currentBatchSize } from "./hooks"
+import { useAsyncGuard, useIllustBookmark, useLatest, useOpenBookmarkDetailListener, usePagedList, currentBatchSize, renderAmbientBackground } from "./hooks"
 import type { PixivIllustration } from "../types"
 import {
   AvatarImage,
@@ -157,6 +159,15 @@ export function IllustDetailView(props: { illustID: number }) {
   const [ambientIntensity, setAmbientIntensity] = useState(
     () => loadSettings().ambientIntensity
   )
+  const [experimentalEnabled, setExperimentalEnabled] = useState(
+    () => loadSettings().experimentalImmersion && loadSettings().overrideSecondaryPagesImmersion
+  )
+  const [ambientAlgorithm, setAmbientAlgorithm] = useState(
+    () => loadSettings().experimentalImmersionAlgorithm
+  )
+  const [experimentalIntensity, setExperimentalIntensity] = useState(
+    () => loadSettings().experimentalImmersionIntensity
+  )
   const [ugoiraExportFormat, setUgoiraExportFormat] = useState(
     () => loadSettings().ugoiraExportFormat ?? "mp4"
   )
@@ -175,10 +186,14 @@ export function IllustDetailView(props: { illustID: number }) {
     const settings = loadSettings()
     if (!settings.ambientImmersion) return null
     const initial = getCachedIllust(illustID)
+    const activeIntensity =
+      settings.experimentalImmersion && settings.overrideSecondaryPagesImmersion
+        ? settings.experimentalImmersionIntensity
+        : settings.ambientIntensity
     return getInitialIllustPalette(
       initial,
       isDark,
-      settings.ambientIntensity,
+      activeIntensity,
       getDetailImageQuality(settings)
     )
   })
@@ -393,6 +408,8 @@ export function IllustDetailView(props: { illustID: number }) {
     })
   }, [])
 
+  const effectiveIntensity = experimentalEnabled ? experimentalIntensity : ambientIntensity
+
   useEffect(() => {
     if (!ambientEnabled) {
       setAmbientPalette(null)
@@ -413,7 +430,7 @@ export function IllustDetailView(props: { illustID: number }) {
 
     let active = true
     for (const u of candidates) {
-      const cached = getCachedIllustAmbientPalette(u, isDark, ambientIntensity)
+      const cached = getCachedIllustAmbientPalette(u, isDark, effectiveIntensity)
       if (cached) {
         setAmbientPalette(cached)
         return
@@ -424,13 +441,13 @@ export function IllustDetailView(props: { illustID: number }) {
       void extractIllustAmbientPalette(targetUrl).then((result) => {
         if (!active || !result) return
         const modeObj = isDark ? result.dark : result.light
-        setAmbientPalette(modeObj[ambientIntensity] ?? modeObj.medium)
+        setAmbientPalette(modeObj[effectiveIntensity] ?? modeObj.medium)
       })
     }
     return () => {
       active = false
     }
-  }, [illust?.id, quality, isDark, ambientEnabled, ambientIntensity])
+  }, [illust?.id, quality, isDark, ambientEnabled, effectiveIntensity])
 
   // 设置变化时更新图片质量与沉浸式开关；屏蔽黑名单变化时撤下或恢复已打开的内容。
   useEffect(() => {
@@ -439,6 +456,9 @@ export function IllustDetailView(props: { illustID: number }) {
       setQuality(getDetailImageQuality(settings))
       setAmbientEnabled(settings.ambientImmersion)
       setAmbientIntensity(settings.ambientIntensity)
+      setExperimentalEnabled(settings.experimentalImmersion && settings.overrideSecondaryPagesImmersion)
+      setAmbientAlgorithm(settings.experimentalImmersionAlgorithm)
+      setExperimentalIntensity(settings.experimentalImmersionIntensity)
       setUgoiraExportFormat(settings.ugoiraExportFormat ?? "mp4")
       setQuickActionEnabled(settings.quickActionButtonEnabled)
       setQuickActionType(settings.quickActionButtonAction)
@@ -511,6 +531,20 @@ export function IllustDetailView(props: { illustID: number }) {
   for (let k = 0; k < pageCount; k++) {
     pageURLs.push(imageUrlOf(current, k, quality))
   }
+
+  const ambientPaletteRef = useLatest(ambientPalette)
+  const handleMainImageLoaded = useCallback(() => {
+    setMediaReady(true)
+    if (!ambientPaletteRef.current && ambientEnabled) {
+      const bigImageUrl = pageURLs[0]
+      if (bigImageUrl) {
+        const pal = getCachedIllustAmbientPalette(bigImageUrl, isDark, effectiveIntensity)
+        if (pal) {
+          setAmbientPalette(pal)
+        }
+      }
+    }
+  }, [ambientEnabled, isDark, effectiveIntensity, pageURLs])
   const pageAspect = useMemo(() => {
     if (current.width && current.height && current.width > 0 && current.height > 0) {
       return current.width / current.height
@@ -962,19 +996,29 @@ export function IllustDetailView(props: { illustID: number }) {
     >
       {/* 1. 独立全屏底层：铺满屏幕（含顶部状态栏与灵动岛背后），实现状态栏追色沉浸 */}
       {ambientEnabled && ambientPalette ? (
-        <Rectangle
-          fill={{
-            colors: [
-              ambientPalette.topColor,
-              ambientPalette.midColor,
-              ambientPalette.backgroundColor,
-              ambientPalette.backgroundColor,
-            ],
-            startPoint: "top",
-            endPoint: "bottom",
-          }}
-          ignoresSafeArea={true}
-        />
+        experimentalEnabled ? (
+          renderAmbientBackground({
+            ambientPalette,
+            ambientAlgorithm,
+            isDark,
+            ambientIntensity: experimentalIntensity,
+            active: true,
+          })
+        ) : (
+          <Rectangle
+            fill={{
+              colors: [
+                ambientPalette.topColor,
+                ambientPalette.midColor,
+                ambientPalette.backgroundColor,
+                ambientPalette.backgroundColor,
+              ],
+              startPoint: "top",
+              endPoint: "bottom",
+            }}
+            ignoresSafeArea={true}
+          />
+        )
       ) : null}
 
       {/* 2. 滚动内容层：受顶部安全区保护，插画图片与主要内容从安全区下方正常排版，绝不被灵动岛遮挡 */}
@@ -984,6 +1028,7 @@ export function IllustDetailView(props: { illustID: number }) {
         ignoresSafeArea={{ edges: "bottom" }}
         toolbarBackground="clear"
         toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+        scrollContentBackground="hidden"
       toolbar={{
         topBarTrailing: [
           ...(isAppleMusic
@@ -1287,7 +1332,7 @@ export function IllustDetailView(props: { illustID: number }) {
                     contentMode="fit"
                     frame={{ maxWidth: "infinity" }}
                     priority={idx === 0 ? -5000 : idx}
-                    onLoaded={idx === 0 ? () => setMediaReady(true) : undefined}
+                    onLoaded={idx === 0 ? handleMainImageLoaded : undefined}
                     onTapGesture={() => openGallery(idx)}
                   />
                 )
@@ -1304,7 +1349,7 @@ export function IllustDetailView(props: { illustID: number }) {
               contentMode="fit"
               frame={{ maxWidth: "infinity" }}
               priority={-5000}
-              onLoaded={() => setMediaReady(true)}
+              onLoaded={handleMainImageLoaded}
               onTapGesture={() => openGallery(0)}
             />
           )}
