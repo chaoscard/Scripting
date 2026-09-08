@@ -104,6 +104,8 @@ export function UserBookmarksView(props: { userID: number }) {
   return (
     <ZStack
       navigationBarTitleDisplayMode="inline"
+      toolbarBackground="clear"
+      toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
       background={ambientBackground}
       toolbar={{
         principal: (

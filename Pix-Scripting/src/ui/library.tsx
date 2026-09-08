@@ -117,6 +117,8 @@ export function LibraryView(props?: { initialKind?: LibraryKind }) {
   return (
     <ZStack
       navigationBarTitleDisplayMode="inline"
+      toolbarBackground="clear"
+      toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
       background={ambientBackground}
       toolbar={libraryToolbar({
         kind,

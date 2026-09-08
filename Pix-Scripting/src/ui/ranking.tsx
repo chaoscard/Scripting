@@ -298,6 +298,8 @@ export function RankingView(props: { onClose: () => void }) {
   return (
     <ZStack
       navigationBarTitleDisplayMode="inline"
+      toolbarBackground="clear"
+      toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
       navigationDestination={destinationElement}
       background={ambientBackground}
       frame={{ maxWidth: "infinity", maxHeight: "infinity" }}

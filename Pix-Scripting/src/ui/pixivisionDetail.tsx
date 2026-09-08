@@ -377,7 +377,10 @@ export function PixivisionDetailView(props: { articleID: number }) {
   }
 
   return (
-    <ZStack>
+    <ZStack
+      toolbarBackground="clear"
+      toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+    >
       {isVirtualNode(ambientBackground) ? (
         ambientBackground
       ) : (
@@ -390,6 +393,8 @@ export function PixivisionDetailView(props: { articleID: number }) {
             <ScrollView
             navigationTitle=""
             navigationBarTitleDisplayMode="inline"
+            toolbarBackground="clear"
+            toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
             toolbar={{
               topBarTrailing: [
                 ...(detail.tableOfContents && detail.tableOfContents.length > 0

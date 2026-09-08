@@ -1,9 +1,14 @@
-import { useEffect, VStack } from "scripting"
+import { useEffect, useState, VStack } from "scripting"
 import { nextIllustrations, relatedIllustrations } from "../api/pixiv"
 import { cardThumbUrlOf, prefetch } from "../image/imageLoader"
 import { loadSettings, onSettingsChanged } from "../store/settings"
 import { isIllustContentVisible } from "../store/contentFilter"
-import { useLatest, usePagedList, currentBatchSize } from "./hooks"
+import {
+  useLatest,
+  usePagedList,
+  currentBatchSize,
+  useExperimentalAmbientPalette,
+} from "./hooks"
 import type { PixivIllustration } from "../types"
 import {
   EmptyView,
@@ -19,6 +24,10 @@ export function RelatedIllustFeedView(props: { illustID: number }) {
   const { illustID } = props
   const cached = getCachedIllust(illustID)
   const navTitle = cached?.title ? `相关作品 · ${cached.title}` : "相关作品"
+
+  // 1. 优先使用源作品缩略图作为第 0 毫秒环境色，避免网络加载期间白屏或突兀跳色
+  const initialAmbientUrl = cached ? cardThumbUrlOf(cached) : null
+  const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(initialAmbientUrl)
 
   const paged = usePagedList<PixivIllustration>({
     first: (token) => relatedIllustrations(illustID, token),
@@ -36,11 +45,25 @@ export function RelatedIllustFeedView(props: { illustID: number }) {
     })
   }, [])
 
+  // 2. 列表首图就绪后动态追色
+  useEffect(() => {
+    const firstUrl = paged.items[0] ? cardThumbUrlOf(paged.items[0]) : null
+    if (firstUrl) {
+      setAmbientImageUrl(firstUrl)
+    } else if (!paged.initialLoading && paged.items.length === 0) {
+      setAmbientImageUrl(null)
+    }
+  }, [paged.items[0]?.id, paged.initialLoading, paged.items.length])
+
+  // 3. 接入实验性沉浸氛围算法
+  const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
+
   return (
     <RefreshableScrollView
       navigationTitle={navTitle}
       navigationBarTitleDisplayMode="inline"
       navigationDestination={destinationElement}
+      background={ambientBackground}
       refreshable={paged.refresh}
     >
       <VStack alignment="leading" spacing={10} padding={{ top: 4 }}>

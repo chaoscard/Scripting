@@ -955,31 +955,35 @@ export function IllustDetailView(props: { illustID: number }) {
   }
 
   return (
-    <ZStack alignment={quickActionPos === "leading" ? "bottomLeading" : "bottomTrailing"}>
+    <ZStack
+      alignment={quickActionPos === "leading" ? "bottomLeading" : "bottomTrailing"}
+      toolbarBackground="clear"
+      toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+    >
+      {/* 1. 独立全屏底层：铺满屏幕（含顶部状态栏与灵动岛背后），实现状态栏追色沉浸 */}
+      {ambientEnabled && ambientPalette ? (
+        <Rectangle
+          fill={{
+            colors: [
+              ambientPalette.topColor,
+              ambientPalette.midColor,
+              ambientPalette.backgroundColor,
+              ambientPalette.backgroundColor,
+            ],
+            startPoint: "top",
+            endPoint: "bottom",
+          }}
+          ignoresSafeArea={true}
+        />
+      ) : null}
+
+      {/* 2. 滚动内容层：受顶部安全区保护，插画图片与主要内容从安全区下方正常排版，绝不被灵动岛遮挡 */}
       <ScrollView
         navigationTitle=""
         navigationBarTitleDisplayMode="inline"
         ignoresSafeArea={{ edges: "bottom" }}
+        toolbarBackground="clear"
         toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
-        background={
-          ambientEnabled && ambientPalette ? (
-            <ZStack ignoresSafeArea={true}>
-              <Rectangle
-                fill={{
-                  colors: [
-                    ambientPalette.topColor,
-                    ambientPalette.midColor,
-                    ambientPalette.backgroundColor,
-                    ambientPalette.backgroundColor,
-                  ],
-                  startPoint: "top",
-                  endPoint: "bottom",
-                }}
-                ignoresSafeArea={true}
-              />
-            </ZStack>
-          ) : undefined
-        }
       toolbar={{
         topBarTrailing: [
           ...(isAppleMusic

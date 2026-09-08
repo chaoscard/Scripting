@@ -205,6 +205,8 @@ export function HistoryView() {
   return (
     <ZStack
       navigationBarTitleDisplayMode="inline"
+      toolbarBackground="clear"
+      toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
       background={ambientBackground}
       toolbar={historyToolbar({
         kind,

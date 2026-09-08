@@ -308,6 +308,8 @@ export function UserWorksView(props: { userID?: number; title?: string }) {
   return (
     <ZStack
       navigationBarTitleDisplayMode="inline"
+      toolbarBackground="clear"
+      toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
       toolbar={toolbar}
       background={ambientBackground}
       frame={{ maxWidth: "infinity", maxHeight: "infinity" }}

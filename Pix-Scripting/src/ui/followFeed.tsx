@@ -141,6 +141,8 @@ export function FollowFeedView(props: {
     <ZStack
       frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
       navigationBarTitleDisplayMode="inline"
+      toolbarBackground="clear"
+      toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
       navigationDestination={destinationElement}
       background={ambientBackground}
       toolbar={followToolbar({

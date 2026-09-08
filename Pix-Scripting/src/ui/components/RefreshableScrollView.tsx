@@ -94,7 +94,12 @@ export function RefreshableScrollView(props: {
     }
 
   return (
-    <ZStack navigationDestination={props.navigationDestination}>
+    <ZStack
+      navigationDestination={props.navigationDestination}
+      navigationBarTitleDisplayMode={props.navigationBarTitleDisplayMode}
+      toolbarBackground={activeToolbarBackground}
+      toolbarBackgroundVisibility={activeToolbarBackgroundVisibility}
+    >
       {props.background ? (
         <ZStack
           frame={{ maxWidth: "infinity", maxHeight: "infinity" }}

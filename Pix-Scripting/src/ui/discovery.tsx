@@ -144,6 +144,8 @@ export function DiscoveryView(props: { onClose: () => void }) {
     <ZStack
       frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
       navigationBarTitleDisplayMode="inline"
+      toolbarBackground="clear"
+      toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
       navigationDestination={destinationElement}
       background={ambientBackground}
       toolbar={exploreToolbar({

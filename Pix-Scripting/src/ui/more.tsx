@@ -105,6 +105,8 @@ export function MoreView(props: { onClose: () => void }) {
   return (
     <ZStack
       navigationBarTitleDisplayMode="inline"
+      toolbarBackground="clear"
+      toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
       navigationDestination={destinationElement}
       toolbar={appToolbar(
         props.onClose,

@@ -1042,6 +1042,8 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
   return (
     <ZStack
       navigationBarTitleDisplayMode="inline"
+      toolbarBackground="clear"
+      toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
       navigationDestination={destinationElement}
       sheet={{
         isPresented: isAdvancedSheetOpen,
