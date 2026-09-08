@@ -1057,15 +1057,17 @@ export function IllustDetailView(props: { illustID: number }) {
             />
           </Button>,
           <Menu label={<Image systemName="ellipsis.circle" />}>
-            <Button
-              title="主页"
-              systemImage="person.crop.circle"
-              action={() => {
-                if (current.user?.id) {
-                  void requestPixivRoute(`user:${current.user.id}`)
-                }
-              }}
-            />
+            {Device.isiPad ? (
+              <Button
+                title="主页"
+                systemImage="person.crop.circle"
+                action={() => {
+                  if (current.user?.id) {
+                    void requestPixivRoute(`user:${current.user.id}`)
+                  }
+                }}
+              />
+            ) : null}
             <Button
               title="评论"
               systemImage="bubble.left"

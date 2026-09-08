@@ -699,14 +699,16 @@ export function UserDetailView(props: { userID: number }) {
             <Image systemName={downloading ? "arrow.down.circle.fill" : "square.and.arrow.down"} />
           </Button>,
           <Menu label={<Image systemName="ellipsis.circle" />}>
-            <Button
-              title="分享"
-              systemImage="square.and.arrow.up"
-              action={() => {
-                void Haptics.transient()
-                void ShareSheet.present([`https://www.pixiv.net/users/${userID}`])
-              }}
-            />
+            {Device.isiPad ? (
+              <Button
+                title="分享"
+                systemImage="square.and.arrow.up"
+                action={() => {
+                  void Haptics.transient()
+                  void ShareSheet.present([`https://www.pixiv.net/users/${userID}`])
+                }}
+              />
+            ) : null}
             <NavigationLink value={`userConnections:following:${userID}`}>
               <Label title="查看关注" systemImage="person.2" />
             </NavigationLink>

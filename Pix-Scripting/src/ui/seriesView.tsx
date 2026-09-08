@@ -4,6 +4,7 @@ import {
   HStack,
   Image,
   LazyVStack,
+  Menu,
   NavigationLink,
   ScrollView,
   Text,
@@ -64,6 +65,7 @@ import {
   NovelCard,
 } from "./components"
 import { renderDestination } from "./routes"
+import { requestPixivRoute } from "./routeNavigation"
 import {
   currentBatchSize,
   useLatest,
@@ -531,39 +533,75 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
           >
             <Image systemName={isAscending ? "arrow.up" : "arrow.down"} />
           </Button>,
-          <Button
-            action={() => {
-              void Haptics.transient()
-              const shareUrl = kind === "novel"
-                ? `https://www.pixiv.net/novel/series/${seriesID}`
-                : (author?.id
-                    ? `https://www.pixiv.net/user/${author.id}/series/${seriesID}`
-                    : `https://www.pixiv.net/series/${seriesID}`)
-              void ShareSheet.present([shareUrl])
-            }}
-          >
-            <Image systemName="square.and.arrow.up" />
-          </Button>,
-          <Button
-            disabled={seriesDownloading}
-            action={handleExportSeries}
-          >
-            <Image
-              systemName={seriesDownloading ? "arrow.down.circle.fill" : "square.and.arrow.down"}
-              foregroundStyle={seriesDownloading ? "systemBlue" : undefined}
-            />
-          </Button>,
-          ...(author ? [
-            <NavigationLink
-              key="series-author"
-              value={`user:${author.id}`}
-            >
-              <AvatarImage
-                url={author.profile_image_urls?.medium ?? null}
-                size={28}
-              />
-            </NavigationLink>
-          ] : []),
+          ...(Device.isiPad
+            ? [
+                <Menu label={<Image systemName="ellipsis.circle" />}>
+                  {author ? (
+                    <Button
+                      title="主页"
+                      systemImage="person.crop.circle"
+                      action={() => {
+                        void requestPixivRoute(`user:${author.id}`)
+                      }}
+                    />
+                  ) : null}
+                  <Button
+                    title="分享"
+                    systemImage="square.and.arrow.up"
+                    action={() => {
+                      void Haptics.transient()
+                      const shareUrl = kind === "novel"
+                        ? `https://www.pixiv.net/novel/series/${seriesID}`
+                        : (author?.id
+                            ? `https://www.pixiv.net/user/${author.id}/series/${seriesID}`
+                            : `https://www.pixiv.net/series/${seriesID}`)
+                      void ShareSheet.present([shareUrl])
+                    }}
+                  />
+                  <Button
+                    title="下载"
+                    systemImage={seriesDownloading ? "arrow.down.circle.fill" : "square.and.arrow.down"}
+                    foregroundStyle={seriesDownloading ? "systemBlue" : undefined}
+                    disabled={seriesDownloading}
+                    action={handleExportSeries}
+                  />
+                </Menu>,
+              ]
+            : [
+                <Button
+                  action={() => {
+                    void Haptics.transient()
+                    const shareUrl = kind === "novel"
+                      ? `https://www.pixiv.net/novel/series/${seriesID}`
+                      : (author?.id
+                          ? `https://www.pixiv.net/user/${author.id}/series/${seriesID}`
+                          : `https://www.pixiv.net/series/${seriesID}`)
+                    void ShareSheet.present([shareUrl])
+                  }}
+                >
+                  <Image systemName="square.and.arrow.up" />
+                </Button>,
+                <Button
+                  disabled={seriesDownloading}
+                  action={handleExportSeries}
+                >
+                  <Image
+                    systemName={seriesDownloading ? "arrow.down.circle.fill" : "square.and.arrow.down"}
+                    foregroundStyle={seriesDownloading ? "systemBlue" : undefined}
+                  />
+                </Button>,
+                ...(author ? [
+                  <NavigationLink
+                    key="series-author"
+                    value={`user:${author.id}`}
+                  >
+                    <AvatarImage
+                      url={author.profile_image_urls?.medium ?? null}
+                      size={28}
+                    />
+                  </NavigationLink>
+                ] : []),
+              ]),
         ],
       }}
     >
