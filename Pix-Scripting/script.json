@@ -1,29 +1,29 @@
 {
-  "localizedDescriptions": {
-    "zh": "液态玻璃风格 Pixiv 客户端"
-  },
-  "author": {
-    "name": "chaoscard",
-    "email": null,
-    "homepage": "https://github.com/chaoscard/Scripting"
+  "icon": "paintpalette",
+  "version": "1.0.0",
+  "runInApp": true,
+  "remoteResource": {
+    "autoUpdateInterval": null,
+    "url": "https://raw.githubusercontent.com/chaoscard/Scripting/main/Release/Pix-Scripting.scripting",
+    "hash": "0d2791b716b851dcf25a4c7ac68df90a"
   },
   "intentInputTypes": [],
-  "runInApp": true,
+  "name": "Pix-Scripting",
   "localizedNames": {
     "zh": ""
   },
-  "contributors": [],
-  "version": "1.0.0",
   "color": "rgba(0, 150, 250, 1)",
-  "icon": "paintpalette",
-  "description": "Liquid Glass Pixiv Client",
-  "remoteResource": {
-    "hash": "b9a5957e35d891d82a39b2d95da7d9a2",
-    "url": "https://raw.githubusercontent.com/chaoscard/Scripting/main/Release/Pix-Scripting.scripting",
-    "autoUpdateInterval": null
-  },
-  "entry": "index.tsx",
   "permissions": null,
+  "entry": "index.tsx",
   "iconImage": null,
-  "name": "Pix-Scripting"
+  "author": {
+    "homepage": "https://github.com/chaoscard/Scripting",
+    "name": "chaoscard",
+    "email": null
+  },
+  "description": "Liquid Glass Pixiv Client",
+  "contributors": [],
+  "localizedDescriptions": {
+    "zh": "液态玻璃风格 Pixiv 客户端"
+  }
 }
