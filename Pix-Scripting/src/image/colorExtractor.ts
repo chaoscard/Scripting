@@ -135,6 +135,112 @@ function boostVibrancy(
 }
 
 /**
+ * 构建深浅双模式 x 三档强度的调色板矩阵
+ */
+function buildDualModeIntensityMatrix<T>(
+  builder: (isDark: boolean, intensity: AmbientIntensity) => T
+): {
+  light: IntensityPaletteMap<T>
+  dark: IntensityPaletteMap<T>
+} {
+  return {
+    light: {
+      low: builder(false, "low"),
+      medium: builder(false, "medium"),
+      high: builder(false, "high"),
+    },
+    dark: {
+      low: builder(true, "low"),
+      medium: builder(true, "medium"),
+      high: builder(true, "high"),
+    },
+  }
+}
+
+function buildUserPalette(
+  bRaw: [number, number, number],
+  dRaw: [number, number, number],
+  isDark: boolean,
+  intensity: AmbientIntensity
+): UserAmbientPalette {
+  const [bR, bG, bB] = boostVibrancy(bRaw[0], bRaw[1], bRaw[2], isDark, intensity)
+  const [dR, dG, dB] = boostVibrancy(dRaw[0], dRaw[1], dRaw[2], isDark, intensity)
+  let topAlpha = 0.44
+  let midAlpha = 0.22
+  let worksAlpha = 0.08
+  if (intensity === "low") {
+    topAlpha = 0.38
+    midAlpha = 0.18
+    worksAlpha = 0.06
+  } else if (intensity === "high") {
+    topAlpha = isDark ? 0.54 : 0.52
+    midAlpha = 0.28
+    worksAlpha = 0.11
+  }
+  return {
+    topColor: `rgba(${bR},${bG},${bB},${topAlpha})` as Color,
+    midColor: `rgba(${dR},${dG},${dB},${midAlpha})` as Color,
+    worksColor: `rgba(${dR},${dG},${dB},${worksAlpha})` as Color,
+  }
+}
+
+/**
+ * 纯函数：从 UIImage 提取用户背景氛围色盘
+ */
+function processUserAmbientPaletteFromImage(
+  uiImage: UIImage,
+  url?: string
+): UserAmbientResult | null {
+  if (!uiImage || uiImage.width <= 0 || uiImage.height <= 0) return null
+
+  // 1. 底边 20% 区域采样（无缝承接背景图底部）
+  const cropH = Math.max(2, Math.round(uiImage.height * 0.2))
+  const cropY = Math.max(0, uiImage.height - cropH)
+  const bottomCrop = uiImage.croppedTo({
+    x: 0,
+    y: cropY,
+    width: uiImage.width,
+    height: cropH,
+  })
+  const bottomAvg = bottomCrop?.averageColor() ?? uiImage.averageColor()
+
+  // 2. 全局主色采样：在主色列表中优先选取鲜活度适中的颜色
+  const dominants = uiImage.dominantColors(6)
+  let bestDominant = uiImage.averageColor()
+  if (dominants && dominants.length > 0) {
+    let maxScore = -1
+    for (const d of dominants) {
+      const c = d.color
+      const [, s] = rgbToHsl(c.red ?? 0, c.green ?? 0, c.blue ?? 0)
+      const score = s * 1.5 + d.fraction
+      if (score > maxScore) {
+        maxScore = score
+        bestDominant = c
+      }
+    }
+  }
+
+  if (!bottomAvg || !bestDominant) return null
+
+  const bRawR = bottomAvg.red ?? 0
+  const bRawG = bottomAvg.green ?? 0
+  const bRawB = bottomAvg.blue ?? 0
+
+  const dRawR = bestDominant.red ?? 0
+  const dRawG = bestDominant.green ?? 0
+  const dRawB = bestDominant.blue ?? 0
+
+  const result: UserAmbientResult = buildDualModeIntensityMatrix((isDark, intensity) =>
+    buildUserPalette([bRawR, bRawG, bRawB], [dRawR, dRawG, dRawB], isDark, intensity)
+  )
+
+  if (url) {
+    paletteCache.set(url, result)
+  }
+  return result
+}
+
+/**
  * 同步尝试从已缓存到本地的图片提取氛围色
  */
 export function extractUserAmbientPaletteSync(
@@ -151,84 +257,7 @@ export function extractUserAmbientPaletteSync(
     const uiImage = UIImage.fromFile(filePath)
     if (!uiImage || uiImage.width <= 0 || uiImage.height <= 0) return null
 
-    // 1. 底边 20% 区域采样（无缝承接背景图底部）
-    const cropH = Math.max(2, Math.round(uiImage.height * 0.2))
-    const cropY = Math.max(0, uiImage.height - cropH)
-    const bottomCrop = uiImage.croppedTo({
-      x: 0,
-      y: cropY,
-      width: uiImage.width,
-      height: cropH,
-    })
-    const bottomAvg = bottomCrop?.averageColor() ?? uiImage.averageColor()
-
-    // 2. 全局主色采样：在主色列表中优先选取鲜活度适中的颜色
-    const dominants = uiImage.dominantColors(6)
-    let bestDominant = uiImage.averageColor()
-    if (dominants && dominants.length > 0) {
-      let maxScore = -1
-      for (const d of dominants) {
-        const c = d.color
-        const [, s] = rgbToHsl(c.red ?? 0, c.green ?? 0, c.blue ?? 0)
-        const score = s * 1.5 + d.fraction
-        if (score > maxScore) {
-          maxScore = score
-          bestDominant = c
-        }
-      }
-    }
-
-    if (!bottomAvg || !bestDominant) return null
-
-    const bRawR = bottomAvg.red ?? 0
-    const bRawG = bottomAvg.green ?? 0
-    const bRawB = bottomAvg.blue ?? 0
-
-    const dRawR = bestDominant.red ?? 0
-    const dRawG = bestDominant.green ?? 0
-    const dRawB = bestDominant.blue ?? 0
-
-    const buildUserPalette = (
-      bRaw: [number, number, number],
-      dRaw: [number, number, number],
-      isDark: boolean,
-      intensity: AmbientIntensity
-    ): UserAmbientPalette => {
-      const [bR, bG, bB] = boostVibrancy(bRaw[0], bRaw[1], bRaw[2], isDark, intensity)
-      const [dR, dG, dB] = boostVibrancy(dRaw[0], dRaw[1], dRaw[2], isDark, intensity)
-      let topAlpha = 0.44
-      let midAlpha = 0.22
-      let worksAlpha = 0.08
-      if (intensity === "low") {
-        topAlpha = 0.38
-        midAlpha = 0.18
-        worksAlpha = 0.06
-      } else if (intensity === "high") {
-        topAlpha = isDark ? 0.54 : 0.52
-        midAlpha = 0.28
-        worksAlpha = 0.11
-      }
-      return {
-        topColor: `rgba(${bR},${bG},${bB},${topAlpha})` as Color,
-        midColor: `rgba(${dR},${dG},${dB},${midAlpha})` as Color,
-        worksColor: `rgba(${dR},${dG},${dB},${worksAlpha})` as Color,
-      }
-    }
-
-    const result: UserAmbientResult = {
-      light: {
-        low: buildUserPalette([bRawR, bRawG, bRawB], [dRawR, dRawG, dRawB], false, "low"),
-        medium: buildUserPalette([bRawR, bRawG, bRawB], [dRawR, dRawG, dRawB], false, "medium"),
-        high: buildUserPalette([bRawR, bRawG, bRawB], [dRawR, dRawG, dRawB], false, "high"),
-      },
-      dark: {
-        low: buildUserPalette([bRawR, bRawG, bRawB], [dRawR, dRawG, dRawB], true, "low"),
-        medium: buildUserPalette([bRawR, bRawG, bRawB], [dRawR, dRawG, dRawB], true, "medium"),
-        high: buildUserPalette([bRawR, bRawG, bRawB], [dRawR, dRawG, dRawB], true, "high"),
-      },
-    }
-    paletteCache.set(url, result)
-    return result
+    return processUserAmbientPaletteFromImage(uiImage, url)
   } catch (err) {
     console.log("extractUserAmbientPaletteSync error:", err)
     return null
@@ -273,84 +302,7 @@ export async function extractUserAmbientPalette(
     const uiImage = UIImage.fromFile(filePath)
     if (!uiImage || uiImage.width <= 0 || uiImage.height <= 0) return null
 
-    // 1. 底边 20% 区域采样（无缝承接背景图底部）
-    const cropH = Math.max(2, Math.round(uiImage.height * 0.2))
-    const cropY = Math.max(0, uiImage.height - cropH)
-    const bottomCrop = uiImage.croppedTo({
-      x: 0,
-      y: cropY,
-      width: uiImage.width,
-      height: cropH,
-    })
-    const bottomAvg = bottomCrop?.averageColor() ?? uiImage.averageColor()
-
-    // 2. 全局主色采样：在主色列表中优先选取鲜活度适中的颜色
-    const dominants = uiImage.dominantColors(6)
-    let bestDominant = uiImage.averageColor()
-    if (dominants && dominants.length > 0) {
-      let maxScore = -1
-      for (const d of dominants) {
-        const c = d.color
-        const [, s] = rgbToHsl(c.red ?? 0, c.green ?? 0, c.blue ?? 0)
-        const score = s * 1.5 + d.fraction
-        if (score > maxScore) {
-          maxScore = score
-          bestDominant = c
-        }
-      }
-    }
-
-    if (!bottomAvg || !bestDominant) return null
-
-    const bRawR = bottomAvg.red ?? 0
-    const bRawG = bottomAvg.green ?? 0
-    const bRawB = bottomAvg.blue ?? 0
-
-    const dRawR = bestDominant.red ?? 0
-    const dRawG = bestDominant.green ?? 0
-    const dRawB = bestDominant.blue ?? 0
-
-    const buildUserPalette = (
-      bRaw: [number, number, number],
-      dRaw: [number, number, number],
-      isDark: boolean,
-      intensity: AmbientIntensity
-    ): UserAmbientPalette => {
-      const [bR, bG, bB] = boostVibrancy(bRaw[0], bRaw[1], bRaw[2], isDark, intensity)
-      const [dR, dG, dB] = boostVibrancy(dRaw[0], dRaw[1], dRaw[2], isDark, intensity)
-      let topAlpha = 0.44
-      let midAlpha = 0.22
-      let worksAlpha = 0.08
-      if (intensity === "low") {
-        topAlpha = 0.38
-        midAlpha = 0.18
-        worksAlpha = 0.06
-      } else if (intensity === "high") {
-        topAlpha = isDark ? 0.54 : 0.52
-        midAlpha = 0.28
-        worksAlpha = 0.11
-      }
-      return {
-        topColor: `rgba(${bR},${bG},${bB},${topAlpha})` as Color,
-        midColor: `rgba(${dR},${dG},${dB},${midAlpha})` as Color,
-        worksColor: `rgba(${dR},${dG},${dB},${worksAlpha})` as Color,
-      }
-    }
-
-    const result: UserAmbientResult = {
-      light: {
-        low: buildUserPalette([bRawR, bRawG, bRawB], [dRawR, dRawG, dRawB], false, "low"),
-        medium: buildUserPalette([bRawR, bRawG, bRawB], [dRawR, dRawG, dRawB], false, "medium"),
-        high: buildUserPalette([bRawR, bRawG, bRawB], [dRawR, dRawG, dRawB], false, "high"),
-      },
-      dark: {
-        low: buildUserPalette([bRawR, bRawG, bRawB], [dRawR, dRawG, dRawB], true, "low"),
-        medium: buildUserPalette([bRawR, bRawG, bRawB], [dRawR, dRawG, dRawB], true, "medium"),
-        high: buildUserPalette([bRawR, bRawG, bRawB], [dRawR, dRawG, dRawB], true, "high"),
-      },
-    }
-    paletteCache.set(url, result)
-    return result
+    return processUserAmbientPaletteFromImage(uiImage, url)
   } catch (err) {
     console.log("extractUserAmbientPalette error:", err)
     return null
@@ -778,18 +730,19 @@ function processIllustPaletteFromImage(uiImage: UIImage, url?: string): IllustAm
 
   const prismRaw = computePrismaticBridge([tlRawR, tlRawG, tlRawB], [trRawR, trRawG, trRawB])
 
-  const result: IllustAmbientResult = {
-    light: {
-      low: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], [accentRawR, accentRawG, accentRawB], [tlRawR, tlRawG, tlRawB], [trRawR, trRawG, trRawB], prismRaw, [bRawR, bRawG, bRawB], false, "low"),
-      medium: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], [accentRawR, accentRawG, accentRawB], [tlRawR, tlRawG, tlRawB], [trRawR, trRawG, trRawB], prismRaw, [bRawR, bRawG, bRawB], false, "medium"),
-      high: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], [accentRawR, accentRawG, accentRawB], [tlRawR, tlRawG, tlRawB], [trRawR, trRawG, trRawB], prismRaw, [bRawR, bRawG, bRawB], false, "high"),
-    },
-    dark: {
-      low: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], [accentRawR, accentRawG, accentRawB], [tlRawR, tlRawG, tlRawB], [trRawR, trRawG, trRawB], prismRaw, [bRawR, bRawG, bRawB], true, "low"),
-      medium: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], [accentRawR, accentRawG, accentRawB], [tlRawR, tlRawG, tlRawB], [trRawR, trRawG, trRawB], prismRaw, [bRawR, bRawG, bRawB], true, "medium"),
-      high: buildIllustPalette([tRawR, tRawG, tRawB], [dRawR, dRawG, dRawB], [accentRawR, accentRawG, accentRawB], [tlRawR, tlRawG, tlRawB], [trRawR, trRawG, trRawB], prismRaw, [bRawR, bRawG, bRawB], true, "high"),
-    },
-  }
+  const result: IllustAmbientResult = buildDualModeIntensityMatrix((isDark, intensity) =>
+    buildIllustPalette(
+      [tRawR, tRawG, tRawB],
+      [dRawR, dRawG, dRawB],
+      [accentRawR, accentRawG, accentRawB],
+      [tlRawR, tlRawG, tlRawB],
+      [trRawR, trRawG, trRawB],
+      prismRaw,
+      [bRawR, bRawG, bRawB],
+      isDark,
+      intensity
+    )
+  )
   if (url) {
     illustPaletteCache.set(url, result)
   }

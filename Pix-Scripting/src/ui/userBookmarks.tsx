@@ -29,7 +29,8 @@ import {
   onIllustBookmarkChanged,
   onNovelBookmarkChanged,
 } from "../store/bookmarkSync"
-import { useAsyncGuard, useLatest, usePagedList, currentBatchSize, useExperimentalAmbientPalette } from "./hooks"
+import { useAsyncGuard, useLatest, usePagedList, currentBatchSize } from "./hooks"
+import { useExperimentalAmbientPalette } from "./ambient"
 import type { PixivBookmarkTag, PixivIllustration, PixivNovel } from "../types"
 import {
   BookmarkTags,

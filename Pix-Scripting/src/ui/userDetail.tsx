@@ -60,7 +60,8 @@ import {
   recordUserFollowed,
   type FollowRestrict,
 } from "../store/userFollow"
-import { useAsyncGuard, useUserAmbientPalette } from "./hooks"
+import { useAsyncGuard } from "./hooks"
+import { useUserAmbientPalette } from "./ambient"
 import type {
   PixivUserDetail,
   PixivWebUserDetail,

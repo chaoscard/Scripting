@@ -264,13 +264,6 @@ async function syncHistoryCategory(
     const existing = map.get(id)
     if (!existing || (typeof entry.viewedAt === "number" && entry.viewedAt > existing.viewedAt)) {
       map.set(id, entry)
-    } else if (existing) {
-      // 收藏状态兜底保护
-      if (entry.kind === "illust" && entry.illustration?.is_bookmarked && existing.illustration) {
-        existing.illustration.is_bookmarked = true
-      } else if (entry.kind === "novel" && entry.novel?.is_bookmarked && existing.novel) {
-        existing.novel.is_bookmarked = true
-      }
     }
   }
 
@@ -368,27 +361,7 @@ async function syncSearchHistoryFile(
     updatedAt: cloudUpdated,
   }
 
-  // 1. 如果本地版本更新或相等（如本地刚进行搜索、左滑删除或清空），以本地为主覆写云端
-  if (localUpdated >= cloudUpdated && localUpdated > 0) {
-    const cloudJson = JSON.stringify(cloudStore)
-    const localJson = JSON.stringify(localStore)
-    if (cloudJson !== localJson) {
-      try {
-        writeTextSafely(cloudFile, localJson)
-      } catch (e: any) {
-        console.warn("write cloud search history error:", e?.message ?? e)
-      }
-    }
-    return
-  }
-
-  // 2. 如果云端版本更新（如另一台设备添加了新搜索或清理），以云端为主覆盖本地
-  if (cloudUpdated > localUpdated && cloudUpdated > 0) {
-    replaceSearchHistoryStore(cloudStore, true)
-    return
-  }
-
-  // 3. 初始迁移兜底（两端均无时间戳或均为初始状态）
+  // 双向条目级并集增量合并（保留双端新增搜索词，避免整文件 Last-Write-Wins 覆盖）
   function mergeScopeList(localArr: string[], cloudArr: string[]): string[] {
     const set = new Set<string>()
     const result: string[] = []
@@ -413,16 +386,25 @@ async function syncSearchHistoryFile(
     illust: mergeScopeList(localStore.illust, cloudStore.illust),
     novel: mergeScopeList(localStore.novel, cloudStore.novel),
     user: mergeScopeList(localStore.user, cloudStore.user),
-    updatedAt: Date.now(),
+    updatedAt: Math.max(localUpdated, cloudUpdated, Date.now()),
   }
 
+  const localJson = JSON.stringify(localStore)
+  const cloudJson = JSON.stringify(cloudStore)
   const mergedJson = JSON.stringify(mergedStore)
-  replaceSearchHistoryStore(mergedStore, true)
 
-  try {
-    writeTextSafely(cloudFile, mergedJson)
-  } catch (e: any) {
-    console.warn("write cloud search history error:", e?.message ?? e)
+  // 1. 若合并结果与本地存在差异，增量刷新本地存储
+  if (localJson !== mergedJson) {
+    replaceSearchHistoryStore(mergedStore, true)
+  }
+
+  // 2. 若合并结果与云端存在差异，安全推送到云端
+  if (cloudJson !== mergedJson) {
+    try {
+      writeTextSafely(cloudFile, mergedJson)
+    } catch (e: any) {
+      console.warn("write cloud search history error:", e?.message ?? e)
+    }
   }
 }
 

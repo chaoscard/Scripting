@@ -3,6 +3,53 @@ import { getSauceNaoApiKey, getSauceNaoApiKeys, recordSauceNaoQuota } from "../s
 
 declare const UIImage: any
 declare const Data: any
+declare const AbortController: any
+
+/**
+ * 带有超时控制的 fetch 请求包装器
+ */
+async function fetchWithTimeout(
+  url: string,
+  options: any = {},
+  timeoutMs: number = 8000
+): Promise<any> {
+  if (typeof AbortController !== "undefined") {
+    const controller = new AbortController()
+    const timer = setTimeout(() => {
+      controller.abort()
+    }, timeoutMs)
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      })
+      clearTimeout(timer)
+      return response
+    } catch (err: any) {
+      clearTimeout(timer)
+      if (err?.name === "AbortError" || String(err).includes("aborted")) {
+        throw new Error(`网络请求超时 (${timeoutMs}ms)`)
+      }
+      throw err
+    }
+  } else {
+    let timer: any
+    const timeoutPromise = new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        reject(new Error(`网络请求超时 (${timeoutMs}ms)`))
+      }, timeoutMs)
+    })
+    try {
+      const response = await Promise.race([fetch(url, options), timeoutPromise])
+      clearTimeout(timer)
+      return response
+    } catch (err) {
+      clearTimeout(timer)
+      throw err
+    }
+  }
+}
 
 export interface SauceNAOMatch {
   similarity: number
@@ -71,16 +118,20 @@ export async function resolveBooruPixivId(data: Record<string, any>): Promise<{
   authorName?: string
   authorUrl?: string
 }> {
-  // 1. Danbooru 溯源 (官方公开高速 JSON API)
+  // 1. Danbooru 溯源 (官方公开高速 JSON API，5s 超时)
   const danbooruId =
     data.danbooru_id ||
     (Array.isArray(data.ext_urls) && data.ext_urls[0]?.match(/danbooru\.donmai\.us\/posts\/(\d+)/)?.[1])
 
   if (danbooruId) {
     try {
-      const resp = await fetch(`https://danbooru.donmai.us/posts/${danbooruId}.json`, {
-        headers: { "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)" },
-      })
+      const resp = await fetchWithTimeout(
+        `https://danbooru.donmai.us/posts/${danbooruId}.json`,
+        {
+          headers: { "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)" },
+        },
+        5000
+      )
       if (resp.ok) {
         const post = (await resp.json()) as any
         let pixivId: number | undefined = undefined
@@ -94,20 +145,22 @@ export async function resolveBooruPixivId(data: Record<string, any>): Promise<{
         let authorId: number | undefined = undefined
         let authorUrl: string | undefined = undefined
 
-        // 若艺术家存在，查询 Danbooru artist_urls 快速获取其关联的 Pixiv 主页 ID
+        // 若艺术家存在，查询 Danbooru artist_urls 快速获取其关联的 Pixiv 主页 ID（短超时 3.5s）
         if (authorName) {
           try {
-            const artResp = await fetch(
+            const artResp = await fetchWithTimeout(
               `https://danbooru.donmai.us/artists.json?search[name]=${encodeURIComponent(authorName)}`,
-              { headers: { "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)" } }
+              { headers: { "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)" } },
+              3500
             )
             if (artResp.ok) {
               const artList = (await artResp.json()) as any[]
               const artId = artList?.[0]?.id
               if (artId) {
-                const urlResp = await fetch(
+                const urlResp = await fetchWithTimeout(
                   `https://danbooru.donmai.us/artist_urls.json?search[artist_id]=${artId}`,
-                  { headers: { "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)" } }
+                  { headers: { "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)" } },
+                  3500
                 )
                 if (urlResp.ok) {
                   const urlList = (await urlResp.json()) as any[]
@@ -133,18 +186,19 @@ export async function resolveBooruPixivId(data: Record<string, any>): Promise<{
     } catch {}
   }
 
-  // 2. Gelbooru 溯源
+  // 2. Gelbooru 溯源 (5s 超时)
   const gelbooruId =
     data.gelbooru_id ||
     (Array.isArray(data.ext_urls) && data.ext_urls[0]?.match(/gelbooru\.com\/.*id=(\d+)/)?.[1])
 
   if (gelbooruId) {
     try {
-      const resp = await fetch(
+      const resp = await fetchWithTimeout(
         `https://gelbooru.com/index.php?page=dapi&s=post&q=index&json=1&id=${gelbooruId}`,
         {
           headers: { "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)" },
-        }
+        },
+        5000
       )
       if (resp.ok) {
         const postData = (await resp.json()) as any
@@ -160,16 +214,20 @@ export async function resolveBooruPixivId(data: Record<string, any>): Promise<{
     } catch {}
   }
 
-  // 3. Yande.re 溯源
+  // 3. Yande.re 溯源 (5s 超时)
   const yandereId =
     data.yandere_id ||
     (Array.isArray(data.ext_urls) && data.ext_urls[0]?.match(/yande\.re\/post\/show\/(\d+)/)?.[1])
 
   if (yandereId) {
     try {
-      const resp = await fetch(`https://yande.re/post.json?tags=id:${yandereId}`, {
-        headers: { "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)" },
-      })
+      const resp = await fetchWithTimeout(
+        `https://yande.re/post.json?tags=id:${yandereId}`,
+        {
+          headers: { "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)" },
+        },
+        5000
+      )
       if (resp.ok) {
         const postData = (await resp.json()) as any
         const post = postData?.[0]
@@ -496,13 +554,17 @@ export async function searchImageBySauceNAO(
     formData.append("file", jpegData, "image/jpeg", "search.jpg")
 
     try {
-      const resp = await fetch(requestUrl, {
-        method: "POST",
-        headers: {
-          "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148",
+      const resp = await fetchWithTimeout(
+        requestUrl,
+        {
+          method: "POST",
+          headers: {
+            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148",
+          },
+          body: formData,
         },
-        body: formData,
-      })
+        12000
+      )
 
       if (resp.status === 429) {
         // 当前 Key 每日额度耗尽，记录剩余 0 并尝试下一个 Key

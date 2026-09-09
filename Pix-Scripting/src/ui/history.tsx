@@ -47,7 +47,8 @@ import {
 import { cacheIllust } from "../store/illustCache"
 import { cacheNovel } from "../store/novelCache"
 import { cardThumbUrlOf, novelThumbUrlOf, prefetch } from "../image/imageLoader"
-import { currentBatchSize, useLatest, usePagedList, useExperimentalAmbientPalette } from "./hooks"
+import { currentBatchSize, useLatest, usePagedList } from "./hooks"
+import { useExperimentalAmbientPalette } from "./ambient"
 import type { PixivIllustration, PixivNovel } from "../types"
 
 export type HistoryKind = HistoryContentKind

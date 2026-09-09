@@ -72,8 +72,8 @@ import {
   useLatest,
   usePagedList,
   useSeriesWatchlist,
-  useUserAmbientPalette,
 } from "./hooks"
+import { useUserAmbientPalette } from "./ambient"
 
 type SeriesKind = "manga" | "novel"
 type SeriesWorkItem = PixivIllustration | PixivNovel

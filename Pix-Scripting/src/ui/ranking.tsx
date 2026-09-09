@@ -38,7 +38,8 @@ import {
 import { destinationElement } from "./routes"
 import { setActiveTabKind } from "./routeNavigation"
 import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
-import { useLatest, usePagedList, currentBatchSize, useExperimentalAmbientPalette } from "./hooks"
+import { useLatest, usePagedList, currentBatchSize } from "./hooks"
+import { useExperimentalAmbientPalette } from "./ambient"
 import type { PixivIllustration, PixivNovel } from "../types"
 import {
   appToolbar,

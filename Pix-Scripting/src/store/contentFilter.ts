@@ -62,7 +62,7 @@ export function getIllustContentBlockReason(
   if (item.x_restrict === 1 && !settings.showR18) {
     return "restriction"
   }
-  if (item.x_restrict === 2 && !settings.showR18G) {
+  if (item.x_restrict === 2 && (!settings.showR18 || !settings.showR18G)) {
     return "restriction"
   }
   if (item.illust_ai_type === 2 && !settings.showAI) {
@@ -95,7 +95,7 @@ export function getNovelContentBlockReason(
   if (item.x_restrict === 1 && !settings.showR18) {
     return "restriction"
   }
-  if (item.x_restrict === 2 && !settings.showR18G) {
+  if (item.x_restrict === 2 && (!settings.showR18 || !settings.showR18G)) {
     return "restriction"
   }
   if (item.novel_ai_type === 2 && !settings.showAI) {

@@ -7,8 +7,8 @@ import {
   useLatest,
   usePagedList,
   currentBatchSize,
-  useExperimentalAmbientPalette,
 } from "./hooks"
+import { useExperimentalAmbientPalette } from "./ambient"
 import type { PixivIllustration } from "../types"
 import {
   EmptyView,

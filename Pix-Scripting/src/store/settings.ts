@@ -579,6 +579,17 @@ function parseStringArray(value: unknown, fallback: string[]): string[] {
   return fallback
 }
 
+function parseCustomBaseUrl(value: unknown, fallback: string): string {
+  if (typeof value !== "string") return fallback
+  const trimmed = value.trim()
+  if (!trimmed) return ""
+  // 严格限制为 http:// 或 https:// 协议开头的合法 URL，禁止 javascript: 或本地协议注入
+  if (!/^https?:\/\/[a-zA-Z0-9\-._~:/?#[\]@!$&'()*+,;=]+$/i.test(trimmed)) {
+    return fallback
+  }
+  return trimmed.replace(/\/+$/, "")
+}
+
 function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): AppSettings {
   return {
     ...DEFAULT_SETTINGS,
@@ -803,24 +814,29 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
     imageSourceMode: isOneOf(stored?.imageSourceMode, IMAGE_SOURCE_MODE_VALUES)
       ? stored.imageSourceMode
       : DEFAULT_SETTINGS.imageSourceMode,
-    customImageBaseUrl: typeof stored?.customImageBaseUrl === "string"
-      ? stored.customImageBaseUrl
-      : DEFAULT_SETTINGS.customImageBaseUrl,
+    customImageBaseUrl: parseCustomBaseUrl(
+      stored?.customImageBaseUrl,
+      DEFAULT_SETTINGS.customImageBaseUrl
+    ),
     apiGatewayMode: isOneOf(stored?.apiGatewayMode, API_GATEWAY_MODE_VALUES)
       ? stored.apiGatewayMode
       : DEFAULT_SETTINGS.apiGatewayMode,
-    customApiBaseUrl: typeof stored?.customApiBaseUrl === "string"
-      ? stored.customApiBaseUrl
-      : DEFAULT_SETTINGS.customApiBaseUrl,
-    customOauthBaseUrl: typeof stored?.customOauthBaseUrl === "string"
-      ? stored.customOauthBaseUrl
-      : DEFAULT_SETTINGS.customOauthBaseUrl,
-    customAccountBaseUrl: typeof stored?.customAccountBaseUrl === "string"
-      ? stored.customAccountBaseUrl
-      : DEFAULT_SETTINGS.customAccountBaseUrl,
-    customWebBaseUrl: typeof stored?.customWebBaseUrl === "string"
-      ? stored.customWebBaseUrl
-      : DEFAULT_SETTINGS.customWebBaseUrl,
+    customApiBaseUrl: parseCustomBaseUrl(
+      stored?.customApiBaseUrl,
+      DEFAULT_SETTINGS.customApiBaseUrl
+    ),
+    customOauthBaseUrl: parseCustomBaseUrl(
+      stored?.customOauthBaseUrl,
+      DEFAULT_SETTINGS.customOauthBaseUrl
+    ),
+    customAccountBaseUrl: parseCustomBaseUrl(
+      stored?.customAccountBaseUrl,
+      DEFAULT_SETTINGS.customAccountBaseUrl
+    ),
+    customWebBaseUrl: parseCustomBaseUrl(
+      stored?.customWebBaseUrl,
+      DEFAULT_SETTINGS.customWebBaseUrl
+    ),
   }
 }
 
@@ -1163,9 +1179,9 @@ export function resolveImageUrl(
   if (mode === "official") return url
   let targetBase = "https://i.pixiv.re"
   if (mode === "custom") {
-    const custom = settings.customImageBaseUrl?.trim().replace(/\/+$/, "")
+    const custom = parseCustomBaseUrl(settings.customImageBaseUrl, "")
     if (!custom) {
-      // 自定义未输入时静默回退官方原源
+      // 自定义未输入或协议不合法时静默回退官方原源
       return url
     }
     targetBase = custom
@@ -1177,11 +1193,9 @@ export function resolveImageUrl(
 }
 
 export function getApiBaseUrl(settings: AppSettings = loadSettings()): string {
-  if (
-    settings.apiGatewayMode === "custom" &&
-    settings.customApiBaseUrl?.trim()
-  ) {
-    return settings.customApiBaseUrl.trim().replace(/\/+$/, "")
+  if (settings.apiGatewayMode === "custom") {
+    const custom = parseCustomBaseUrl(settings.customApiBaseUrl, "")
+    if (custom) return custom
   }
   return "https://app-api.pixiv.net"
 }
@@ -1190,12 +1204,10 @@ export function getOauthBaseUrl(
   settings: AppSettings = loadSettings()
 ): string {
   if (settings.apiGatewayMode === "custom") {
-    if (settings.customOauthBaseUrl?.trim()) {
-      return settings.customOauthBaseUrl.trim().replace(/\/+$/, "")
-    }
-    if (settings.customApiBaseUrl?.trim()) {
-      return settings.customApiBaseUrl.trim().replace(/\/+$/, "")
-    }
+    const customOauth = parseCustomBaseUrl(settings.customOauthBaseUrl, "")
+    if (customOauth) return customOauth
+    const customApi = parseCustomBaseUrl(settings.customApiBaseUrl, "")
+    if (customApi) return customApi
   }
   return "https://oauth.secure.pixiv.net"
 }
@@ -1204,12 +1216,10 @@ export function getAccountBaseUrl(
   settings: AppSettings = loadSettings()
 ): string {
   if (settings.apiGatewayMode === "custom") {
-    if (settings.customAccountBaseUrl?.trim()) {
-      return settings.customAccountBaseUrl.trim().replace(/\/+$/, "")
-    }
-    if (settings.customApiBaseUrl?.trim()) {
-      return settings.customApiBaseUrl.trim().replace(/\/+$/, "")
-    }
+    const customAccount = parseCustomBaseUrl(settings.customAccountBaseUrl, "")
+    if (customAccount) return customAccount
+    const customApi = parseCustomBaseUrl(settings.customApiBaseUrl, "")
+    if (customApi) return customApi
   }
   return "https://accounts.pixiv.net"
 }
@@ -1218,9 +1228,8 @@ export function getWebBaseUrl(
   settings: AppSettings = loadSettings()
 ): string {
   if (settings.apiGatewayMode === "custom") {
-    if (settings.customWebBaseUrl?.trim()) {
-      return settings.customWebBaseUrl.trim().replace(/\/+$/, "")
-    }
+    const customWeb = parseCustomBaseUrl(settings.customWebBaseUrl, "")
+    if (customWeb) return customWeb
   }
   return "https://www.pixiv.net"
 }

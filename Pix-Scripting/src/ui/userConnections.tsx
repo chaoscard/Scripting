@@ -35,7 +35,8 @@ import {
   RefreshableScrollView,
 } from "./components"
 import { prefetch } from "../image/imageLoader"
-import { currentBatchSize, useExperimentalAmbientPalette, usePagedList } from "./hooks"
+import { currentBatchSize, usePagedList } from "./hooks"
+import { useExperimentalAmbientPalette } from "./ambient"
 import {
   DockActionBar,
   useRegisterBottomAccessory,

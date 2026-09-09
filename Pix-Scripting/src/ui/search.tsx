@@ -74,9 +74,9 @@ import {
   useDebouncedCallback,
   useLatest,
   usePagedList,
-  useExperimentalAmbientPalette,
   useLayoutMetrics,
 } from "./hooks"
+import { useExperimentalAmbientPalette } from "./ambient"
 import type {
   AdvancedSearchParams,
   BookmarkThreshold,

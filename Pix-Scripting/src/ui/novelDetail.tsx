@@ -56,9 +56,9 @@ import {
   useNovelMarker,
   useOpenBookmarkDetailListener,
   usePagedList,
-  useNovelExperimentalAmbientPalette,
   waitForNovelLoadingFeedback,
 } from "./hooks"
+import { useNovelExperimentalAmbientPalette } from "./ambient"
 import { novelThumbUrlOf, prefetch } from "../image/imageLoader"
 import {
   recordNovelHistory,
