@@ -6,7 +6,7 @@
   "runInApp": true,
   "name": "Pix-Scripting",
   "remoteResource": {
-    "hash": "a32911ddeaae10ee0a12a93c0aa7f51b",
+    "hash": "4b4514d00006c3987d4c60ee732e2736",
     "autoUpdateInterval": null,
     "url": "https://raw.githubusercontent.com/chaoscard/Scripting/main/Release/Pix-Scripting.scripting"
   },
@@ -24,6 +24,6 @@
   "localizedDescriptions": {
     "zh": "液态玻璃风格 Pixiv 客户端"
   },
-  "version": "0.9.26",
+  "version": "0.9.27",
   "description": "Liquid Glass Pixiv Client"
 }

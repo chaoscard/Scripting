@@ -932,13 +932,33 @@ function AdvancedRankingFeedItem(props: {
   )
 }
 
-function NovelRankingFeedContent(props: {
-  paged: ReturnType<typeof usePagedList<PixivNovel>>
+interface RankingFeedShellProps<T extends { id: number | string }> {
+  paged: ReturnType<typeof usePagedList<T>>
   emptyText?: string
   emptySystemImage?: string
   onBackToDefault?: () => void
-}) {
-  const { paged, emptyText, emptySystemImage, onBackToDefault } = props
+  filteredText: string
+  dateEmptyFallbackText: string
+  normalEmptyText: string
+  normalEmptySystemImage: string
+  children: (items: T[]) => JSX.Element
+}
+
+function RankingFeedShell<T extends { id: number | string }>(
+  props: RankingFeedShellProps<T>
+) {
+  const {
+    paged,
+    emptyText,
+    emptySystemImage,
+    onBackToDefault,
+    filteredText,
+    dateEmptyFallbackText,
+    normalEmptyText,
+    normalEmptySystemImage,
+    children,
+  } = props
+
   return (
     <VStack alignment="leading" spacing={10} frame={{ maxWidth: "infinity" }}>
       {paged.initialLoading ? (
@@ -1013,9 +1033,8 @@ function NovelRankingFeedContent(props: {
                 multilineTextAlignment="center"
               >
                 {paged.hasFilteredContent
-                  ? "当前页面部分小说被内容显示设置过滤，暂时无法显示"
-                  : emptyText ??
-                    "未查询到该日期的小说排行，可能官方尚未发布或该榜单设立于较晚时间"}
+                  ? filteredText
+                  : emptyText ?? dateEmptyFallbackText}
               </Text>
               <Button
                 buttonStyle="bordered"
@@ -1038,17 +1057,40 @@ function NovelRankingFeedContent(props: {
           </ZStack>
         ) : (
           <EmptyView
-            text={
-              paged.hasFilteredContent
-                ? "当前页面部分小说被内容显示设置过滤，暂时无法显示"
-                : "暂无小说排行，下拉刷新试试"
+            text={paged.hasFilteredContent ? filteredText : normalEmptyText}
+            systemImage={
+              paged.hasFilteredContent ? "eye.slash" : normalEmptySystemImage
             }
-            systemImage={paged.hasFilteredContent ? "eye.slash" : "book"}
           />
         )
       ) : (
+        children(paged.items)
+      )}
+    </VStack>
+  )
+}
+
+function NovelRankingFeedContent(props: {
+  paged: ReturnType<typeof usePagedList<PixivNovel>>
+  emptyText?: string
+  emptySystemImage?: string
+  onBackToDefault?: () => void
+}) {
+  const { paged, emptyText, emptySystemImage, onBackToDefault } = props
+  return (
+    <RankingFeedShell<PixivNovel>
+      paged={paged}
+      emptyText={emptyText}
+      emptySystemImage={emptySystemImage}
+      onBackToDefault={onBackToDefault}
+      filteredText="当前页面部分小说被内容显示设置过滤，暂时无法显示"
+      dateEmptyFallbackText="未查询到该日期的小说排行，可能官方尚未发布或该榜单设立于较晚时间"
+      normalEmptyText="暂无小说排行，下拉刷新试试"
+      normalEmptySystemImage="book"
+    >
+      {(items) => (
         <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
-          {paged.items.map((novel, index) => (
+          {items.map((novel, index) => (
             <NovelCard
               key={novel.id}
               novel={novel}
@@ -1057,14 +1099,14 @@ function NovelRankingFeedContent(props: {
             />
           ))}
           <LoadMoreTrigger
-            anchor={paged.items[paged.items.length - 1]?.id}
+            anchor={items[items.length - 1]?.id}
             onLoadMore={paged.loadMore}
             hasMore={paged.hasMore}
             isLoading={paged.loadingMore}
           />
         </LazyVStack>
       )}
-    </VStack>
+    </RankingFeedShell>
   )
 }
 
@@ -1091,122 +1133,21 @@ function IllustRankingFeedContent(props: {
     },
     [heroFirst]
   )
+
   return (
-    <VStack alignment="leading" spacing={10} frame={{ maxWidth: "infinity" }}>
-      {paged.initialLoading ? (
-        <LoadingView />
-      ) : paged.error && paged.items.length === 0 ? (
-        onBackToDefault ? (
-          <ZStack
-            frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-            padding={40}
-          >
-            <VStack alignment="center" spacing={14}>
-              <Image
-                systemName="wifi.exclamationmark"
-                font="largeTitle"
-                foregroundStyle="secondaryLabel"
-              />
-              <Text
-                font="subheadline"
-                foregroundStyle="secondaryLabel"
-                multilineTextAlignment="center"
-              >
-                {paged.error}
-              </Text>
-              <HStack alignment="center" spacing={12}>
-                <Button
-                  buttonStyle="bordered"
-                  title="重试"
-                  action={paged.refresh}
-                />
-                <Button
-                  buttonStyle="bordered"
-                  action={() => {
-                    try {
-                      triggerHaptic("light")
-                    } catch {}
-                    onBackToDefault()
-                  }}
-                >
-                  <HStack alignment="center" spacing={4}>
-                    <Image
-                      systemName="arrow.uturn.backward"
-                      font="subheadline"
-                    />
-                    <Text font="subheadline">返回</Text>
-                  </HStack>
-                </Button>
-              </HStack>
-            </VStack>
-          </ZStack>
-        ) : (
-          <ErrorView message={paged.error} onRetry={paged.refresh} />
-        )
-      ) : paged.items.length === 0 ? (
-        onBackToDefault ? (
-          <ZStack
-            frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-            padding={40}
-          >
-            <VStack alignment="center" spacing={14}>
-              <Image
-                systemName={
-                  paged.hasFilteredContent
-                    ? "eye.slash"
-                    : emptySystemImage ?? "clock.badge.questionmark"
-                }
-                font="largeTitle"
-                foregroundStyle="secondaryLabel"
-              />
-              <Text
-                font="subheadline"
-                foregroundStyle="secondaryLabel"
-                multilineTextAlignment="center"
-              >
-                {paged.hasFilteredContent
-                  ? "当前页面部分作品被内容显示设置过滤，暂时无法显示"
-                  : emptyText ??
-                    `未查询到该日期的${label}排行，可能官方尚未发布或该榜单设立于较晚时间`}
-              </Text>
-              <Button
-                buttonStyle="bordered"
-                action={() => {
-                  try {
-                    triggerHaptic("light")
-                  } catch {}
-                  onBackToDefault()
-                }}
-              >
-                <HStack alignment="center" spacing={4}>
-                  <Image
-                    systemName="arrow.uturn.backward"
-                    font="subheadline"
-                  />
-                  <Text font="subheadline">返回</Text>
-                </HStack>
-              </Button>
-            </VStack>
-          </ZStack>
-        ) : (
-          <EmptyView
-            text={
-              paged.hasFilteredContent
-                ? "当前页面部分作品被内容显示设置过滤，暂时无法显示"
-                : `暂无${label}排行，下拉刷新试试`
-            }
-            systemImage={
-              paged.hasFilteredContent
-                ? "eye.slash"
-                : label.includes("漫画")
-                  ? "photo.on.rectangle"
-                  : "photo"
-            }
-          />
-        )
-      ) : (
+    <RankingFeedShell<PixivIllustration>
+      paged={paged}
+      emptyText={emptyText}
+      emptySystemImage={emptySystemImage}
+      onBackToDefault={onBackToDefault}
+      filteredText="当前页面部分作品被内容显示设置过滤，暂时无法显示"
+      dateEmptyFallbackText={`未查询到该日期的${label}排行，可能官方尚未发布或该榜单设立于较晚时间`}
+      normalEmptyText={`暂无${label}排行，下拉刷新试试`}
+      normalEmptySystemImage={label.includes("漫画") ? "photo.on.rectangle" : "photo"}
+    >
+      {(items) => (
         <IllustFlowFeed
-          items={paged.items}
+          items={items}
           onLoadMore={paged.loadMore}
           hasMore={paged.hasMore}
           isLoading={paged.loadingMore}
@@ -1214,7 +1155,7 @@ function IllustRankingFeedContent(props: {
           enableHeroFirst={heroFirst}
         />
       )}
-    </VStack>
+    </RankingFeedShell>
   )
 }
 

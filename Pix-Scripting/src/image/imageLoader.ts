@@ -233,20 +233,32 @@ function touch(meta: CacheMeta, key: string, url: string, size: number): void {
 }
 
 // 按 LRU 清理超出上限的缓存（静态图片分配总预算的 90%）
+// 引入滞后双水位线机制（105% 触发淘汰 / 90% 修剪目标），消除缓存满仓时每 3 秒全量排序的振荡卡顿
 export function enforceCacheLimit(): void {
   try {
     enforceUgoiraCacheLimit()
   } catch {}
   const settings = loadSettings()
   if (settings.cacheLimitMB == null) return
-  const limitBytes = Math.round(settings.cacheLimitMB * 1024 * 1024 * 0.9)
+
+  // 基础配额（分配总预算的 90% 给静态图片）
+  const baseLimitBytes = Math.round(settings.cacheLimitMB * 1024 * 1024 * 0.9)
+  // 高水位线（触发阈值）：超出额度 5% 时才启动物理清理
+  const highWatermarkBytes = Math.round(baseLimitBytes * 1.05)
+  // 低水位线（修剪目标）：一旦触发，一口气清理至额度的 90%，留出充裕缓冲空间
+  const lowWatermarkBytes = Math.round(baseLimitBytes * 0.90)
+
   const meta = loadMeta()
   const entries = Object.entries(meta)
   let total = entries.reduce((sum, [, v]) => sum + (v.size || 0), 0)
-  if (total <= limitBytes) return
+
+  // 未达到高水位线，直接零开销退出
+  if (total <= highWatermarkBytes) return
+
+  // 达到高水位线，执行一次全量 LRU 排序并向下修剪至低水位线
   const sorted = entries.sort((a, b) => a[1].lastAccess - b[1].lastAccess)
   for (const [key, v] of sorted) {
-    if (total <= limitBytes) break
+    if (total <= lowWatermarkBytes) break
     const file = cacheFilePath(v.url)
     try {
       if (FileManager.existsSync(file)) {

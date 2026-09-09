@@ -230,22 +230,40 @@ export async function beginBackgroundTask(
 }
 
 /**
- * 用后台任务与灵动岛托管执行异步任务
+ * 用后台任务与灵动岛托管执行异步任务（具备自动完结兜底保护）
  */
 export async function runWithBackgroundTask<T>(
   options: BackgroundTaskOptions,
   runner: (task: BackgroundTaskHandle) => Promise<T>
 ): Promise<T> {
   const task = await beginBackgroundTask(options)
+  let isFinished = false
+
+  // 包装 handle，记录外部 runner 是否已主动 finish
+  const wrappedTask: BackgroundTaskHandle = {
+    ...task,
+    finish: async (res) => {
+      isFinished = true
+      await task.finish(res)
+    },
+  }
+
   try {
-    const result = await runner(task)
+    const result = await runner(wrappedTask)
+    // 成功路径兜底：若 runner 执行完毕后未显式调用 finish，自动标记成功并释放保活
+    if (!isFinished) {
+      await task.finish({ success: true, summary: "任务已完成" })
+    }
     return result
   } catch (error: any) {
-    await task.finish({
-      success: false,
-      summary: error?.message ? `执行中断: ${error.message}` : "任务执行过程中发生异常",
-      errorMessage: String(error),
-    })
+    // 异常路径兜底：若 runner 抛出异常前未显式 finish，自动标记失败并上报错误
+    if (!isFinished) {
+      await task.finish({
+        success: false,
+        summary: error?.message ? `执行中断: ${error.message}` : "任务执行过程中发生异常",
+        errorMessage: String(error),
+      })
+    }
     throw error
   }
 }

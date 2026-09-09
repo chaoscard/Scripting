@@ -96,6 +96,17 @@ const HISTORY_MANGA_FILE = "history_manga.json"
 const HISTORY_NOVEL_FILE = "history_novel.json"
 const DEBOUNCE_DELAY_MS = 1500
 
+/** 各分类历史记录保存上限（插画 7000 条，漫画 1000 条，小说 2000 条） */
+export const HISTORY_LIMITS: Record<HistoryContentKind, number> = {
+  illustration: 7000,
+  manga: 1000,
+  novel: 2000,
+}
+
+export function getHistoryLimitForKind(kind: HistoryContentKind): number {
+  return HISTORY_LIMITS[kind]
+}
+
 const caches: {
   illustration: IllustrationHistoryEntry[] | null
   manga: IllustrationHistoryEntry[] | null
@@ -294,7 +305,10 @@ function inflateNovel(data: StoredNovelData): PixivNovel {
 function persistKindSync(kind: HistoryContentKind): boolean {
   try {
     const list = caches[kind] ?? []
-    const compactEntries = list.map(toStoredEntry)
+    const maxLimit = getHistoryLimitForKind(kind)
+    const trimmed = list.length > maxLimit ? list.slice(0, maxLimit) : list
+    caches[kind] = trimmed as any
+    const compactEntries = trimmed.map(toStoredEntry)
     const filePath = historyFilePath(kind)
     writeTextSafely(filePath, JSON.stringify(compactEntries), (raw) => {
       const parsed = JSON.parse(raw)
@@ -326,7 +340,9 @@ export function flushHistory(): boolean {
 }
 
 function commitKind(kind: HistoryContentKind, next: any[], immediate = false): boolean {
-  caches[kind] = next as any
+  const maxLimit = getHistoryLimitForKind(kind)
+  const trimmed = Array.isArray(next) && next.length > maxLimit ? next.slice(0, maxLimit) : next
+  caches[kind] = trimmed as any
   dirtyFlags[kind] = true
   emitChanged()
   notifyLocalMutation()
@@ -385,7 +401,9 @@ export async function refreshHistoryFromCloud(): Promise<void> {
 }
 
 export function replaceKindEntries(kind: HistoryContentKind, next: any[], persist = true): void {
-  caches[kind] = next as any
+  const maxLimit = getHistoryLimitForKind(kind)
+  const trimmed = Array.isArray(next) && next.length > maxLimit ? next.slice(0, maxLimit) : next
+  caches[kind] = trimmed as any
   if (persist) {
     if (saveTimers[kind]) {
       clearTimeout(saveTimers[kind]!)

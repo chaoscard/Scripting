@@ -1,6 +1,7 @@
 import { clearBookmarkMemoryCache } from "./bookmarkSync"
 import { clearFollowMemoryCache } from "./userFollow"
 import { clearIllustMemoryCache } from "./illustCache"
+import { clearNovelMemoryCache } from "./novelCache"
 import { clearHistoryMemoryCache } from "./history"
 import { clearSearchHistoryMemoryCache } from "./searchHistory"
 import { clearNovelProgressMemoryCache } from "./novelProgress"
@@ -21,6 +22,9 @@ export function clearAllAccountStateCaches(): void {
   } catch {}
   try {
     clearIllustMemoryCache()
+  } catch {}
+  try {
+    clearNovelMemoryCache()
   } catch {}
   try {
     clearHistoryMemoryCache()

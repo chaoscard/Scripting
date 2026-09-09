@@ -10,6 +10,7 @@ import {
   clearHistoryMemoryCache,
   flushHistory,
   getHistory,
+  getHistoryLimitForKind,
   historyFilePath,
   loadKindEntries,
   onHistoryChanged,
@@ -267,7 +268,10 @@ async function syncHistoryCategory(
     }
   }
 
-  const mergedStored = Array.from(map.values()).sort((a, b) => b.viewedAt - a.viewedAt)
+  const maxLimit = getHistoryLimitForKind(kind)
+  const mergedStored = Array.from(map.values())
+    .sort((a, b) => b.viewedAt - a.viewedAt)
+    .slice(0, maxLimit)
   const localDecoded = parseRawEntriesForKind(kind, mergedStored)
 
   // 比对并更新本地
