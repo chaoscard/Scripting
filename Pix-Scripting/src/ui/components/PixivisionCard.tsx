@@ -7,11 +7,14 @@ import {
   Text,
   VStack,
   ZStack,
+  useMemo,
+  useState,
 } from "scripting"
 import { CachedImage } from "./CachedImage"
 import { TagChip } from "./TagChip"
 import { useLayoutMetrics } from "../hooks"
 import { recordPixivisionCoverUrl } from "../../image/imageLoader"
+import { loadSettings } from "../../store/settings"
 import type { PixivisionArticle } from "../../types"
 
 const FLOW_HORIZONTAL_PADDING = 12
@@ -25,7 +28,22 @@ export function PixivisionCard(props: {
 }) {
   const { article, cardWidth: customCardWidth, onAppear, priority } = props
   const { width: screenWidth } = useLayoutMetrics()
+  const [isAppeared, setIsAppeared] = useState(false)
   const targetCardWidth = customCardWidth ?? Math.floor(screenWidth - FLOW_HORIZONTAL_PADDING * 2)
+
+  const handleAppear = () => {
+    if (!isAppeared) setIsAppeared(true)
+    onAppear?.()
+  }
+
+  const effectivePriority = useMemo(() => {
+    if (priority == null) return priority
+    const enablePreemption = loadSettings().enableViewportPreemption ?? true
+    if (enablePreemption && isAppeared) {
+      return priority - 10000
+    }
+    return priority
+  }, [priority, isAppeared])
 
   if (article.id && article.imageURL) {
     recordPixivisionCoverUrl(article.id, article.imageURL)
@@ -45,7 +63,7 @@ export function PixivisionCard(props: {
         alignment="leading"
         spacing={4}
         frame={cardFrame}
-        onAppear={onAppear}
+        onAppear={handleAppear}
         padding={6}
         glassEffect={{ type: "rect", cornerRadius: 16 }}
         shadow={{ color: "#0000000F", radius: 20, y: 10 }}
@@ -68,7 +86,7 @@ export function PixivisionCard(props: {
                   contentMode="fill"
                   cornerRadius={12}
                   frame={imageFrame}
-                  priority={priority}
+                  priority={effectivePriority}
                 />
               </ZStack>
             </ZStack>

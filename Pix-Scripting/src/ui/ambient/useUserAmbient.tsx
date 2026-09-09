@@ -26,14 +26,14 @@ export function useUserAmbientPalette(imageUrl: string | null | undefined): User
   const [ambientIntensity, setAmbientIntensity] = useState<AmbientIntensity>(
     () => loadSettings().ambientIntensity
   )
-  const [experimentalOverride, setExperimentalOverride] = useState(
-    () => loadSettings().experimentalImmersion && loadSettings().overrideSecondaryPagesImmersion
+  const [isExperimental, setIsExperimental] = useState(
+    () => loadSettings().experimentalImmersion
   )
   const [ambientAlgorithm, setAmbientAlgorithm] = useState<AmbientAlgorithm>(
-    () => loadSettings().experimentalImmersionAlgorithm
-  )
-  const [experimentalIntensity, setExperimentalIntensity] = useState<AmbientIntensity>(
-    () => loadSettings().experimentalImmersionIntensity
+    () =>
+      loadSettings().experimentalImmersion
+        ? loadSettings().experimentalImmersionAlgorithm
+        : loadSettings().ambientAlgorithm
   )
   const [ambientPalette, setAmbientPalette] = useState<UserAmbientPalette | null>(() => {
     if (!loadSettings().ambientImmersion || !imageUrl) return null
@@ -41,8 +41,8 @@ export function useUserAmbientPalette(imageUrl: string | null | undefined): User
   })
   const [illustPalette, setIllustPalette] = useState<IllustAmbientPalette | null>(() => {
     const s = loadSettings()
-    if (!s.ambientImmersion || !s.experimentalImmersion || !s.overrideSecondaryPagesImmersion || !imageUrl) return null
-    return getCachedIllustAmbientPalette(imageUrl, isDark, s.experimentalImmersionIntensity)
+    if (!s.ambientImmersion || !s.experimentalImmersion || !imageUrl) return null
+    return getCachedIllustAmbientPalette(imageUrl, isDark, s.ambientIntensity)
   })
 
   useEffect(() => {
@@ -50,9 +50,12 @@ export function useUserAmbientPalette(imageUrl: string | null | undefined): User
       const nextSettings = loadSettings()
       setAmbientEnabled(nextSettings.ambientImmersion)
       setAmbientIntensity(nextSettings.ambientIntensity)
-      setExperimentalOverride(nextSettings.experimentalImmersion && nextSettings.overrideSecondaryPagesImmersion)
-      setAmbientAlgorithm(nextSettings.experimentalImmersionAlgorithm)
-      setExperimentalIntensity(nextSettings.experimentalImmersionIntensity)
+      setIsExperimental(nextSettings.experimentalImmersion)
+      setAmbientAlgorithm(
+        nextSettings.experimentalImmersion
+          ? nextSettings.experimentalImmersionAlgorithm
+          : nextSettings.ambientAlgorithm
+      )
     })
   }, [])
 
@@ -73,15 +76,15 @@ export function useUserAmbientPalette(imageUrl: string | null | undefined): User
       setAmbientPalette(modeObj[ambientIntensity] ?? modeObj.medium)
     })
 
-    if (experimentalOverride) {
-      const cachedIllust = getCachedIllustAmbientPalette(imageUrl, isDark, experimentalIntensity)
+    if (isExperimental) {
+      const cachedIllust = getCachedIllustAmbientPalette(imageUrl, isDark, ambientIntensity)
       if (cachedIllust) {
         setIllustPalette(cachedIllust)
       }
       void extractIllustAmbientPalette(imageUrl).then((result) => {
         if (!active || !result) return
         const modeObj = isDark ? result.dark : result.light
-        setIllustPalette(modeObj[experimentalIntensity] ?? modeObj.medium)
+        setIllustPalette(modeObj[ambientIntensity] ?? modeObj.medium)
       })
     } else {
       setIllustPalette(null)
@@ -90,16 +93,16 @@ export function useUserAmbientPalette(imageUrl: string | null | undefined): User
     return () => {
       active = false
     }
-  }, [imageUrl, isDark, ambientEnabled, ambientIntensity, experimentalOverride, experimentalIntensity])
+  }, [imageUrl, isDark, ambientEnabled, ambientIntensity, isExperimental])
 
   const ambientBackground = useMemo(() => {
     if (!ambientEnabled) return undefined
-    if (experimentalOverride && illustPalette) {
+    if (isExperimental && illustPalette) {
       return renderAmbientBackground({
         ambientPalette: illustPalette,
         ambientAlgorithm,
         isDark,
-        ambientIntensity: experimentalIntensity,
+        ambientIntensity,
         active: true,
       })
     }
@@ -121,7 +124,7 @@ export function useUserAmbientPalette(imageUrl: string | null | undefined): User
         />
       </ZStack>
     )
-  }, [ambientEnabled, experimentalOverride, illustPalette, ambientAlgorithm, isDark, experimentalIntensity, ambientPalette])
+  }, [ambientEnabled, isExperimental, illustPalette, ambientAlgorithm, isDark, ambientIntensity, ambientPalette])
 
   return { ambientEnabled, ambientIntensity, ambientPalette, ambientBackground }
 }

@@ -116,6 +116,7 @@ export function IllustCard(props: {
   const isCompact = compact ?? compactSetting
   // 流式或Hero卡片只在进入原生可见区后请求图片；骨架尺寸仍由作品元数据提前固定。
   const [imageVisible, setImageVisible] = useState(!flow && !hero)
+  const [isAppeared, setIsAppeared] = useState(!flow && !hero)
   const rawRatio = illust.width > 0 && illust.height > 0 ? illust.width / illust.height : 0.75
 
   let imageRatio = 1
@@ -136,8 +137,18 @@ export function IllustCard(props: {
 
   function handleAppear() {
     if (!imageVisible) setImageVisible(true)
+    if (!isAppeared) setIsAppeared(true)
     onAppear?.()
   }
+
+  const effectivePriority = useMemo(() => {
+    if (priority == null) return priority
+    const enablePreemption = loadSettings().enableViewportPreemption ?? true
+    if (enablePreemption && isAppeared) {
+      return priority - 10000
+    }
+    return priority
+  }, [priority, isAppeared])
 
   async function toggleBookmark() {
     if (bookmarkBusy) return
@@ -313,7 +324,7 @@ export function IllustCard(props: {
                   centerCropSquare={!flow && !hero}
                   cornerRadius={hero ? 12 : 10}
                   frame={imageFrame}
-                  priority={priority}
+                  priority={effectivePriority}
                 />
                 {illust.page_count > 1 ? (
                   <PageCountBadge count={illust.page_count} hero={hero} />

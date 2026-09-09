@@ -32,8 +32,8 @@ import {
   onSettingsChanged,
   resetSettings,
   updateSettings,
-  type AmbientAlgorithm,
-  type NovelReaderExperimentalAlgorithm,
+  type BaseAmbientAlgorithm,
+  type ExperimentalAmbientAlgorithm,
   type GeminiMotionSpeed,
   type LaunchPage,
   type QuickActionButtonAction,
@@ -665,7 +665,6 @@ export function SettingsView() {
                 update({
                   ambientImmersion: false,
                   experimentalImmersion: false,
-                  overrideSecondaryPagesImmersion: false,
                 })
               } else {
                 update({ ambientImmersion: true })
@@ -675,7 +674,7 @@ export function SettingsView() {
           {settings.ambientImmersion ? (
             <>
               <Picker
-                title="效果强度"
+                title="沉浸效果强度"
                 value={settings.ambientIntensity}
                 onChanged={(value: string) =>
                   update({ ambientIntensity: value as "low" | "medium" | "high" })
@@ -685,6 +684,33 @@ export function SettingsView() {
                 <Text tag="medium">中</Text>
                 <Text tag="high">高</Text>
               </Picker>
+              <Picker
+                label={
+                  <VStack alignment="leading" spacing={2}>
+                    <Text>沉浸效果算法</Text>
+                    {settings.experimentalImmersion ? (
+                      <Text font="caption2" foregroundStyle="secondaryLabel">
+                        当前由实验性沉浸算法接管
+                      </Text>
+                    ) : null}
+                  </VStack>
+                }
+                value={settings.ambientAlgorithm}
+                onChanged={(value: string) =>
+                  update({
+                    ambientAlgorithm: value as BaseAmbientAlgorithm,
+                  })
+                }
+              >
+                <Text tag="classic">经典</Text>
+                <Text tag="explore">探索</Text>
+                <Text tag="ultimate">极致</Text>
+              </Picker>
+              <Toggle
+                title="对小说正文页启用"
+                value={settings.novelReaderImmersion}
+                onChanged={(value) => update({ novelReaderImmersion: value })}
+              />
               <Toggle
                 key={`experimental-immersion-${experimentalImmersionKey}`}
                 title="实验性沉浸效果"
@@ -695,7 +721,7 @@ export function SettingsView() {
                     try {
                       confirmed = await Dialog.confirm({
                         title: "提示",
-                        message: "此功能可能会导致发热和崩溃",
+                        message: "实验性算法采用动态流体或多重物理光斑渲染，可能会增加设备发热和电量消耗",
                         confirmLabel: "确认开启",
                         cancelLabel: "取消",
                       })
@@ -708,76 +734,32 @@ export function SettingsView() {
                       setExperimentalImmersionKey((k) => k + 1)
                       update({
                         experimentalImmersion: false,
-                        overrideSecondaryPagesImmersion: false,
                       })
                     }
                   } else {
                     update({
                       experimentalImmersion: false,
-                      overrideSecondaryPagesImmersion: false,
                     })
                   }
                 }}
               />
               {settings.experimentalImmersion ? (
                 <>
-                  <Toggle
-                    title="覆盖原有沉浸效果页面"
-                    value={settings.overrideSecondaryPagesImmersion}
-                    onChanged={(value) => {
-                      update({ overrideSecondaryPagesImmersion: value })
-                    }}
-                  />
                   <Picker
-                    title="实验性沉浸效果算法"
+                    title="实验性沉浸算法"
                     value={settings.experimentalImmersionAlgorithm}
                     onChanged={(value: string) =>
                       update({
-                        experimentalImmersionAlgorithm: value as AmbientAlgorithm,
+                        experimentalImmersionAlgorithm: value as ExperimentalAmbientAlgorithm,
                       })
                     }
                   >
-                    <Text tag="classic">经典</Text>
-                    <Text tag="explore">探索</Text>
-                    <Text tag="ultimate">极致</Text>
                     <Text tag="transcend">超越</Text>
                     <Text tag="geminiA">Gemini A</Text>
                     <Text tag="geminiB">Gemini B</Text>
-                  </Picker>
-                  <Picker
-                    title="小说正文实验性算法"
-                    value={settings.novelReaderExperimentalAlgorithm}
-                    onChanged={(value: string) =>
-                      update({
-                        novelReaderExperimentalAlgorithm: value as NovelReaderExperimentalAlgorithm,
-                      })
-                    }
-                  >
-                    <Text tag="off">关闭</Text>
-                    <Text tag="classic">经典</Text>
-                    <Text tag="explore">探索</Text>
-                    <Text tag="ultimate">极致</Text>
-                    <Text tag="transcend">超越</Text>
-                    <Text tag="geminiA">Gemini A</Text>
-                    <Text tag="geminiB">Gemini B</Text>
-                  </Picker>
-                  <Picker
-                    title="实验性沉浸效果强度"
-                    value={settings.experimentalImmersionIntensity}
-                    onChanged={(value: string) =>
-                      update({
-                        experimentalImmersionIntensity: value as "low" | "medium" | "high",
-                      })
-                    }
-                  >
-                    <Text tag="low">低</Text>
-                    <Text tag="medium">中</Text>
-                    <Text tag="high">高</Text>
                   </Picker>
                   {settings.experimentalImmersionAlgorithm === "geminiA" ||
-                  settings.experimentalImmersionAlgorithm === "geminiB" ||
-                  settings.novelReaderExperimentalAlgorithm === "geminiA" ||
-                  settings.novelReaderExperimentalAlgorithm === "geminiB" ? (
+                  settings.experimentalImmersionAlgorithm === "geminiB" ? (
                     <Picker
                       title="Gemini 动效流速"
                       value={settings.geminiCustomParamsEnabled ? "custom" : settings.geminiMotionSpeed}
@@ -1544,7 +1526,7 @@ export function SettingsView() {
               onSave={(val) => update({ widgetReloadIntervalMinutes: val })}
             />
             <AdvancedNumberRow
-              title="图片并发数"
+              title="图片并发总数"
               unit="张"
               value={settings.imageBatchConcurrency}
               defaultValue={30}
@@ -1553,6 +1535,35 @@ export function SettingsView() {
               onSave={(val) => update({ imageBatchConcurrency: val })}
             />
             <AdvancedNumberRow
+              title="前台并发窗口"
+              unit="张"
+              value={settings.imageForegroundConcurrency}
+              defaultValue={10}
+              min={1}
+              max={30}
+              onSave={(val) => update({ imageForegroundConcurrency: val })}
+            />
+            <AdvancedNumberRow
+              title="后台预取并发"
+              unit="张"
+              value={settings.imagePrefetchConcurrency}
+              defaultValue={15}
+              min={0}
+              max={30}
+              onSave={(val) => update({ imagePrefetchConcurrency: val })}
+            />
+            <Toggle
+              value={settings.enableViewportPreemption}
+              onChanged={(val: boolean) => update({ enableViewportPreemption: val })}
+            >
+              <VStack alignment="leading" spacing={2}>
+                <Text font="body">视口动态抢占</Text>
+                <Text font="caption" foregroundStyle="secondaryLabel">
+                  快速滑停时当前视口卡片优先插队下载
+                </Text>
+              </VStack>
+            </Toggle>
+            <AdvancedNumberRow
               title="图片翻译并发数"
               unit="张"
               value={settings.aiTranslateConcurrency}
@@ -1560,24 +1571,6 @@ export function SettingsView() {
               min={1}
               max={6}
               onSave={(val) => update({ aiTranslateConcurrency: val })}
-            />
-            <AdvancedNumberRow
-              title="下载并发比例"
-              unit="%"
-              value={settings.imageDownloadConcurrencyRatio}
-              defaultValue={100}
-              min={0}
-              max={100}
-              onSave={(val) => update({ imageDownloadConcurrencyRatio: val })}
-            />
-            <AdvancedNumberRow
-              title="预取并发比例"
-              unit="%"
-              value={settings.imagePrefetchConcurrencyRatio}
-              defaultValue={100}
-              min={0}
-              max={100}
-              onSave={(val) => update({ imagePrefetchConcurrencyRatio: val })}
             />
             <AdvancedNumberRow
               title="淡入动画时长"

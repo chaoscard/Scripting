@@ -122,14 +122,11 @@ export function useIllustDetailState(illustID: number): {
   const [ambientIntensity, setAmbientIntensity] = useState(
     () => loadSettings().ambientIntensity
   )
-  const [experimentalEnabled, setExperimentalEnabled] = useState(
-    () => loadSettings().experimentalImmersion && loadSettings().overrideSecondaryPagesImmersion
-  )
   const [ambientAlgorithm, setAmbientAlgorithm] = useState(
-    () => loadSettings().experimentalImmersionAlgorithm
-  )
-  const [experimentalIntensity, setExperimentalIntensity] = useState(
-    () => loadSettings().experimentalImmersionIntensity
+    () =>
+      loadSettings().experimentalImmersion
+        ? loadSettings().experimentalImmersionAlgorithm
+        : loadSettings().ambientAlgorithm
   )
   const [ugoiraExportFormat, setUgoiraExportFormat] = useState(
     () => loadSettings().ugoiraExportFormat ?? "mp4"
@@ -149,14 +146,10 @@ export function useIllustDetailState(illustID: number): {
     const settings = loadSettings()
     if (!settings.ambientImmersion) return null
     const initial = getCachedIllust(illustID)
-    const activeIntensity =
-      settings.experimentalImmersion && settings.overrideSecondaryPagesImmersion
-        ? settings.experimentalImmersionIntensity
-        : settings.ambientIntensity
     return getInitialIllustPalette(
       initial,
       isDark,
-      activeIntensity,
+      settings.ambientIntensity,
       getDetailImageQuality(settings)
     )
   })
@@ -229,21 +222,19 @@ export function useIllustDetailState(illustID: number): {
     }
   }
 
-  const effectiveIntensity = experimentalEnabled ? experimentalIntensity : ambientIntensity
-
   const ambientPaletteRef = useLatest(ambientPalette)
   const handleMainImageLoaded = useCallback(() => {
     setMediaReady(true)
     if (!ambientPaletteRef.current && ambientEnabled) {
       const bigImageUrl = pageURLs[0]
       if (bigImageUrl) {
-        const pal = getCachedIllustAmbientPalette(bigImageUrl, isDark, effectiveIntensity)
+        const pal = getCachedIllustAmbientPalette(bigImageUrl, isDark, ambientIntensity)
         if (pal) {
           setAmbientPalette(pal)
         }
       }
     }
-  }, [ambientEnabled, isDark, effectiveIntensity, pageURLs])
+  }, [ambientEnabled, isDark, ambientIntensity, pageURLs])
 
   const pageAspect = useMemo(() => {
     if (!currentIllust) return 0.75
@@ -444,7 +435,7 @@ export function useIllustDetailState(illustID: number): {
 
     let active = true
     for (const u of candidates) {
-      const cached = getCachedIllustAmbientPalette(u, isDark, effectiveIntensity)
+      const cached = getCachedIllustAmbientPalette(u, isDark, ambientIntensity)
       if (cached) {
         setAmbientPalette(cached)
         return
@@ -455,13 +446,13 @@ export function useIllustDetailState(illustID: number): {
       void extractIllustAmbientPalette(targetUrl).then((result) => {
         if (!active || !result) return
         const modeObj = isDark ? result.dark : result.light
-        setAmbientPalette(modeObj[effectiveIntensity] ?? modeObj.medium)
+        setAmbientPalette(modeObj[ambientIntensity] ?? modeObj.medium)
       })
     }
     return () => {
       active = false
     }
-  }, [illust?.id, quality, isDark, ambientEnabled, effectiveIntensity])
+  }, [illust?.id, quality, isDark, ambientEnabled, ambientIntensity])
 
   useEffect(() => {
     return onSettingsChanged(() => {
@@ -469,9 +460,11 @@ export function useIllustDetailState(illustID: number): {
       setQuality(getDetailImageQuality(settings))
       setAmbientEnabled(settings.ambientImmersion)
       setAmbientIntensity(settings.ambientIntensity)
-      setExperimentalEnabled(settings.experimentalImmersion && settings.overrideSecondaryPagesImmersion)
-      setAmbientAlgorithm(settings.experimentalImmersionAlgorithm)
-      setExperimentalIntensity(settings.experimentalImmersionIntensity)
+      setAmbientAlgorithm(
+        settings.experimentalImmersion
+          ? settings.experimentalImmersionAlgorithm
+          : settings.ambientAlgorithm
+      )
       setUgoiraExportFormat(settings.ugoiraExportFormat ?? "mp4")
       setQuickActionEnabled(settings.quickActionButtonEnabled)
       setQuickActionType(settings.quickActionButtonAction)
@@ -739,31 +732,15 @@ export function useIllustDetailState(illustID: number): {
   }
 
   const ambientBackgroundNode =
-    ambientEnabled && ambientPalette ? (
-      experimentalEnabled ? (
-        renderAmbientBackground({
+    ambientEnabled && ambientPalette
+      ? renderAmbientBackground({
           ambientPalette,
           ambientAlgorithm,
           isDark,
-          ambientIntensity: experimentalIntensity,
+          ambientIntensity,
           active: true,
         })
-      ) : (
-        <Rectangle
-          fill={{
-            colors: [
-              ambientPalette.topColor,
-              ambientPalette.midColor,
-              ambientPalette.backgroundColor,
-              ambientPalette.backgroundColor,
-            ],
-            startPoint: "top",
-            endPoint: "bottom",
-          }}
-          ignoresSafeArea={true}
-        />
-      )
-    ) : null
+      : null
 
   const state: IllustDetailState = {
     illustID,

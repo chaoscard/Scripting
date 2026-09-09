@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useColorScheme, type Color } from "scripting"
-import { loadSettings, onSettingsChanged, type AmbientIntensity, type NovelReaderExperimentalAlgorithm } from "../../store/settings"
+import { loadSettings, onSettingsChanged, type AmbientIntensity, type AmbientAlgorithm } from "../../store/settings"
 import {
   extractIllustAmbientPalette,
   getCachedIllustAmbientPalette,
@@ -10,10 +10,15 @@ import { renderAmbientBackground } from "./renderAmbientBackground"
 export interface NovelAmbientState {
   ambientEnabled: boolean
   ambientIntensity: AmbientIntensity
-  ambientAlgorithm: NovelReaderExperimentalAlgorithm
+  ambientAlgorithm: AmbientAlgorithm
   ambientPalette: IllustAmbientPalette | null
   ambientBackground: any
   topColor: Color | undefined
+}
+
+function resolveNovelAlgorithm(): AmbientAlgorithm {
+  const s = loadSettings()
+  return s.experimentalImmersion ? s.experimentalImmersionAlgorithm : s.ambientAlgorithm
 }
 
 export function useNovelExperimentalAmbientPalette(
@@ -23,31 +28,23 @@ export function useNovelExperimentalAmbientPalette(
   const colorScheme = useColorScheme()
   const isDark = colorScheme === "dark"
   const [ambientIntensity, setAmbientIntensity] = useState<AmbientIntensity>(
-    () => loadSettings().experimentalImmersionIntensity
+    () => loadSettings().ambientIntensity
   )
-  const [novelAlgorithm, setNovelAlgorithm] = useState<NovelReaderExperimentalAlgorithm>(
-    () => loadSettings().novelReaderExperimentalAlgorithm
+  const [novelAlgorithm, setNovelAlgorithm] = useState<AmbientAlgorithm>(
+    resolveNovelAlgorithm
   )
   const [ambientEnabled, setAmbientEnabled] = useState(
-    () =>
-      loadSettings().ambientImmersion &&
-      loadSettings().experimentalImmersion &&
-      loadSettings().novelReaderExperimentalAlgorithm !== "off"
+    () => loadSettings().ambientImmersion && loadSettings().novelReaderImmersion
   )
   const [ambientPalette, setAmbientPalette] = useState<IllustAmbientPalette | null>(() => {
     const s = loadSettings()
-    if (
-      !s.ambientImmersion ||
-      !s.experimentalImmersion ||
-      s.novelReaderExperimentalAlgorithm === "off" ||
-      !imageUrl
-    ) {
+    if (!s.ambientImmersion || !s.novelReaderImmersion || !imageUrl) {
       return null
     }
     return getCachedIllustAmbientPalette(
       imageUrl,
       isDark,
-      s.experimentalImmersionIntensity
+      s.ambientIntensity
     )
   })
 
@@ -55,17 +52,19 @@ export function useNovelExperimentalAmbientPalette(
     return onSettingsChanged(() => {
       const nextSettings = loadSettings()
       setAmbientEnabled(
-        nextSettings.ambientImmersion &&
-        nextSettings.experimentalImmersion &&
-        nextSettings.novelReaderExperimentalAlgorithm !== "off"
+        nextSettings.ambientImmersion && nextSettings.novelReaderImmersion
       )
-      setAmbientIntensity(nextSettings.experimentalImmersionIntensity)
-      setNovelAlgorithm(nextSettings.novelReaderExperimentalAlgorithm)
+      setAmbientIntensity(nextSettings.ambientIntensity)
+      setNovelAlgorithm(
+        nextSettings.experimentalImmersion
+          ? nextSettings.experimentalImmersionAlgorithm
+          : nextSettings.ambientAlgorithm
+      )
     })
   }, [])
 
   useEffect(() => {
-    if (!ambientEnabled || !imageUrl || novelAlgorithm === "off") {
+    if (!ambientEnabled || !imageUrl) {
       setAmbientPalette(null)
       return
     }
@@ -85,13 +84,13 @@ export function useNovelExperimentalAmbientPalette(
   }, [imageUrl, isDark, ambientEnabled, ambientIntensity, novelAlgorithm])
 
   const synchronousPalette =
-    ambientEnabled && imageUrl && novelAlgorithm !== "off"
+    ambientEnabled && imageUrl
       ? getCachedIllustAmbientPalette(imageUrl, isDark, ambientIntensity)
       : null
   const effectivePalette = ambientPalette ?? synchronousPalette
 
   const ambientBackground = useMemo(() => {
-    if (!ambientEnabled || !effectivePalette || novelAlgorithm === "off") return undefined
+    if (!ambientEnabled || !effectivePalette) return undefined
     return renderAmbientBackground({
       ambientPalette: effectivePalette,
       ambientAlgorithm: novelAlgorithm,
@@ -102,7 +101,7 @@ export function useNovelExperimentalAmbientPalette(
   }, [ambientEnabled, effectivePalette, novelAlgorithm, isDark, ambientIntensity, active])
 
   const topColor =
-    ambientEnabled && effectivePalette && novelAlgorithm !== "off"
+    ambientEnabled && effectivePalette
       ? novelAlgorithm === "transcend" ||
         novelAlgorithm === "ultimate" ||
         novelAlgorithm === "geminiA" ||

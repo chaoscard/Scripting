@@ -28,6 +28,7 @@ import { DreamyFluidBackground } from "./components/DreamyBackground"
 export function LoginView(props: {
   onClose: () => void
   onSuccess: () => void
+  isModal?: boolean
 }) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -152,16 +153,37 @@ export function LoginView(props: {
       ignoresSafeArea={true}
       toolbarBackground="clear"
       toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
-      toolbar={appToolbar(
-        props.onClose,
-        undefined,
-        <Button
-          key="network-settings"
-          title="网络设置"
-          systemImage="network"
-          action={() => setShowNetworkSheet(true)}
-        />
-      )}
+      toolbar={
+        props.isModal
+          ? {
+              topBarLeading: [
+                <Button
+                  key="modal-close"
+                  title="关闭"
+                  systemImage="xmark"
+                  action={props.onClose}
+                />,
+              ],
+              topBarTrailing: [
+                <Button
+                  key="network-settings"
+                  title="网络设置"
+                  systemImage="network"
+                  action={() => setShowNetworkSheet(true)}
+                />,
+              ],
+            }
+          : appToolbar(
+              props.onClose,
+              undefined,
+              <Button
+                key="network-settings"
+                title="网络设置"
+                systemImage="network"
+                action={() => setShowNetworkSheet(true)}
+              />
+            )
+      }
       sheet={{
         isPresented: showNetworkSheet,
         onChanged: (val: boolean) => setShowNetworkSheet(val),

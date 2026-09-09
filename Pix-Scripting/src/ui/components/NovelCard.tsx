@@ -12,6 +12,7 @@ import {
   ZStack,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "scripting"
@@ -66,6 +67,21 @@ export function NovelCard(props: {
   const [activeMarker] = useNovelMarker(novel.id, markerPage ?? null)
   const [bookmarkBusy, setBookmarkBusy] = useState(false)
   const [showBookmarkDetail, setShowBookmarkDetail] = useState(false)
+  const [isAppeared, setIsAppeared] = useState(false)
+
+  const handleAppear = useCallback(() => {
+    if (!isAppeared) setIsAppeared(true)
+    onAppear?.()
+  }, [isAppeared, onAppear])
+
+  const effectivePriority = useMemo(() => {
+    if (priority == null) return priority
+    const enablePreemption = loadSettings().enableViewportPreemption ?? true
+    if (enablePreemption && isAppeared) {
+      return priority - 10000
+    }
+    return priority
+  }, [priority, isAppeared])
 
   async function toggleNovelBookmark() {
     if (bookmarkBusy) return
@@ -134,7 +150,7 @@ export function NovelCard(props: {
           <HStack
             spacing={10}
             padding={10}
-            onAppear={onAppear}
+            onAppear={handleAppear}
             alignment="top"
             glassEffect={{ type: "rect", cornerRadius: 14 }}
             shadow={{ color: "#0000000F", radius: 18, y: 8 }}
@@ -150,7 +166,7 @@ export function NovelCard(props: {
                 centerCropAspect={0.71}
                 cornerRadius={0}
                 contentMode="fill"
-                priority={priority}
+                priority={effectivePriority}
                 frame={{ width: 68, height: 96 }}
               />
             </ZStack>

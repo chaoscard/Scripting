@@ -261,11 +261,12 @@ export function enforceCacheLimit(): void {
   saveMeta(meta)
 }
 
-// 图片下载并发控制：同一 URL 在途去重。
-// 最大下载并发数与预取 Worker 数根据设置“图片并发数”结合“下载并发比例 / 预取并发比例”动态计算。
-// 引入优先级调度：前台视图根据卡片在信息流中的自然次序传入 priority（值越小越优先），
-// 保证自顶向下优先加载最上方的卡片，消除左右列分发造成的挂载先后偏差。
-// 预取可在出队前取消；可见卡片随后请求同一 URL 时会提升为前台任务。
+// 图片下载并发控制：同一 URL 在途去重与分块滑动窗口顺序下载。
+// 1. 图片并发总上限：受控于 settings.imageBatchConcurrency（默认 30 张），提供全局并发底线保护；
+// 2. 前台并发窗口：受控于 settings.imageForegroundConcurrency（默认 6 张），严格按 priority 升序排队与滑动滑出；
+// 3. 后台预取并发：受控于 settings.imagePrefetchConcurrency（默认 10 张），在空闲或独立预取管道中静默下载；
+// 4. 视口感知动态抢占：当用户快速滑停触发 onAppear 时，视口卡片动态提升 priority 瞬间插队到队头，抢占接下来的下载槽位；
+// 5. 预取任务可在出队前取消；可见卡片请求同一 URL 时瞬间提升为不可取消的高优先级前台任务。
 interface PrefetchState {
   cancelled: boolean
 }
@@ -285,55 +286,71 @@ interface DownloadTask {
 }
 
 const inflightDownloads = new Map<string, DownloadTask>()
-let activeDownloads = 0
+let activeForegroundDownloads = 0
 let activePrefetchDownloads = 0
 const foregroundQueue: DownloadTask[] = []
 const prefetchQueue: DownloadTask[] = []
 
+export function maxTotalConcurrency(): number {
+  const settings = loadSettings()
+  return settings.imageBatchConcurrency ?? 30
+}
+
 export function maxConcurrentDownloads(): number {
   const settings = loadSettings()
-  const concurrency = settings.imageBatchConcurrency ?? 30
-  const ratio = (settings.imageDownloadConcurrencyRatio ?? 100) / 100
-  return Math.max(1, Math.round(concurrency * ratio))
+  return settings.imageForegroundConcurrency ?? 10
 }
 
 export function maxPrefetchWorkers(): number {
   const settings = loadSettings()
-  const concurrency = settings.imageBatchConcurrency ?? 30
-  const ratio = (settings.imagePrefetchConcurrencyRatio ?? 100) / 100
-  return Math.max(1, Math.round(concurrency * ratio))
+  return settings.imagePrefetchConcurrency ?? 15
 }
 
 export function maxPrefetchUrls(): number {
   const settings = loadSettings()
-  const concurrency = settings.imageBatchConcurrency ?? 30
-  const ratio = (settings.imagePrefetchConcurrencyRatio ?? 100) / 100
-  return Math.max(1, Math.round(concurrency * ratio))
+  return Math.max(10, (settings.imagePrefetchConcurrency ?? 15) * 3)
 }
 
 function pumpDownloads(): void {
-  const maxDownloads = maxConcurrentDownloads()
+  const maxTotal = maxTotalConcurrency()
+  const maxForeground = maxConcurrentDownloads()
   const maxPrefetch = maxPrefetchWorkers()
-  while (activeDownloads < maxDownloads) {
-    let task = foregroundQueue.shift()
-    let lane: "foreground" | "prefetch" = "foreground"
-    if (!task) {
-      if (activePrefetchDownloads >= maxPrefetch) return
-      task = prefetchQueue.shift()
-      lane = "prefetch"
-    }
-    if (!task) return
+
+  // 1. 优先满足前台滑动窗口（严格按 priority 升序推进）
+  while (
+    activeForegroundDownloads + activePrefetchDownloads < maxTotal &&
+    activeForegroundDownloads < maxForeground &&
+    foregroundQueue.length > 0
+  ) {
+    const task = foregroundQueue.shift()
+    if (!task) break
     task.queue = null
-    task.activeLane = lane
-    activeDownloads++
-    if (lane === "prefetch") activePrefetchDownloads++
+    task.activeLane = "foreground"
+    activeForegroundDownloads++
+    task.run()
+  }
+
+  // 2. 后台预取管道调度（在总上限与预取并发配额内执行）
+  while (
+    activeForegroundDownloads + activePrefetchDownloads < maxTotal &&
+    activePrefetchDownloads < maxPrefetch &&
+    prefetchQueue.length > 0
+  ) {
+    const task = prefetchQueue.shift()
+    if (!task) break
+    task.queue = null
+    task.activeLane = "prefetch"
+    activePrefetchDownloads++
     task.run()
   }
 }
 
 function releaseDownloadSlot(task: DownloadTask): void {
-  activeDownloads--
-  if (task.activeLane === "prefetch") activePrefetchDownloads--
+  if (task.activeLane === "foreground") {
+    activeForegroundDownloads = Math.max(0, activeForegroundDownloads - 1)
+  } else if (task.activeLane === "prefetch") {
+    activePrefetchDownloads = Math.max(0, activePrefetchDownloads - 1)
+  }
   task.activeLane = null
   pumpDownloads()
 }
@@ -349,7 +366,7 @@ function insertForegroundTask(task: DownloadTask): void {
   }
 }
 
-function updateTaskPriority(task: DownloadTask, newPriority: number): void {
+export function updateTaskPriority(task: DownloadTask, newPriority: number): void {
   if (newPriority < task.priority) {
     task.priority = newPriority
     if (task.queue === "foreground") {
@@ -387,6 +404,17 @@ export async function loadImage(
   priority = DEFAULT_IMAGE_PRIORITY
 ): Promise<string | null> {
   return requestImage(url, undefined, priority)
+}
+
+/**
+ * 动态提升已有或正在排队图片的优先级（用于视口滚动出现时的即时抢占）
+ */
+export function boostImagePriority(url: string, priority: number): void {
+  const task = inflightDownloads.get(url)
+  if (!task || task.generation !== cacheGeneration) return
+  task.foregroundRequested = true
+  updateTaskPriority(task, priority)
+  promoteQueuedDownload(task)
 }
 
 function requestImage(

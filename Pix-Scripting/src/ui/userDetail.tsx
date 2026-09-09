@@ -614,6 +614,16 @@ export function UserDetailView(props: { userID: number }) {
     await Promise.all([loadDetail(), worksRefreshRef.current()])
   }
 
+  const showStandaloneShare =
+    !Device.isiPad && (isOwnProfile || isAppleMusic || availableKinds.length <= 1)
+  const showStandaloneDownload =
+    !Device.isiPad || isAppleMusic || availableKinds.length <= 1
+
+  const handleShare = () => {
+    triggerHaptic("selection")
+    void ShareSheet.present([`https://www.pixiv.net/users/${userID}`])
+  }
+
   if (!detail) {
     if (detailError) {
       return (
@@ -651,6 +661,7 @@ export function UserDetailView(props: { userID: number }) {
         topBarTrailing: [
           ...(!isOwnProfile ? [
             <Button
+              key="follow-button"
               disabled={followBusy}
               action={toggleFollow}
               contextMenu={{
@@ -695,7 +706,17 @@ export function UserDetailView(props: { userID: number }) {
               />
             </Button>,
           ] : []),
-          ...(!Device.isiPad || isAppleMusic || availableKinds.length <= 1
+          ...(showStandaloneShare
+            ? [
+                <Button
+                  key="share-button"
+                  action={handleShare}
+                >
+                  <Image systemName="square.and.arrow.up" />
+                </Button>,
+              ]
+            : []),
+          ...(showStandaloneDownload
             ? [
                 <Button
                   key="download-button"
@@ -751,16 +772,15 @@ export function UserDetailView(props: { userID: number }) {
                 </Menu>,
               ]
             : []),
-          <Menu label={<Image systemName="ellipsis.circle" />}>
-            <Button
-              title="分享"
-              systemImage="square.and.arrow.up"
-              action={() => {
-                triggerHaptic("selection")
-                void ShareSheet.present([`https://www.pixiv.net/users/${userID}`])
-              }}
-            />
-            {Device.isiPad && !isAppleMusic && availableKinds.length > 1 ? (
+          <Menu key="more-menu" label={<Image systemName="ellipsis.circle" />}>
+            {!showStandaloneShare ? (
+              <Button
+                title="分享"
+                systemImage="square.and.arrow.up"
+                action={handleShare}
+              />
+            ) : null}
+            {!showStandaloneDownload ? (
               <Button
                 title={downloading ? (downloadStatusText || "正在下载…") : "批量下载作品"}
                 systemImage={downloading ? "arrow.down.circle.fill" : "square.and.arrow.down"}

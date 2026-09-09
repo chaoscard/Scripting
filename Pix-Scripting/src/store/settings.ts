@@ -16,8 +16,9 @@ export const PAGE_LAYOUT_VALUES: ReadonlyArray<PageLayout> = ["appleMusic", "cla
 export type CloseButtonAction = "minimize" | "exit"
 export type WatchlistSortOrder = "asc" | "desc"
 export type AmbientIntensity = "low" | "medium" | "high"
-export type AmbientAlgorithm = "classic" | "explore" | "ultimate" | "transcend" | "geminiA" | "geminiB"
-export type NovelReaderExperimentalAlgorithm = "off" | "classic" | "explore" | "ultimate" | "transcend" | "geminiA" | "geminiB"
+export type BaseAmbientAlgorithm = "classic" | "explore" | "ultimate"
+export type ExperimentalAmbientAlgorithm = "transcend" | "geminiA" | "geminiB"
+export type AmbientAlgorithm = BaseAmbientAlgorithm | ExperimentalAmbientAlgorithm
 export type GeminiMotionSpeed = "fast" | "official" | "calm"
 export type LaunchPage = "discovery" | "ranking" | "following"
 export type ImageBatchConcurrency = number
@@ -115,11 +116,10 @@ export interface AppSettings {
   compactIllustCard: boolean
   ambientImmersion: boolean
   ambientIntensity: AmbientIntensity
+  ambientAlgorithm: BaseAmbientAlgorithm
+  novelReaderImmersion: boolean
   experimentalImmersion: boolean
-  overrideSecondaryPagesImmersion: boolean
-  experimentalImmersionIntensity: AmbientIntensity
-  experimentalImmersionAlgorithm: AmbientAlgorithm
-  novelReaderExperimentalAlgorithm: NovelReaderExperimentalAlgorithm
+  experimentalImmersionAlgorithm: ExperimentalAmbientAlgorithm
   geminiMotionSpeed: GeminiMotionSpeed
   geminiCustomParamsEnabled: boolean
   geminiTransitionIntervalMs: number
@@ -150,9 +150,10 @@ export interface AppSettings {
   cacheLimitMB: number | null
   recordHistory: boolean
   imageBatchConcurrency: ImageBatchConcurrency
+  imageForegroundConcurrency: number
+  imagePrefetchConcurrency: number
+  enableViewportPreemption: boolean
   aiTranslateConcurrency: AITranslateConcurrency
-  imageDownloadConcurrencyRatio: number
-  imagePrefetchConcurrencyRatio: number
   imageFadeInDuration: ImageFadeInDuration
   blurCrossFadeDuration: BlurCrossFadeDuration
   backgroundPreheatDuration: BackgroundPreheatDuration
@@ -208,11 +209,10 @@ const DEFAULT_SETTINGS: AppSettings = {
   compactIllustCard: true,
   ambientImmersion: true,
   ambientIntensity: "medium",
+  ambientAlgorithm: "classic",
+  novelReaderImmersion: false,
   experimentalImmersion: false,
-  overrideSecondaryPagesImmersion: false,
-  experimentalImmersionIntensity: "medium",
-  experimentalImmersionAlgorithm: "classic",
-  novelReaderExperimentalAlgorithm: "off",
+  experimentalImmersionAlgorithm: "transcend",
   geminiMotionSpeed: "official",
   geminiCustomParamsEnabled: false,
   geminiTransitionIntervalMs: 2000,
@@ -243,9 +243,10 @@ const DEFAULT_SETTINGS: AppSettings = {
   cacheLimitMB: 300,
   recordHistory: true,
   imageBatchConcurrency: 30,
+  imageForegroundConcurrency: 10,
+  imagePrefetchConcurrency: 15,
+  enableViewportPreemption: true,
   aiTranslateConcurrency: 4,
-  imageDownloadConcurrencyRatio: 100,
-  imagePrefetchConcurrencyRatio: 100,
   imageFadeInDuration: 65,
   blurCrossFadeDuration: 80,
   backgroundPreheatDuration: 1000,
@@ -330,27 +331,20 @@ const QUICK_ACTION_BUTTON_POSITION_VALUES: readonly QuickActionButtonPosition[] 
   "trailing",
 ]
 const AMBIENT_INTENSITY_VALUES: readonly AmbientIntensity[] = ["low", "medium", "high"]
+const BASE_AMBIENT_ALGORITHM_VALUES: readonly BaseAmbientAlgorithm[] = [
+  "classic",
+  "explore",
+  "ultimate",
+]
+const EXPERIMENTAL_AMBIENT_ALGORITHM_VALUES: readonly ExperimentalAmbientAlgorithm[] = [
+  "transcend",
+  "geminiA",
+  "geminiB",
+]
 const GEMINI_MOTION_SPEED_VALUES: readonly GeminiMotionSpeed[] = [
   "fast",
   "official",
   "calm",
-]
-const AMBIENT_ALGORITHM_VALUES: readonly AmbientAlgorithm[] = [
-  "classic",
-  "explore",
-  "ultimate",
-  "transcend",
-  "geminiA",
-  "geminiB",
-]
-const NOVEL_READER_EXPERIMENTAL_ALGORITHM_VALUES: readonly NovelReaderExperimentalAlgorithm[] = [
-  "off",
-  "classic",
-  "explore",
-  "ultimate",
-  "transcend",
-  "geminiA",
-  "geminiB",
 ]
 const CACHE_LIMIT_VALUES = [300, 500, 1000, 2000] as const
 const IMAGE_SOURCE_MODE_VALUES: readonly ImageSourceMode[] = [
@@ -425,18 +419,25 @@ function cacheLimitOf(value: unknown): number | null {
     : DEFAULT_SETTINGS.cacheLimitMB
 }
 
-function parseConcurrencyRatio(value: unknown, fallback: number): number {
-  if (typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100) {
-    return Math.max(0, Math.min(100, Math.round(value)))
-  }
-  return fallback
-}
-
 function parseImageConcurrency(value: unknown): number {
   if (typeof value === "number" && Number.isFinite(value) && value > 0) {
     return Math.max(1, Math.min(90, Math.round(value)))
   }
   return DEFAULT_SETTINGS.imageBatchConcurrency
+}
+
+function parseForegroundConcurrency(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return Math.max(1, Math.min(30, Math.round(value)))
+  }
+  return DEFAULT_SETTINGS.imageForegroundConcurrency
+}
+
+function parsePrefetchConcurrency(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+    return Math.max(0, Math.min(30, Math.round(value)))
+  }
+  return DEFAULT_SETTINGS.imagePrefetchConcurrency
 }
 
 function parseAITranslateConcurrency(value: unknown): number {
@@ -623,34 +624,23 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
     ambientIntensity: isOneOf(stored?.ambientIntensity, AMBIENT_INTENSITY_VALUES)
       ? stored.ambientIntensity
       : DEFAULT_SETTINGS.ambientIntensity,
-    experimentalImmersion: boolOr(stored?.ambientImmersion, DEFAULT_SETTINGS.ambientImmersion)
-      ? boolOr(
-          stored?.experimentalImmersion,
-          DEFAULT_SETTINGS.experimentalImmersion
-        )
-      : false,
-    overrideSecondaryPagesImmersion: boolOr(
-      stored?.overrideSecondaryPagesImmersion,
-      DEFAULT_SETTINGS.overrideSecondaryPagesImmersion
+    ambientAlgorithm: isOneOf(stored?.ambientAlgorithm, BASE_AMBIENT_ALGORITHM_VALUES)
+      ? stored.ambientAlgorithm
+      : DEFAULT_SETTINGS.ambientAlgorithm,
+    novelReaderImmersion: boolOr(
+      stored?.novelReaderImmersion,
+      DEFAULT_SETTINGS.novelReaderImmersion
     ),
-    experimentalImmersionIntensity: isOneOf(
-      stored?.experimentalImmersionIntensity,
-      AMBIENT_INTENSITY_VALUES
-    )
-      ? stored.experimentalImmersionIntensity
-      : DEFAULT_SETTINGS.experimentalImmersionIntensity,
+    experimentalImmersion: boolOr(
+      stored?.experimentalImmersion,
+      DEFAULT_SETTINGS.experimentalImmersion
+    ),
     experimentalImmersionAlgorithm: isOneOf(
       stored?.experimentalImmersionAlgorithm,
-      AMBIENT_ALGORITHM_VALUES
+      EXPERIMENTAL_AMBIENT_ALGORITHM_VALUES
     )
       ? stored.experimentalImmersionAlgorithm
       : DEFAULT_SETTINGS.experimentalImmersionAlgorithm,
-    novelReaderExperimentalAlgorithm: isOneOf(
-      stored?.novelReaderExperimentalAlgorithm,
-      NOVEL_READER_EXPERIMENTAL_ALGORITHM_VALUES
-    )
-      ? stored.novelReaderExperimentalAlgorithm
-      : DEFAULT_SETTINGS.novelReaderExperimentalAlgorithm,
     geminiMotionSpeed: isOneOf(stored?.geminiMotionSpeed, GEMINI_MOTION_SPEED_VALUES)
       ? stored.geminiMotionSpeed
       : DEFAULT_SETTINGS.geminiMotionSpeed,
@@ -726,15 +716,13 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
     cacheLimitMB: cacheLimitOf(stored?.cacheLimitMB),
     recordHistory: boolOr(stored?.recordHistory, DEFAULT_SETTINGS.recordHistory),
     imageBatchConcurrency: parseImageConcurrency(stored?.imageBatchConcurrency),
+    imageForegroundConcurrency: parseForegroundConcurrency(stored?.imageForegroundConcurrency),
+    imagePrefetchConcurrency: parsePrefetchConcurrency(stored?.imagePrefetchConcurrency),
+    enableViewportPreemption: boolOr(
+      stored?.enableViewportPreemption,
+      DEFAULT_SETTINGS.enableViewportPreemption
+    ),
     aiTranslateConcurrency: parseAITranslateConcurrency(stored?.aiTranslateConcurrency),
-    imageDownloadConcurrencyRatio: parseConcurrencyRatio(
-      stored?.imageDownloadConcurrencyRatio,
-      DEFAULT_SETTINGS.imageDownloadConcurrencyRatio
-    ),
-    imagePrefetchConcurrencyRatio: parseConcurrencyRatio(
-      stored?.imagePrefetchConcurrencyRatio,
-      DEFAULT_SETTINGS.imagePrefetchConcurrencyRatio
-    ),
     imageFadeInDuration: parseFadeInDuration(stored?.imageFadeInDuration),
     blurCrossFadeDuration: parseBlurCrossFadeDuration(stored?.blurCrossFadeDuration),
     backgroundPreheatDuration: parseBackgroundPreheatDuration(stored?.backgroundPreheatDuration),

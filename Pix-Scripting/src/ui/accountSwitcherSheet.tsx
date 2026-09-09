@@ -83,14 +83,20 @@ export function AccountSwitcherSheet(props: {
 
   if (isAddingAccount) {
     return (
-      <LoginView
-        onClose={() => setIsAddingAccount(false)}
-        onSuccess={() => {
-          setIsAddingAccount(false)
-          setAccounts(session.getAllAccounts())
-          onClose()
-        }}
-      />
+      <NavigationStack
+        presentationDetents={["large"]}
+        presentationDragIndicator="visible"
+      >
+        <LoginView
+          isModal={true}
+          onClose={() => setIsAddingAccount(false)}
+          onSuccess={() => {
+            setIsAddingAccount(false)
+            setAccounts(session.getAllAccounts())
+            onClose()
+          }}
+        />
+      </NavigationStack>
     )
   }
 

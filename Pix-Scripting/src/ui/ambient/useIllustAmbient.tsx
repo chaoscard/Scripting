@@ -16,6 +16,11 @@ export interface IllustAmbientState {
   topColor: Color | undefined
 }
 
+function resolveAmbientAlgorithm(): AmbientAlgorithm {
+  const s = loadSettings()
+  return s.experimentalImmersion ? s.experimentalImmersionAlgorithm : s.ambientAlgorithm
+}
+
 export function useExperimentalAmbientPalette(
   imageUrl: string | null | undefined,
   active: boolean = true
@@ -23,30 +28,34 @@ export function useExperimentalAmbientPalette(
   const colorScheme = useColorScheme()
   const isDark = colorScheme === "dark"
   const [ambientEnabled, setAmbientEnabled] = useState(
-    () => loadSettings().ambientImmersion && loadSettings().experimentalImmersion
+    () => loadSettings().ambientImmersion
   )
   const [ambientIntensity, setAmbientIntensity] = useState<AmbientIntensity>(
-    () => loadSettings().experimentalImmersionIntensity
+    () => loadSettings().ambientIntensity
   )
   const [ambientAlgorithm, setAmbientAlgorithm] = useState<AmbientAlgorithm>(
-    () => loadSettings().experimentalImmersionAlgorithm
+    resolveAmbientAlgorithm
   )
   const [ambientPalette, setAmbientPalette] = useState<IllustAmbientPalette | null>(() => {
     const s = loadSettings()
-    if (!s.ambientImmersion || !s.experimentalImmersion || !imageUrl) return null
+    if (!s.ambientImmersion || !imageUrl) return null
     return getCachedIllustAmbientPalette(
       imageUrl,
       isDark,
-      s.experimentalImmersionIntensity
+      s.ambientIntensity
     )
   })
 
   useEffect(() => {
     return onSettingsChanged(() => {
       const nextSettings = loadSettings()
-      setAmbientEnabled(nextSettings.ambientImmersion && nextSettings.experimentalImmersion)
-      setAmbientIntensity(nextSettings.experimentalImmersionIntensity)
-      setAmbientAlgorithm(nextSettings.experimentalImmersionAlgorithm)
+      setAmbientEnabled(nextSettings.ambientImmersion)
+      setAmbientIntensity(nextSettings.ambientIntensity)
+      setAmbientAlgorithm(
+        nextSettings.experimentalImmersion
+          ? nextSettings.experimentalImmersionAlgorithm
+          : nextSettings.ambientAlgorithm
+      )
     })
   }, [])
 

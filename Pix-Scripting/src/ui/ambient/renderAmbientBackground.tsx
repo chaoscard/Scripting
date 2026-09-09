@@ -1,12 +1,12 @@
 import { Rectangle, ZStack, type Color } from "scripting"
-import type { AmbientAlgorithm, AmbientIntensity, NovelReaderExperimentalAlgorithm } from "../../store/settings"
+import type { AmbientAlgorithm, AmbientIntensity } from "../../store/settings"
 import type { IllustAmbientPalette } from "../../image/colorExtractor"
 import { TranscendAmbientBackground } from "../components/TranscendAmbientBackground"
 import { GeminiAmbientBackground } from "../components/GeminiAmbientBackground"
 
 export interface RenderAmbientOptions {
   ambientPalette: IllustAmbientPalette | null | undefined
-  ambientAlgorithm: AmbientAlgorithm | NovelReaderExperimentalAlgorithm
+  ambientAlgorithm: AmbientAlgorithm
   isDark: boolean
   ambientIntensity: AmbientIntensity
   active?: boolean
@@ -18,7 +18,7 @@ export interface RenderAmbientOptions {
  */
 export function renderAmbientBackground(options: RenderAmbientOptions): any {
   const { ambientPalette, ambientAlgorithm, isDark, ambientIntensity, active = true } = options
-  if (!ambientPalette || ambientAlgorithm === "off") return undefined
+  if (!ambientPalette) return undefined
 
   if (ambientAlgorithm === "geminiA" || ambientAlgorithm === "geminiB") {
     const primary = ambientPalette.ultimateLeadingColor ?? ambientPalette.topColor
