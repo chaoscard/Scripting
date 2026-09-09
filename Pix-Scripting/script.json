@@ -5,7 +5,7 @@
   "remoteResource": {
     "autoUpdateInterval": null,
     "url": "https://raw.githubusercontent.com/chaoscard/Scripting/main/Release/Pix-Scripting.scripting",
-    "hash": "0d2791b716b851dcf25a4c7ac68df90a"
+    "hash": "afca99d41d1b0822a014d3fa6eacc8ad"
   },
   "intentInputTypes": [],
   "name": "Pix-Scripting",

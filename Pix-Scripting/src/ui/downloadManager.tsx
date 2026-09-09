@@ -1280,6 +1280,57 @@ export function DownloadDetailListView(props: {
   )
 }
 
+function getFileItemVisual(item: ManagedFileItem): { iconName: string; iconColor: string } {
+  const category = item.category
+  const ext = item.extension.toLowerCase()
+
+  // 1. 漫画分类：统一采用绿色系漫画图标
+  if (category === "manga") {
+    if (ext === "cbz") {
+      return { iconName: "book.closed.fill", iconColor: "#34C759" }
+    }
+    return { iconName: "photo.on.rectangle.fill", iconColor: "#34C759" }
+  }
+
+  // 2. 小说分类：统一采用紫色系
+  if (category === "novels") {
+    if (ext === "txt") {
+      return { iconName: "doc.text.fill", iconColor: "#AF52DE" }
+    }
+    return { iconName: "book.fill", iconColor: "#AF52DE" }
+  }
+
+  // 3. 动图分类：采用橙色/粉红动态图标
+  if (category === "ugoira") {
+    if (ext === "mp4" || ext === "mov") {
+      return { iconName: "film", iconColor: "#FF2D55" }
+    }
+    if (ext === "gif") {
+      return { iconName: "photo.stack", iconColor: "#FF9500" }
+    }
+    return { iconName: "film.stack", iconColor: "#FF9500" }
+  }
+
+  // 4. 插画分类：采用蓝色系
+  if (category === "illustrations") {
+    if (ext === "zip") {
+      return { iconName: "doc.zipper", iconColor: "#0096FA" }
+    }
+    return { iconName: "photo", iconColor: "#0096FA" }
+  }
+
+  // 5. 兜底回退：当 category 为 other 或未知时按扩展名推断
+  if (ext === "epub") return { iconName: "book.fill", iconColor: "#AF52DE" }
+  if (ext === "cbz") return { iconName: "book.closed.fill", iconColor: "#34C759" }
+  if (ext === "zip") return { iconName: "doc.zipper", iconColor: "#FF9500" }
+  if (ext === "mp4" || ext === "mov") return { iconName: "film", iconColor: "#FF2D55" }
+  if (ext === "gif") return { iconName: "photo.stack", iconColor: "#FF9500" }
+  if (ext === "jpg" || ext === "png" || ext === "jpeg") return { iconName: "photo", iconColor: "#0096FA" }
+  if (ext === "txt") return { iconName: "doc.text.fill", iconColor: "#5856D6" }
+
+  return { iconName: "doc.fill", iconColor: "#8E8E93" }
+}
+
 function FileRowItem(props: {
   item: ManagedFileItem
   isEditing: boolean
@@ -1289,33 +1340,7 @@ function FileRowItem(props: {
   onDelete: () => void
 }) {
   const { item, isEditing, isSelected, onTap, onRename, onDelete } = props
-
-  const ext = item.extension.toLowerCase()
-  let iconName = "doc.fill"
-  let iconColor = "#8E8E93"
-
-  if (ext === "epub") {
-    iconName = "book.fill"
-    iconColor = "#AF52DE"
-  } else if (ext === "cbz") {
-    iconName = "book.closed.fill"
-    iconColor = "#34C759"
-  } else if (ext === "zip") {
-    iconName = "doc.zipper"
-    iconColor = "#FF9500"
-  } else if (ext === "mp4" || ext === "mov") {
-    iconName = "film"
-    iconColor = "#FF2D55"
-  } else if (ext === "gif") {
-    iconName = "photo.stack"
-    iconColor = "#FF9500"
-  } else if (ext === "jpg" || ext === "png" || ext === "jpeg") {
-    iconName = "photo"
-    iconColor = "#0096FA"
-  } else if (ext === "txt") {
-    iconName = "doc.text.fill"
-    iconColor = "#5856D6"
-  }
+  const { iconName, iconColor } = getFileItemVisual(item)
 
   return (
     <HStack

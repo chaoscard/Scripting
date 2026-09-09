@@ -178,6 +178,11 @@ export function renderIllustToolbarActions(props: IllustToolbarActionsProps): Vi
           systemImage="text.viewfinder"
           action={() => onOpenAI("ocr")}
         />
+        <Button
+          title="翻译图片（生图）"
+          systemImage="wand.and.stars"
+          action={() => onOpenAI("vision")}
+        />
       </Menu>
       <Button
         title="分享"
