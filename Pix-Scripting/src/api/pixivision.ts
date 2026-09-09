@@ -381,11 +381,16 @@ export function parsePixivisionDetailPage(
   html: string,
   articleID: number
 ): PixivisionDetail {
-  const title = pixivisionHTMLToText(
-    html.match(/<h1\b[^>]*class=["'][^"']*(?:amsp__title|am__title)[^"']*["'][^>]*>([\s\S]*?)<\/h1>/i)?.[1] ?? ""
-  )
+  const rawTitle =
+    html.match(/<h1\b[^>]*class=["'][^"']*(?:amsp__title|am__title|article-title)[^"']*["'][^>]*>([\s\S]*?)<\/h1>/i)?.[1] ||
+    html.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i)?.[1] ||
+    html.match(/<meta\b[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i)?.[1] ||
+    html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1] ||
+    ""
+  const title = pixivisionHTMLToText(rawTitle)
   const date = matchAttribute(
-    html.match(/<time\b[^>]*class=["'][^"']*[_ ]date[^"']*["'][^>]*>/i)?.[0] ?? "",
+    (html.match(/<time\b[^>]*class=["'][^"']*[_ ]date[^"']*["'][^>]*>/i)?.[0] ||
+      html.match(/<time\b[^>]*>/i)?.[0]) ?? "",
     "datetime"
   )
   const rawThumbnailURL =
@@ -463,7 +468,10 @@ export function parsePixivisionDetailPage(
   const seenEmbeddedArticles = new Set<number>()
 
   // 4.1 界定正文主体范围（排除底部相关推荐、分享与页脚）
-  const startBodyMatch = html.match(/<div\b[^>]*class=["'][^"']*\b_feature-article-body\b(?![a-zA-Z0-9_-])/i)
+  const startBodyMatch =
+    html.match(/<div\b[^>]*class=["'][^"']*\b_feature-article-body\b(?![a-zA-Z0-9_-])/i) ||
+    html.match(/<article\b[^>]*>/i) ||
+    html.match(/<main\b[^>]*>/i)
   const startBodyIndex = startBodyMatch ? (startBodyMatch.index ?? -1) : -1
 
   let bodySlice = ""
@@ -497,8 +505,9 @@ export function parsePixivisionDetailPage(
     let currentArtwork: PixivisionArtwork | null = null
 
     while ((blockMatch = blockPattern.exec(bodySlice)) != null) {
-      const rawBlock = blockMatch[1]
-      const blockType = blockMatch[2]
+      try {
+        const rawBlock = blockMatch[1]
+        const blockType = blockMatch[2]
 
       if (blockType === "table_of_contents") {
         const linkPattern = /<a\b[^>]*href=["']#([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi
@@ -796,8 +805,11 @@ export function parsePixivisionDetailPage(
           })
         }
       }
-      }
     }
+  } catch (blockErr) {
+    console.warn("Pixivision block parse skipped due to error:", blockErr)
+  }
+}
 
     if (pendingQuestion) {
       blocks.push({
@@ -972,12 +984,18 @@ export function parsePixivisionDetailPage(
     }
   }
 
-  if (!title || (artworks.length === 0 && embeddedArticles.length === 0 && blocks.length === 0)) {
+  const isFallbackMode =
+    artworks.length === 0 &&
+    embeddedArticles.length === 0 &&
+    blocks.length === 0
+
+  if (!title && isFallbackMode) {
     throw new PixivError(404, "特辑内容不完整或已下架")
   }
+
   return {
     id: articleID,
-    title,
+    title: title || `特辑 #${articleID}`,
     date,
     category: category || "特辑",
     categorySlug: mainCategorySlug,
@@ -990,6 +1008,7 @@ export function parsePixivisionDetailPage(
     relatedSections: relatedSections.length > 0 ? relatedSections : undefined,
     tableOfContents: tableOfContents.length > 0 ? tableOfContents : undefined,
     blocks: blocks.length > 0 ? blocks : undefined,
+    isFallbackMode: isFallbackMode || undefined,
   }
 }
 

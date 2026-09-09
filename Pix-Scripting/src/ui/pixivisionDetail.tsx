@@ -389,7 +389,15 @@ export function PixivisionDetailView(props: { articleID: number }) {
           toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
           scrollContentBackground="hidden"
         >
-          <ErrorView message={error ?? "特辑不存在或已下架"} onRetry={load} />
+          <VStack alignment="center" spacing={14} padding={20} frame={{ maxWidth: "infinity" }}>
+            <ErrorView message={error ?? "特辑不存在或已下架"} onRetry={load} />
+            <Button
+              title="在内置浏览器中查看原网页"
+              systemImage="safari"
+              buttonStyle="glass"
+              action={() => void presentExternalURL(`https://www.pixivision.net/zh/a/${articleID}`)}
+            />
+          </VStack>
         </ScrollView>
       </ZStack>
     )
@@ -1119,6 +1127,30 @@ export function PixivisionDetailView(props: { articleID: number }) {
                           <PixivisionCard key={`fallback-card-${article.id}`} article={article} />
                         ))}
                       </LazyVStack>
+                    </VStack>
+                  ) : null}
+
+                  {detail.isFallbackMode || (!detail.artworks.length && !detail.embeddedArticles?.length) ? (
+                    <VStack
+                      alignment="center"
+                      spacing={12}
+                      padding={16}
+                      glassEffect={{ type: "rect", cornerRadius: 14 }}
+                      frame={{ maxWidth: "infinity" }}
+                    >
+                      <Image systemName="newspaper" font="largeTitle" foregroundStyle="#0096FA" />
+                      <Text font="headline" fontWeight="bold">
+                        特辑排版结构暂未完全解析
+                      </Text>
+                      <Text font="subheadline" foregroundStyle="secondaryLabel" lineLimit={3}>
+                        该特辑可能采用了新版排版或包含网页专属动态组件，建议直接在内置浏览器中流畅阅读完整原文。
+                      </Text>
+                      <Button
+                        title="在内置浏览器中阅读原特辑"
+                        systemImage="safari"
+                        buttonStyle="glass"
+                        action={() => void presentExternalURL(`https://www.pixivision.net/zh/a/${articleID}`)}
+                      />
                     </VStack>
                   ) : null}
                 </>

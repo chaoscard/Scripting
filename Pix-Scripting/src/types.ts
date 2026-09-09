@@ -171,6 +171,7 @@ export interface PixivisionDetail {
   relatedSections?: PixivisionRelatedSection[]
   tableOfContents?: PixivisionTocItem[]
   blocks?: PixivisionBodyBlock[]
+  isFallbackMode?: boolean
 }
 
 export interface PixivPage<T> {
