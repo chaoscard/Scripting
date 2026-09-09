@@ -62,7 +62,6 @@ export function PixivisionCard(props: {
               >
                 <CachedImage
                   url={article.imageURL}
-                  previewUrl={article.thumbURL}
                   aspectRatioValue={imageRatio}
                   centerCropAspect={imageRatio}
                   cropAnchor="top"

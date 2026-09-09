@@ -1,6 +1,6 @@
 import { Script } from "scripting"
 
-export const SCRIPT_VERSION = Script.metadata?.version ?? "0.9.24"
+export const SCRIPT_VERSION = Script.metadata?.version ?? "0.9.25"
 
 // 默认服务端点地址
 export const DEFAULT_API_BASE_URL = "https://app-api.pixiv.net"

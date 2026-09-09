@@ -648,7 +648,7 @@ export function PixivisionDetailView(props: { articleID: number }) {
                     case "heading":
                       return (
                         <VStack
-                          key={block.id ?? `h-${idx}`}
+                           key={block.id ?? `h-${idx}`}
                           alignment="leading"
                           spacing={6}
                           padding={{ horizontal: FLOW_HORIZONTAL_PADDING, top: 18, bottom: 2 }}
@@ -939,311 +939,311 @@ export function PixivisionDetailView(props: { articleID: number }) {
                                               ok = await saveImageToPixivAlbum(cached, fileName)
                                             } else {
                                               const data = await fetchImageBinaryWithRetry(block.src)
-                                              if (data) {
-                                                ok = await saveImageToPixivAlbum(data, fileName)
-                                              }
+                                            if (data) {
+                                              ok = await saveImageToPixivAlbum(data, fileName)
                                             }
-                                            if (ok) {
-                                              triggerHaptic("success")
-                                            }
-                                          })
-                                        }}
-                                      />
-                                      <Button
-                                        title="复制图片链接"
-                                        systemImage="doc.on.doc"
-                                        action={() => {
-                                          void Pasteboard.setString(block.src)
-                                        }}
-                                      />
-                                      {block.linkURL ? (
-                                        <Button
-                                          title="打开链接"
-                                          systemImage="arrow.up.right"
-                                          action={() => {
-                                            handlePixivisionLink(block.linkURL!)
-                                          }}
-                                        />
-                                      ) : null}
-                                    </Group>
-                                  ),
-                                }}
-                              >
-                                <ZStack alignment="topLeading" frame={cardFrame}>
-                                  <ZStack
-                                    alignment="bottomLeading"
-                                    frame={imageFrame}
-                                    clipShape={{ type: "rect", cornerRadius: 12 }}
-                                    clipped={true}
-                                  >
-                                    <CachedImage
-                                      url={block.src}
-                                      previewUrl={block.thumbURL}
-                                      aspectRatioValue={imageRatio}
-                                      contentMode="fit"
-                                      cornerRadius={12}
-                                      frame={imageFrame}
+                                          }
+                                          if (ok) {
+                                            triggerHaptic("success")
+                                          }
+                                        })
+                                      }}
                                     />
-                                  </ZStack>
+                                    <Button
+                                      title="复制图片链接"
+                                      systemImage="doc.on.doc"
+                                      action={() => {
+                                        void Pasteboard.setString(block.src)
+                                      }}
+                                    />
+                                    {block.linkURL ? (
+                                      <Button
+                                        title="打开链接"
+                                        systemImage="arrow.up.right"
+                                        action={() => {
+                                          handlePixivisionLink(block.linkURL!)
+                                        }}
+                                      />
+                                    ) : null}
+                                  </Group>
+                                ),
+                              }}
+                            >
+                              <ZStack alignment="topLeading" frame={cardFrame}>
+                                <ZStack
+                                  alignment="bottomLeading"
+                                  frame={imageFrame}
+                                  clipShape={{ type: "rect", cornerRadius: 12 }}
+                                  clipped={true}
+                                >
+                                  <CachedImage
+                                    url={block.src}
+                                    previewUrl={block.thumbURL}
+                                    aspectRatioValue={imageRatio}
+                                    contentMode="fit"
+                                    cornerRadius={12}
+                                    frame={imageFrame}
+                                  />
                                 </ZStack>
-                              </Button>
-                            </ZStack>
+                              </ZStack>
+                            </Button>
+                          </ZStack>
+                        </VStack>
+                        {block.caption ? (
+                          <VStack padding={{ horizontal: 6 }} frame={{ maxWidth: "infinity", alignment: "leading" }}>
+                            <Text font="caption" foregroundStyle="secondaryLabel" lineLimit={3} lineSpacing={3}>
+                              {block.caption}
+                            </Text>
                           </VStack>
-                          {block.caption ? (
-                            <VStack padding={{ horizontal: 6 }} frame={{ maxWidth: "infinity", alignment: "leading" }}>
-                              <Text font="caption" foregroundStyle="secondaryLabel" lineLimit={3} lineSpacing={3}>
-                                {block.caption}
+                        ) : null}
+                      </VStack>
+                    )
+                  }
+                  case "movie":
+                    return (
+                      <VStack
+                        key={`mov-${idx}`}
+                        padding={{ horizontal: FLOW_HORIZONTAL_PADDING, vertical: 6 }}
+                        frame={{ maxWidth: "infinity" }}
+                      >
+                        <Button
+                          action={() => {
+                            handlePixivisionLink(block.videoURL)
+                          }}
+                          buttonStyle="plain"
+                        >
+                          <HStack
+                            spacing={10}
+                            padding={14}
+                            glassEffect={{ type: "rect", cornerRadius: 12 }}
+                            alignment="center"
+                          >
+                            <Image
+                              systemName="play.circle.fill"
+                              font="title2"
+                              foregroundStyle="#FF3B30"
+                            />
+                            <VStack alignment="leading" spacing={2}>
+                              <Text font="subheadline" fontWeight="bold">
+                                观看特辑视频
+                              </Text>
+                              <Text font="caption" foregroundStyle="secondaryLabel" lineLimit={1}>
+                                {block.videoURL}
                               </Text>
                             </VStack>
-                          ) : null}
-                        </VStack>
-                      )
-                    }
-                    case "movie":
-                      return (
-                        <VStack
-                          key={`mov-${idx}`}
-                          padding={{ horizontal: FLOW_HORIZONTAL_PADDING, vertical: 6 }}
-                          frame={{ maxWidth: "infinity" }}
-                        >
-                          <Button
-                            action={() => {
-                              handlePixivisionLink(block.videoURL)
-                            }}
-                            buttonStyle="plain"
-                          >
-                            <HStack
-                              spacing={10}
-                              padding={14}
-                              glassEffect={{ type: "rect", cornerRadius: 12 }}
-                              alignment="center"
-                            >
-                              <Image
-                                systemName="play.circle.fill"
-                                font="title2"
-                                foregroundStyle="#FF3B30"
-                              />
-                              <VStack alignment="leading" spacing={2}>
-                                <Text font="subheadline" fontWeight="bold">
-                                  观看特辑视频
-                                </Text>
-                                <Text font="caption" foregroundStyle="secondaryLabel" lineLimit={1}>
-                                  {block.videoURL}
-                                </Text>
-                              </VStack>
-                              <Spacer />
-                              <Image
-                                systemName="arrow.up.right"
-                                font="caption"
-                                foregroundStyle="tertiaryLabel"
-                              />
-                            </HStack>
-                          </Button>
-                        </VStack>
-                      )
-                    case "credit":
-                      return (
-                        <VStack
-                          key={`cr-${idx}`}
-                          alignment="trailing"
-                          padding={{ horizontal: FLOW_HORIZONTAL_PADDING, vertical: 6 }}
-                          frame={{ maxWidth: "infinity", alignment: "trailing" }}
-                        >
-                          <Text font="caption" foregroundStyle="tertiaryLabel">
-                            {block.text}
-                          </Text>
-                        </VStack>
-                      )
-                    case "caption":
-                      return (
-                        <VStack
-                          key={`cap-${idx}`}
-                          alignment="leading"
-                          padding={{ horizontal: FLOW_HORIZONTAL_PADDING, vertical: 2 }}
-                          frame={{ maxWidth: "infinity", alignment: "leading" }}
-                        >
-                          <Text font="caption" foregroundStyle="secondaryLabel">
-                            {block.text}
-                          </Text>
-                        </VStack>
-                      )
-                    default:
-                      return null
-                  }
-                })
-              ) : (
-                // 降级回退模式
-                <>
-                  {detail.artworks.length > 0 ? (
-                    detail.artworks.map((artwork, index) => {
-                      const cached = getCachedIllust(artwork.id)
-                      const illust = cached && cached.width > 0 && cached.height > 0 ? cached : buildArtworkSkeletonIllust(artwork)
-                      return (
-                        <VStack
-                          key={`fallback-art-${artwork.id}`}
-                          alignment="leading"
-                          spacing={6}
-                          padding={{ horizontal: FLOW_HORIZONTAL_PADDING }}
-                          frame={{ width: screenWidth }}
-                        >
-                          <IllustCard
-                            hero={true}
-                            cardWidth={heroCardWidth}
-                            compact={true}
-                            showBookmarkButton={false}
-                            illust={illust}
-                            priority={index}
-                          />
-                          {artwork.comment ? (
-                            <VStack padding={{ horizontal: 6 }} frame={{ maxWidth: "infinity", alignment: "leading" }}>
-                              <LinkedDescription
-                                html={artwork.comment}
-                                font="caption"
-                                foregroundStyle="secondaryLabel"
-                                lineLimit={3}
-                                lineSpacing={3}
-                              />
-                            </VStack>
-                          ) : null}
-                        </VStack>
-                      )
-                    })
-                  ) : null}
-
-                  {detail.embeddedArticles && detail.embeddedArticles.length > 0 ? (
-                    <VStack key="fallback-embedded" alignment="leading" spacing={12} padding={{ horizontal: FLOW_HORIZONTAL_PADDING, top: 16 }}>
-                      <HStack spacing={6} alignment="center">
-                        <Image
-                          systemName="doc.text.image"
-                          font="headline"
-                          foregroundStyle="#0096FA"
-                        />
-                        <Text font="headline" fontWeight="bold">
-                          推荐阅读
+                            <Spacer />
+                            <Image
+                              systemName="arrow.up.right"
+                              font="caption"
+                              foregroundStyle="tertiaryLabel"
+                            />
+                          </HStack>
+                        </Button>
+                      </VStack>
+                    )
+                  case "credit":
+                    return (
+                      <VStack
+                        key={`cr-${idx}`}
+                        alignment="trailing"
+                        padding={{ horizontal: FLOW_HORIZONTAL_PADDING, vertical: 6 }}
+                        frame={{ maxWidth: "infinity", alignment: "trailing" }}
+                      >
+                        <Text font="caption" foregroundStyle="tertiaryLabel">
+                          {block.text}
                         </Text>
+                      </VStack>
+                    )
+                  case "caption":
+                    return (
+                      <VStack
+                        key={`cap-${idx}`}
+                        alignment="leading"
+                        padding={{ horizontal: FLOW_HORIZONTAL_PADDING, vertical: 2 }}
+                        frame={{ maxWidth: "infinity", alignment: "leading" }}
+                      >
+                        <Text font="caption" foregroundStyle="secondaryLabel">
+                          {block.text}
+                        </Text>
+                      </VStack>
+                    )
+                  default:
+                    return null
+                }
+              })
+            ) : (
+              // 降级回退模式
+              <>
+                {detail.artworks.length > 0 ? (
+                  detail.artworks.map((artwork, index) => {
+                    const cached = getCachedIllust(artwork.id)
+                    const illust = cached && cached.width > 0 && cached.height > 0 ? cached : buildArtworkSkeletonIllust(artwork)
+                    return (
+                      <VStack
+                        key={`fallback-art-${artwork.id}`}
+                        alignment="leading"
+                        spacing={6}
+                        padding={{ horizontal: FLOW_HORIZONTAL_PADDING }}
+                        frame={{ width: screenWidth }}
+                      >
+                        <IllustCard
+                          hero={true}
+                          cardWidth={heroCardWidth}
+                          compact={true}
+                          showBookmarkButton={false}
+                          illust={illust}
+                          priority={index}
+                        />
+                        {artwork.comment ? (
+                          <VStack padding={{ horizontal: 6 }} frame={{ maxWidth: "infinity", alignment: "leading" }}>
+                            <LinkedDescription
+                              html={artwork.comment}
+                              font="caption"
+                              foregroundStyle="secondaryLabel"
+                              lineLimit={3}
+                              lineSpacing={3}
+                            />
+                          </VStack>
+                        ) : null}
+                      </VStack>
+                    )
+                  })
+                ) : null}
+
+                {detail.embeddedArticles && detail.embeddedArticles.length > 0 ? (
+                  <VStack key="fallback-embedded" alignment="leading" spacing={12} padding={{ horizontal: FLOW_HORIZONTAL_PADDING, top: 16 }}>
+                    <HStack spacing={6} alignment="center">
+                      <Image
+                        systemName="doc.text.image"
+                        font="headline"
+                        foregroundStyle="#0096FA"
+                      />
+                      <Text font="headline" fontWeight="bold">
+                        推荐阅读
+                      </Text>
+                    </HStack>
+                    <LazyVStack alignment="leading" spacing={8} frame={{ maxWidth: "infinity" }}>
+                      {detail.embeddedArticles.map((article) => (
+                        <PixivisionCard key={`fallback-card-${article.id}`} article={article} />
+                      ))}
+                    </LazyVStack>
+                  </VStack>
+                ) : null}
+
+                {detail.isFallbackMode || (!detail.artworks.length && !detail.embeddedArticles?.length) ? (
+                  <VStack
+                    alignment="center"
+                    spacing={12}
+                    padding={16}
+                    glassEffect={{ type: "rect", cornerRadius: 14 }}
+                    frame={{ maxWidth: "infinity" }}
+                  >
+                    <Image systemName="newspaper" font="largeTitle" foregroundStyle="#0096FA" />
+                    <Text font="headline" fontWeight="bold">
+                      特辑排版结构暂未完全解析
+                    </Text>
+                    <Text font="subheadline" foregroundStyle="secondaryLabel" lineLimit={3}>
+                      该特辑可能采用了新版排版或包含网页专属动态组件，建议直接在内置浏览器中流畅阅读完整原文。
+                    </Text>
+                    <Button
+                      title="在内置浏览器中阅读原特辑"
+                      systemImage="safari"
+                      buttonStyle="glass"
+                      action={() => void presentExternalURL(`https://www.pixivision.net/zh/a/${articleID}`)}
+                    />
+                  </VStack>
+                ) : null}
+              </>
+            )}
+
+            {/* 6. 底部相关推荐分组 (Related Articles) */}
+            {detail.relatedSections && detail.relatedSections.length > 0 ? (
+              <VStack
+                key="section-related"
+                alignment="leading"
+                spacing={20}
+                padding={{ horizontal: FLOW_HORIZONTAL_PADDING, top: 16 }}
+              >
+                {detail.relatedSections.map((section, sIdx) => {
+                  const isLike = section.title.includes("喜欢") || section.title.includes("也喜欢")
+                  const isRanking =
+                    section.title.includes("排行") ||
+                    section.title.includes("榜") ||
+                    section.title.toLowerCase().includes("ranking")
+                  const isCategoryLatest =
+                    section.isCategoryLatest ||
+                    sIdx === (detail.relatedSections?.length ?? 1) - 1 ||
+                    section.title.includes("插画相关") ||
+                    section.title.includes("漫画相关")
+                  const iconName = isLike
+                    ? "heart.fill"
+                    : isRanking
+                      ? "trophy.fill"
+                      : "sparkles.rectangle.stack.fill"
+                  const iconColor = isLike
+                    ? "#FF453A"
+                    : isRanking
+                      ? "#FF9500"
+                      : "#0096FA"
+
+                  return (
+                    <VStack
+                      key={`${section.title}-${sIdx}`}
+                      alignment="leading"
+                      spacing={10}
+                      frame={{ maxWidth: "infinity", alignment: "leading" }}
+                    >
+                      <HStack
+                        spacing={6}
+                        alignment="center"
+                        frame={{ maxWidth: "infinity", alignment: "leading" }}
+                      >
+                        <Image
+                          systemName={iconName}
+                          font="headline"
+                          foregroundStyle={iconColor}
+                        />
+                        <Text
+                          font="headline"
+                          fontWeight="bold"
+                          multilineTextAlignment="leading"
+                        >
+                          {section.title}
+                        </Text>
+                        {section.moreRoute ? (
+                          <>
+                            <Spacer />
+                            <NavigationLink value={section.moreRoute}>
+                              <HStack spacing={2} alignment="center">
+                                <Text font="subheadline" foregroundStyle="secondaryLabel">
+                                  查看更多
+                                </Text>
+                                <Image
+                                  systemName="chevron.right"
+                                  font="caption"
+                                  foregroundStyle="tertiaryLabel"
+                                />
+                              </HStack>
+                            </NavigationLink>
+                          </>
+                        ) : null}
                       </HStack>
                       <LazyVStack alignment="leading" spacing={8} frame={{ maxWidth: "infinity" }}>
-                        {detail.embeddedArticles.map((article) => (
-                          <PixivisionCard key={`fallback-card-${article.id}`} article={article} />
+                        {section.articles.map((article) => (
+                          <PixivisionCard key={`${section.title}-${article.id}`} article={article} />
                         ))}
                       </LazyVStack>
                     </VStack>
-                  ) : null}
-
-                  {detail.isFallbackMode || (!detail.artworks.length && !detail.embeddedArticles?.length) ? (
-                    <VStack
-                      alignment="center"
-                      spacing={12}
-                      padding={16}
-                      glassEffect={{ type: "rect", cornerRadius: 14 }}
-                      frame={{ maxWidth: "infinity" }}
-                    >
-                      <Image systemName="newspaper" font="largeTitle" foregroundStyle="#0096FA" />
-                      <Text font="headline" fontWeight="bold">
-                        特辑排版结构暂未完全解析
-                      </Text>
-                      <Text font="subheadline" foregroundStyle="secondaryLabel" lineLimit={3}>
-                        该特辑可能采用了新版排版或包含网页专属动态组件，建议直接在内置浏览器中流畅阅读完整原文。
-                      </Text>
-                      <Button
-                        title="在内置浏览器中阅读原特辑"
-                        systemImage="safari"
-                        buttonStyle="glass"
-                        action={() => void presentExternalURL(`https://www.pixivision.net/zh/a/${articleID}`)}
-                      />
-                    </VStack>
-                  ) : null}
-                </>
-              )}
-
-              {/* 6. 底部相关推荐分组 (Related Articles) */}
-              {detail.relatedSections && detail.relatedSections.length > 0 ? (
-                <VStack
-                  key="section-related"
-                  alignment="leading"
-                  spacing={20}
-                  padding={{ horizontal: FLOW_HORIZONTAL_PADDING, top: 16 }}
-                >
-                  {detail.relatedSections.map((section, sIdx) => {
-                    const isLike = section.title.includes("喜欢") || section.title.includes("也喜欢")
-                    const isRanking =
-                      section.title.includes("排行") ||
-                      section.title.includes("榜") ||
-                      section.title.toLowerCase().includes("ranking")
-                    const isCategoryLatest =
-                      section.isCategoryLatest ||
-                      sIdx === (detail.relatedSections?.length ?? 1) - 1 ||
-                      section.title.includes("插画相关") ||
-                      section.title.includes("漫画相关")
-                    const iconName = isLike
-                      ? "heart.fill"
-                      : isRanking
-                        ? "trophy.fill"
-                        : "sparkles.rectangle.stack.fill"
-                    const iconColor = isLike
-                      ? "#FF453A"
-                      : isRanking
-                        ? "#FF9500"
-                        : "#0096FA"
-
-                    return (
-                      <VStack
-                        key={`${section.title}-${sIdx}`}
-                        alignment="leading"
-                        spacing={10}
-                        frame={{ maxWidth: "infinity", alignment: "leading" }}
-                      >
-                        <HStack
-                          spacing={6}
-                          alignment="center"
-                          frame={{ maxWidth: "infinity", alignment: "leading" }}
-                        >
-                          <Image
-                            systemName={iconName}
-                            font="headline"
-                            foregroundStyle={iconColor}
-                          />
-                          <Text
-                            font="headline"
-                            fontWeight="bold"
-                            multilineTextAlignment="leading"
-                          >
-                            {section.title}
-                          </Text>
-                          {section.moreRoute ? (
-                            <>
-                              <Spacer />
-                              <NavigationLink value={section.moreRoute}>
-                                <HStack spacing={2} alignment="center">
-                                  <Text font="subheadline" foregroundStyle="secondaryLabel">
-                                    查看更多
-                                  </Text>
-                                  <Image
-                                    systemName="chevron.right"
-                                    font="caption"
-                                    foregroundStyle="tertiaryLabel"
-                                  />
-                                </HStack>
-                              </NavigationLink>
-                            </>
-                          ) : null}
-                        </HStack>
-                        <LazyVStack alignment="leading" spacing={8} frame={{ maxWidth: "infinity" }}>
-                          {section.articles.map((article) => (
-                            <PixivisionCard key={`${section.title}-${article.id}`} article={article} />
-                          ))}
-                        </LazyVStack>
-                      </VStack>
-                    )
-                  })}
-                </VStack>
-              ) : null}
-            </VStack>
-          </ScrollView>
-        )
-      }}
-    </ScrollViewReader>
-    </ZStack>
+                  )
+                })}
+              </VStack>
+            ) : null}
+          </VStack>
+        </ScrollView>
+      )
+    }}
+  </ScrollViewReader>
+  </ZStack>
   )
 }
 
