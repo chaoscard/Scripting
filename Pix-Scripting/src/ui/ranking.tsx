@@ -174,16 +174,6 @@ export function RankingView(props: { onClose: () => void }) {
   }
 
   const isAppleMusic = settings.pageLayout === "appleMusic"
-  const [visitedKinds, setVisitedKinds] = useState<Set<RankingKind>>(() => new Set([kind]))
-
-  useEffect(() => {
-    setVisitedKinds((prev) => {
-      if (prev.has(kind)) return prev
-      const next = new Set(prev)
-      next.add(kind)
-      return next
-    })
-  }, [kind])
 
   const rankingItems = useMemo(() => {
     if (!activeModes) return []
@@ -342,91 +332,57 @@ export function RankingView(props: { onClose: () => void }) {
         if (!activated) setActivated(true)
       }}
     >
-      {/* 1. 插画排行榜（多榜单模式独立保活） */}
-      <VStack
-        frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-        opacity={kind === "illustration" ? 1 : 0}
-        zIndex={kind === "illustration" ? 1 : 0}
-        allowsHitTesting={kind === "illustration"}
-      >
+      {/* 1. 插画排行榜（大分类切换即刻卸载，内部多榜单模式独立保活） */}
+      {kind === "illustration" && (
         <IllustRankingSection
           selectedMode={illustrationMode}
           label="插画"
-          enabled={activated && kind === "illustration"}
-          onFirstImageUrlChange={(url) => {
-            if (kind === "illustration") setAmbientImageUrl(url)
-          }}
+          enabled={activated}
+          onFirstImageUrlChange={setAmbientImageUrl}
         />
-      </VStack>
+      )}
 
-      {/* 2. 漫画排行榜（多榜单模式独立保活） */}
-      {visitedKinds.has("manga") ? (
-        <VStack
-          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-          opacity={kind === "manga" ? 1 : 0}
-          zIndex={kind === "manga" ? 1 : 0}
-          allowsHitTesting={kind === "manga"}
-        >
-          <IllustRankingSection
-            selectedMode={mangaMode}
-            label="漫画"
-            enabled={activated && kind === "manga"}
-            onFirstImageUrlChange={(url) => {
-              if (kind === "manga") setAmbientImageUrl(url)
-            }}
-          />
-        </VStack>
-      ) : null}
+      {/* 2. 漫画排行榜（大分类切换即刻卸载，内部多榜单模式独立保活） */}
+      {kind === "manga" && (
+        <IllustRankingSection
+          selectedMode={mangaMode}
+          label="漫画"
+          enabled={activated}
+          onFirstImageUrlChange={setAmbientImageUrl}
+        />
+      )}
 
-      {/* 3. 小说排行榜（多榜单模式独立保活） */}
-      {visitedKinds.has("novel") ? (
-        <VStack
-          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-          opacity={kind === "novel" ? 1 : 0}
-          zIndex={kind === "novel" ? 1 : 0}
-          allowsHitTesting={kind === "novel"}
-        >
-          <NovelRankingSection
-            selectedMode={novelMode}
-            enabled={activated && kind === "novel"}
-            onFirstImageUrlChange={(url) => {
-              if (kind === "novel") setAmbientImageUrl(url)
-            }}
-          />
-        </VStack>
-      ) : null}
+      {/* 3. 小说排行榜（大分类切换即刻卸载，内部多榜单模式独立保活） */}
+      {kind === "novel" && (
+        <NovelRankingSection
+          selectedMode={novelMode}
+          enabled={activated}
+          onFirstImageUrlChange={setAmbientImageUrl}
+        />
+      )}
 
-      {/* 4. 自定义历史榜单 */}
-      {visitedKinds.has("advanced") ? (
-        <VStack
-          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-          opacity={kind === "advanced" ? 1 : 0}
-          zIndex={kind === "advanced" ? 1 : 0}
-          allowsHitTesting={kind === "advanced"}
-        >
-          <RefreshableScrollView refreshable={() => refreshHandlerRef.current()}>
-            <VStack alignment="leading" spacing={8} frame={{ maxWidth: "infinity" }}>
-              <AdvancedRankingBar
-                params={advancedParams}
-                onPress={() => setIsAdvancedSheetOpen(true)}
-                onBack={() => setKind("illustration")}
-              />
-              <AdvancedRankingFeedItem
-                params={advancedParams}
-                active={true}
-                enabled={activated && kind === "advanced"}
-                onFirstImageUrlChange={(url) => {
-                  if (kind === "advanced") setAmbientImageUrl(url)
-                }}
-                onRegisterRefresh={(fn) => {
-                  refreshHandlerRef.current = fn
-                }}
-                onBackToDefault={() => setKind("illustration")}
-              />
-            </VStack>
-          </RefreshableScrollView>
-        </VStack>
-      ) : null}
+      {/* 4. 自定义历史榜单（切换即刻卸载） */}
+      {kind === "advanced" && (
+        <RefreshableScrollView refreshable={() => refreshHandlerRef.current()}>
+          <VStack alignment="leading" spacing={8} frame={{ maxWidth: "infinity" }}>
+            <AdvancedRankingBar
+              params={advancedParams}
+              onPress={() => setIsAdvancedSheetOpen(true)}
+              onBack={() => setKind("illustration")}
+            />
+            <AdvancedRankingFeedItem
+              params={advancedParams}
+              active={true}
+              enabled={activated}
+              onFirstImageUrlChange={setAmbientImageUrl}
+              onRegisterRefresh={(fn) => {
+                refreshHandlerRef.current = fn
+              }}
+              onBackToDefault={() => setKind("illustration")}
+            />
+          </VStack>
+        </RefreshableScrollView>
+      )}
     </ZStack>
   )
 }
