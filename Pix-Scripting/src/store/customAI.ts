@@ -480,27 +480,31 @@ export function saveCustomAIProfile(profile: CustomAIProfile): void {
 
   const json = JSON.stringify(sanitized)
 
-  try {
-    if (sanitized.syncToICloud) {
-      // 写入 iCloud 同步钥匙串
+  if (sanitized.syncToICloud) {
+    // 写入 iCloud 同步钥匙串
+    try {
       Keychain.set(KEYCHAIN_KEY, json, {
         synchronizable: true,
         accessibility: "first_unlock",
       })
-    } else {
-      // 若关闭同步，则尝试从 iCloud 移除同步项，仅保留本地
-      try {
-        Keychain.remove(KEYCHAIN_KEY, { synchronizable: true })
-      } catch {}
+    } catch (e) {
+      console.log("Failed to save custom AI profile to iCloud Keychain:", e)
     }
+  } else {
+    // 若关闭同步，则尝试从 iCloud 移除同步项，仅保留本地
+    try {
+      Keychain.remove(KEYCHAIN_KEY, { synchronizable: true })
+    } catch {}
+  }
 
-    // 始终写入本地钥匙串备份
+  // 始终写入本地钥匙串备份
+  try {
     Keychain.set(KEYCHAIN_KEY, json, {
       synchronizable: false,
       accessibility: "first_unlock_this_device",
     })
   } catch (e) {
-    console.log("Failed to save custom AI profile to Keychain:", e)
+    console.log("Failed to save custom AI profile to local Keychain:", e)
   }
 
   notifyListeners(sanitized)

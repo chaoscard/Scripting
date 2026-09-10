@@ -38,7 +38,11 @@ function pixivCloudDirectory(subDir: string): string {
       // iCloud 初始化失败时使用本地回退目录。
     }
   }
-  return pixivDataPath(subDir)
+  try {
+    return ensureDirectory(pixivDataPath(subDir))
+  } catch {
+    return pixivDataPath(subDir)
+  }
 }
 
 // 历史记录（插画/漫画/小说、小说阅读进度、搜索历史）保存在本地 Documents，实时读写不走 iCloud。

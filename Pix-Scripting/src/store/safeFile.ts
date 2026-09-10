@@ -7,6 +7,20 @@ function tempPathFor(targetPath: string): string {
   return `${targetPath}.tmp.${Date.now()}.${++tempSequence}`
 }
 
+function ensureParentDirectory(targetPath: string): void {
+  const lastSlash = targetPath.lastIndexOf("/")
+  if (lastSlash > 0) {
+    const parentDir = targetPath.substring(0, lastSlash)
+    if (parentDir && !FileManager.existsSync(parentDir)) {
+      try {
+        FileManager.createDirectorySync(parentDir, true)
+      } catch {
+        // 创建目录异常由后续文件写入操作处理
+      }
+    }
+  }
+}
+
 export function backupPathFor(targetPath: string): string {
   return `${targetPath}.bak`
 }
@@ -58,6 +72,7 @@ export function writeTextSafely(
   contents: string,
   validate?: (contents: string) => void
 ): void {
+  ensureParentDirectory(targetPath)
   const tempPath = tempPathFor(targetPath)
   try {
     FileManager.writeAsStringSync(tempPath, contents)
@@ -80,6 +95,7 @@ export function writeDataSafely(
   data: Data,
   validate?: (tempPath: string) => void
 ): void {
+  ensureParentDirectory(targetPath)
   const tempPath = tempPathFor(targetPath)
   try {
     FileManager.writeAsDataSync(tempPath, data)
@@ -107,6 +123,7 @@ export function publishPreparedFile(
   targetPath: string,
   validate?: (tempPath: string) => void
 ): void {
+  ensureParentDirectory(targetPath)
   const tempPath = tempPathFor(targetPath)
   try {
     FileManager.copyFileSync(sourcePath, tempPath)

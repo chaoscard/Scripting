@@ -829,17 +829,26 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
 }
 
 function persistSettings(settings: AppSettings): boolean {
+  let fileSaved = false
   try {
     writeTextSafely(settingsFilePath(), JSON.stringify(settings, null, 2), (raw) => {
       const parsed = JSON.parse(raw)
       if (typeof parsed !== "object" || parsed === null) throw new Error("设置格式错误")
     })
-    Storage.set(KEY, settings)
-    return true
+    fileSaved = true
   } catch (error: any) {
-    console.log("settings persist error:", error?.message ?? error)
-    return false
+    console.log("settings file persist error:", error?.message ?? error)
   }
+
+  let storageSaved = false
+  try {
+    Storage.set(KEY, settings)
+    storageSaved = true
+  } catch (error: any) {
+    console.log("settings storage persist error:", error?.message ?? error)
+  }
+
+  return fileSaved || storageSaved
 }
 
 export function resetSettings(): AppSettings {
