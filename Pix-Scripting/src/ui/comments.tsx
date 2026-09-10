@@ -28,7 +28,7 @@ import {
   novelCommentReplies,
 } from "../api/pixiv"
 import { session } from "../api/session"
-import { destinationElement } from "./routes"
+import { requestPixivRoute } from "./routeNavigation"
 import { dedupeByID, mergeUniqueByID } from "./hooks"
 import type { PixivComment } from "../types"
 import {
@@ -334,6 +334,17 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number; onCl
     }
   }, [replyStates])
 
+  const handleOpenUser = useCallback(
+    (userID: number) => {
+      if (!userID) return
+      props.onClose?.()
+      setTimeout(() => {
+        requestPixivRoute(`user:${userID}`)
+      }, 260)
+    },
+    [props.onClose]
+  )
+
   const handleReply = useCallback((comment: PixivComment, rootID?: number) => {
     setReplyTarget({
       id: comment.id,
@@ -366,7 +377,6 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number; onCl
             </Text>
           ),
         }}
-        navigationDestination={destinationElement}
       >
 
         {postError ? (
@@ -416,6 +426,7 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number; onCl
                   key={comment.id}
                   comment={comment}
                   onReply={handleReply}
+                  onOpenUser={handleOpenUser}
                   replyState={replyStates[comment.id]}
                   onToggleReplies={() => toggleReplies(comment.id)}
                   onRetryReplies={() => retryReplies(comment.id)}
@@ -579,12 +590,21 @@ function CommentInputBar(props: {
 function CommentCard(props: {
   comment: PixivComment
   onReply: (c: PixivComment, rootID?: number) => void
+  onOpenUser: (userID: number) => void
   replyState?: ReplyState
   onToggleReplies: () => void
   onRetryReplies: () => void
   onLoadMoreReplies: () => void
 }) {
-  const { comment, onReply, replyState, onToggleReplies, onRetryReplies, onLoadMoreReplies } = props
+  const {
+    comment,
+    onReply,
+    onOpenUser,
+    replyState,
+    onToggleReplies,
+    onRetryReplies,
+    onLoadMoreReplies,
+  } = props
   const avatarUrl = comment.user.profile_image_urls?.medium ?? null
   const hasReplies = comment.has_replies || (comment.reply_count ?? 0) > 0
 
@@ -601,9 +621,9 @@ function CommentCard(props: {
         alignment="top"
         frame={{ maxWidth: "infinity", alignment: "leading" }}
       >
-        <NavigationLink value={`user:${comment.user.id}`}>
+        <Button buttonStyle="plain" action={() => onOpenUser(comment.user.id)}>
           <AvatarImage url={avatarUrl} size={30} />
-        </NavigationLink>
+        </Button>
         <VStack
           alignment="leading"
           spacing={4}
@@ -615,11 +635,11 @@ function CommentCard(props: {
             alignment="center"
             frame={{ maxWidth: "infinity", alignment: "leading" }}
           >
-            <NavigationLink value={`user:${comment.user.id}`}>
+            <Button buttonStyle="plain" action={() => onOpenUser(comment.user.id)}>
               <Text font="caption" fontWeight="semibold">
                 {comment.user.name}
               </Text>
-            </NavigationLink>
+            </Button>
             <Text font="caption2" foregroundStyle="secondaryLabel">
               {formatDate(comment.date)}
             </Text>
@@ -635,7 +655,10 @@ function CommentCard(props: {
 
           {/* 回复谁 */}
           {comment.parent_comment?.user ? (
-            <NavigationLink value={`user:${comment.parent_comment.user.id}`}>
+            <Button
+              buttonStyle="plain"
+              action={() => onOpenUser(comment.parent_comment!.user.id)}
+            >
               <Text
                 font="caption2"
                 foregroundStyle="secondaryLabel"
@@ -643,7 +666,7 @@ function CommentCard(props: {
               >
                 回复 @{comment.parent_comment.user.name}
               </Text>
-            </NavigationLink>
+            </Button>
           ) : null}
 
           {/* 评论内容（富文本 Emoji 或 Stamp） */}
@@ -691,6 +714,7 @@ function CommentCard(props: {
                         key={sub.id}
                         comment={sub}
                         onReply={(c) => onReply(c, comment.id)}
+                        onOpenUser={onOpenUser}
                       />
                     ))
                   )}
@@ -717,8 +741,9 @@ function CommentCard(props: {
 function SubCommentRow(props: {
   comment: PixivComment
   onReply: (c: PixivComment) => void
+  onOpenUser: (userID: number) => void
 }) {
-  const { comment, onReply } = props
+  const { comment, onReply, onOpenUser } = props
   const avatarUrl = comment.user.profile_image_urls?.medium ?? null
 
   return (
@@ -734,9 +759,9 @@ function SubCommentRow(props: {
         alignment="top"
         frame={{ maxWidth: "infinity", alignment: "leading" }}
       >
-        <NavigationLink value={`user:${comment.user.id}`}>
+        <Button buttonStyle="plain" action={() => onOpenUser(comment.user.id)}>
           <AvatarImage url={avatarUrl} size={22} />
-        </NavigationLink>
+        </Button>
         <VStack
           alignment="leading"
           spacing={3}
@@ -747,11 +772,11 @@ function SubCommentRow(props: {
             alignment="center"
             frame={{ maxWidth: "infinity", alignment: "leading" }}
           >
-            <NavigationLink value={`user:${comment.user.id}`}>
+            <Button buttonStyle="plain" action={() => onOpenUser(comment.user.id)}>
               <Text font="caption2" fontWeight="semibold">
                 {comment.user.name}
               </Text>
-            </NavigationLink>
+            </Button>
             <Text font="caption2" foregroundStyle="secondaryLabel">
               {formatDate(comment.date)}
             </Text>
@@ -766,7 +791,10 @@ function SubCommentRow(props: {
           </HStack>
 
           {comment.parent_comment?.user ? (
-            <NavigationLink value={`user:${comment.parent_comment.user.id}`}>
+            <Button
+              buttonStyle="plain"
+              action={() => onOpenUser(comment.parent_comment!.user.id)}
+            >
               <Text
                 font="caption2"
                 foregroundStyle="secondaryLabel"
@@ -774,7 +802,7 @@ function SubCommentRow(props: {
               >
                 回复 @{comment.parent_comment.user.name}
               </Text>
-            </NavigationLink>
+            </Button>
           ) : null}
 
           <CommentBody comment={comment} />

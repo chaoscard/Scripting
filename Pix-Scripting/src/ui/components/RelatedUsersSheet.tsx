@@ -1,6 +1,5 @@
 import {
   Button,
-  GeometryReader,
   Image,
   LazyVStack,
   NavigationStack,
@@ -12,7 +11,8 @@ import {
 import { userRelated } from "../../api/pixiv"
 import { session } from "../../api/session"
 import { loadSettings, onSettingsChanged } from "../../store/settings"
-import { destinationElement } from "../routes"
+import { requestPixivRoute } from "../routeNavigation"
+import { useLayoutMetrics } from "../hooks"
 import {
   CONNECTION_CARD_HORIZONTAL_PADDING,
   CONNECTION_LIST_HORIZONTAL_PADDING,
@@ -64,6 +64,24 @@ export function RelatedUsersSheet(props: {
     void loadRelated()
   }, [seedUserID])
 
+  const { width: screenWidth } = useLayoutMetrics()
+  const previewSide = Math.max(
+    0,
+    Math.floor(
+      (screenWidth -
+        (CONNECTION_LIST_HORIZONTAL_PADDING + CONNECTION_CARD_HORIZONTAL_PADDING) * 2 -
+        CONNECTION_PREVIEW_GAP * 2) /
+        3
+    )
+  )
+
+  const handleNavigate = (route: string) => {
+    onClose()
+    setTimeout(() => {
+      requestPixivRoute(route)
+    }, 260)
+  }
+
   return (
     <NavigationStack
       presentationDetents={["medium", "large"]}
@@ -72,7 +90,6 @@ export function RelatedUsersSheet(props: {
       <VStack
         navigationTitle={seedUserName ? `相似于 ${seedUserName}` : "相似创作者"}
         navigationBarTitleDisplayMode="inline"
-        navigationDestination={destinationElement}
         toolbar={{
           topBarLeading: (
             <Button action={onClose}>
@@ -94,39 +111,27 @@ export function RelatedUsersSheet(props: {
         ) : users.length === 0 ? (
           <EmptyView text="暂无更多相似创作者推荐" />
         ) : (
-          <GeometryReader>
-            {(proxy) => {
-              const previewSide = Math.max(
-                0,
-                (proxy.size.width -
-                  (CONNECTION_LIST_HORIZONTAL_PADDING + CONNECTION_CARD_HORIZONTAL_PADDING) * 2 -
-                  CONNECTION_PREVIEW_GAP * 2) /
-                  3
-              )
-              return (
-                <ScrollView
-                  frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-                  presentationContentInteraction="scrolls"
-                >
-                  <LazyVStack
-                    spacing={10}
-                    padding={{ horizontal: CONNECTION_LIST_HORIZONTAL_PADDING, top: 12, bottom: 24 }}
-                    frame={{ maxWidth: "infinity" }}
-                  >
-                    {users.map((item) => (
-                      <ConnectionRow
-                        key={`related-${item.user.id}`}
-                        preview={item}
-                        showFollowControl={item.user.id !== session.userID}
-                        previewSide={previewSide}
-                        hideNovels={hideNovels}
-                      />
-                    ))}
-                  </LazyVStack>
-                </ScrollView>
-              )
-            }}
-          </GeometryReader>
+          <ScrollView
+            frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+            presentationContentInteraction="scrolls"
+          >
+            <LazyVStack
+              spacing={10}
+              padding={{ horizontal: CONNECTION_LIST_HORIZONTAL_PADDING, top: 12, bottom: 24 }}
+              frame={{ maxWidth: "infinity" }}
+            >
+              {users.map((item) => (
+                <ConnectionRow
+                  key={`related-${item.user.id}`}
+                  preview={item}
+                  showFollowControl={item.user.id !== session.userID}
+                  previewSide={previewSide}
+                  hideNovels={hideNovels}
+                  onNavigate={handleNavigate}
+                />
+              ))}
+            </LazyVStack>
+          </ScrollView>
         )}
       </VStack>
     </NavigationStack>

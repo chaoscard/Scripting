@@ -68,7 +68,7 @@ import {
 } from "../../store/illustCache"
 import { getCachedIllustBookmark } from "../../store/bookmarkSync"
 import { getSeriesByWorkID, recordWorkSeriesAssociation } from "../../store/seriesCache"
-import { useAsyncGuard, useIllustBookmark, useLatest, useOpenBookmarkDetailListener } from "../hooks"
+import { useAsyncGuard, useIllustBookmark, useLatest, useOpenBookmarkDetailListener, useOpenRelatedUsersListener } from "../hooks"
 import { renderAmbientBackground } from "../ambient"
 import type { PixivIllustration } from "../../types"
 import { IllustGalleryView } from "../IllustGalleryView"
@@ -181,6 +181,9 @@ export function useIllustDetailState(illustID: number): {
   })
   const [followLoading, setFollowLoading] = useState(false)
   const [showRelatedUsers, setShowRelatedUsers] = useState(false)
+  useOpenRelatedUsersListener(illust?.user?.id, () => {
+    setShowRelatedUsers(true)
+  })
   const [showComments, setShowComments] = useState(false)
   const [showAISheet, setShowAISheet] = useState(false)
   const [aiMode, setAIMode] = useState<IllustAIMode>("caption")

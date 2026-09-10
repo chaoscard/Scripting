@@ -60,7 +60,7 @@ import {
   recordUserFollowed,
   type FollowRestrict,
 } from "../store/userFollow"
-import { useAsyncGuard } from "./hooks"
+import { useAsyncGuard, useOpenRelatedUsersListener } from "./hooks"
 import { useUserAmbientPalette } from "./ambient"
 import type {
   PixivUserDetail,
@@ -91,6 +91,9 @@ export function UserDetailView(props: { userID: number }) {
   const [detailError, setDetailError] = useState<string | null>(null)
   const [followBusy, setFollowBusy] = useState(false)
   const [showRelatedUsers, setShowRelatedUsers] = useState(false)
+  useOpenRelatedUsersListener(userID, () => {
+    setShowRelatedUsers(true)
+  })
   const [kind, setKind] = useState<UserWorkKind>("illust")
   const [selectedTag, setSelectedTag] = useState<string | null>(null)
   const [tagsByKind, setTagsByKind] = useState<Partial<Record<UserWorkKind, PixivWebUserTag[]>>>({})

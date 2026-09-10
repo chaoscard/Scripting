@@ -25,7 +25,9 @@ import {
 import {
   getUserFollowRestrict,
   isUserFollowed,
+  notifyOpenRelatedUsers,
   notifyUserFollowChanged,
+  onOpenRelatedUsers,
   onUserFollowChanged,
   type FollowRestrict,
 } from "../store/userFollow"
@@ -762,6 +764,25 @@ export function useOpenBookmarkDetailListener(
 }
 
 export { notifyOpenBookmarkDetail }
+
+/**
+ * 监听打开相似创作者弹窗事件
+ */
+export function useOpenRelatedUsersListener(
+  targetUserID: number | undefined,
+  onOpen: (seedUserID: number, seedUserName?: string) => void
+): void {
+  const onOpenRef = useLatest(onOpen)
+  useEffect(() => {
+    return onOpenRelatedUsers((userID, userName) => {
+      if (!targetUserID || targetUserID === userID) {
+        onOpenRef.current(userID, userName)
+      }
+    })
+  }, [targetUserID, onOpenRef])
+}
+
+export { notifyOpenRelatedUsers }
 
 
 /**

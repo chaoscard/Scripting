@@ -43,6 +43,7 @@ import {
   useSeriesWatchlist,
   useUserFollow,
   notifyOpenBookmarkDetail,
+  notifyOpenRelatedUsers,
 } from "./hooks"
 import {
   downloadEntireMangaSeries,
@@ -418,6 +419,9 @@ export function IllustDetailDockBar(props: { illustID: number }) {
       if (userID && !followed) {
         await session.call((token) => followUser(userID, "public", token))
         setFollowed(true)
+        if (loadSettings().showRelatedUsersOnFollow) {
+          notifyOpenRelatedUsers(userID, illust?.user?.name ?? cached?.user?.name)
+        }
       }
     } catch {
     } finally {
@@ -452,6 +456,9 @@ export function IllustDetailDockBar(props: { illustID: number }) {
       } else {
         await session.call((token) => followUser(userID, "public", token))
         setFollowed(true)
+        if (loadSettings().showRelatedUsersOnFollow) {
+          notifyOpenRelatedUsers(userID, illust?.user?.name ?? cached?.user?.name)
+        }
       }
     } catch {
     } finally {
@@ -469,6 +476,9 @@ export function IllustDetailDockBar(props: { illustID: number }) {
       await session.call((token) => followUser(userID, visibility, token))
       setFollowed(true)
       setFollowRestrict(visibility)
+      if (loadSettings().showRelatedUsersOnFollow) {
+        notifyOpenRelatedUsers(userID, illust?.user?.name ?? cached?.user?.name)
+      }
     } catch {
     } finally {
       setFollowLoading(false)
@@ -793,6 +803,9 @@ export function NovelDetailDockBar(props: { novelID: number }) {
       if (userID && !followed) {
         await session.call((token) => followUser(userID, "public", token))
         setFollowed(true)
+        if (loadSettings().showRelatedUsersOnFollow) {
+          notifyOpenRelatedUsers(userID, novel?.user?.name)
+        }
       }
     } catch {
     } finally {
@@ -827,6 +840,9 @@ export function NovelDetailDockBar(props: { novelID: number }) {
       } else {
         await session.call((token) => followUser(userID, "public", token))
         setFollowed(true)
+        if (loadSettings().showRelatedUsersOnFollow) {
+          notifyOpenRelatedUsers(userID, novel?.user?.name)
+        }
       }
     } catch {
     } finally {
@@ -844,6 +860,9 @@ export function NovelDetailDockBar(props: { novelID: number }) {
       await session.call((token) => followUser(userID, visibility, token))
       setFollowed(true)
       setFollowRestrict(visibility)
+      if (loadSettings().showRelatedUsersOnFollow) {
+        notifyOpenRelatedUsers(userID, novel?.user?.name)
+      }
     } catch {
     } finally {
       setFollowLoading(false)

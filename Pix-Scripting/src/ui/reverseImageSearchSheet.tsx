@@ -33,7 +33,7 @@ import {
 import { cacheIllust } from "../store/illustCache"
 import { CachedImage } from "./components/CachedImage"
 import { EmptyView, ErrorView, LoadingView, presentExternalURL } from "./components"
-import { destinationElement } from "./routes"
+import { requestPixivRoute } from "./routeNavigation"
 
 declare const Photos: any
 import { triggerHaptic } from "../utils/haptics"
@@ -138,6 +138,16 @@ export function ReverseImageSearchSheet(props: {
     })
   }, [image, error, performSearch])
 
+  const handleNavigate = useCallback(
+    (route: string) => {
+      onClose()
+      setTimeout(() => {
+        requestPixivRoute(route)
+      }, 260)
+    },
+    [onClose]
+  )
+
   const handlePickFromPhotos = useCallback(async () => {
     try {
       triggerHaptic("light")
@@ -175,7 +185,6 @@ export function ReverseImageSearchSheet(props: {
         <ScrollView
           navigationTitle={quota.keyCount > 0 ? `SauceNAO 搜图 (${quota.used}/${quota.total})` : "SauceNAO 搜图"}
           navigationBarTitleDisplayMode="inline"
-          navigationDestination={destinationElement}
           toolbar={{
             topBarLeading: (
               <Button title="关闭" systemImage="xmark" action={onClose} />
@@ -400,6 +409,7 @@ export function ReverseImageSearchSheet(props: {
                   <SauceNAOMatchCard
                     key={`${match.pixivId || match.title}-${idx}`}
                     match={match}
+                    onNavigate={handleNavigate}
                   />
                 ))}
               </LazyVStack>
@@ -679,8 +689,9 @@ function SauceNAOConfigView(props: {
 
 function SauceNAOMatchCard(props: {
   match: SauceNAOMatch
+  onNavigate?: (route: string) => void
 }) {
-  const { match } = props
+  const { match, onNavigate } = props
   const similarityScore = match.similarity
   const isHighSim = similarityScore >= 80
   const isMedSim = similarityScore >= 60
@@ -805,9 +816,9 @@ function SauceNAOMatchCard(props: {
       {/* 3. 右侧操作按钮列（若无可跳转链接，则展示复制信息按钮） */}
       <VStack alignment="trailing" spacing={6}>
         {match.pixivId ? (
-          <NavigationLink
-            value={`illust:${match.pixivId}`}
+          <Button
             buttonStyle="plain"
+            action={() => onNavigate?.(`illust:${match.pixivId}`)}
           >
             <HStack
               alignment="center"
@@ -831,7 +842,7 @@ function SauceNAOMatchCard(props: {
                 作品详情
               </Text>
             </HStack>
-          </NavigationLink>
+          </Button>
         ) : match.extUrls.length > 0 ? (
           <Button
             buttonStyle="plain"
@@ -863,9 +874,9 @@ function SauceNAOMatchCard(props: {
         ) : null}
 
         {match.authorId ? (
-          <NavigationLink
-            value={`user:${match.authorId}`}
+          <Button
             buttonStyle="plain"
+            action={() => onNavigate?.(`user:${match.authorId}`)}
           >
             <HStack
               alignment="center"
@@ -889,7 +900,7 @@ function SauceNAOMatchCard(props: {
                 作者主页
               </Text>
             </HStack>
-          </NavigationLink>
+          </Button>
         ) : match.authorUrl ? (
           <Button
             buttonStyle="plain"

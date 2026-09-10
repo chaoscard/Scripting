@@ -65,3 +65,19 @@ export function recordUserFollowed(
 export function clearFollowMemoryCache(): void {
   followedUserCache.clear()
 }
+
+export type OpenRelatedUsersListener = (userID: number, userName?: string) => void
+const relatedUsersListeners = new Set<OpenRelatedUsersListener>()
+
+export function onOpenRelatedUsers(listener: OpenRelatedUsersListener): () => void {
+  relatedUsersListeners.add(listener)
+  return () => relatedUsersListeners.delete(listener)
+}
+
+export function notifyOpenRelatedUsers(userID: number, userName?: string): void {
+  for (const listener of relatedUsersListeners) {
+    try {
+      listener(userID, userName)
+    } catch {}
+  }
+}

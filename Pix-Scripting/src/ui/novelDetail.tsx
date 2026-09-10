@@ -55,6 +55,7 @@ import {
   useNovelBookmark,
   useNovelMarker,
   useOpenBookmarkDetailListener,
+  useOpenRelatedUsersListener,
   usePagedList,
   waitForNovelLoadingFeedback,
 } from "./hooks"
@@ -174,6 +175,9 @@ export function NovelDetailView(props: { novelID: number }) {
   const [followRestrict, setFollowRestrict] = useState<FollowRestrict | null>(null)
   const [followLoading, setFollowLoading] = useState(false)
   const [showRelatedUsers, setShowRelatedUsers] = useState(false)
+  useOpenRelatedUsersListener(novel?.user?.id ?? cachedNovel?.user?.id, () => {
+    setShowRelatedUsers(true)
+  })
   const [showComments, setShowComments] = useState(false)
   const [showAISheet, setShowAISheet] = useState(false)
   const [showTypographySheet, setShowTypographySheet] = useState(false)

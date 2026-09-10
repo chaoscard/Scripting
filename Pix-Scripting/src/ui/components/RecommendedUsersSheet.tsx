@@ -1,6 +1,5 @@
 import {
   Button,
-  GeometryReader,
   Image,
   LazyVStack,
   NavigationStack,
@@ -12,7 +11,7 @@ import {
 import { nextUsers, recommendedUsers } from "../../api/pixiv"
 import { session } from "../../api/session"
 import { loadSettings, onSettingsChanged } from "../../store/settings"
-import { destinationElement } from "../routes"
+import { requestPixivRoute } from "../routeNavigation"
 import {
   CONNECTION_CARD_HORIZONTAL_PADDING,
   CONNECTION_LIST_HORIZONTAL_PADDING,
@@ -23,7 +22,7 @@ import {
 import { EmptyView, ErrorView, LoadingView } from "./StatusViews"
 import { LoadMoreTrigger } from "./RefreshableScrollView"
 import { prefetch } from "../../image/imageLoader"
-import { currentBatchSize, usePagedList } from "../hooks"
+import { currentBatchSize, useLayoutMetrics, usePagedList } from "../hooks"
 import type { PixivPage, PixivUserPreview } from "../../types"
 
 type ConnectionPreview = PixivUserPreview & { id: number }
@@ -59,6 +58,24 @@ export function RecommendedUsersSheet(props: {
       prefetch(pendingItems.slice(0, currentBatchSize()).flatMap(connectionPreviewImageURLs)).cancel,
   })
 
+  const { width: screenWidth } = useLayoutMetrics()
+  const previewSide = Math.max(
+    0,
+    Math.floor(
+      (screenWidth -
+        (CONNECTION_LIST_HORIZONTAL_PADDING + CONNECTION_CARD_HORIZONTAL_PADDING) * 2 -
+        CONNECTION_PREVIEW_GAP * 2) /
+        3
+    )
+  )
+
+  const handleNavigate = (route: string) => {
+    onClose()
+    setTimeout(() => {
+      requestPixivRoute(route)
+    }, 260)
+  }
+
   return (
     <NavigationStack
       presentationDetents={["medium", "large"]}
@@ -67,7 +84,6 @@ export function RecommendedUsersSheet(props: {
       <VStack
         navigationTitle="推荐创作者"
         navigationBarTitleDisplayMode="inline"
-        navigationDestination={destinationElement}
         toolbar={{
           topBarLeading: (
             <Button action={onClose}>
@@ -89,45 +105,33 @@ export function RecommendedUsersSheet(props: {
         ) : paged.items.length === 0 ? (
           <EmptyView text="暂无推荐创作者" />
         ) : (
-          <GeometryReader>
-            {(proxy) => {
-              const previewSide = Math.max(
-                0,
-                (proxy.size.width -
-                  (CONNECTION_LIST_HORIZONTAL_PADDING + CONNECTION_CARD_HORIZONTAL_PADDING) * 2 -
-                  CONNECTION_PREVIEW_GAP * 2) /
-                  3
-              )
-              return (
-                <ScrollView
-                  frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-                  presentationContentInteraction="scrolls"
-                >
-                  <LazyVStack
-                    spacing={10}
-                    padding={{ horizontal: CONNECTION_LIST_HORIZONTAL_PADDING, top: 12, bottom: 24 }}
-                    frame={{ maxWidth: "infinity" }}
-                  >
-                    {paged.items.map((item) => (
-                      <ConnectionRow
-                        key={`recommended-${item.user.id}`}
-                        preview={item}
-                        showFollowControl={item.user.id !== session.userID}
-                        previewSide={previewSide}
-                        hideNovels={hideNovels}
-                      />
-                    ))}
-                    <LoadMoreTrigger
-                      anchor={paged.items[paged.items.length - 1].user.id}
-                      onLoadMore={paged.loadMore}
-                      hasMore={paged.hasMore}
-                      isLoading={paged.loadingMore}
-                    />
-                  </LazyVStack>
-                </ScrollView>
-              )
-            }}
-          </GeometryReader>
+          <ScrollView
+            frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+            presentationContentInteraction="scrolls"
+          >
+            <LazyVStack
+              spacing={10}
+              padding={{ horizontal: CONNECTION_LIST_HORIZONTAL_PADDING, top: 12, bottom: 24 }}
+              frame={{ maxWidth: "infinity" }}
+            >
+              {paged.items.map((item) => (
+                <ConnectionRow
+                  key={`recommended-${item.user.id}`}
+                  preview={item}
+                  showFollowControl={item.user.id !== session.userID}
+                  previewSide={previewSide}
+                  hideNovels={hideNovels}
+                  onNavigate={handleNavigate}
+                />
+              ))}
+              <LoadMoreTrigger
+                anchor={paged.items[paged.items.length - 1].user.id}
+                onLoadMore={paged.loadMore}
+                hasMore={paged.hasMore}
+                isLoading={paged.loadingMore}
+              />
+            </LazyVStack>
+          </ScrollView>
         )}
       </VStack>
     </NavigationStack>

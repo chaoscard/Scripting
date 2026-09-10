@@ -85,11 +85,12 @@ export function ConnectionRow(props: {
   showFollowControl?: boolean
   previewSide?: number
   hideNovels?: boolean
+  onNavigate?: (route: string) => void
 }) {
   const { preview, hideNovels = false, showFollowControl = true } = props
   const [followed, setFollowed, followRestrict, setFollowRestrict] = useUserFollow(
     preview.user.id,
-    preview.user.is_followed ?? true
+    preview.user.is_followed ?? false
   )
   const [followBusy, setFollowBusy] = useState(false)
   const [filterVersion, setFilterVersion] = useState(0)
@@ -164,36 +165,70 @@ export function ConnectionRow(props: {
       frame={{ maxWidth: "infinity" }}
     >
       <HStack spacing={10} alignment="center" frame={{ maxWidth: "infinity" }}>
-        <NavigationLink
-          value={`user:${preview.user.id}`}
-          frame={{ maxWidth: "infinity", alignment: "leading" }}
-          contentShape="rect"
-        >
-          <HStack
-            spacing={8}
-            alignment="center"
+        {props.onNavigate ? (
+          <Button
+            buttonStyle="plain"
+            action={() => props.onNavigate!(`user:${preview.user.id}`)}
             frame={{ maxWidth: "infinity", alignment: "leading" }}
             contentShape="rect"
           >
-            <ZStack frame={{ width: 38, height: 38 }}>
-              <Circle
-                fill="rgba(255, 255, 255, 0.16)"
-                glassEffect={true}
-                frame={{ width: 38, height: 38 }}
-              />
-              <AvatarImage url={preview.user.profile_image_urls?.medium ?? null} size={32} />
-            </ZStack>
-            <VStack alignment="leading" spacing={2}>
-              <Text font="body" fontWeight="semibold" lineLimit={1}>
-                {preview.user.name}
-              </Text>
-              <Text font="caption" foregroundStyle="secondaryLabel" lineLimit={1}>
-                @{preview.user.account}
-              </Text>
-            </VStack>
-            <Spacer />
-          </HStack>
-        </NavigationLink>
+            <HStack
+              spacing={8}
+              alignment="center"
+              frame={{ maxWidth: "infinity", alignment: "leading" }}
+              contentShape="rect"
+            >
+              <ZStack frame={{ width: 38, height: 38 }}>
+                <Circle
+                  fill="rgba(255, 255, 255, 0.16)"
+                  glassEffect={true}
+                  frame={{ width: 38, height: 38 }}
+                />
+                <AvatarImage url={preview.user.profile_image_urls?.medium ?? null} size={32} />
+              </ZStack>
+              <VStack alignment="leading" spacing={2}>
+                <Text font="body" fontWeight="semibold" lineLimit={1}>
+                  {preview.user.name}
+                </Text>
+                <Text font="caption" foregroundStyle="secondaryLabel" lineLimit={1}>
+                  @{preview.user.account}
+                </Text>
+              </VStack>
+              <Spacer />
+            </HStack>
+          </Button>
+        ) : (
+          <NavigationLink
+            value={`user:${preview.user.id}`}
+            frame={{ maxWidth: "infinity", alignment: "leading" }}
+            contentShape="rect"
+          >
+            <HStack
+              spacing={8}
+              alignment="center"
+              frame={{ maxWidth: "infinity", alignment: "leading" }}
+              contentShape="rect"
+            >
+              <ZStack frame={{ width: 38, height: 38 }}>
+                <Circle
+                  fill="rgba(255, 255, 255, 0.16)"
+                  glassEffect={true}
+                  frame={{ width: 38, height: 38 }}
+                />
+                <AvatarImage url={preview.user.profile_image_urls?.medium ?? null} size={32} />
+              </ZStack>
+              <VStack alignment="leading" spacing={2}>
+                <Text font="body" fontWeight="semibold" lineLimit={1}>
+                  {preview.user.name}
+                </Text>
+                <Text font="caption" foregroundStyle="secondaryLabel" lineLimit={1}>
+                  @{preview.user.account}
+                </Text>
+              </VStack>
+              <Spacer />
+            </HStack>
+          </NavigationLink>
+        )}
         {showFollowControl ? (
           <Button
             buttonStyle="glass"
@@ -256,12 +291,14 @@ export function ConnectionRow(props: {
                 key={`illust:${item.item.id}`}
                 illustration={item.item}
                 side={previewSide}
+                onNavigate={props.onNavigate}
               />
             ) : (
               <ConnectionNovelThumbnail
                 key={`novel:${item.item.id}`}
                 novel={item.item}
                 side={previewSide}
+                onNavigate={props.onNavigate}
               />
             )
           )}
@@ -274,19 +311,36 @@ export function ConnectionRow(props: {
 export function ConnectionIllustThumbnail(props: {
   illustration: PixivIllustration
   side: number
+  onNavigate?: (route: string) => void
 }) {
+  const imageElement = (
+    <CachedImage
+      url={thumbUrlOf(props.illustration)}
+      aspectRatioValue={1}
+      useIntrinsicAspectRatio={false}
+      cornerRadius={6}
+      frame={{ width: props.side, height: props.side }}
+    />
+  )
+
+  if (props.onNavigate) {
+    return (
+      <Button
+        buttonStyle="plain"
+        action={() => props.onNavigate!(`illust:${props.illustration.id}`)}
+        frame={{ width: props.side, height: props.side }}
+      >
+        {imageElement}
+      </Button>
+    )
+  }
+
   return (
     <NavigationLink
       value={`illust:${props.illustration.id}`}
       frame={{ width: props.side, height: props.side }}
     >
-      <CachedImage
-        url={thumbUrlOf(props.illustration)}
-        aspectRatioValue={1}
-        useIntrinsicAspectRatio={false}
-        cornerRadius={6}
-        frame={{ width: props.side, height: props.side }}
-      />
+      {imageElement}
     </NavigationLink>
   )
 }
@@ -294,42 +348,59 @@ export function ConnectionIllustThumbnail(props: {
 export function ConnectionNovelThumbnail(props: {
   novel: PixivNovel
   side: number
+  onNavigate?: (route: string) => void
 }) {
   const coverWidth = props.side * NOVEL_PREVIEW_COVER_RATIO
+
+  const novelElement = (
+    <ZStack
+      alignment="bottom"
+      background="systemGray6"
+      clipShape={{ type: "rect", cornerRadius: 6 }}
+      frame={{ width: props.side, height: props.side }}
+    >
+      <CachedImage
+        url={novelThumbUrlOf(props.novel)}
+        aspectRatioValue={NOVEL_PREVIEW_COVER_RATIO}
+        centerCropAspect={NOVEL_PREVIEW_COVER_RATIO}
+        useIntrinsicAspectRatio={false}
+        contentMode="fill"
+        cornerRadius={0}
+        frame={{ width: coverWidth, height: props.side }}
+      />
+      <Text
+        font="caption2"
+        fontWeight="semibold"
+        foregroundStyle="white"
+        multilineTextAlignment="leading"
+        lineLimit={4}
+        padding={{ horizontal: 5, vertical: 3 }}
+        frame={{ width: props.side, alignment: "leading" }}
+        background="rgba(0, 0, 0, 0.58)"
+      >
+        {props.novel.title}
+      </Text>
+    </ZStack>
+  )
+
+  if (props.onNavigate) {
+    return (
+      <Button
+        buttonStyle="plain"
+        action={() => props.onNavigate!(`novel:${props.novel.id}`)}
+        frame={{ width: props.side, height: props.side }}
+      >
+        {novelElement}
+      </Button>
+    )
+  }
 
   return (
     <NavigationLink
       value={`novel:${props.novel.id}`}
       frame={{ width: props.side, height: props.side }}
     >
-      <ZStack
-        alignment="bottom"
-        background="systemGray6"
-        clipShape={{ type: "rect", cornerRadius: 6 }}
-        frame={{ width: props.side, height: props.side }}
-      >
-        <CachedImage
-          url={novelThumbUrlOf(props.novel)}
-          aspectRatioValue={NOVEL_PREVIEW_COVER_RATIO}
-          centerCropAspect={NOVEL_PREVIEW_COVER_RATIO}
-          useIntrinsicAspectRatio={false}
-          contentMode="fill"
-          cornerRadius={0}
-          frame={{ width: coverWidth, height: props.side }}
-        />
-        <Text
-          font="caption2"
-          fontWeight="semibold"
-          foregroundStyle="white"
-          multilineTextAlignment="leading"
-          lineLimit={4}
-          padding={{ horizontal: 5, vertical: 3 }}
-          frame={{ width: props.side, alignment: "leading" }}
-          background="rgba(0, 0, 0, 0.58)"
-        >
-          {props.novel.title}
-        </Text>
-      </ZStack>
+      {novelElement}
     </NavigationLink>
   )
 }
