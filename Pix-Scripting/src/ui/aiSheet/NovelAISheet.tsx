@@ -32,7 +32,7 @@ import {
 import { ErrorView } from "../components"
 import { createThrottledUpdater } from "./throttle"
 import { PRESET_CONTINUE_PROMPTS, type NovelAIMode } from "./types"
-import { triggerHaptic } from "../../utils/haptics"
+import { triggerHaptic } from "../../platform/haptics"
 
 interface NovelPageCache {
   translateText?: string

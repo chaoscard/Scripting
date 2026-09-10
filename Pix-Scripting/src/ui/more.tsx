@@ -25,7 +25,7 @@ import { DockActionBar, useRegisterBottomAccessory, type DockActionItem } from "
 import { useExperimentalAmbientPalette } from "./ambient"
 import { ReverseImageSearchSheet } from "./reverseImageSearchSheet"
 import { AccountSwitcherSheet } from "./accountSwitcherSheet"
-import { triggerHaptic } from "../utils/haptics"
+import { triggerHaptic } from "../platform/haptics"
 
 function isVirtualNode(v: unknown): v is VirtualNode {
   return !!v && typeof v === "object" && ("render" in v || "isInternal" in v || "props" in v)

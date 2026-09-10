@@ -18,9 +18,9 @@ import {
   type VirtualNode,
 } from "scripting"
 import { isAIAvailable } from "../../api/aiService"
-import { isScriptingPro } from "../../utils/pro"
+import { isScriptingPro } from "../../platform/pro"
 import { ErrorView } from "../components"
-import { triggerHaptic } from "../../utils/haptics"
+import { triggerHaptic } from "../../platform/haptics"
 
 /**
  * 极简微光骨架呼吸条

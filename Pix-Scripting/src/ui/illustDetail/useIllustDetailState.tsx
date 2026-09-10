@@ -18,7 +18,7 @@ import {
   unfollowUser,
 } from "../../api/pixiv"
 import { session } from "../../api/session"
-import { triggerHaptic } from "../../utils/haptics"
+import { triggerHaptic } from "../../platform/haptics"
 import {
   downloadIllustToAlbum,
   exportIllustToZip,
@@ -69,7 +69,7 @@ import {
 import { getCachedIllustBookmark } from "../../store/bookmarkSync"
 import { getSeriesByWorkID, recordWorkSeriesAssociation } from "../../store/seriesCache"
 import { useAsyncGuard, useIllustBookmark, useLatest, useOpenBookmarkDetailListener, useOpenRelatedUsersListener } from "../hooks"
-import { renderAmbientBackground } from "../ambient"
+import { renderAmbientBackground, recordActiveAmbientImageUrl } from "../ambient"
 import type { PixivIllustration } from "../../types"
 import { IllustGalleryView } from "../IllustGalleryView"
 import type { IllustAIMode } from "../aiSheet"
@@ -805,6 +805,13 @@ export function useIllustDetailState(illustID: number): {
     setShowRelatedUsers,
     setBookmarked,
   }
+
+  useEffect(() => {
+    const heroUrl = pageURLs[0]
+    if (ambientEnabled && ambientPalette && heroUrl) {
+      recordActiveAmbientImageUrl(heroUrl)
+    }
+  }, [ambientEnabled, ambientPalette, pageURLs[0]])
 
   return { state, actions }
 }

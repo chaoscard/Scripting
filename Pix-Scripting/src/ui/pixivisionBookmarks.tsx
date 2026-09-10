@@ -30,7 +30,7 @@ import { useExperimentalAmbientPalette } from "./ambient"
 import { recordPixivisionCoverUrl } from "../image/imageLoader"
 import { loadSettings, onSettingsChanged } from "../store/settings"
 import { LibraryView } from "./library"
-import { triggerHaptic } from "../utils/haptics"
+import { triggerHaptic } from "../platform/haptics"
 
 const FLOW_HORIZONTAL_PADDING = 12
 const DEFAULT_ARTICLE_RATIO = 1200 / 630

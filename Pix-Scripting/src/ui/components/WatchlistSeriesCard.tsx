@@ -19,7 +19,7 @@ import {
 } from "../../downloader"
 import { recordWorkSeriesAssociation } from "../../store/seriesCache"
 import type { PixivWatchlistSeries } from "../../types"
-import { triggerHaptic } from "../../utils/haptics"
+import { triggerHaptic } from "../../platform/haptics"
 function formatWatchlistDate(dateStr?: string | null): string {
   if (!dateStr) return ""
   try {

@@ -9,7 +9,7 @@ import {
   ZStack,
   type Color,
 } from "scripting"
-import { triggerHaptic } from "../../utils/haptics"
+import { triggerHaptic } from "../../platform/haptics"
 
 interface FeatureItem {
   id: string

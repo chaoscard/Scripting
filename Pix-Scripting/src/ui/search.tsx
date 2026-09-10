@@ -67,7 +67,7 @@ import { destinationElement } from "./routes"
 import { requestPixivRoute, setActiveTabKind } from "./routeNavigation"
 
 declare const Pasteboard: any
-import { triggerHaptic } from "../utils/haptics"
+import { triggerHaptic } from "../platform/haptics"
 import {
   currentBatchSize,
   dedupeByID,
@@ -381,6 +381,10 @@ function filterUserPreviews(items: UserItem[]): UserItem[] {
 declare const Dialog: any
 declare const Animation: any
 
+// 模块级热门标签内存预热缓存
+let cachedTrendingIllust: PixivTrendingTag[] = []
+let cachedTrendingNovel: PixivTrendingTag[] = []
+
 export function SearchView(props: { onClose: () => void; active?: boolean }) {
   useEffect(() => {
     setActiveTabKind("search")
@@ -414,8 +418,10 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
   const [historyItems, setHistoryItems] = useState<string[]>(() => getSearchHistory(scope))
 
   // 热门标签状态
-  const [trendingIllust, setTrendingIllust] = useState<PixivTrendingTag[]>([])
-  const [trendingNovel, setTrendingNovel] = useState<PixivTrendingTag[]>([])
+  const [trendingIllust, setTrendingIllust] = useState<PixivTrendingTag[]>(() => cachedTrendingIllust)
+  const [trendingNovel, setTrendingNovel] = useState<PixivTrendingTag[]>(() => cachedTrendingNovel)
+  const [trendingIllustLoaded, setTrendingIllustLoaded] = useState<boolean>(() => cachedTrendingIllust.length > 0)
+  const [trendingNovelLoaded, setTrendingNovelLoaded] = useState<boolean>(() => cachedTrendingNovel.length > 0)
   const [trendingIllustLoading, setTrendingIllustLoading] = useState(false)
   const [trendingNovelLoading, setTrendingNovelLoading] = useState(false)
   const [trendingIllustError, setTrendingIllustError] = useState<string | null>(null)
@@ -562,6 +568,8 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
     try {
       const tags = await session.call((token) => trendingTags(token))
       setTrendingIllust(tags)
+      cachedTrendingIllust = tags
+      setTrendingIllustLoaded(true)
       for (const t of tags) {
         if (t.illust?.id && (t.illust as any).image_urls) {
           cacheIllust(t.illust as any)
@@ -585,6 +593,8 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
     try {
       const tags = await session.call((token) => trendingNovelTags(token))
       setTrendingNovel(tags)
+      cachedTrendingNovel = tags
+      setTrendingNovelLoaded(true)
       const urls = tags
         .slice(0, 10)
         .flatMap((t) => [trendingTagHeroUrl(t), trendingTagThumbUrl(t)])
@@ -785,39 +795,90 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
         ? novelPaged
         : userSearchPaged
 
-  // 实验性沉浸环境光背景
-  const ambientImageUrl = useMemo(() => {
-    if (submitted) {
-      if (scope === "illust" && illustPaged.items[0]) {
-        return cardThumbUrlOf(illustPaged.items[0])
-      }
-      if (scope === "novel" && novelPaged.items[0]) {
-        return novelThumbUrlOf(novelPaged.items[0])
-      }
-      if (scope === "user" && userSearchPaged.items[0]?.user?.profile_image_urls?.medium) {
-        return userSearchPaged.items[0].user.profile_image_urls.medium
-      }
-    } else {
-      if (scope === "illust" && trendingIllust[0]) {
-        return trendingTagHeroUrl(trendingIllust[0])
-      }
-      if (scope === "novel" && trendingNovel[0]) {
-        return trendingTagHeroUrl(trendingNovel[0])
-      }
-      if (scope === "user" && userRecommendedPaged.items[0]?.user?.profile_image_urls?.medium) {
-        return userRecommendedPaged.items[0].user.profile_image_urls.medium
-      }
+  // 实验性沉浸环境光背景（带有持久缓冲保护，切换分类或搜索请求中坚决保留上一张背景图）
+  const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(() => {
+    if (cachedTrendingIllust[0]) {
+      return trendingTagHeroUrl(cachedTrendingIllust[0])
     }
     return null
+  })
+
+  useEffect(() => {
+    let nextUrl: string | null = null
+    let hasLoaded = false
+    let isDataEmpty = false
+
+    if (submitted) {
+      if (scope === "illust") {
+        hasLoaded = !illustPaged.initialLoading
+        isDataEmpty = illustPaged.items.length === 0
+        if (illustPaged.items[0]) {
+          nextUrl = cardThumbUrlOf(illustPaged.items[0])
+        }
+      } else if (scope === "novel") {
+        hasLoaded = !novelPaged.initialLoading
+        isDataEmpty = novelPaged.items.length === 0
+        if (novelPaged.items[0]) {
+          nextUrl = novelThumbUrlOf(novelPaged.items[0])
+        }
+      } else if (scope === "user") {
+        hasLoaded = !userSearchPaged.initialLoading
+        isDataEmpty = userSearchPaged.items.length === 0
+        if (userSearchPaged.items[0]?.user?.profile_image_urls?.medium) {
+          nextUrl = userSearchPaged.items[0].user.profile_image_urls.medium
+        }
+      }
+    } else {
+      if (scope === "illust") {
+        hasLoaded = trendingIllustLoaded && !trendingIllustLoading
+        isDataEmpty = trendingIllust.length === 0
+        if (trendingIllust[0]) {
+          nextUrl = trendingTagHeroUrl(trendingIllust[0])
+        }
+      } else if (scope === "novel") {
+        hasLoaded = trendingNovelLoaded && !trendingNovelLoading
+        isDataEmpty = trendingNovel.length === 0
+        if (trendingNovel[0]) {
+          nextUrl = trendingTagHeroUrl(trendingNovel[0])
+        }
+      } else if (scope === "user") {
+        hasLoaded = !userRecommendedPaged.initialLoading
+        isDataEmpty = userRecommendedPaged.items.length === 0
+        if (userRecommendedPaged.items[0]?.user?.profile_image_urls?.medium) {
+          nextUrl = userRecommendedPaged.items[0].user.profile_image_urls.medium
+        }
+      }
+    }
+
+    if (nextUrl) {
+      setAmbientImageUrl(nextUrl)
+    } else if (hasLoaded && isDataEmpty) {
+      // 只有在确定加载结束且当前列表确认为空时才置空环境光
+      setAmbientImageUrl(null)
+    }
   }, [
     submitted,
     scope,
     illustPaged.items[0]?.id,
+    illustPaged.initialLoading,
+    illustPaged.items.length,
     novelPaged.items[0]?.id,
+    novelPaged.initialLoading,
+    novelPaged.items.length,
     userSearchPaged.items[0]?.id,
+    userSearchPaged.initialLoading,
+    userSearchPaged.items.length,
     trendingIllust[0]?.tag,
+    trendingIllustLoaded,
+    trendingIllustLoading,
+    trendingIllust.length,
     trendingNovel[0]?.tag,
+    trendingNovelLoaded,
+    trendingNovelLoading,
+    trendingNovel.length,
     userRecommendedPaged.items[0]?.id,
+    userRecommendedPaged.initialLoading,
+    userRecommendedPaged.items.length,
   ])
   const isTabActive = useIsCurrentTab("search")
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl, isTabActive)

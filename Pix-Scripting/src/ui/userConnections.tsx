@@ -36,13 +36,13 @@ import {
 } from "./components"
 import { prefetch } from "../image/imageLoader"
 import { currentBatchSize, usePagedList } from "./hooks"
-import { useExperimentalAmbientPalette } from "./ambient"
+import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl } from "./ambient"
 import {
   DockActionBar,
   useRegisterBottomAccessory,
   type DockActionItem,
 } from "./bottomAccessory"
-import { triggerHaptic } from "../utils/haptics"
+import { triggerHaptic } from "../platform/haptics"
 
 export type ConnectionRouteKind = "following" | "follower" | "mypixiv"
 type ConnectionVisibility = Extract<Visibility, "public" | "private">
@@ -77,7 +77,7 @@ export function UserConnectionsView(props: {
   const isAppleMusic = pageLayout === "appleMusic"
   const isMyFollowing = props.kind === "following" && (props.userID == null || props.userID === session.userID)
   const [showRecommendedUsers, setShowRecommendedUsers] = useState(false)
-  const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(null)
+  const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(() => getLastActiveAmbientImageUrl())
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
   const showVisibilityPicker =
     props.showVisibilityPicker ?? isMyFollowing

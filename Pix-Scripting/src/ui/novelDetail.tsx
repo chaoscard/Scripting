@@ -46,7 +46,7 @@ import {
   unfollowUser,
 } from "../api/pixiv"
 import { session } from "../api/session"
-import { triggerHaptic } from "../utils/haptics"
+import { triggerHaptic } from "../platform/haptics"
 import { exportNovelToEpub } from "../downloader"
 import {
   currentBatchSize,

@@ -55,7 +55,7 @@ import {
 import { requestPixivRoute } from "./routeNavigation"
 
 declare const Dialog: any
-import { triggerHaptic } from "../utils/haptics"
+import { triggerHaptic } from "../platform/haptics"
 
 // ============================================================================
 // 1. 二级总览页：下载与本地文件管理 (DownloadManagerView)

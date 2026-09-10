@@ -36,7 +36,7 @@ import {
   useRegisterBottomAccessory,
   type DockActionItem,
 } from "./bottomAccessory"
-import { triggerHaptic } from "../utils/haptics"
+import { triggerHaptic } from "../platform/haptics"
 
 export type CustomRankingPickerKind = "illust" | "manga" | "novel"
 

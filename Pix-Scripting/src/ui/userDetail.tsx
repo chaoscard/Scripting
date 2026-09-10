@@ -38,7 +38,7 @@ import {
   unfollowUser,
   userDetail,
 } from "../api/pixiv"
-import { triggerHaptic } from "../utils/haptics"
+import { triggerHaptic } from "../platform/haptics"
 import { session } from "../api/session"
 import {
   cachedFileExists,

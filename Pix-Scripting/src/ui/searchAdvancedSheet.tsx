@@ -24,7 +24,7 @@ import type {
   SearchSort,
 } from "../types"
 import type { AppSettings } from "../store/settings"
-import { triggerHaptic } from "../utils/haptics"
+import { triggerHaptic } from "../platform/haptics"
 
 declare const Dialog: any
 

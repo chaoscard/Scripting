@@ -34,7 +34,7 @@ import {
   novelSeries,
 } from "../api/pixiv"
 import { session } from "../api/session"
-import { triggerHaptic } from "../utils/haptics"
+import { triggerHaptic } from "../platform/haptics"
 import {
   loadSettings,
   onSettingsChanged,
@@ -73,7 +73,7 @@ import {
   usePagedList,
   useSeriesWatchlist,
 } from "./hooks"
-import { useUserAmbientPalette } from "./ambient"
+import { useUserAmbientPalette, getLastActiveAmbientImageUrl } from "./ambient"
 
 type SeriesKind = "manga" | "novel"
 type SeriesWorkItem = PixivIllustration | PixivNovel
@@ -230,7 +230,9 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
   const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
   const isAppleMusic = pageLayout === "appleMusic"
 
-  const { ambientBackground } = useUserAmbientPalette(coverPreviewUrl || coverUrl)
+  const { ambientBackground } = useUserAmbientPalette(
+    coverPreviewUrl || coverUrl || getLastActiveAmbientImageUrl()
+  )
 
   // 全量已获取未过滤的原始数据映射池（按自然正序 1..N 存储）
   const rawMappedItemsRef = useRef<SeriesWorkItem[]>([])

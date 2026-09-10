@@ -28,7 +28,7 @@ import {
 import { loadSettings, onSettingsChanged } from "../store/settings"
 import { AvatarImage, EmptyView } from "./components"
 import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
-import { triggerHaptic } from "../utils/haptics"
+import { triggerHaptic } from "../platform/haptics"
 
 type BlockedScope = "tag" | "user"
 

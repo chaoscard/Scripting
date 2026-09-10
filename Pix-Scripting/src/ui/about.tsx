@@ -14,7 +14,7 @@ import {
 import { SCRIPT_VERSION } from "../config"
 import { loadSettings, onSettingsChanged, updateSettings } from "../store/settings"
 import { AvatarImage, presentExternalURL } from "./components"
-import { triggerHaptic } from "../utils/haptics"
+import { triggerHaptic } from "../platform/haptics"
 
 const GITHUB_AVATAR_URL = "https://avatars.githubusercontent.com/u/16934707?v=4"
 const HANA_IRO_AVATAR_URL = "https://github.com/youshen2.png?size=128"

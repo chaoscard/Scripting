@@ -30,7 +30,7 @@ import {
   onNovelBookmarkChanged,
 } from "../store/bookmarkSync"
 import { useAsyncGuard, useLatest, usePagedList, currentBatchSize } from "./hooks"
-import { useExperimentalAmbientPalette } from "./ambient"
+import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl } from "./ambient"
 import type { PixivBookmarkTag, PixivIllustration, PixivNovel } from "../types"
 import {
   BookmarkTags,
@@ -65,7 +65,7 @@ export function UserBookmarksView(props: { userID: number }) {
       return next
     })
   }, [kind])
-  const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(null)
+  const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(() => getLastActiveAmbientImageUrl())
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
 

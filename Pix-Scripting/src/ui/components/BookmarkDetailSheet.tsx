@@ -38,7 +38,7 @@ import { TagChip } from "./TagChip"
 import { CachedImage } from "./CachedImage"
 import { LoadingView } from "./StatusViews"
 import { CORNER_ICON_SIZE } from "./formatUtils"
-import { triggerHaptic } from "../../utils/haptics"
+import { triggerHaptic } from "../../platform/haptics"
 import type {
   PixivBookmarkDetail,
   PixivBookmarkTag,

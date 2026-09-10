@@ -30,7 +30,7 @@ import { session } from "../../api/session"
 import { novelThumbUrlOf } from "../../image/imageLoader"
 import { cacheNovel } from "../../store/novelCache"
 import type { PixivNovel } from "../../types"
-import { triggerHaptic } from "../../utils/haptics"
+import { triggerHaptic } from "../../platform/haptics"
 export function NovelCard(props: {
   novel: PixivNovel
   onAppear?: () => void

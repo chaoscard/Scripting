@@ -1,6 +1,7 @@
 import {
   LazyVStack,
   useEffect,
+  useState,
   VStack,
 } from "scripting"
 import {
@@ -17,7 +18,7 @@ import {
 } from "../store/settings"
 import { isIllustContentVisible, isNovelContentVisible } from "../store/contentFilter"
 import { useLatest, usePagedList, currentBatchSize } from "./hooks"
-import { useExperimentalAmbientPalette } from "./ambient"
+import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl } from "./ambient"
 import type { PixivIllustration, PixivNovel, PixivisionArticle } from "../types"
 import {
   EmptyView,
@@ -68,8 +69,16 @@ function TagIllustFeed(props: { tag: string }) {
 
   // 设置变更（屏蔽标签/用户）后立即重新加载过滤
   const pagedRef = useLatest(paged)
-  const firstIllustUrl = paged.items[0] ? cardThumbUrlOf(paged.items[0]) : null
-  const { ambientBackground } = useExperimentalAmbientPalette(firstIllustUrl)
+  const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(() => getLastActiveAmbientImageUrl())
+  useEffect(() => {
+    const first = paged.items[0]
+    if (first) {
+      setAmbientImageUrl(cardThumbUrlOf(first))
+    } else if (!paged.initialLoading && paged.items.length === 0) {
+      setAmbientImageUrl(null)
+    }
+  }, [paged.items[0]?.id, paged.initialLoading, paged.items.length])
+  const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
 
   useEffect(() => {
     return onSettingsChanged(() => {
@@ -132,8 +141,16 @@ function TagNovelFeed(props: { tag: string }) {
   })
 
   const pagedRef = useLatest(paged)
-  const firstNovelUrl = paged.items[0] ? novelThumbUrlOf(paged.items[0]) : null
-  const { ambientBackground } = useExperimentalAmbientPalette(firstNovelUrl)
+  const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(() => getLastActiveAmbientImageUrl())
+  useEffect(() => {
+    const first = paged.items[0]
+    if (first) {
+      setAmbientImageUrl(novelThumbUrlOf(first))
+    } else if (!paged.initialLoading && paged.items.length === 0) {
+      setAmbientImageUrl(null)
+    }
+  }, [paged.items[0]?.id, paged.initialLoading, paged.items.length])
+  const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
 
   useEffect(() => {
     return onSettingsChanged(() => {
@@ -214,8 +231,16 @@ function TagPixivisionFeed(props: { tag: string }) {
       prefetch(pendingItems.slice(0, currentBatchSize()).map((item) => item.imageURL)).cancel,
   })
 
-  const firstImageUrl = paged.items[0]?.imageURL ?? null
-  const { ambientBackground } = useExperimentalAmbientPalette(firstImageUrl)
+  const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(() => getLastActiveAmbientImageUrl())
+  useEffect(() => {
+    const first = paged.items[0]
+    if (first?.imageURL) {
+      setAmbientImageUrl(first.imageURL)
+    } else if (!paged.initialLoading && paged.items.length === 0) {
+      setAmbientImageUrl(null)
+    }
+  }, [paged.items[0]?.id, paged.initialLoading, paged.items.length])
+  const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
 
   return (
     <RefreshableScrollView

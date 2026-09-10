@@ -54,7 +54,7 @@ import type { PixivIllustration, PixivNovel } from "../types"
 export type HistoryKind = HistoryContentKind
 
 declare const Dialog: any
-import { triggerHaptic } from "../utils/haptics"
+import { triggerHaptic } from "../platform/haptics"
 
 export interface HistoryIllustItem extends PixivIllustration {
   viewedAt: number

@@ -16,7 +16,7 @@ import {
 import { isNovelContentVisible } from "../store/contentFilter"
 import { onNovelMarkerChanged } from "../store/bookmarkSync"
 import { useLatest, usePagedList, currentBatchSize } from "./hooks"
-import { useExperimentalAmbientPalette } from "./ambient"
+import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl } from "./ambient"
 import { destinationElement } from "./routes"
 import {
   DockActionBar,
@@ -24,7 +24,7 @@ import {
   type DockActionItem,
 } from "./bottomAccessory"
 import type { PixivNovelMarker } from "../types"
-import { triggerHaptic } from "../utils/haptics"
+import { triggerHaptic } from "../platform/haptics"
 import {
   EmptyView,
   ErrorView,
@@ -106,8 +106,16 @@ export function NovelLibraryView() {
     isAppleMusic
   )
 
-  const firstNovelUrl = sortedItems[0] ? novelThumbUrlOf(sortedItems[0].novel) : null
-  const { ambientBackground } = useExperimentalAmbientPalette(firstNovelUrl)
+  const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(() => getLastActiveAmbientImageUrl())
+  useEffect(() => {
+    const firstUrl = sortedItems[0] ? novelThumbUrlOf(sortedItems[0].novel) : null
+    if (firstUrl) {
+      setAmbientImageUrl(firstUrl)
+    } else if (!paged.initialLoading && sortedItems.length === 0) {
+      setAmbientImageUrl(null)
+    }
+  }, [sortedItems[0]?.novel?.id, paged.initialLoading, sortedItems.length])
+  const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
   useEffect(() => {
     return onSettingsChanged(() => {
       pagedRef.current.reapplyFilter()

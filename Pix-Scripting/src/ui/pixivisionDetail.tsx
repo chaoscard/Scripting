@@ -54,7 +54,7 @@ import {
 } from "../store/pixivisionBookmarks"
 
 declare const Pasteboard: any
-import { triggerHaptic } from "../utils/haptics"
+import { triggerHaptic } from "../platform/haptics"
 
 const FLOW_HORIZONTAL_PADDING = 12
 const MIN_FLOW_IMAGE_RATIO = 1 / 4

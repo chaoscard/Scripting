@@ -19,7 +19,7 @@ import {
 } from "scripting"
 
 import { useIsCurrentTab } from "./routeNavigation"
-import { triggerHaptic } from "../utils/haptics"
+import { triggerHaptic } from "../platform/haptics"
 import { nextIllustrations, nextNovels, novelRanking, ranking } from "../api/pixiv"
 import { cardThumbUrlOf, novelThumbUrlOf, prefetch } from "../image/imageLoader"
 import {

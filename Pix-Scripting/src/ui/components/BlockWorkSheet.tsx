@@ -17,7 +17,7 @@ import {
   updateBlocklist,
 } from "../../store/blocklist"
 import type { PixivTag, PixivUser } from "../../types"
-import { triggerHaptic } from "../../utils/haptics"
+import { triggerHaptic } from "../../platform/haptics"
 
 export function BlockWorkSheet(props: {
   user?:

@@ -33,7 +33,7 @@ import {
   saveImageToPixivAlbum,
   withAlbumKeepAlive,
 } from "../downloader"
-import { triggerHaptic } from "../utils/haptics"
+import { triggerHaptic } from "../platform/haptics"
 import {
   getDetailImageQuality,
   getDownloadImageQuality,

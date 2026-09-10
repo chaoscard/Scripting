@@ -18,7 +18,7 @@ import {
   onSettingsChanged,
   type AppSettings,
 } from "../store/settings"
-import { triggerHaptic } from "../utils/haptics"
+import { triggerHaptic } from "../platform/haptics"
 
 export function LoginNetworkSheet(props: { onClose: () => void }) {
   const [settings, setSettings] = useState<AppSettings>(() => loadSettings())

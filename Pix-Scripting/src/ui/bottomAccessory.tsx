@@ -72,7 +72,7 @@ import type {
   PixivNovelDetail,
   PixivisionDetail,
 } from "../types"
-import { triggerHaptic } from "../utils/haptics"
+import { triggerHaptic } from "../platform/haptics"
 
 declare const ShareSheet: any
 declare const Dialog: any

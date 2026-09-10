@@ -4,8 +4,8 @@ import {
 } from "scripting"
 import { PixivTaskLiveActivity, type TaskLiveActivityState } from "../../live_activity"
 import { loadSettings } from "../store/settings"
-import { triggerHaptic } from "../utils/haptics"
-import { isScriptingProUser } from "../utils/pro"
+import { triggerHaptic } from "../platform/haptics"
+import { isScriptingProUser } from "../platform/pro"
 
 export interface BackgroundTaskOptions {
   taskId?: string

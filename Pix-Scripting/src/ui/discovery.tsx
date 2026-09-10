@@ -60,7 +60,7 @@ import {
   RefreshableScrollView,
   PixivisionCard,
 } from "./components"
-import { triggerHaptic } from "../utils/haptics"
+import { triggerHaptic } from "../platform/haptics"
 
 type ExploreMode = "recommended" | "latest" | "pixivision"
 type FeedMode = Exclude<ExploreMode, "pixivision">

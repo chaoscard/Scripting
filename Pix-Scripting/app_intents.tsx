@@ -1,6 +1,6 @@
 import { AppIntentManager, AppIntentProtocol, Widget } from "scripting"
 import { advanceWidgetArtwork, toggleWidgetArtworkBookmark } from "./src/store/widgetStore"
-import { triggerHaptic } from "./src/utils/haptics"
+import { triggerHaptic } from "./src/platform/haptics"
 
 export const NextArtworkIntent = AppIntentManager.register({
   name: "PixivNextArtworkIntent",

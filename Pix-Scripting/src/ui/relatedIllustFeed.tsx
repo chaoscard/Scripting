@@ -8,7 +8,7 @@ import {
   usePagedList,
   currentBatchSize,
 } from "./hooks"
-import { useExperimentalAmbientPalette } from "./ambient"
+import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl } from "./ambient"
 import type { PixivIllustration } from "../types"
 import {
   EmptyView,
@@ -25,8 +25,8 @@ export function RelatedIllustFeedView(props: { illustID: number }) {
   const cached = getCachedIllust(illustID)
   const navTitle = cached?.title ? `相关作品 · ${cached.title}` : "相关作品"
 
-  // 1. 优先使用源作品缩略图作为第 0 毫秒环境色，避免网络加载期间白屏或突兀跳色
-  const initialAmbientUrl = cached ? cardThumbUrlOf(cached) : null
+  // 1. 优先使用源作品缩略图作为第 0 毫秒环境色，若无则回退最近活跃环境光垫底
+  const initialAmbientUrl = cached ? cardThumbUrlOf(cached) : getLastActiveAmbientImageUrl()
   const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(initialAmbientUrl)
 
   const paged = usePagedList<PixivIllustration>({

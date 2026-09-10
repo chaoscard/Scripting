@@ -2,13 +2,13 @@
   "localizedDescriptions": {
     "zh": "液态玻璃风格 Pixiv 客户端"
   },
-  "version": "1.0.2",
+  "version": "1.0.3",
   "contributors": [],
   "description": "Liquid Glass Pixiv Client",
   "remoteResource": {
     "autoUpdateInterval": null,
     "url": "https://raw.githubusercontent.com/chaoscard/Scripting/main/Release/Pix-Scripting.scripting",
-    "hash": "2f1e88290bf5c51efc576756b7be3f98"
+    "hash": "73ff0816f825f4edd040e2a2f4c3fd32"
   },
   "intentInputTypes": [],
   "entry": "index.tsx",

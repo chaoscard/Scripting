@@ -55,7 +55,7 @@ import {
 
 declare const Pasteboard: any
 declare const Safari: any
-import { triggerHaptic } from "../utils/haptics"
+import { triggerHaptic } from "../platform/haptics"
 declare const Dialog: any
 
 export function CustomAISettingsView() {

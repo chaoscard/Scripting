@@ -17,3 +17,8 @@ export {
   useNovelExperimentalAmbientPalette,
   type NovelAmbientState,
 } from "./useNovelAmbient"
+
+export {
+  recordActiveAmbientImageUrl,
+  getLastActiveAmbientImageUrl,
+} from "./tracker"

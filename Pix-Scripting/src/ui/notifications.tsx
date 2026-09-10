@@ -39,7 +39,7 @@ import {
   LoadingView,
   RefreshableScrollView,
 } from "./components"
-import { triggerHaptic } from "../utils/haptics"
+import { triggerHaptic } from "../platform/haptics"
 
 export function NotificationsView() {
   return (

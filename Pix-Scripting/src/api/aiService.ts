@@ -6,7 +6,7 @@
 import { AbortController } from "scripting"
 import { loadImage, imageUrlOf } from "../image/imageLoader"
 import type { PixivIllustration } from "../types"
-import { isScriptingPro } from "../utils/pro"
+import { isScriptingPro } from "../platform/pro"
 import {
   loadCustomAIProfile,
   isCustomAIConfigured,

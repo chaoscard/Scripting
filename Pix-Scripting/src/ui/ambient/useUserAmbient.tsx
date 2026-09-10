@@ -9,6 +9,7 @@ import {
   type UserAmbientPalette,
 } from "../../image/colorExtractor"
 import { renderAmbientBackground } from "./renderAmbientBackground"
+import { recordActiveAmbientImageUrl } from "./tracker"
 
 export interface UserAmbientState {
   ambientEnabled: boolean
@@ -125,6 +126,12 @@ export function useUserAmbientPalette(imageUrl: string | null | undefined): User
       </ZStack>
     )
   }, [ambientEnabled, isExperimental, illustPalette, ambientAlgorithm, isDark, ambientIntensity, ambientPalette])
+
+  useEffect(() => {
+    if (ambientEnabled && imageUrl && (illustPalette || ambientPalette)) {
+      recordActiveAmbientImageUrl(imageUrl)
+    }
+  }, [ambientEnabled, imageUrl, illustPalette, ambientPalette])
 
   return { ambientEnabled, ambientIntensity, ambientPalette, ambientBackground }
 }

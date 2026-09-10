@@ -36,7 +36,7 @@ import {
   NovelCard,
 } from "./components"
 import type { PixivIllustration, PixivNovel } from "../types"
-import { triggerHaptic } from "../utils/haptics"
+import { triggerHaptic } from "../platform/haptics"
 
 export type UserWorkKind = "illust" | "manga" | "novel"
 

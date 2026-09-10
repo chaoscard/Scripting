@@ -38,7 +38,7 @@ import { CachedImage, ErrorView } from "../components"
 import { cachedFilePath, imageUrlOf, loadImage, pageThumbUrlOf } from "../../image/imageLoader"
 import { getDownloadImageQuality, loadSettings } from "../../store/settings"
 import { drawOCROverlay } from "./OCRCanvas"
-import { triggerHaptic } from "../../utils/haptics"
+import { triggerHaptic } from "../../platform/haptics"
 import { createThrottledUpdater } from "./throttle"
 import type { IllustAIMode, PageTranslationCache } from "./types"
 

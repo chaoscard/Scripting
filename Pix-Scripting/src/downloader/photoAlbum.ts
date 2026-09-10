@@ -3,7 +3,7 @@ import { cachedFilePath, imageUrlOf } from "../image/imageLoader"
 import { fetchImageBinaryWithRetry, runConcurrentTasks } from "./downloadHelper"
 import type { PixivIllustration } from "../types"
 import type { TaskControlToken } from "./downloadTaskManager"
-import { isScriptingProUser } from "../utils/pro"
+import { isScriptingProUser } from "../platform/pro"
 
 /**
  * 相册保存专用后台保活引用计数管理器

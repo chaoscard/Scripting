@@ -36,7 +36,7 @@ import { EmptyView, ErrorView, LoadingView, presentExternalURL } from "./compone
 import { requestPixivRoute } from "./routeNavigation"
 
 declare const Photos: any
-import { triggerHaptic } from "../utils/haptics"
+import { triggerHaptic } from "../platform/haptics"
 declare const Dialog: any
 declare const Pasteboard: any
 

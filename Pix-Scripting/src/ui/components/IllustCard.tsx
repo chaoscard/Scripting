@@ -35,7 +35,7 @@ import { addBookmark, bookmarkDetail, bookmarkTags, followUser, removeBookmark }
 import { session } from "../../api/session"
 import { cardThumbUrlOf, heroCardThumbUrlOf } from "../../image/imageLoader"
 import type { PixivIllustration } from "../../types"
-import { triggerHaptic } from "../../utils/haptics"
+import { triggerHaptic } from "../../platform/haptics"
 
 export const FLOW_HORIZONTAL_PADDING = 12
 export const FLOW_COLUMN_SPACING = 12

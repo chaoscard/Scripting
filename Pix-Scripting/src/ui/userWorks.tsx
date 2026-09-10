@@ -37,9 +37,9 @@ import {
 } from "../store/contentFilter"
 import { isUserFollowed, onUserFollowChanged } from "../store/userFollow"
 import { useAsyncGuard, useLatest, usePagedList, currentBatchSize } from "./hooks"
-import { useExperimentalAmbientPalette } from "./ambient"
+import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl } from "./ambient"
 import type { PixivIllustration, PixivNovel, PixivUserDetail } from "../types"
-import { triggerHaptic } from "../utils/haptics"
+import { triggerHaptic } from "../platform/haptics"
 import {
   EmptyView,
   ErrorView,
@@ -81,7 +81,7 @@ export function UserWorksView(props: { userID?: number; title?: string }) {
   const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
   const isAppleMusic = pageLayout === "appleMusic"
   const [emptyKinds, setEmptyKinds] = useState<Partial<Record<WorkTab, boolean>>>({})
-  const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(null)
+  const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(() => getLastActiveAmbientImageUrl())
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
   const guard = useAsyncGuard()
   const worksRefreshRef = useRef<() => Promise<void>>(() => Promise.resolve())

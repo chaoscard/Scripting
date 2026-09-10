@@ -6,6 +6,7 @@ import {
   type IllustAmbientPalette,
 } from "../../image/colorExtractor"
 import { renderAmbientBackground } from "./renderAmbientBackground"
+import { recordActiveAmbientImageUrl } from "./tracker"
 
 export interface NovelAmbientState {
   ambientEnabled: boolean
@@ -111,6 +112,12 @@ export function useNovelExperimentalAmbientPalette(
           ? (effectivePalette.exploreTopColor ?? effectivePalette.topColor)
           : effectivePalette.topColor
       : undefined
+
+  useEffect(() => {
+    if (active && ambientEnabled && imageUrl && effectivePalette) {
+      recordActiveAmbientImageUrl(imageUrl)
+    }
+  }, [active, ambientEnabled, imageUrl, effectivePalette])
 
   return {
     ambientEnabled,

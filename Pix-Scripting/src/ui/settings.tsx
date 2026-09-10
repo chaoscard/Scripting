@@ -48,8 +48,8 @@ import {
 } from "./bottomAccessory"
 
 declare const Dialog: any
-import { triggerHaptic } from "../utils/haptics"
-import { isScriptingPro } from "../utils/pro"
+import { triggerHaptic } from "../platform/haptics"
+import { isScriptingPro } from "../platform/pro"
 import {
   loadCustomAIProfile,
   onCustomAIConfigChanged,
