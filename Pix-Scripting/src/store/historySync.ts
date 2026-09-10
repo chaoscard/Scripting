@@ -40,6 +40,8 @@ export interface HistorySyncState {
   lastSyncTime: number
   tombstones: { [key: string]: number } // "kind:id" -> timestamp
   clearBefore: { [kind in HistoryContentKind]?: number }
+  searchTombstones?: { [key: string]: number } // "scope:query" -> timestamp
+  searchClearBefore?: { [scope in SearchHistoryScope]?: number } // scope -> timestamp
 }
 
 const SYNC_STATE_FILE = "sync_state.json"
@@ -82,6 +84,10 @@ function loadSyncState(userId?: string | number | null): HistorySyncState {
           lastSyncTime: typeof parsed.lastSyncTime === "number" ? parsed.lastSyncTime : 0,
           tombstones: parsed.tombstones && typeof parsed.tombstones === "object" ? parsed.tombstones : {},
           clearBefore: parsed.clearBefore && typeof parsed.clearBefore === "object" ? parsed.clearBefore : {},
+          searchTombstones:
+            parsed.searchTombstones && typeof parsed.searchTombstones === "object" ? parsed.searchTombstones : {},
+          searchClearBefore:
+            parsed.searchClearBefore && typeof parsed.searchClearBefore === "object" ? parsed.searchClearBefore : {},
         }
       }
     }
@@ -90,6 +96,8 @@ function loadSyncState(userId?: string | number | null): HistorySyncState {
     lastSyncTime: 0,
     tombstones: {},
     clearBefore: {},
+    searchTombstones: {},
+    searchClearBefore: {},
   }
 }
 
@@ -113,6 +121,49 @@ export function recordTombstone(kind: HistoryContentKind, id: number): void {
 export function recordClearBefore(kind: HistoryContentKind): void {
   const state = loadSyncState()
   state.clearBefore[kind] = Date.now()
+  saveSyncState(state)
+  notifyLocalMutation()
+}
+
+export function recordSearchTombstone(scope: SearchHistoryScope, query: string): void {
+  const trimmed = typeof query === "string" ? query.trim() : ""
+  if (!trimmed) return
+  const state = loadSyncState()
+  if (!state.searchTombstones) {
+    state.searchTombstones = {}
+  }
+  state.searchTombstones[`${scope}:${trimmed}`] = Date.now()
+  pruneTombstones(state)
+  saveSyncState(state)
+  notifyLocalMutation()
+}
+
+export function removeSearchTombstone(scope: SearchHistoryScope, query: string): void {
+  const trimmed = typeof query === "string" ? query.trim() : ""
+  if (!trimmed) return
+  const state = loadSyncState()
+  const key = `${scope}:${trimmed}`
+  if (state.searchTombstones && typeof state.searchTombstones[key] === "number") {
+    delete state.searchTombstones[key]
+    saveSyncState(state)
+  }
+}
+
+export function recordSearchClearBefore(scope: SearchHistoryScope): void {
+  const state = loadSyncState()
+  if (!state.searchClearBefore) {
+    state.searchClearBefore = {}
+  }
+  state.searchClearBefore[scope] = Date.now()
+  // 顺便清空该 scope 下的所有已有单条墓碑，避免墓碑膨胀
+  if (state.searchTombstones) {
+    const prefix = `${scope}:`
+    for (const key of Object.keys(state.searchTombstones)) {
+      if (key.startsWith(prefix)) {
+        delete state.searchTombstones[key]
+      }
+    }
+  }
   saveSyncState(state)
   notifyLocalMutation()
 }
@@ -185,6 +236,13 @@ function pruneTombstones(state: HistorySyncState): void {
   for (const [k, ts] of Object.entries(state.tombstones)) {
     if (typeof ts === "number" && ts < threshold) {
       delete state.tombstones[k]
+    }
+  }
+  if (state.searchTombstones) {
+    for (const [k, ts] of Object.entries(state.searchTombstones)) {
+      if (typeof ts === "number" && ts < threshold) {
+        delete state.searchTombstones[k]
+      }
     }
   }
 }
@@ -346,6 +404,7 @@ async function syncNovelProgressFile(
 async function syncSearchHistoryFile(
   localDir: string,
   cloudDir: string,
+  state: HistorySyncState,
   userId?: string | number | null
 ): Promise<void> {
   const fileName = "search_history.json"
@@ -365,20 +424,36 @@ async function syncSearchHistoryFile(
     updatedAt: cloudUpdated,
   }
 
-  // 双向条目级并集增量合并（保留双端新增搜索词，避免整文件 Last-Write-Wins 覆盖）
-  function mergeScopeList(localArr: string[], cloudArr: string[]): string[] {
+  const searchTombstones = state.searchTombstones ?? {}
+  const searchClearBefore = state.searchClearBefore ?? {}
+
+  // 双向增量合并（过滤已删除墓碑与已清空旧条目，保留双端新增搜索词）
+  function mergeScopeList(scope: SearchHistoryScope, localArr: string[], cloudArr: string[]): string[] {
+    const clearBeforeTs = searchClearBefore[scope] ?? 0
     const set = new Set<string>()
     const result: string[] = []
+
+    // 1. 本地条目（过滤处于墓碑中的条目）
     for (const it of localArr) {
       const trimmed = typeof it === "string" ? it.trim() : ""
-      if (trimmed && !set.has(trimmed)) {
+      if (!trimmed) continue
+      const tombstoneTs = searchTombstones[`${scope}:${trimmed}`] ?? 0
+      if (tombstoneTs > 0) continue
+      if (!set.has(trimmed)) {
         set.add(trimmed)
         result.push(trimmed)
       }
     }
+
+    // 2. 云端条目（若处于墓碑中，或者云端文件更新时间早于清空时间，则剔除）
     for (const it of cloudArr) {
       const trimmed = typeof it === "string" ? it.trim() : ""
-      if (trimmed && !set.has(trimmed)) {
+      if (!trimmed) continue
+      const tombstoneTs = searchTombstones[`${scope}:${trimmed}`] ?? 0
+      if (tombstoneTs > 0) continue
+      if (clearBeforeTs > 0 && cloudUpdated <= clearBeforeTs) continue
+
+      if (!set.has(trimmed)) {
         set.add(trimmed)
         result.push(trimmed)
       }
@@ -387,9 +462,9 @@ async function syncSearchHistoryFile(
   }
 
   const mergedStore: SearchHistoryStore = {
-    illust: mergeScopeList(localStore.illust, cloudStore.illust),
-    novel: mergeScopeList(localStore.novel, cloudStore.novel),
-    user: mergeScopeList(localStore.user, cloudStore.user),
+    illust: mergeScopeList("illust", localStore.illust, cloudStore.illust),
+    novel: mergeScopeList("novel", localStore.novel, cloudStore.novel),
+    user: mergeScopeList("user", localStore.user, cloudStore.user),
     updatedAt: Math.max(localUpdated, cloudUpdated, Date.now()),
   }
 
@@ -402,7 +477,7 @@ async function syncSearchHistoryFile(
     replaceSearchHistoryStore(mergedStore, true)
   }
 
-  // 2. 若合并结果与云端存在差异，安全推送到云端
+  // 2. 若合并结果与云端存在差异，安全推送到云端（彻底清除云端被删除的脏条目）
   if (cloudJson !== mergedJson) {
     try {
       writeTextSafely(cloudFile, mergedJson)
@@ -441,7 +516,7 @@ export async function syncHistoryNow(userId?: string | number | null): Promise<b
     await syncHistoryCategory("manga", localDir, cloudDir, state, userId)
     await syncHistoryCategory("novel", localDir, cloudDir, state, userId)
     await syncNovelProgressFile(localDir, cloudDir, userId)
-    await syncSearchHistoryFile(localDir, cloudDir, userId)
+    await syncSearchHistoryFile(localDir, cloudDir, state, userId)
 
     // 3. 更新同步状态
     state.lastSyncTime = Date.now()

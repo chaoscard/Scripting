@@ -1801,7 +1801,7 @@ function TrendingGridCard(props: {
         <CachedImage
           url={thumbUrl}
           aspectRatioValue={1}
-          centerCropAspect={1}
+          centerCropSquare={true}
           useIntrinsicAspectRatio={false}
           contentMode="fill"
           cornerRadius={10}

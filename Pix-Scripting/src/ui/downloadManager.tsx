@@ -630,7 +630,7 @@ function DownloadTaskCardRow(props: { task: DownloadTaskItem }) {
           <Spacer />
         </HStack>
 
-        <VStack alignment="leading" spacing={2} frame={{ maxWidth: "infinity" }}>
+        <VStack alignment="leading" spacing={2}>
           <Text font="headline" fontWeight="medium" lineLimit={1}>
             {task.title}
           </Text>
@@ -729,7 +729,7 @@ function DownloadTaskCardRow(props: { task: DownloadTaskItem }) {
 
       {/* 3. 底行：状态详情描述 + 紧凑操作按键 */}
       <HStack alignment="center" spacing={8}>
-        <Text font="caption" foregroundStyle="secondaryLabel" lineLimit={1} frame={{ maxWidth: "infinity" }}>
+        <Text font="caption" foregroundStyle="secondaryLabel" lineLimit={1}>
           {task.statusText || (isCompleted ? "下载已完成" : isPaused ? "已暂停" : "处理中…")}
         </Text>
         <Spacer />
@@ -1439,7 +1439,7 @@ function FileRowItem(props: {
           />
 
           {/* 文件详情 */}
-          <VStack alignment="leading" spacing={3} frame={{ maxWidth: "infinity" }}>
+          <VStack alignment="leading" spacing={3}>
             <Text font="body" fontWeight="medium" lineLimit={2}>
               {item.name}
             </Text>
@@ -1465,6 +1465,8 @@ function FileRowItem(props: {
               ) : null}
             </HStack>
           </VStack>
+
+          <Spacer />
         </HStack>
       </Button>
     </HStack>
@@ -1830,7 +1832,7 @@ export function DownloadCreatorsListView(props: { onClose?: () => void }) {
                   font="title3"
                   frame={{ width: 28 }}
                 />
-                <VStack alignment="leading" spacing={3} frame={{ maxWidth: "infinity" }}>
+                <VStack alignment="leading" spacing={3}>
                   <Text font="body" fontWeight="medium" lineLimit={1}>
                     {creator.name}
                   </Text>
@@ -1846,6 +1848,8 @@ export function DownloadCreatorsListView(props: { onClose?: () => void }) {
                     </Text>
                   </HStack>
                 </VStack>
+
+                <Spacer />
               </HStack>
             )
 

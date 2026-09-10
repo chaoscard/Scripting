@@ -1,7 +1,12 @@
 import { pixivHistoryDirectory } from "./dataDirectory"
 import { recoverFile, writeTextSafely } from "./safeFile"
 import { session } from "../api/session"
-import { notifyLocalMutation } from "./historySync"
+import {
+  notifyLocalMutation,
+  recordSearchClearBefore,
+  recordSearchTombstone,
+  removeSearchTombstone,
+} from "./historySync"
 
 export type SearchHistoryScope = "illust" | "novel" | "user"
 
@@ -146,6 +151,9 @@ export function getSearchHistory(scope: SearchHistoryScope = "illust"): string[]
 export function addSearchHistory(query: string, scope: SearchHistoryScope = "illust"): string[] {
   const trimmed = query.trim()
   if (!trimmed) return getSearchHistory(scope)
+  try {
+    removeSearchTombstone(scope, trimmed)
+  } catch {}
   const store = getFullSearchHistoryStore()
   const current = store[scope] ?? []
   const filtered = current.filter((item) => item !== trimmed)
@@ -159,9 +167,15 @@ export function addSearchHistory(query: string, scope: SearchHistoryScope = "ill
 }
 
 export function removeSearchHistory(query: string, scope: SearchHistoryScope = "illust"): string[] {
+  const trimmed = query.trim()
+  if (trimmed) {
+    try {
+      recordSearchTombstone(scope, trimmed)
+    } catch {}
+  }
   const store = getFullSearchHistoryStore()
   const current = store[scope] ?? []
-  const next = current.filter((item) => item !== query)
+  const next = current.filter((item) => item !== trimmed && item !== query)
   store[scope] = next
   store.updatedAt = Date.now()
   scheduleSave()
@@ -171,6 +185,9 @@ export function removeSearchHistory(query: string, scope: SearchHistoryScope = "
 }
 
 export function clearSearchHistory(scope: SearchHistoryScope = "illust"): void {
+  try {
+    recordSearchClearBefore(scope)
+  } catch {}
   const store = getFullSearchHistoryStore()
   store[scope] = []
   store.updatedAt = Date.now()
