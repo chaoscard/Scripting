@@ -42,7 +42,7 @@ import { destinationElement } from "./routes"
 import { setActiveTabKind } from "./routeNavigation"
 import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
 import { useLatest, usePagedList, currentBatchSize } from "./hooks"
-import { useExperimentalAmbientPalette } from "./ambient"
+import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl } from "./ambient"
 import type {
   PixivIllustration,
   PixivNovel,
@@ -83,7 +83,9 @@ export function FollowFeedView(props: {
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
   const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
   const isAppleMusic = pageLayout === "appleMusic"
-  const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(null)
+  const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(
+    () => getLastActiveAmbientImageUrl()
+  )
   const isTabActive = useIsCurrentTab("following")
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl, isTabActive)
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())

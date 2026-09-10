@@ -43,7 +43,7 @@ import {
   useRegisterBottomAccessory,
 } from "./bottomAccessory"
 import { useLatest, usePagedList, currentBatchSize } from "./hooks"
-import { useExperimentalAmbientPalette } from "./ambient"
+import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl } from "./ambient"
 import type {
   PixivIllustration,
   PixivNovel,
@@ -78,7 +78,9 @@ export function DiscoveryView(props: { onClose: () => void }) {
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
   const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
   const isAppleMusic = pageLayout === "appleMusic"
-  const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(null)
+  const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(
+    () => getLastActiveAmbientImageUrl()
+  )
   const isTabActive = useIsCurrentTab("discovery")
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl, isTabActive)
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())

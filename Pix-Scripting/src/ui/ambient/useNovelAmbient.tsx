@@ -6,7 +6,7 @@ import {
   type IllustAmbientPalette,
 } from "../../image/colorExtractor"
 import { renderAmbientBackground } from "./renderAmbientBackground"
-import { recordActiveAmbientImageUrl } from "./tracker"
+import { recordActiveAmbientImageUrl, getLastActiveAmbientImageUrl } from "./tracker"
 
 export interface NovelAmbientState {
   ambientEnabled: boolean
@@ -37,13 +37,17 @@ export function useNovelExperimentalAmbientPalette(
   const [ambientEnabled, setAmbientEnabled] = useState(
     () => loadSettings().ambientImmersion && loadSettings().novelReaderImmersion
   )
+
+  const fallbackUrl = active ? getLastActiveAmbientImageUrl() : null
+  const effectiveImageUrl = imageUrl || fallbackUrl
+
   const [ambientPalette, setAmbientPalette] = useState<IllustAmbientPalette | null>(() => {
     const s = loadSettings()
-    if (!s.ambientImmersion || !s.novelReaderImmersion || !imageUrl) {
+    if (!s.ambientImmersion || !s.novelReaderImmersion || !effectiveImageUrl) {
       return null
     }
     return getCachedIllustAmbientPalette(
-      imageUrl,
+      effectiveImageUrl,
       isDark,
       s.ambientIntensity
     )
@@ -65,16 +69,16 @@ export function useNovelExperimentalAmbientPalette(
   }, [])
 
   useEffect(() => {
-    if (!ambientEnabled || !imageUrl) {
+    if (!ambientEnabled || !effectiveImageUrl) {
       setAmbientPalette(null)
       return
     }
     let isActive = true
-    const cached = getCachedIllustAmbientPalette(imageUrl, isDark, ambientIntensity)
+    const cached = getCachedIllustAmbientPalette(effectiveImageUrl, isDark, ambientIntensity)
     if (cached) {
       setAmbientPalette(cached)
     }
-    void extractIllustAmbientPalette(imageUrl).then((result) => {
+    void extractIllustAmbientPalette(effectiveImageUrl).then((result) => {
       if (!isActive || !result) return
       const modeObj = isDark ? result.dark : result.light
       setAmbientPalette(modeObj[ambientIntensity] ?? modeObj.medium)
@@ -82,11 +86,11 @@ export function useNovelExperimentalAmbientPalette(
     return () => {
       isActive = false
     }
-  }, [imageUrl, isDark, ambientEnabled, ambientIntensity, novelAlgorithm])
+  }, [effectiveImageUrl, isDark, ambientEnabled, ambientIntensity, novelAlgorithm])
 
   const synchronousPalette =
-    ambientEnabled && imageUrl
-      ? getCachedIllustAmbientPalette(imageUrl, isDark, ambientIntensity)
+    ambientEnabled && effectiveImageUrl
+      ? getCachedIllustAmbientPalette(effectiveImageUrl, isDark, ambientIntensity)
       : null
   const effectivePalette = ambientPalette ?? synchronousPalette
 

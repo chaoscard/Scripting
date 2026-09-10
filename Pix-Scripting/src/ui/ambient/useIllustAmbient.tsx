@@ -6,7 +6,7 @@ import {
   type IllustAmbientPalette,
 } from "../../image/colorExtractor"
 import { renderAmbientBackground } from "./renderAmbientBackground"
-import { recordActiveAmbientImageUrl } from "./tracker"
+import { recordActiveAmbientImageUrl, getLastActiveAmbientImageUrl } from "./tracker"
 
 export interface IllustAmbientState {
   ambientEnabled: boolean
@@ -37,11 +37,16 @@ export function useExperimentalAmbientPalette(
   const [ambientAlgorithm, setAmbientAlgorithm] = useState<AmbientAlgorithm>(
     resolveAmbientAlgorithm
   )
+
+  // 当当前页面尚未加载完成（imageUrl 为空）且处于活跃状态时，自动继承复用最近一次生效的环境光封面作为垫底
+  const fallbackUrl = active ? getLastActiveAmbientImageUrl() : null
+  const effectiveImageUrl = imageUrl || fallbackUrl
+
   const [ambientPalette, setAmbientPalette] = useState<IllustAmbientPalette | null>(() => {
     const s = loadSettings()
-    if (!s.ambientImmersion || !imageUrl) return null
+    if (!s.ambientImmersion || !effectiveImageUrl) return null
     return getCachedIllustAmbientPalette(
-      imageUrl,
+      effectiveImageUrl,
       isDark,
       s.ambientIntensity
     )
@@ -61,16 +66,16 @@ export function useExperimentalAmbientPalette(
   }, [])
 
   useEffect(() => {
-    if (!ambientEnabled || !imageUrl) {
+    if (!ambientEnabled || !effectiveImageUrl) {
       setAmbientPalette(null)
       return
     }
     let isActive = true
-    const cached = getCachedIllustAmbientPalette(imageUrl, isDark, ambientIntensity)
+    const cached = getCachedIllustAmbientPalette(effectiveImageUrl, isDark, ambientIntensity)
     if (cached) {
       setAmbientPalette(cached)
     }
-    void extractIllustAmbientPalette(imageUrl).then((result) => {
+    void extractIllustAmbientPalette(effectiveImageUrl).then((result) => {
       if (!isActive || !result) return
       const modeObj = isDark ? result.dark : result.light
       setAmbientPalette(modeObj[ambientIntensity] ?? modeObj.medium)
@@ -78,12 +83,12 @@ export function useExperimentalAmbientPalette(
     return () => {
       isActive = false
     }
-  }, [imageUrl, isDark, ambientEnabled, ambientIntensity])
+  }, [effectiveImageUrl, isDark, ambientEnabled, ambientIntensity])
 
   // 同步直接读取内存缓存中的调色板，无需等待 useEffect 触发二次渲染
   const synchronousPalette =
-    ambientEnabled && imageUrl
-      ? getCachedIllustAmbientPalette(imageUrl, isDark, ambientIntensity)
+    ambientEnabled && effectiveImageUrl
+      ? getCachedIllustAmbientPalette(effectiveImageUrl, isDark, ambientIntensity)
       : null
 
   const effectivePalette = ambientPalette ?? synchronousPalette
@@ -112,6 +117,7 @@ export function useExperimentalAmbientPalette(
       : undefined
 
   useEffect(() => {
+    // 仅在拥有自身真实 imageUrl 时更新全局活跃封面，避免 fallback 图片循环覆盖
     if (active && ambientEnabled && imageUrl && effectivePalette) {
       recordActiveAmbientImageUrl(imageUrl)
     }

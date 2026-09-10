@@ -9,7 +9,7 @@ import {
   type UserAmbientPalette,
 } from "../../image/colorExtractor"
 import { renderAmbientBackground } from "./renderAmbientBackground"
-import { recordActiveAmbientImageUrl } from "./tracker"
+import { recordActiveAmbientImageUrl, getLastActiveAmbientImageUrl } from "./tracker"
 
 export interface UserAmbientState {
   ambientEnabled: boolean
@@ -36,14 +36,17 @@ export function useUserAmbientPalette(imageUrl: string | null | undefined): User
         ? loadSettings().experimentalImmersionAlgorithm
         : loadSettings().ambientAlgorithm
   )
+
+  const effectiveImageUrl = imageUrl || getLastActiveAmbientImageUrl()
+
   const [ambientPalette, setAmbientPalette] = useState<UserAmbientPalette | null>(() => {
-    if (!loadSettings().ambientImmersion || !imageUrl) return null
-    return getCachedUserAmbientPalette(imageUrl, isDark, loadSettings().ambientIntensity)
+    if (!loadSettings().ambientImmersion || !effectiveImageUrl) return null
+    return getCachedUserAmbientPalette(effectiveImageUrl, isDark, loadSettings().ambientIntensity)
   })
   const [illustPalette, setIllustPalette] = useState<IllustAmbientPalette | null>(() => {
     const s = loadSettings()
-    if (!s.ambientImmersion || !s.experimentalImmersion || !imageUrl) return null
-    return getCachedIllustAmbientPalette(imageUrl, isDark, s.ambientIntensity)
+    if (!s.ambientImmersion || !s.experimentalImmersion || !effectiveImageUrl) return null
+    return getCachedIllustAmbientPalette(effectiveImageUrl, isDark, s.ambientIntensity)
   })
 
   useEffect(() => {
@@ -61,28 +64,28 @@ export function useUserAmbientPalette(imageUrl: string | null | undefined): User
   }, [])
 
   useEffect(() => {
-    if (!ambientEnabled || !imageUrl) {
+    if (!ambientEnabled || !effectiveImageUrl) {
       setAmbientPalette(null)
       setIllustPalette(null)
       return
     }
     let active = true
-    const cached = getCachedUserAmbientPalette(imageUrl, isDark, ambientIntensity)
+    const cached = getCachedUserAmbientPalette(effectiveImageUrl, isDark, ambientIntensity)
     if (cached) {
       setAmbientPalette(cached)
     }
-    void extractUserAmbientPalette(imageUrl).then((result) => {
+    void extractUserAmbientPalette(effectiveImageUrl).then((result) => {
       if (!active || !result) return
       const modeObj = isDark ? result.dark : result.light
       setAmbientPalette(modeObj[ambientIntensity] ?? modeObj.medium)
     })
 
     if (isExperimental) {
-      const cachedIllust = getCachedIllustAmbientPalette(imageUrl, isDark, ambientIntensity)
+      const cachedIllust = getCachedIllustAmbientPalette(effectiveImageUrl, isDark, ambientIntensity)
       if (cachedIllust) {
         setIllustPalette(cachedIllust)
       }
-      void extractIllustAmbientPalette(imageUrl).then((result) => {
+      void extractIllustAmbientPalette(effectiveImageUrl).then((result) => {
         if (!active || !result) return
         const modeObj = isDark ? result.dark : result.light
         setIllustPalette(modeObj[ambientIntensity] ?? modeObj.medium)
@@ -94,7 +97,7 @@ export function useUserAmbientPalette(imageUrl: string | null | undefined): User
     return () => {
       active = false
     }
-  }, [imageUrl, isDark, ambientEnabled, ambientIntensity, isExperimental])
+  }, [effectiveImageUrl, isDark, ambientEnabled, ambientIntensity, isExperimental])
 
   const ambientBackground = useMemo(() => {
     if (!ambientEnabled) return undefined

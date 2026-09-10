@@ -39,7 +39,7 @@ import {
   getCachedNovelBookmark,
 } from "../store/bookmarkSync"
 import { useAsyncGuard, useLatest, usePagedList, currentBatchSize } from "./hooks"
-import { useExperimentalAmbientPalette } from "./ambient"
+import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl } from "./ambient"
 import type { PixivBookmarkTag, PixivIllustration, PixivNovel } from "../types"
 import {
   EmptyView,
@@ -67,7 +67,9 @@ export function LibraryView(props?: { initialKind?: LibraryKind }) {
   const [isAscending, setIsAscending] = useState(false)
   const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
   const isAppleMusic = pageLayout === "appleMusic"
-  const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(null)
+  const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(
+    () => getLastActiveAmbientImageUrl()
+  )
   const [visitedKinds, setVisitedKinds] = useState<Set<LibraryKind>>(() => new Set([kind]))
 
   useEffect(() => {

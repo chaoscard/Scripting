@@ -39,7 +39,7 @@ import { destinationElement } from "./routes"
 import { setActiveTabKind } from "./routeNavigation"
 import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
 import { useLatest, usePagedList, currentBatchSize } from "./hooks"
-import { useExperimentalAmbientPalette } from "./ambient"
+import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl } from "./ambient"
 import type { PixivIllustration, PixivNovel } from "../types"
 import {
   appToolbar,
@@ -107,7 +107,9 @@ export function RankingView(props: { onClose: () => void }) {
   )
   const [isAdvancedSheetOpen, setIsAdvancedSheetOpen] = useState(false)
   const hasQueriedAdvancedRef = useRef(false)
-  const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(null)
+  const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(
+    () => getLastActiveAmbientImageUrl()
+  )
   const isTabActive = useIsCurrentTab("ranking")
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl, isTabActive)
 

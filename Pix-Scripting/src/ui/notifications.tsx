@@ -20,7 +20,7 @@ import {
   type PixivNotification,
 } from "../api/pixiv"
 import { currentBatchSize, usePagedList } from "./hooks"
-import { useExperimentalAmbientPalette } from "./ambient"
+import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl } from "./ambient"
 import { prefetch } from "../image/imageLoader"
 import { loadSettings, onSettingsChanged } from "../store/settings"
 import {
@@ -78,7 +78,9 @@ function NotificationList(props: {
     nextURL: string | null
   }>
 }) {
-  const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(null)
+  const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(
+    () => getLastActiveAmbientImageUrl()
+  )
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
   const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
   const isAppleMusic = pageLayout === "appleMusic"
