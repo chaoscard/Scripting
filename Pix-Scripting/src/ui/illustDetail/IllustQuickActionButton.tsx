@@ -201,8 +201,8 @@ export function IllustQuickActionButton(props: IllustQuickActionButtonProps) {
     <VStack
       padding={{
         bottom: 24,
-        leading: quickActionPos === "leading" ? 18 : 0,
-        trailing: quickActionPos === "trailing" ? 18 : 0,
+        leading: quickActionPos === "leading" ? 30 : 0,
+        trailing: quickActionPos === "trailing" ? 30 : 0,
       }}
     >
       <Button

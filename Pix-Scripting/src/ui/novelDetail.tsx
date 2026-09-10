@@ -958,8 +958,8 @@ export function NovelDetailView(props: { novelID: number }) {
       <VStack
         padding={{
           bottom: bottomPadding,
-          leading: quickActionPos === "leading" ? 18 : 0,
-          trailing: quickActionPos === "trailing" ? 18 : 0,
+          leading: quickActionPos === "leading" ? 30 : 0,
+          trailing: quickActionPos === "trailing" ? 30 : 0,
         }}
       >
         <Button

@@ -119,9 +119,11 @@ function LaunchExperienceView() {
   )
 }
 
+let hasAppLaunchedOnce = false
+
 export function RootView() {
   const [loggedIn, setLoggedIn] = useState(session.isAuthenticated)
-  const [isReady, setIsReady] = useState(false)
+  const [isReady, setIsReady] = useState(() => hasAppLaunchedOnce)
   const [showFeatureHighlights, setShowFeatureHighlights] = useState(false)
 
   useEffect(() => {
@@ -131,6 +133,10 @@ export function RootView() {
   }, [])
 
   useEffect(() => {
+    if (hasAppLaunchedOnce) {
+      setIsReady(true)
+      return
+    }
     let cancelled = false
     const hasStartupRoute = Boolean(
       Script.queryParameters?.route || Script.widgetParameter
@@ -140,6 +146,7 @@ export function RootView() {
     const duration = hasStartupRoute ? 100 : defaultDuration
     const timer = setTimeout(() => {
       if (!cancelled) {
+        hasAppLaunchedOnce = true
         setIsReady(true)
       }
     }, duration)

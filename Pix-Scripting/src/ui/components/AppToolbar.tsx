@@ -1,6 +1,25 @@
 import { Button, Device, Script, Text } from "scripting"
 import { loadSettings } from "../../store/settings"
 import { abortAllAITasks } from "../../api/aiService"
+import { useIsFullScreen, toggleFullScreen } from "../fullScreenState"
+
+export function FullScreenToggleButton() {
+  const isFull = useIsFullScreen()
+  return (
+    <Button
+      key="app-toolbar-fullscreen-toggle"
+      title={isFull ? "收缩" : "全屏"}
+      systemImage={
+        isFull
+          ? "arrow.down.left.and.arrow.up.right"
+          : "arrow.up.right.and.arrow.down.left"
+      }
+      action={() => {
+        toggleFullScreen()
+      }}
+    />
+  )
+}
 
 export function appToolbar(
   dismiss: () => void,
@@ -9,26 +28,33 @@ export function appToolbar(
   principal?: any
 ) {
   const isiPad = Device.isiPad
+  const isHomeScreen = Script.env === "home_screen"
+
+  let leadingButton = (
+    <Button
+      key="app-toolbar-close"
+      title="关闭"
+      systemImage="xmark"
+      action={() => {
+        abortAllAITasks()
+        if (loadSettings().closeButtonAction === "exit") {
+          try {
+            dismiss()
+          } catch {}
+          Script.exit()
+        } else {
+          Script.minimize()
+        }
+      }}
+    />
+  )
+
+  if (isHomeScreen) {
+    leadingButton = <FullScreenToggleButton key="app-toolbar-fullscreen-toggle-host" />
+  }
 
   return {
-    topBarLeading: [
-      <Button
-        key="app-toolbar-close"
-        title="关闭"
-        systemImage="xmark"
-        action={() => {
-          abortAllAITasks()
-          if (loadSettings().closeButtonAction === "exit") {
-            try {
-              dismiss()
-            } catch {}
-            Script.exit()
-          } else {
-            Script.minimize()
-          }
-        }}
-      />,
-    ],
+    topBarLeading: [leadingButton],
     topBarTrailing: trailing
       ? Array.isArray(trailing)
         ? trailing
