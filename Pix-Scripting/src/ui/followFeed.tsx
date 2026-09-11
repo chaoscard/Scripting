@@ -224,7 +224,7 @@ function followToolbar(props: {
     props.mode === "following"
       ? props.scope === "private"
         ? "私密关注"
-        : "关注"
+        : "公开关注"
       : props.mode === "watchlist"
         ? "追更列表"
         : "好友动态"

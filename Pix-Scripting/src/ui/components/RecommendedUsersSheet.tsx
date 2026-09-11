@@ -1,5 +1,6 @@
 import {
   Button,
+  GeometryReader,
   Image,
   LazyVStack,
   NavigationStack,
@@ -22,7 +23,7 @@ import {
 import { EmptyView, ErrorView, LoadingView } from "./StatusViews"
 import { LoadMoreTrigger } from "./RefreshableScrollView"
 import { prefetch } from "../../image/imageLoader"
-import { currentBatchSize, useLayoutMetrics, usePagedList } from "../hooks"
+import { currentBatchSize, usePagedList } from "../hooks"
 import type { PixivPage, PixivUserPreview } from "../../types"
 
 type ConnectionPreview = PixivUserPreview & { id: number }
@@ -57,17 +58,6 @@ export function RecommendedUsersSheet(props: {
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).flatMap(connectionPreviewImageURLs)).cancel,
   })
-
-  const { width: screenWidth } = useLayoutMetrics()
-  const previewSide = Math.max(
-    0,
-    Math.floor(
-      (screenWidth -
-        (CONNECTION_LIST_HORIZONTAL_PADDING + CONNECTION_CARD_HORIZONTAL_PADDING) * 2 -
-        CONNECTION_PREVIEW_GAP * 2) /
-        3
-    )
-  )
 
   const handleNavigate = (route: string) => {
     onClose()
@@ -105,33 +95,48 @@ export function RecommendedUsersSheet(props: {
         ) : paged.items.length === 0 ? (
           <EmptyView text="暂无推荐创作者" />
         ) : (
-          <ScrollView
-            frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-            presentationContentInteraction="scrolls"
-          >
-            <LazyVStack
-              spacing={10}
-              padding={{ horizontal: CONNECTION_LIST_HORIZONTAL_PADDING, top: 12, bottom: 24 }}
-              frame={{ maxWidth: "infinity" }}
-            >
-              {paged.items.map((item) => (
-                <ConnectionRow
-                  key={`recommended-${item.user.id}`}
-                  preview={item}
-                  showFollowControl={item.user.id !== session.userID}
-                  previewSide={previewSide}
-                  hideNovels={hideNovels}
-                  onNavigate={handleNavigate}
-                />
-              ))}
-              <LoadMoreTrigger
-                anchor={paged.items[paged.items.length - 1].user.id}
-                onLoadMore={paged.loadMore}
-                hasMore={paged.hasMore}
-                isLoading={paged.loadingMore}
-              />
-            </LazyVStack>
-          </ScrollView>
+          <GeometryReader>
+            {(proxy) => {
+              const previewSide = Math.max(
+                0,
+                Math.floor(
+                  (proxy.size.width -
+                    (CONNECTION_LIST_HORIZONTAL_PADDING + CONNECTION_CARD_HORIZONTAL_PADDING) * 2 -
+                    CONNECTION_PREVIEW_GAP * 2) /
+                    3
+                )
+              )
+              return (
+                <ScrollView
+                  frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+                  presentationContentInteraction="scrolls"
+                >
+                  <LazyVStack
+                    spacing={10}
+                    padding={{ horizontal: CONNECTION_LIST_HORIZONTAL_PADDING, top: 12, bottom: 24 }}
+                    frame={{ maxWidth: "infinity" }}
+                  >
+                    {paged.items.map((item) => (
+                      <ConnectionRow
+                        key={`recommended-${item.user.id}`}
+                        preview={item}
+                        showFollowControl={item.user.id !== session.userID}
+                        previewSide={previewSide}
+                        hideNovels={hideNovels}
+                        onNavigate={handleNavigate}
+                      />
+                    ))}
+                    <LoadMoreTrigger
+                      anchor={paged.items[paged.items.length - 1].user.id}
+                      onLoadMore={paged.loadMore}
+                      hasMore={paged.hasMore}
+                      isLoading={paged.loadingMore}
+                    />
+                  </LazyVStack>
+                </ScrollView>
+              )
+            }}
+          </GeometryReader>
         )}
       </VStack>
     </NavigationStack>
