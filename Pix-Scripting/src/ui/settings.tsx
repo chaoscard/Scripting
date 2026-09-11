@@ -976,7 +976,7 @@ export function SettingsView() {
             <Text tag="ranking_week">周榜</Text>
             <Text tag="ranking_month">月榜</Text>
             <Text tag="follow">关注</Text>
-            <Text tag="discovery">推荐</Text>
+            <Text tag="recommend">推荐</Text>
             <Text tag="pixivision">特辑</Text>
           </Picker>
 
@@ -998,7 +998,7 @@ export function SettingsView() {
             <Text tag="ranking_week">周榜</Text>
             <Text tag="ranking_month">月榜</Text>
             <Text tag="follow">关注</Text>
-            <Text tag="discovery">推荐</Text>
+            <Text tag="recommend">推荐</Text>
             <Text tag="pixivision">特辑</Text>
           </Picker>
 
@@ -1020,7 +1020,7 @@ export function SettingsView() {
             <Text tag="ranking_week">周榜</Text>
             <Text tag="ranking_month">月榜</Text>
             <Text tag="follow">关注</Text>
-            <Text tag="discovery">推荐</Text>
+            <Text tag="recommend">推荐</Text>
             <Text tag="pixivision">特辑</Text>
           </Picker>
 
@@ -1521,7 +1521,7 @@ export function SettingsView() {
               unit="min"
               value={settings.widgetReloadIntervalMinutes}
               defaultValue={60}
-              min={30}
+              min={1}
               max={1440}
               onSave={(val) => update({ widgetReloadIntervalMinutes: val })}
             />
@@ -1749,7 +1749,7 @@ function sourceLabel(source?: string): string {
     case "ranking_week": return "周榜"
     case "ranking_month": return "月榜"
     case "follow": return "关注"
-    case "discovery": return "推荐"
+    case "recommend": return "推荐"
     case "pixivision": return "特辑"
     default: return "默认"
   }

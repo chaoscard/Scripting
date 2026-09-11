@@ -197,7 +197,7 @@ async function main() {
   const intentParam = rawParam ? rawParam : `__family:${family}`
   const artwork = await getCurrentWidgetArtwork(rawParam, family)
 
-  const intervalMinutes = loadSettings().widgetReloadIntervalMinutes || 60
+  const intervalMinutes = loadSettings().widgetReloadIntervalMinutes ?? 60
   const reloadDate = new Date(Date.now() + 1000 * 60 * intervalMinutes)
 
   Widget.present(

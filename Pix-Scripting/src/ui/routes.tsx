@@ -19,7 +19,7 @@ import { CustomAISettingsView } from "./customAISettings"
 import { SeriesView } from "./seriesView"
 import { UserBookmarksView } from "./userBookmarks"
 import { UserConnectionsView, type ConnectionRouteKind } from "./userConnections"
-import { UserWorksView } from "./userWorks"
+import { UserWorksView } from "./UserWorksPage"
 import { AboutView } from "./about"
 import { RankingCustomPickerView, type CustomRankingPickerKind } from "./rankingCustomPicker"
 import {

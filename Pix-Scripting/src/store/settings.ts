@@ -35,7 +35,7 @@ export type WidgetDefaultSource =
   | "ranking_day"
   | "ranking_week"
   | "ranking_month"
-  | "discovery"
+  | "recommend"
   | "follow"
   | "pixivision"
 
@@ -308,7 +308,7 @@ const WIDGET_DEFAULT_SOURCE_VALUES: readonly WidgetDefaultSource[] = [
   "ranking_day",
   "ranking_week",
   "ranking_month",
-  "discovery",
+  "recommend",
   "follow",
   "pixivision",
 ]
@@ -498,7 +498,7 @@ function parseWidgetPoolCapacity(value: unknown): number {
 
 function parseWidgetReloadInterval(value: unknown): number {
   if (typeof value === "number" && Number.isFinite(value)) {
-    return Math.max(30, Math.min(1440, Math.round(value)))
+    return Math.max(1, Math.min(1440, Math.round(value)))
   }
   return DEFAULT_SETTINGS.widgetReloadIntervalMinutes
 }

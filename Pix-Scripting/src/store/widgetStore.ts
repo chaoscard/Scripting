@@ -40,19 +40,51 @@ export interface WidgetArtwork {
 }
 
 export interface WidgetPoolState {
-  revision?: number
+  revision: number
   currentIndex: number
+  currentArtworkId?: number
   artworks: WidgetArtwork[]
   lastFetchTime: number
+  lastFetchStartedAt?: number
+  lastRotatedAt?: number
   parameter: string
   nextURL?: string | null
-  updatedAt?: number
+  updatedAt: number
 }
 
 const IMAGES_DIR_NAME = "images"
 const DEFAULT_POOL_CAPACITY = 30
-const MIN_PREFETCH_COUNT = 5
+const MIN_PREFETCH_COUNT = 15 // 提前 15 张深水位线后台预拉取，消除切图断档
 const POOL_STALE_TTL_MS = 4 * 60 * 60 * 1000 // 4小时数据过期自愈，重新拉取最新数据
+const DOWNLOAD_CONCURRENCY = 3 // 3路并发下载大图，兼顾吞吐与小组件内存限制
+const GLOBAL_INTENT_FILE = "intent_state.json"
+const ADVANCE_COOLDOWN_MS = 3000 // 3 秒防连跳步进冷却
+const BROADCAST_GRACE_PERIOD_MS = 6000 // 6 秒手动全局广播保护期，防止殃及其他小组件
+
+function globalIntentStatePath(): string {
+  return `${ensureWidgetDir()}/${GLOBAL_INTENT_FILE}`
+}
+
+export function recordGlobalWidgetIntent(): void {
+  try {
+    const path = globalIntentStatePath()
+    writeTextSafely(path, JSON.stringify({ lastIntentAt: Date.now() }))
+  } catch {}
+}
+
+export function getLastGlobalWidgetIntent(): number {
+  try {
+    const path = globalIntentStatePath()
+    if (FileManager.existsSync(path)) {
+      const raw = FileManager.readAsStringSync(path, "utf-8")
+      const parsed = JSON.parse(raw)
+      if (typeof parsed?.lastIntentAt === "number") {
+        return parsed.lastIntentAt
+      }
+    }
+  } catch {}
+  return 0
+}
 
 function getPoolCapacity(): number {
   try {
@@ -94,8 +126,8 @@ function normalizeParameter(param?: string | null, family?: string): string {
       if (lower.includes("follow") || lower.includes("关注") || lower.includes("追更") || lower.includes("动态")) {
         return "follow"
       }
-      if (lower.includes("discovery") || lower.includes("recommend") || lower.includes("推荐") || lower.includes("探索")) {
-        return "discovery"
+      if (lower.includes("recommend") || lower.includes("推荐")) {
+        return "recommend"
       }
       if (lower.includes("pixivision") || lower.includes("vision") || lower.includes("专辑") || lower.includes("特辑") || lower.includes("专栏")) {
         return "pixivision"
@@ -158,17 +190,35 @@ export function loadWidgetPool(param?: string, family?: string): WidgetPoolState
       const raw = FileManager.readAsStringSync(path, "utf-8")
       const parsed = JSON.parse(raw)
       if (parsed && Array.isArray(parsed.artworks)) {
+        const validArtworks = parsed.artworks.filter(
+          (a: WidgetArtwork) =>
+            a &&
+            a.localImagePath &&
+            FileManager.existsSync(a.localImagePath) &&
+            (normalized !== "pixivision" || (a.route && a.route.startsWith("pixivision:")))
+        )
+        const parsedIndex = typeof parsed.currentIndex === "number" ? parsed.currentIndex : 0
+        const currentArtId = typeof parsed.currentArtworkId === "number" ? parsed.currentArtworkId : undefined
+
+        // 优先根据 currentArtworkId 寻找准确下标，防止下标错位
+        let targetIndex = parsedIndex
+        if (currentArtId !== undefined) {
+          const foundIdx = validArtworks.findIndex((a: WidgetArtwork) => a.id === currentArtId)
+          if (foundIdx >= 0) {
+            targetIndex = foundIdx
+          }
+        }
+        const safeIndex =
+          validArtworks.length > 0 ? Math.max(0, Math.min(validArtworks.length - 1, targetIndex)) : 0
+
         return {
           revision: typeof parsed.revision === "number" ? parsed.revision : 0,
-          currentIndex: typeof parsed.currentIndex === "number" ? parsed.currentIndex : 0,
-          artworks: parsed.artworks.filter(
-            (a: WidgetArtwork) =>
-              a &&
-              a.localImagePath &&
-              FileManager.existsSync(a.localImagePath) &&
-              (normalized !== "pixivision" || (a.route && a.route.startsWith("pixivision:")))
-          ),
+          currentIndex: safeIndex,
+          currentArtworkId: validArtworks[safeIndex]?.id,
+          artworks: validArtworks,
           lastFetchTime: typeof parsed.lastFetchTime === "number" ? parsed.lastFetchTime : 0,
+          lastFetchStartedAt: typeof parsed.lastFetchStartedAt === "number" ? parsed.lastFetchStartedAt : 0,
+          lastRotatedAt: typeof parsed.lastRotatedAt === "number" ? parsed.lastRotatedAt : 0,
           parameter: normalized,
           nextURL: typeof parsed.nextURL === "string" ? parsed.nextURL : null,
           updatedAt: typeof parsed.updatedAt === "number" ? parsed.updatedAt : 0,
@@ -181,8 +231,11 @@ export function loadWidgetPool(param?: string, family?: string): WidgetPoolState
   return {
     revision: 0,
     currentIndex: 0,
+    currentArtworkId: undefined,
     artworks: [],
     lastFetchTime: 0,
+    lastFetchStartedAt: 0,
+    lastRotatedAt: 0,
     parameter: normalized,
     nextURL: null,
     updatedAt: 0,
@@ -190,7 +243,8 @@ export function loadWidgetPool(param?: string, family?: string): WidgetPoolState
 }
 
 /**
- * 跨进程智能合并小组件池数据，防止 AppIntent 推进游标与主 App 后台补池互相覆盖
+ * 跨进程智能合并小组件池数据
+ * 权威原则：磁盘的游标与正在展示的插画永远最高优先，后台慢任务只负责纯追加新大图，绝不回退游标
  */
 function mergeWidgetPools(base: WidgetPoolState, incoming: WidgetPoolState): WidgetPoolState {
   const mergedArtworksMap = new Map<number, WidgetArtwork>()
@@ -216,21 +270,32 @@ function mergeWidgetPools(base: WidgetPoolState, incoming: WidgetPoolState): Wid
     }
   }
 
-  // 3. 游标对齐：若 incoming 显式改变了游标则优先采用，并保证处于合法边界
   const mergedArtworks = Array.from(mergedArtworksMap.values())
-  const targetIndex =
-    incoming.currentIndex !== base.currentIndex ? incoming.currentIndex : base.currentIndex
-  const safeIndex =
-    mergedArtworks.length > 0
-      ? Math.max(0, Math.min(mergedArtworks.length - 1, targetIndex))
-      : 0
+
+  // 3. 游标对齐：严格以 base（磁盘权威）的 currentArtworkId 或 currentIndex 为准
+  let safeIndex = 0
+  if (mergedArtworks.length > 0) {
+    if (base.currentArtworkId) {
+      const foundIdx = mergedArtworks.findIndex((a) => a.id === base.currentArtworkId)
+      if (foundIdx >= 0) {
+        safeIndex = foundIdx
+      } else {
+        safeIndex = Math.max(0, Math.min(mergedArtworks.length - 1, base.currentIndex))
+      }
+    } else {
+      safeIndex = Math.max(0, Math.min(mergedArtworks.length - 1, base.currentIndex))
+    }
+  }
 
   return {
     revision: Math.max(base.revision || 0, incoming.revision || 0) + 1,
     currentIndex: safeIndex,
+    currentArtworkId: mergedArtworks[safeIndex]?.id,
     artworks: mergedArtworks,
     lastFetchTime: Math.max(base.lastFetchTime || 0, incoming.lastFetchTime || 0),
-    parameter: incoming.parameter || base.parameter,
+    lastFetchStartedAt: Math.max(base.lastFetchStartedAt || 0, incoming.lastFetchStartedAt || 0),
+    lastRotatedAt: Math.max(base.lastRotatedAt || 0, incoming.lastRotatedAt || 0),
+    parameter: base.parameter || incoming.parameter,
     nextURL: incoming.nextURL !== undefined ? incoming.nextURL : base.nextURL,
     updatedAt: Date.now(),
   }
@@ -239,6 +304,11 @@ function mergeWidgetPools(base: WidgetPoolState, incoming: WidgetPoolState): Wid
 export function saveWidgetPool(state: WidgetPoolState, param?: string, family?: string): void {
   const normalized = normalizeParameter(param || state.parameter, family)
   const path = poolFilePath(normalized)
+
+  // 保证 currentArtworkId 始终与当前 currentIndex 对齐
+  if (state.artworks.length > 0 && state.currentIndex >= 0 && state.currentIndex < state.artworks.length) {
+    state.currentArtworkId = state.artworks[state.currentIndex].id
+  }
 
   let finalState: WidgetPoolState = state
   try {
@@ -250,13 +320,18 @@ export function saveWidgetPool(state: WidgetPoolState, param?: string, family?: 
         const memoryRevision = typeof state.revision === "number" ? state.revision : 0
         if (diskRevision > memoryRevision) {
           // 磁盘已被其他进程更新过，执行跨进程安全增量合并
+          const validDiskArtworks = diskParsed.artworks.filter(
+            (a: any) => a && a.localImagePath && FileManager.existsSync(a.localImagePath)
+          )
+          const diskIndex = typeof diskParsed.currentIndex === "number" ? diskParsed.currentIndex : 0
           const diskState: WidgetPoolState = {
             revision: diskRevision,
-            currentIndex: typeof diskParsed.currentIndex === "number" ? diskParsed.currentIndex : 0,
-            artworks: diskParsed.artworks.filter(
-              (a: any) => a && a.localImagePath && FileManager.existsSync(a.localImagePath)
-            ),
+            currentIndex: diskIndex,
+            currentArtworkId: typeof diskParsed.currentArtworkId === "number" ? diskParsed.currentArtworkId : validDiskArtworks[diskIndex]?.id,
+            artworks: validDiskArtworks,
             lastFetchTime: typeof diskParsed.lastFetchTime === "number" ? diskParsed.lastFetchTime : 0,
+            lastFetchStartedAt: typeof diskParsed.lastFetchStartedAt === "number" ? diskParsed.lastFetchStartedAt : 0,
+            lastRotatedAt: typeof diskParsed.lastRotatedAt === "number" ? diskParsed.lastRotatedAt : 0,
             parameter: normalized,
             nextURL: typeof diskParsed.nextURL === "string" ? diskParsed.nextURL : null,
             updatedAt: typeof diskParsed.updatedAt === "number" ? diskParsed.updatedAt : 0,
@@ -273,9 +348,12 @@ export function saveWidgetPool(state: WidgetPoolState, param?: string, family?: 
   // 同步回原引用对象
   state.revision = finalState.revision
   state.currentIndex = finalState.currentIndex
+  state.currentArtworkId = finalState.currentArtworkId
   state.artworks = finalState.artworks
   state.nextURL = finalState.nextURL
   state.lastFetchTime = finalState.lastFetchTime
+  state.lastFetchStartedAt = finalState.lastFetchStartedAt
+  state.lastRotatedAt = finalState.lastRotatedAt
   state.updatedAt = finalState.updatedAt
 
   try {
@@ -311,7 +389,7 @@ async function fetchArtworksForSourceWithPage(
       result = await nextIllustrations(nextURL, token ?? "")
     } else if (param === "follow" && token) {
       result = await followingFeed("all", token)
-    } else if (param === "discovery" && token) {
+    } else if (param === "recommend" && token) {
       result = await recommendations("illustration", token)
     } else if (param === "ranking_month") {
       result = await ranking("month", null, token ?? "")
@@ -385,6 +463,7 @@ async function downloadDirectImage(url: string, prefix: string, id: number): Pro
 }
 
 async function downloadArtworkImage(item: PixivIllustration): Promise<string | null> {
+  // 坚守 large 高清原图品质
   const url = item.image_urls.large || item.image_urls.medium || item.image_urls.square_medium
   if (!url) return null
   return downloadDirectImage(url, "widget", item.id)
@@ -499,126 +578,191 @@ export async function populateWidgetPool(
         return pool
       }
 
-      // 确定拉取的 nextURL：如果需要下一页则用 pool.nextURL；如果过期且未要求下一页则重头拉取
+      // 标记本次拉取开始时间并存盘加锁
+      pool.lastFetchStartedAt = Date.now()
+      saveWidgetPool(pool, normalized, family)
+
+      // 确定拉取的 nextURL 与是否需要循环洗牌
+      const isCycleReset = !pool.nextURL && (Boolean(options?.forceNextPage) || isStale || pool.currentIndex + 1 >= pool.artworks.length)
       let requestNextURL: string | null = null
-      if (options?.forceNextPage) {
+      if (!isCycleReset && options?.forceNextPage) {
         requestNextURL = pool.nextURL || null
-      } else if (!isStale) {
+      } else if (!isCycleReset && !isStale) {
         requestNextURL = pool.nextURL || null
       }
 
-      const existingIds = new Set(pool.artworks.map((a) => a.id))
-      const newArtworks: WidgetArtwork[] = [...pool.artworks]
-      let firstSaved = pool.artworks.length > 0
+      // 当进行循环洗牌时，仅保护当前正在展示的插画 ID，其余旧图 ID 不参与拦截，确保新图顺利入池
+      const currentArtId = pool.currentArtworkId || pool.artworks[pool.currentIndex]?.id
+      const existingIds = new Set(
+        isCycleReset
+          ? (currentArtId ? [currentArtId] : [])
+          : pool.artworks.map((a) => a.id)
+      )
+      const newArtworks: WidgetArtwork[] = isCycleReset
+        ? (currentArtId ? pool.artworks.filter((a) => a.id === currentArtId) : [])
+        : [...pool.artworks]
+      let firstSaved = newArtworks.length > 0
       let latestNextURL = pool.nextURL || null
 
       if (normalized === "pixivision") {
         const res = await fetchPixivisionWithPage(requestNextURL)
         latestNextURL = res.nextURL
-        for (const article of res.items) {
-          if (existingIds.has(article.id)) continue
-          if (!article.imageURL) continue
+        const candidateArticles = res.items.filter((article) => !existingIds.has(article.id) && article.imageURL)
 
-          const localPath = await downloadDirectImage(
-            article.imageURL,
-            "widget_pixivision",
-            article.id
-          )
-          if (localPath) {
-            const art: WidgetArtwork = {
-              id: article.id,
-              title: article.title,
-              userId: 0,
-              userName: "pixivision",
-              localImagePath: localPath,
-              remoteImageUrl: article.imageURL,
-              width: 1200,
-              height: 630,
-              aspectRatio: 1200 / 630,
-              sourceType: "pixivision",
-              route: `pixivision:${article.id}`,
-              updatedAt: Date.now(),
-              bookmarked: isPixivisionBookmarked(article.id),
-            }
-            newArtworks.push(art)
-            existingIds.add(article.id)
+        // 3 路受限并发管道下载大图
+        let candidateIdx = 0
+        async function pixivisionWorker() {
+          while (candidateIdx < candidateArticles.length) {
+            const article = candidateArticles[candidateIdx++]
+            const localPath = await downloadDirectImage(
+              article.imageURL,
+              "widget_pixivision",
+              article.id
+            )
+            if (localPath) {
+              const art: WidgetArtwork = {
+                id: article.id,
+                title: article.title,
+                userId: 0,
+                userName: "pixivision",
+                localImagePath: localPath,
+                remoteImageUrl: article.imageURL,
+                width: 1200,
+                height: 630,
+                aspectRatio: 1200 / 630,
+                sourceType: "pixivision",
+                route: `pixivision:${article.id}`,
+                updatedAt: Date.now(),
+                bookmarked: isPixivisionBookmarked(article.id),
+              }
+              newArtworks.push(art)
+              existingIds.add(article.id)
 
-            if (!firstSaved) {
-              firstSaved = true
+              // 流式增量落盘：每下载完成 1 张大图立即更新写盘
               pool.artworks = [...newArtworks]
               pool.lastFetchTime = Date.now()
               saveWidgetPool(pool, normalized, family)
-              emitFirstReady(normalized, art)
+
+              if (!firstSaved) {
+                firstSaved = true
+                emitFirstReady(normalized, art)
+              }
             }
           }
         }
+
+        const workers = Array.from(
+          { length: Math.min(DOWNLOAD_CONCURRENCY, candidateArticles.length) },
+          () => pixivisionWorker()
+        )
+        await Promise.all(workers)
       } else {
         const res = await fetchArtworksForSourceWithPage(normalized, requestNextURL)
         latestNextURL = res.nextURL
-        for (const item of res.items) {
-          if (existingIds.has(item.id)) continue
+        const candidateItems = res.items.filter((item) => !existingIds.has(item.id))
 
-          const localPath = await downloadArtworkImage(item)
-          if (localPath) {
-            const width = item.width || 1200
-            const height = item.height || 1200
-            const remoteUrl =
-              item.image_urls.large ||
-              item.image_urls.medium ||
-              item.image_urls.square_medium ||
-              ""
-            const art: WidgetArtwork = {
-              id: item.id,
-              title: item.title,
-              userId: item.user.id,
-              userName: item.user.name,
-              localImagePath: localPath,
-              remoteImageUrl: remoteUrl,
-              width,
-              height,
-              aspectRatio: width > 0 && height > 0 ? width / height : 1,
-              sourceType: normalized,
-              route: `illust:${item.id}`,
-              updatedAt: Date.now(),
-              bookmarked: Boolean(item.is_bookmarked),
-            }
-            newArtworks.push(art)
-            existingIds.add(item.id)
+        // 3 路受限并发管道下载高清大图
+        let candidateIdx = 0
+        async function illustWorker() {
+          while (candidateIdx < candidateItems.length) {
+            const item = candidateItems[candidateIdx++]
+            const localPath = await downloadArtworkImage(item)
+            if (localPath) {
+              const width = item.width || 1200
+              const height = item.height || 1200
+              const remoteUrl =
+                item.image_urls.large ||
+                item.image_urls.medium ||
+                item.image_urls.square_medium ||
+                ""
+              const art: WidgetArtwork = {
+                id: item.id,
+                title: item.title,
+                userId: item.user.id,
+                userName: item.user.name,
+                localImagePath: localPath,
+                remoteImageUrl: remoteUrl,
+                width,
+                height,
+                aspectRatio: width > 0 && height > 0 ? width / height : 1,
+                sourceType: normalized,
+                route: `illust:${item.id}`,
+                updatedAt: Date.now(),
+                bookmarked: Boolean(item.is_bookmarked),
+              }
+              newArtworks.push(art)
+              existingIds.add(item.id)
 
-            if (!firstSaved) {
-              firstSaved = true
+              // 流式增量落盘：每下载完成 1 张大图立即更新写盘
               pool.artworks = [...newArtworks]
               pool.lastFetchTime = Date.now()
               saveWidgetPool(pool, normalized, family)
-              emitFirstReady(normalized, art)
+
+              if (!firstSaved) {
+                firstSaved = true
+                emitFirstReady(normalized, art)
+              }
             }
           }
         }
+
+        const workers = Array.from(
+          { length: Math.min(DOWNLOAD_CONCURRENCY, candidateItems.length) },
+          () => illustWorker()
+        )
+        await Promise.all(workers)
       }
 
-      // 滑动窗口修剪：如果追加了新数据导致总数超过最大容量
+      // 安全容量修剪：超过最大容量时淘汰已看过的旧图，受保护作品（当前正在展示的）永不剔除
       if (newArtworks.length > maxCapacity) {
+        const protectArtId = pool.currentArtworkId || pool.artworks[pool.currentIndex]?.id
         const overflow = newArtworks.length - maxCapacity
-        // 优先淘汰头部已经看过的旧图片
-        if (pool.currentIndex > 0) {
-          const dropCount = Math.min(overflow, pool.currentIndex)
-          newArtworks.splice(0, dropCount)
-          pool.currentIndex = Math.max(0, pool.currentIndex - dropCount)
+
+        let dropped = 0
+        const trimmedArtworks: WidgetArtwork[] = []
+        for (let i = 0; i < newArtworks.length; i++) {
+          const art = newArtworks[i]
+          if (dropped < overflow && i < pool.currentIndex && art.id !== protectArtId) {
+            dropped++
+            continue
+          }
+          trimmedArtworks.push(art)
         }
-        // 如果依然超出（比如一次性拉取了较多新图），截取最新的容量上限
-        if (newArtworks.length > maxCapacity) {
-          const extra = newArtworks.length - maxCapacity
-          newArtworks.splice(0, extra)
-          pool.currentIndex = Math.max(0, pool.currentIndex - extra)
+
+        if (dropped < overflow) {
+          const secondPass: WidgetArtwork[] = []
+          for (let i = 0; i < trimmedArtworks.length; i++) {
+            const art = trimmedArtworks[i]
+            if (dropped < overflow && art.id !== protectArtId) {
+              dropped++
+              continue
+            }
+            secondPass.push(art)
+          }
+          pool.artworks = secondPass
+        } else {
+          pool.artworks = trimmedArtworks
         }
+
+        if (protectArtId) {
+          const reanchoredIdx = pool.artworks.findIndex((a) => a.id === protectArtId)
+          if (reanchoredIdx >= 0) {
+            pool.currentIndex = reanchoredIdx
+          } else {
+            pool.currentIndex = Math.max(0, Math.min(pool.artworks.length - 1, pool.currentIndex - dropped))
+          }
+        } else {
+          pool.currentIndex = Math.max(0, Math.min(pool.artworks.length - 1, pool.currentIndex - dropped))
+        }
+      } else {
+        pool.artworks = newArtworks
       }
 
-      pool.artworks = newArtworks
       pool.nextURL = latestNextURL
       pool.lastFetchTime = Date.now()
       saveWidgetPool(pool, normalized, family)
 
-      // 异步清理不再被任何池子引用的旧本地图片
+      // 异步清理不再被任何池子引用的旧本地大图
       cleanupOrphanImages()
 
       return pool
@@ -635,9 +779,9 @@ export async function getCurrentWidgetArtwork(param?: string, family?: string): 
   const normalized = normalizeParameter(param, family)
   let pool = loadWidgetPool(normalized, family)
 
-  // 若当前池子为空或已有图片被系统清理，则触发异步拉取，并等待首图就绪
+  // 若当前池子为空或已有图片被系统清理，则触发异步拉取，并等待首批大图就绪
   if (pool.artworks.length === 0) {
-    const firstPromise = waitForFirstArtwork(normalized)
+    const firstPromise = waitForFirstArtwork(normalized, 8000)
     void populateWidgetPool(normalized, family)
     const firstArt = await firstPromise
     if (firstArt) {
@@ -651,8 +795,35 @@ export async function getCurrentWidgetArtwork(param?: string, family?: string): 
   }
 
   // 保证 currentIndex 在合法范围内
-  if (pool.currentIndex >= pool.artworks.length) {
+  if (pool.currentIndex >= pool.artworks.length || pool.currentIndex < 0) {
     pool.currentIndex = 0
+    pool.currentArtworkId = pool.artworks[0]?.id
+    saveWidgetPool(pool, normalized, family)
+  }
+
+  // 时间驱动的自动轮播机制：检测是否超过设置的轮播间隔
+  const intervalMinutes = loadSettings().widgetReloadIntervalMinutes ?? 60
+  const intervalMs = intervalMinutes * 60 * 1000
+  const now = Date.now()
+  const lastRotated = pool.lastRotatedAt || 0
+  const lastIntentAt = getLastGlobalWidgetIntent()
+  const isDuringBroadcastGrace = now - lastIntentAt < BROADCAST_GRACE_PERIOD_MS
+  const isCoolingDown = now - lastRotated < ADVANCE_COOLDOWN_MS
+
+  if (lastRotated === 0) {
+    // 首次初始化时间锚点
+    pool.lastRotatedAt = now
+    saveWidgetPool(pool, normalized, family)
+  } else if (
+    now - lastRotated >= intervalMs &&
+    !isDuringBroadcastGrace &&
+    !isCoolingDown &&
+    pool.artworks.length > 1
+  ) {
+    // 达到自动轮播间隔，且非广播殃及唤醒、非冷却期，自动推进下一张
+    pool.currentIndex = (pool.currentIndex + 1) % pool.artworks.length
+    pool.currentArtworkId = pool.artworks[pool.currentIndex]?.id
+    pool.lastRotatedAt = now
     saveWidgetPool(pool, normalized, family)
   }
 
@@ -663,7 +834,7 @@ export async function getCurrentWidgetArtwork(param?: string, family?: string): 
     return advanceWidgetArtwork(normalized, family)
   }
 
-  // 若数据已过期（4小时），或剩余未看数量较少，触发异步补齐新数据
+  // 若数据已过期（4小时），或剩余未看数量较少，后台静默补充
   const isStale = Date.now() - (pool.lastFetchTime || 0) > POOL_STALE_TTL_MS
   if (isStale || pool.artworks.length - pool.currentIndex < MIN_PREFETCH_COUNT) {
     populateWidgetPool(normalized, family).catch(() => {})
@@ -673,32 +844,43 @@ export async function getCurrentWidgetArtwork(param?: string, family?: string): 
 }
 
 export async function advanceWidgetArtwork(param?: string, family?: string): Promise<WidgetArtwork | null> {
+  // 记录手动交互全局时间戳，向其他可能被广播唤醒的小组件提供保护期
+  recordGlobalWidgetIntent()
+
   const normalized = normalizeParameter(param, family)
   let pool = loadWidgetPool(normalized, family)
 
   if (pool.artworks.length === 0) {
     pool = await populateWidgetPool(normalized, family)
+    if (pool.artworks.length === 0) return null
   }
 
-  if (pool.artworks.length === 0) {
-    return null
-  }
+  // 1. 边界检查：在推进指针前先判定是否到达池底或接近池底
+  const currentIndex = pool.currentIndex
+  const isAtEnd = currentIndex + 1 >= pool.artworks.length
+  const isLow = pool.artworks.length - currentIndex <= MIN_PREFETCH_COUNT
 
-  // 1. 如果已刷到最后一张（刷完了），或者池子快用尽，立即拉取下一页新数据
-  const isAtEnd = pool.currentIndex + 1 >= pool.artworks.length
   if (isAtEnd) {
-    pool = await populateWidgetPool(normalized, family, { forceNextPage: true })
+    // 池底见底：必须请求新内容！启动强制翻页并等待下一页首图就绪（限时 3 秒，避免用户看到旧图循环）
+    const waitNextPromise = waitForFirstArtwork(normalized, 3000)
+    const populatePromise = populateWidgetPool(normalized, family, { forceNextPage: true })
+
+    const nextArt = await waitNextPromise
+    if (!nextArt) {
+      await populatePromise.catch(() => {})
+    }
+    pool = loadWidgetPool(normalized, family)
+  } else if (isLow) {
+    // 剩余未看插画较少时（提前 15 张），纯后台非阻塞启动下一页拉取
+    populateWidgetPool(normalized, family, { forceNextPage: true }).catch(() => {})
   }
 
-  // 2. 推进 currentIndex 指针
+  // 2. 推进指针到下一张并存盘
   if (pool.artworks.length > 0) {
     pool.currentIndex = (pool.currentIndex + 1) % pool.artworks.length
+    pool.currentArtworkId = pool.artworks[pool.currentIndex]?.id
+    pool.lastRotatedAt = Date.now()
     saveWidgetPool(pool, normalized, family)
-  }
-
-  // 3. 异步预拉取：若剩余未看的插画数量较少，触发下一页预热
-  if (pool.artworks.length - pool.currentIndex < MIN_PREFETCH_COUNT) {
-    populateWidgetPool(normalized, family, { forceNextPage: true }).catch(() => {})
   }
 
   const current = pool.artworks[pool.currentIndex]
@@ -706,12 +888,13 @@ export async function advanceWidgetArtwork(param?: string, family?: string): Pro
     return current
   }
 
-  // 若该项失效，递归找下一个有效项
+  // 若该项失效，寻找下一个有效项
   const validIndex = pool.artworks.findIndex(
     (a) => a && a.localImagePath && FileManager.existsSync(a.localImagePath)
   )
   if (validIndex >= 0) {
     pool.currentIndex = validIndex
+    pool.currentArtworkId = pool.artworks[validIndex]?.id
     saveWidgetPool(pool, normalized, family)
     return pool.artworks[validIndex]
   }
@@ -847,6 +1030,9 @@ export async function toggleWidgetArtworkBookmark(
   artworkId?: number,
   family?: string
 ): Promise<boolean> {
+  // 记录手动交互全局时间戳，避免收藏后广播 reloadAll 误触发自动轮播
+  recordGlobalWidgetIntent()
+
   const normalized = normalizeParameter(param, family)
   const pool = loadWidgetPool(normalized, family)
   let target = artworkId
@@ -897,5 +1083,3 @@ export async function toggleWidgetArtworkBookmark(
     }
   }
 }
-
-
