@@ -346,21 +346,27 @@ export async function searchIllustrations(
   options: SearchOptions,
   accessToken: string
 ): Promise<PixivPage<PixivIllustration>> {
+  let target = options.target
+  let word = options.word
+  if (options.bookmarkThreshold && options.bookmarkThreshold > 0) {
+    const cleanWord = word.replace(/\s*\d+users入り/gi, "").trim()
+    word = cleanWord ? `${cleanWord} ${options.bookmarkThreshold}users入り` : `${options.bookmarkThreshold}users入り`
+    if (target === "exact_match_for_tags") {
+      target = "partial_match_for_tags"
+    }
+  }
   const query: Record<string, string> = {
     filter: "for_ios",
     merge_plain_keyword_results: "true",
-    search_target: options.target,
+    search_target: target,
     sort: options.sort,
-    word: options.word,
+    word,
   }
   if (options.aiFilter != null) {
     query["search_ai_type"] = String(options.aiFilter)
   }
   if (options.startDate) query["start_date"] = options.startDate
   if (options.endDate) query["end_date"] = options.endDate
-  if (options.bookmarkThreshold && options.bookmarkThreshold > 0) {
-    query["word"] = `${options.word} ${options.bookmarkThreshold}users入り`
-  }
   const json = await apiGet<PixivIllustListResponse>("/v1/search/illust", query, accessToken)
   return { items: json?.illusts ?? [], nextURL: json?.next_url ?? null }
 }
@@ -1366,21 +1372,27 @@ export async function searchNovels(
   options: SearchOptions,
   accessToken: string
 ): Promise<PixivPage<PixivNovel>> {
+  let target = options.target || "partial_match_for_tags"
+  let word = options.word
+  if (options.bookmarkThreshold && options.bookmarkThreshold > 0) {
+    const cleanWord = word.replace(/\s*\d+users入り/gi, "").trim()
+    word = cleanWord ? `${cleanWord} ${options.bookmarkThreshold}users入り` : `${options.bookmarkThreshold}users入り`
+    if (target === "exact_match_for_tags") {
+      target = "partial_match_for_tags"
+    }
+  }
   const query: Record<string, string> = {
     filter: "for_ios",
     merge_plain_keyword_results: "true",
-    search_target: options.target || "partial_match_for_tags",
+    search_target: target,
     sort: options.sort || "date_desc",
-    word: options.word,
+    word,
   }
   if (options.aiFilter != null) {
     query["search_ai_type"] = String(options.aiFilter)
   }
   if (options.startDate) query["start_date"] = options.startDate
   if (options.endDate) query["end_date"] = options.endDate
-  if (options.bookmarkThreshold && options.bookmarkThreshold > 0) {
-    query["word"] = `${options.word} ${options.bookmarkThreshold}users入り`
-  }
   const json = await apiGet<PixivNovelListResponse>(
     "/v1/search/novel",
     query,

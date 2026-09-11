@@ -688,6 +688,7 @@ export interface AdvancedSearchParams {
   endDate: string // "YYYY-MM-DD"
   startTimestamp: number
   endTimestamp: number
+  datePresetLabel?: string
 }
 
 export interface PixivTagInfoResponse {

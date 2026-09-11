@@ -11,6 +11,7 @@ import {
   Text,
   TextField,
   Toggle,
+  useEffect,
   useMemo,
   useState,
 } from "scripting"
@@ -87,6 +88,7 @@ export function getDefaultAdvancedSearchParams(
     endDate: formatDateToPixivDate(now),
     startTimestamp: oneMonthAgo,
     endTimestamp: now,
+    datePresetLabel: undefined,
   }
 }
 
@@ -169,6 +171,41 @@ export function SearchAdvancedSheet(props: {
   const [endTimestamp, setEndTimestamp] = useState<number>(
     currentParams.endTimestamp
   )
+  const [datePresetLabel, setDatePresetLabel] = useState<string | undefined>(
+    currentParams.datePresetLabel
+  )
+  // 智能一次性自动聚焦：若初始词条为空（从热门/未搜索进入），首次打开自动聚焦唤起键盘；
+  // 挂载后或输入发生变化时立即关闭自动聚焦，防止后续滚动到底部时被虚拟列表反复唤起键盘。
+  const [shouldAutoFocus, setShouldAutoFocus] = useState<boolean>(
+    () => !currentParams.word?.trim()
+  )
+
+  useEffect(() => {
+    setWord(currentParams.word)
+    setCategory(
+      currentParams.category ||
+        categoryFromParams(currentParams.scope, currentParams.mediaFilter)
+    )
+    setTarget(currentParams.target)
+    setSort(currentParams.sort)
+    setBookmarkThreshold(currentParams.bookmarkThreshold)
+    setUseDateRange(currentParams.useDateRange)
+    setStartTimestamp(currentParams.startTimestamp)
+    setEndTimestamp(currentParams.endTimestamp)
+    setDatePresetLabel(currentParams.datePresetLabel)
+    if (!currentParams.word?.trim()) {
+      setShouldAutoFocus(true)
+    }
+  }, [currentParams])
+
+  useEffect(() => {
+    if (shouldAutoFocus) {
+      const timer = setTimeout(() => {
+        setShouldAutoFocus(false)
+      }, 300)
+      return () => clearTimeout(timer)
+    }
+  }, [shouldAutoFocus])
 
   const minTimestamp = useMemo(() => new Date("2007-09-09").getTime(), [])
   const maxTimestamp = useMemo(() => Date.now(), [])
@@ -191,6 +228,7 @@ export function SearchAdvancedSheet(props: {
     setUseDateRange(defaults.useDateRange)
     setStartTimestamp(defaults.startTimestamp)
     setEndTimestamp(defaults.endTimestamp)
+    setDatePresetLabel(defaults.datePresetLabel)
   }
 
   function handleApply() {
@@ -207,7 +245,7 @@ export function SearchAdvancedSheet(props: {
     const { scope, mediaFilter } = scopeAndMediaFilterFromCategory(category)
 
     onApply({
-      word,
+      word: word.trim(),
       category,
       scope,
       target,
@@ -219,6 +257,7 @@ export function SearchAdvancedSheet(props: {
       endDate,
       startTimestamp: clampedStart,
       endTimestamp: clampedEnd,
+      datePresetLabel: useDateRange ? datePresetLabel : undefined,
     })
   }
 
@@ -257,8 +296,13 @@ export function SearchAdvancedSheet(props: {
             title="关键词"
             prompt="输入搜索关键词…"
             value={word}
-            onChanged={setWord}
-            autofocus={true}
+            onChanged={(val: string) => {
+              setWord(val)
+              if (shouldAutoFocus) {
+                setShouldAutoFocus(false)
+              }
+            }}
+            autofocus={shouldAutoFocus}
           />
         </Section>
 
@@ -388,9 +432,12 @@ export function SearchAdvancedSheet(props: {
           header={
             <Text>
               {useDateRange
-                ? `投稿时间 · ${formatDateToPixivDate(
-                    startTimestamp
-                  )} 至 ${formatDateToPixivDate(endTimestamp)}`
+                ? `投稿时间 · ${
+                    datePresetLabel ||
+                    `${formatDateToPixivDate(
+                      startTimestamp
+                    )} 至 ${formatDateToPixivDate(endTimestamp)}`
+                  }`
                 : "投稿时间"}
             </Text>
           }
@@ -414,6 +461,7 @@ export function SearchAdvancedSheet(props: {
                         const range = preset.getTimestamps()
                         setStartTimestamp(range.start)
                         setEndTimestamp(range.end)
+                        setDatePresetLabel(preset.label)
                       }}
                     >
                       <Text font="caption">{preset.label}</Text>
@@ -427,7 +475,10 @@ export function SearchAdvancedSheet(props: {
                 displayedComponents={["date"]}
                 datePickerStyle="compact"
                 value={startTimestamp}
-                onChanged={(val) => setStartTimestamp(val)}
+                onChanged={(val) => {
+                  setStartTimestamp(val)
+                  setDatePresetLabel(undefined)
+                }}
                 startDate={minTimestamp}
                 endDate={endTimestamp}
               />
@@ -437,7 +488,10 @@ export function SearchAdvancedSheet(props: {
                 displayedComponents={["date"]}
                 datePickerStyle="compact"
                 value={endTimestamp}
-                onChanged={(val) => setEndTimestamp(val)}
+                onChanged={(val) => {
+                  setEndTimestamp(val)
+                  setDatePresetLabel(undefined)
+                }}
                 startDate={startTimestamp}
                 endDate={maxTimestamp}
               />

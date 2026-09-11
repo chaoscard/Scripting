@@ -6,7 +6,7 @@ import {
 import type { PixivIllustration } from "../../types"
 import { cachedFilePath, imageUrlOf, loadImage, pageThumbUrlOf } from "../../image/imageLoader"
 import { CachedImage } from "../components/CachedImage"
-import { UgoiraPlayerView } from "../ugoiraView"
+import { UgoiraPlayerView } from "../UgoiraView"
 
 export interface IllustMediaViewportProps {
   illust: PixivIllustration

@@ -11,6 +11,7 @@ import {
   Menu,
   NavigationLink,
   Picker,
+  ScrollView,
   Section,
   Spacer,
   Text,
@@ -385,6 +386,19 @@ declare const Animation: any
 let cachedTrendingIllust: PixivTrendingTag[] = []
 let cachedTrendingNovel: PixivTrendingTag[] = []
 
+function formatShortDateRange(startStr?: string, endStr?: string, presetLabel?: string): string {
+  if (presetLabel) return presetLabel
+  if (!startStr || !endStr) return ""
+  const formatSingle = (s: string) => {
+    const parts = s.split("-")
+    if (parts.length === 3) {
+      return `'${parts[0].slice(2)}.${parts[1]}.${parts[2]}`
+    }
+    return s
+  }
+  return `${formatSingle(startStr)} ~ ${formatSingle(endStr)}`
+}
+
 export function SearchView(props: { onClose: () => void; active?: boolean }) {
   useEffect(() => {
     setActiveTabKind("search")
@@ -397,6 +411,7 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
   const [scope, setScope] = useState<SearchScope>("illust")
   const [sort, setSort] = useState<SearchSort>("date_desc")
   const [isAdvancedSheetOpen, setIsAdvancedSheetOpen] = useState(false)
+  const [advancedSheetKey, setAdvancedSheetKey] = useState(0)
   const [advancedParams, setAdvancedParams] = useState<AdvancedSearchParams>(() =>
     getDefaultAdvancedSearchParams(scope, query)
   )
@@ -779,13 +794,13 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
     addSearchHistory(trimmed, scope)
     setSubmitted(trimmed)
     setQuery("")
-    setIsSearchingMode(true)
-    setAdvancedParams((prev) => ({ ...prev, word: trimmed, scope }))
+    setIsSearchingMode(false)
+    setSearchPresented(false)
+    setAdvancedParams(getDefaultAdvancedSearchParams(scope, trimmed))
     setTagSuggestions([])
     setUserSuggestions([])
     setTagSuggestionsLoading(false)
     setUserSuggestionsLoading(false)
-    setSearchPresented(false)
   }
 
   const activePaged =
@@ -892,6 +907,78 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
     [submitted, scope, hideNovels]
   )
 
+  interface ActiveFilterBadge {
+    key: string
+    icon: string
+    iconColor: string
+    label: string
+    onClear: () => void
+  }
+
+  const activeFilterBadges = useMemo<ActiveFilterBadge[]>(() => {
+    const badges: ActiveFilterBadge[] = []
+    if (advancedParams.bookmarkThreshold > 0) {
+      badges.push({
+        key: "bookmark",
+        icon: "heart.fill",
+        iconColor: "#FF2D55",
+        label: `≥${
+          advancedParams.bookmarkThreshold >= 10000
+            ? `${advancedParams.bookmarkThreshold / 10000}万`
+            : advancedParams.bookmarkThreshold.toLocaleString()
+        } 收藏`,
+        onClear: () =>
+          setAdvancedParams((prev) => ({ ...prev, bookmarkThreshold: 0 })),
+      })
+    }
+    if (
+      advancedParams.useDateRange &&
+      advancedParams.startDate &&
+      advancedParams.endDate
+    ) {
+      badges.push({
+        key: "date",
+        icon: "calendar",
+        iconColor: "#007AFF",
+        label: formatShortDateRange(
+          advancedParams.startDate,
+          advancedParams.endDate,
+          advancedParams.datePresetLabel
+        ),
+        onClear: () =>
+          setAdvancedParams((prev) => ({ ...prev, useDateRange: false })),
+      })
+    }
+    if (
+      advancedParams.mediaFilter &&
+      advancedParams.mediaFilter !== "all" &&
+      scope === "illust"
+    ) {
+      const mediaMap: Record<string, { label: string; icon: string }> = {
+        illust: { label: "仅插画", icon: "photo" },
+        manga: { label: "仅漫画", icon: "photo.on.rectangle" },
+        ugoira: { label: "仅动图", icon: "play.circle" },
+      }
+      const mediaInfo = mediaMap[advancedParams.mediaFilter] || {
+        label: advancedParams.mediaFilter,
+        icon: "photo.stack",
+      }
+      badges.push({
+        key: "media",
+        icon: mediaInfo.icon,
+        iconColor: "#AF52DE",
+        label: mediaInfo.label,
+        onClear: () =>
+          setAdvancedParams((prev) => ({
+            ...prev,
+            mediaFilter: "all",
+            category: "all_illust",
+          })),
+      })
+    }
+    return badges
+  }, [advancedParams, scope])
+
   // 是否处于搜索提示词展示态：输入框有内容，且处于输入或查看提示词状态（未提交或键盘激活中）
   const isSuggestingActive =
     query.trim().length > 0 && (!submitted || searchPresented || isSearchingMode)
@@ -990,8 +1077,9 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
           ) : null}
 
           {/* 4. 已提交搜索：展示当前搜索结果列表 */}
-          {submitted && !searchPresented ? (
+          {submitted && !searchPresented && !isSuggestingActive ? (
             <VStack spacing={10} frame={{ maxWidth: "infinity" }}>
+              {/* 第一行：主搜索词胶囊 + 返回热门 */}
               <HStack
                 alignment="center"
                 spacing={8}
@@ -1016,6 +1104,7 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
                       setQuery("")
                       setIsSearchingMode(false)
                       setSearchPresented(false)
+                      setAdvancedParams(getDefaultAdvancedSearchParams(scope, ""))
                     }}
                   >
                     <Image
@@ -1025,7 +1114,9 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
                     />
                   </Button>
                 </HStack>
+
                 <Spacer />
+
                 <Button
                   buttonStyle="plain"
                   action={() => {
@@ -1033,6 +1124,7 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
                     setQuery("")
                     setIsSearchingMode(false)
                     setSearchPresented(false)
+                    setAdvancedParams(getDefaultAdvancedSearchParams(scope, ""))
                   }}
                 >
                   <HStack alignment="center" spacing={4}>
@@ -1043,6 +1135,86 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
                   </HStack>
                 </Button>
               </HStack>
+
+              {/* 第二行：横向滚动高级筛选标签栏（仅在有筛选条件时展开） */}
+              {activeFilterBadges.length > 0 ? (
+                <ScrollView axes="horizontal">
+                  <HStack alignment="center" spacing={8} padding={{ horizontal: 16, top: 0, bottom: 4 }}>
+                    {activeFilterBadges.map((badge) => (
+                      <HStack
+                        key={badge.key}
+                        alignment="center"
+                        spacing={6}
+                        padding={{ leading: 10, trailing: 8, vertical: 5 }}
+                        glassEffect="capsule"
+                        contentShape="capsule"
+                      >
+                        <Image
+                          systemName={badge.icon}
+                          font="caption2"
+                          foregroundStyle={badge.iconColor as any}
+                        />
+                        <Text
+                          font="caption"
+                          fontWeight="medium"
+                          foregroundStyle="label"
+                          lineLimit={1}
+                        >
+                          {badge.label}
+                        </Text>
+                        <Button
+                          buttonStyle="plain"
+                          action={badge.onClear}
+                        >
+                          <Image
+                            systemName="xmark.circle.fill"
+                            font="caption"
+                            foregroundStyle="tertiaryLabel"
+                          />
+                        </Button>
+                      </HStack>
+                    ))}
+
+                    {activeFilterBadges.length > 1 ? (
+                      <Button
+                        buttonStyle="plain"
+                        action={() => {
+                          setAdvancedParams((prev) => ({
+                            ...prev,
+                            bookmarkThreshold: 0,
+                            useDateRange: false,
+                            datePresetLabel: undefined,
+                            mediaFilter: "all",
+                            category: categoryFromParams(scope, "all"),
+                          }))
+                        }}
+                      >
+                        <HStack
+                          alignment="center"
+                          spacing={4}
+                          padding={{ horizontal: 10, vertical: 5 }}
+                          glassEffect="capsule"
+                          contentShape="capsule"
+                        >
+                          <Image
+                            systemName="arrow.counterclockwise"
+                            font="caption2"
+                            foregroundStyle="secondaryLabel"
+                          />
+                          <Text
+                            font="caption"
+                            fontWeight="medium"
+                            foregroundStyle="secondaryLabel"
+                            lineLimit={1}
+                          >
+                            重置筛选
+                          </Text>
+                        </HStack>
+                      </Button>
+                    ) : null}
+                  </HStack>
+                </ScrollView>
+              ) : null}
 
               {submittedDirectTargets.length > 0 ? (
                 <DirectRouteSection
@@ -1111,17 +1283,32 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
         onChanged: (presented: boolean) => setIsAdvancedSheetOpen(presented),
         content: (
           <SearchAdvancedSheet
+            key={`advanced-sheet-${advancedSheetKey}`}
             currentParams={advancedParams}
             settings={loadSettings()}
             onApply={(params) => {
               setAdvancedParams(params)
               setScope(params.scope)
               setSort(params.sort)
-              if (params.word.trim()) {
-                setQuery(params.word.trim())
-                setSubmitted(params.word.trim())
-                addSearchHistory(params.word.trim(), params.scope)
+              const trimmedWord = params.word.trim()
+              if (trimmedWord) {
+                setQuery("")
+                setSubmitted(trimmedWord)
+                addSearchHistory(trimmedWord, params.scope)
+              } else {
+                setQuery("")
+                setSubmitted("")
               }
+              tagSeq.current += 1
+              userSeq.current += 1
+              debouncedTagAutocomplete.cancel()
+              debouncedUserAutocomplete.cancel()
+              setTagSuggestions([])
+              setUserSuggestions([])
+              setTagSuggestionsLoading(false)
+              setUserSuggestionsLoading(false)
+              setIsSearchingMode(false)
+              setSearchPresented(false)
               setIsAdvancedSheetOpen(false)
             }}
             onCancel={() => setIsAdvancedSheetOpen(false)}
@@ -1137,9 +1324,10 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
         sort,
         onSortChange: selectSort,
         onAdvanced: () => {
+          const currentWord = query.trim() || submitted || advancedParams.word
           setAdvancedParams((prev) => ({
             ...prev,
-            word: query.trim() || submitted || prev.word,
+            word: currentWord,
             scope: scope === "user" ? "illust" : scope,
             sort,
             category: categoryFromParams(
@@ -1147,6 +1335,7 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
               prev.mediaFilter
             ),
           }))
+          setAdvancedSheetKey((k) => k + 1)
           setIsAdvancedSheetOpen(true)
         },
       })}
@@ -1517,10 +1706,12 @@ function SearchHistorySection(props: {
             <HStack alignment="center" spacing={4} padding={{ horizontal: 6, vertical: 4 }}>
               <Image
                 systemName="trash"
-                font="subheadline"
-                fontWeight="semibold"
+                font="caption"
                 foregroundStyle="#FF3B30"
               />
+              <Text font="subheadline" foregroundStyle="#FF3B30">
+                清除记录
+              </Text>
             </HStack>
           </Button>
         ) : null}
