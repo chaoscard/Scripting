@@ -1,3 +1,4 @@
+import { Device, Widget } from "scripting"
 import { downloadBinary } from "../api/client"
 import { session } from "../api/session"
 import {
@@ -900,6 +901,61 @@ export async function advanceWidgetArtwork(param?: string, family?: string): Pro
   }
 
   return null
+}
+
+/**
+ * 立即刷新所有活跃的桌面小组件（方案A：即时切图推进 + 广播更新）：
+ * 1. 扫描当前设置中各尺寸启用的数据源以及沙盒中所有已有池子；
+ * 2. 对每个池子并发调用 advanceWidgetArtwork 推进到下一张有效图片，更新轮播时间戳；
+ * 3. 广播通知 WidgetKit 重新渲染所有桌面小组件。
+ */
+export async function refreshAllWidgets(): Promise<void> {
+  const settings = loadSettings()
+  const sources = new Set<string>()
+
+  if (Device.isiPad) {
+    if (settings.widgetSourceSmallIpad) sources.add(settings.widgetSourceSmallIpad)
+    if (settings.widgetSourceMediumIpad) sources.add(settings.widgetSourceMediumIpad)
+    if (settings.widgetSourceLargeIpad) sources.add(settings.widgetSourceLargeIpad)
+    if (settings.widgetSourceExtraLargeIpad) sources.add(settings.widgetSourceExtraLargeIpad)
+  } else {
+    if (settings.widgetSourceSmallIos) sources.add(settings.widgetSourceSmallIos)
+    if (settings.widgetSourceMediumIos) sources.add(settings.widgetSourceMediumIos)
+    if (settings.widgetSourceLargeIos) sources.add(settings.widgetSourceLargeIos)
+  }
+
+  const dir = pixivWidgetPath()
+  if (FileManager.existsSync(dir)) {
+    try {
+      const files = FileManager.readDirectorySync(dir)
+      for (const file of files) {
+        if (file.startsWith("pool_") && file.endsWith(".json")) {
+          const sourceName = file.replace(/^pool_/, "").replace(/\.json$/, "")
+          if (sourceName && sourceName !== "default") {
+            sources.add(sourceName)
+          }
+        }
+      }
+    } catch {}
+  }
+
+  if (sources.size === 0) {
+    sources.add("ranking_day")
+  }
+
+  await Promise.all(
+    Array.from(sources).map(async (src) => {
+      try {
+        await advanceWidgetArtwork(src)
+      } catch (e: any) {
+        console.log("refreshAllWidgets advance error for", src, e?.message ?? e)
+      }
+    })
+  )
+
+  try {
+    Widget.reloadAll()
+  } catch {}
 }
 
 /**

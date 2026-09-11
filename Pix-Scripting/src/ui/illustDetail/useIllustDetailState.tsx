@@ -217,7 +217,7 @@ export function useIllustDetailState(illustID: number): {
     recordWorkSeriesAssociation(currentIllust.id, "manga", resolvedSeriesID, resolvedSeriesTitle, resolvedEpisodeNumber)
   }
 
-  const pageCount = currentIllust ? Math.max(1, currentIllust.page_count || currentIllust.meta_pages?.length || 1) : 1
+  const pageCount = currentIllust ? Math.max(1, currentIllust.page_count || 1, currentIllust.meta_pages?.length || 1) : 1
   const pageURLs: (string | null)[] = []
   if (currentIllust) {
     for (let k = 0; k < pageCount; k++) {
@@ -364,7 +364,7 @@ export function useIllustDetailState(illustID: number): {
       }
       const prefetchURLs: (string | null | undefined)[] = []
       const detailQuality = getDetailImageQuality()
-      const total = Math.min(4, detail.page_count || detail.meta_pages?.length || 1)
+      const total = Math.min(4, Math.max(1, detail.page_count || 1, detail.meta_pages?.length || 1))
       for (let k = 1; k < total; k++) {
         prefetchURLs.push(imageUrlOf(detail, k, detailQuality))
       }

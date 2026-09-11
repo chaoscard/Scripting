@@ -25,6 +25,7 @@ import {
   enforceCacheLimit,
 } from "../image/imageLoader"
 import { clearHistory, historyCount, onHistoryChanged } from "../store/history"
+import { populateWidgetPool, refreshAllWidgets } from "../store/widgetStore"
 import { FeatureHighlightsSheet } from "./components/FeatureHighlightsSheet"
 import {
   formatCustomRankingSummary,
@@ -968,6 +969,7 @@ export function SettingsView() {
                   : { widgetSourceSmallIos: value as WidgetDefaultSource }
               )
               try {
+                populateWidgetPool(value).catch(() => {})
                 Widget.reloadAll()
               } catch {}
             }}
@@ -990,6 +992,7 @@ export function SettingsView() {
                   : { widgetSourceMediumIos: value as WidgetDefaultSource }
               )
               try {
+                populateWidgetPool(value).catch(() => {})
                 Widget.reloadAll()
               } catch {}
             }}
@@ -1012,6 +1015,7 @@ export function SettingsView() {
                   : { widgetSourceLargeIos: value as WidgetDefaultSource }
               )
               try {
+                populateWidgetPool(value).catch(() => {})
                 Widget.reloadAll()
               } catch {}
             }}
@@ -1031,6 +1035,7 @@ export function SettingsView() {
               onChanged={(value: string) => {
                 update({ widgetSourceExtraLargeIpad: value as WidgetDefaultSource })
                 try {
+                  populateWidgetPool(value).catch(() => {})
                   Widget.reloadAll()
                 } catch {}
               }}
@@ -1039,7 +1044,7 @@ export function SettingsView() {
               <Text tag="ranking_week">周榜</Text>
               <Text tag="ranking_month">月榜</Text>
               <Text tag="follow">关注</Text>
-              <Text tag="discovery">推荐</Text>
+              <Text tag="recommend">推荐</Text>
               <Text tag="pixivision">特辑</Text>
             </Picker>
           )}
@@ -1052,10 +1057,16 @@ export function SettingsView() {
               controlSize="small"
               action={() => {
                 triggerHaptic("light")
-                try {
-                  Widget.reloadAll()
-                  setWidgetRefreshed()
-                } catch {}
+                refreshAllWidgets()
+                  .then(() => {
+                    setWidgetRefreshed()
+                  })
+                  .catch(() => {
+                    try {
+                      Widget.reloadAll()
+                      setWidgetRefreshed()
+                    } catch {}
+                  })
               }}
             >
               {widgetRefreshed ? (

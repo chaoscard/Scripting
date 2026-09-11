@@ -126,6 +126,7 @@ export interface PixivisionTocItem {
 
 export interface PixivisionProfile {
   name: string
+  userId?: number
   avatarURL?: string
   description: string
   links?: { title: string; url: string }[]
@@ -140,7 +141,7 @@ export type PixivisionBodyBlock =
   | { type: "illust"; artwork: PixivisionArtwork }
   | { type: "article_card"; article: PixivisionArticle }
   | { type: "profile"; profile: PixivisionProfile }
-  | { type: "qa"; question: string; answer: string; answerAvatarURL?: string }
+  | { type: "qa"; question: string; answer: string; answerAvatarURL?: string; answerUserId?: number }
   | {
       type: "image"
       src: string

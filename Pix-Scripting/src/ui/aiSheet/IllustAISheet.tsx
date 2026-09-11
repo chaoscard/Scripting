@@ -426,7 +426,7 @@ export function IllustAISheet(props: {
     isPresentedRef.current = isPresented
   }, [isPresented])
 
-  const pageCount = Math.max(1, illust.page_count || illust.meta_pages?.length || 1)
+  const pageCount = Math.max(1, illust.page_count || 1, illust.meta_pages?.length || 1)
   const rawCaption = cleanHtmlCaption(illust.caption)
 
   const illustWidth = illust.width || 800

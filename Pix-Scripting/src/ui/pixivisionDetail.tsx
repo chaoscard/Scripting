@@ -137,8 +137,27 @@ export function PixivisionDetailView(props: { articleID: number }) {
       if (block.associatedArtworkID && detail) {
         const artwork = detail.artworks.find((a) => a.id === block.associatedArtworkID)
         if (artwork) {
+          const skeleton = buildArtworkSkeletonIllust(artwork)
           const cached = getCachedIllust(artwork.id)
-          targetIllust = cached && cached.width > 0 && cached.height > 0 ? cached : buildArtworkSkeletonIllust(artwork)
+
+          if (artwork.draftImages && artwork.draftImages.length > 0) {
+            targetIllust = {
+              ...skeleton,
+              ...(cached
+                ? {
+                    user: cached.user || skeleton.user,
+                    tags: cached.tags && cached.tags.length > 0 ? cached.tags : skeleton.tags,
+                    is_bookmarked: cached.is_bookmarked ?? skeleton.is_bookmarked,
+                  }
+                : {}),
+              // 强制锁定特辑多页草稿序列与页数，坚决防止被 Pixiv 官方单页缓存覆盖
+              meta_pages: skeleton.meta_pages,
+              page_count: skeleton.page_count,
+            }
+          } else {
+            targetIllust = cached && cached.width > 0 && cached.height > 0 ? cached : skeleton
+          }
+
           targetPageIndex = block.galleryPageIndex ?? 0
         }
       }
@@ -754,7 +773,8 @@ export function PixivisionDetailView(props: { articleID: number }) {
                           </VStack>
                         </VStack>
                       )
-                    case "profile":
+                    case "profile": {
+                      const profileUserId = block.profile.userId
                       return (
                         <VStack
                           key={`prof-${idx}`}
@@ -768,16 +788,39 @@ export function PixivisionDetailView(props: { articleID: number }) {
                             glassEffect={{ type: "rect", cornerRadius: 14 }}
                             frame={{ maxWidth: "infinity" }}
                           >
-                            <HStack spacing={10} alignment="center">
+                            <HStack
+                              spacing={10}
+                              alignment="center"
+                              frame={{ maxWidth: "infinity" }}
+                              onTapGesture={
+                                profileUserId
+                                  ? () => {
+                                      triggerHaptic("light")
+                                      requestPixivRoute(`user:${profileUserId}`)
+                                    }
+                                  : undefined
+                              }
+                            >
                               <AvatarImage url={block.profile.avatarURL ?? null} size={44} />
                               <VStack alignment="leading" spacing={2}>
-                                <Text font="headline" fontWeight="bold">
-                                  {block.profile.name}
-                                </Text>
+                                <HStack spacing={6} alignment="center">
+                                  <Text font="headline" fontWeight="bold">
+                                    {block.profile.name}
+                                  </Text>
+                                  {profileUserId ? (
+                                    <Image
+                                      systemName="chevron.right"
+                                      font="caption2"
+                                      fontWeight="semibold"
+                                      foregroundStyle="tertiaryLabel"
+                                    />
+                                  ) : null}
+                                </HStack>
                                 <Text font="caption" foregroundStyle="secondaryLabel">
                                   特辑创作者 / 受访嘉宾
                                 </Text>
                               </VStack>
+                              <Spacer />
                             </HStack>
                             <LinkedDescription
                               html={block.profile.description}
@@ -807,7 +850,9 @@ export function PixivisionDetailView(props: { articleID: number }) {
                           </VStack>
                         </VStack>
                       )
-                    case "qa":
+                    }
+                    case "qa": {
+                      const answerUserId = block.answerUserId
                       return (
                         <VStack
                           key={`qa-${idx}`}
@@ -830,7 +875,18 @@ export function PixivisionDetailView(props: { articleID: number }) {
                             </Text>
                           </HStack>
                           <HStack spacing={10} alignment="top">
-                            <AvatarImage url={block.answerAvatarURL ?? null} size={32} />
+                            <HStack
+                              onTapGesture={
+                                answerUserId
+                                  ? () => {
+                                      triggerHaptic("light")
+                                      requestPixivRoute(`user:${answerUserId}`)
+                                    }
+                                  : undefined
+                              }
+                            >
+                              <AvatarImage url={block.answerAvatarURL ?? null} size={32} />
+                            </HStack>
                             <VStack alignment="leading" frame={{ maxWidth: "infinity" }}>
                               <LinkedDescription
                                 html={block.answer}
@@ -841,6 +897,7 @@ export function PixivisionDetailView(props: { articleID: number }) {
                           </HStack>
                         </VStack>
                       )
+                    }
                     case "illust": {
                       const artwork = block.artwork
                       const cached = getCachedIllust(artwork.id)

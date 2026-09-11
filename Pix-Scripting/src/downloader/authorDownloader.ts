@@ -452,7 +452,7 @@ export async function exportAuthorIllustrationsToZip(
   // 计算总 P 数
   let totalPages = 0
   pureIllusts.forEach((item) => {
-    totalPages += Math.max(1, item.page_count || item.meta_pages?.length || 1)
+    totalPages += Math.max(1, item.page_count || 1, item.meta_pages?.length || 1)
   })
 
   const zipFileName = sanitizeFileName(`[${safeAuthorName}] 插画全集 (共${pureIllusts.length}部_${totalPages}P)`) + ".zip"
@@ -481,7 +481,7 @@ export async function exportAuthorIllustrationsToZip(
             await token.checkOrWait()
             const item = pureIllusts[i]
             const safeTitle = sanitizeFileName(item.title || "Untitled")
-            const pageCount = Math.max(1, item.page_count || item.meta_pages?.length || 1)
+            const pageCount = Math.max(1, item.page_count || 1, item.meta_pages?.length || 1)
 
             if (pageCount === 1) {
               const url = imageUrlOf(item, 0, quality)
@@ -659,7 +659,7 @@ export async function exportAuthorManga(
           for (let epIdx = 0; epIdx < series.works.length; epIdx++) {
             const ep = series.works[epIdx]
             const chapTitle = ep.title || `第 ${epIdx + 1} 话`
-            const pageCount = Math.max(1, ep.page_count || ep.meta_pages?.length || 1)
+            const pageCount = Math.max(1, ep.page_count || 1, ep.meta_pages?.length || 1)
             const chapPages: { pageIndex: number; url: string }[] = []
             for (let p = 0; p < pageCount; p++) {
               const url = imageUrlOf(ep, p, quality)
@@ -735,7 +735,7 @@ export async function exportAuthorManga(
           onProgress?.(statusMsg, currentProgress, totalTasks)
           task.updateProgress({ current: currentProgress, total: totalTasks, statusText: statusMsg })
 
-          const pageCount = Math.max(1, single.page_count || single.meta_pages?.length || 1)
+          const pageCount = Math.max(1, single.page_count || 1, single.meta_pages?.length || 1)
           const pages: { pageIndex: number; url: string }[] = []
           for (let p = 0; p < pageCount; p++) {
             const url = imageUrlOf(single, p, quality)

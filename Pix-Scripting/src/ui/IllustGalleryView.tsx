@@ -395,7 +395,7 @@ export function IllustGalleryView(props: {
   const { illust, initialPageIndex = 0 } = props
   const dismiss = Navigation.useDismiss()
 
-  const pageCount = Math.max(1, illust.page_count || illust.meta_pages?.length || 1)
+  const pageCount = Math.max(1, illust.page_count || 1, illust.meta_pages?.length || 1)
   const isSingle = pageCount <= 1
   const pageIndices = useMemo(() => Array.from({ length: pageCount }, (_, i) => i), [pageCount])
 

@@ -248,7 +248,7 @@ export async function downloadIllustToAlbum(
   return withAlbumKeepAlive(async () => {
     if (token) await token.checkOrWait()
     const quality = downloadQuality ?? getDownloadImageQuality()
-    const pageCount = Math.max(1, illust.page_count || illust.meta_pages?.length || 1)
+    const pageCount = Math.max(1, illust.page_count || 1, illust.meta_pages?.length || 1)
     const tasks: { pageIndex: number; url: string }[] = []
 
     for (let i = 0; i < pageCount; i++) {

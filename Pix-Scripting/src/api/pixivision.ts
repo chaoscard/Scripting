@@ -503,6 +503,7 @@ export function parsePixivisionDetailPage(
     let pendingQuestion: string | null = null
     let inSignupPromoSection = false
     let currentArtwork: PixivisionArtwork | null = null
+    let currentProfileUserId: number | undefined = undefined
 
     while ((blockMatch = blockPattern.exec(bodySlice)) != null) {
       try {
@@ -659,11 +660,41 @@ export function parsePixivisionDetailPage(
             profileLinks.push({ title: lTitle, url: lUrl })
           }
         }
+
+        let userId: number | undefined
+        const userMatch =
+          rawBlock.match(/pixiv\.net\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?users\/(\d+)/i) ||
+          rawBlock.match(/\/users\/(\d+)/i)
+        if (userMatch) {
+          const parsedId = Number(userMatch[1])
+          if (Number.isFinite(parsedId) && parsedId > 0) {
+            userId = parsedId
+          }
+        }
+        if (!userId) {
+          for (const l of profileLinks) {
+            const lm =
+              l.url.match(/users\/(\d+)/i) ||
+              l.url.match(/pixiv\.net\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?users\/(\d+)/i)
+            if (lm) {
+              const parsedId = Number(lm[1])
+              if (Number.isFinite(parsedId) && parsedId > 0) {
+                userId = parsedId
+                break
+              }
+            }
+          }
+        }
+        if (userId) {
+          currentProfileUserId = userId
+        }
+
         if (nameText || descText) {
           blocks.push({
             type: "profile",
             profile: {
               name: nameText || "创作者",
+              userId,
               avatarURL: avatarURL || undefined,
               description: descText,
               links: profileLinks.length > 0 ? profileLinks : undefined,
@@ -684,6 +715,21 @@ export function parsePixivisionDetailPage(
         const avatarURL =
           matchBackgroundImageURL(rawBlock) ||
           matchAttribute(rawBlock.match(/<img\b[^>]*>/i)?.[0] ?? "", "src")
+
+        let answerUserId: number | undefined
+        const aUserMatch =
+          rawBlock.match(/pixiv\.net\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?users\/(\d+)/i) ||
+          rawBlock.match(/\/users\/(\d+)/i)
+        if (aUserMatch) {
+          const parsedId = Number(aUserMatch[1])
+          if (Number.isFinite(parsedId) && parsedId > 0) {
+            answerUserId = parsedId
+          }
+        }
+        if (!answerUserId) {
+          answerUserId = currentProfileUserId
+        }
+
         if (aText) {
           if (pendingQuestion) {
             blocks.push({
@@ -691,6 +737,7 @@ export function parsePixivisionDetailPage(
               question: pendingQuestion,
               answer: aText,
               answerAvatarURL: avatarURL || undefined,
+              answerUserId,
             })
             pendingQuestion = null
           } else {
@@ -817,6 +864,21 @@ export function parsePixivisionDetailPage(
         text: pendingQuestion,
       })
       pendingQuestion = null
+    }
+
+    // 后置回填：若文章中解析到了嘉宾 profile.userId，或全篇仅有 1 位创作者，为所有 QA 问答自动对齐受访画师 ID
+    const fallbackUserId =
+      currentProfileUserId ||
+      (artworks.length > 0 && artworks.every((a) => a.authorID === artworks[0]?.authorID)
+        ? artworks[0]?.authorID
+        : undefined)
+
+    if (fallbackUserId) {
+      for (const b of blocks) {
+        if (b.type === "qa" && !b.answerUserId) {
+          b.answerUserId = fallbackUserId
+        }
+      }
     }
   }
 
