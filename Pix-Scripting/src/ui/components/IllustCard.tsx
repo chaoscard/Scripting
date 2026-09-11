@@ -42,18 +42,18 @@ export const FLOW_COLUMN_SPACING = 12
 export const FLOW_ROW_SPACING = 4
 
 export function calculateFlowCardWidth(
-  screenWidth: number = Device.screen.width,
+  containerWidth: number = Device.screen.width,
   columnCount: number = 2
 ): number {
   const count = Math.max(1, columnCount)
   const totalSpacing = (count - 1) * FLOW_COLUMN_SPACING
   return Math.floor(
-    (screenWidth - FLOW_HORIZONTAL_PADDING * 2 - totalSpacing) / count
+    (containerWidth - FLOW_HORIZONTAL_PADDING * 2 - totalSpacing) / count
   )
 }
 
-export function calculateHeroCardWidth(screenWidth: number = Device.screen.width): number {
-  return Math.floor(screenWidth - FLOW_HORIZONTAL_PADDING * 2)
+export function calculateHeroCardWidth(containerWidth: number = Device.screen.width): number {
+  return Math.floor(containerWidth - FLOW_HORIZONTAL_PADDING * 2)
 }
 
 // 流式布局允许最长 1:4 的竖图保留原始比例；更极端的图片仍受此下限保护。
@@ -494,7 +494,7 @@ export function IllustFlowFeed(props: {
   ) => any
 }) {
   cacheIllusts(props.items)
-  const { width: screenWidth, isiPad, isLandscape } = useLayoutMetrics()
+  const { width: containerWidth, isiPad, isLandscape, isCompact } = useLayoutMetrics()
   const [settings, setSettings] = useState(() => loadSettings())
 
   useEffect(() => {
@@ -504,19 +504,21 @@ export function IllustFlowFeed(props: {
   }, [])
 
   const columnCount = useMemo(() => {
-    if (!isiPad) return 2
+    // 紧凑窗口（iPhone 或 iPad 台前调度收缩窗口 / 分屏 < 560pt）固定锁定为 2 列
+    if (!isiPad || isCompact) return 2
     return isLandscape
       ? (settings.waterfallColumnsIpadLandscape ?? 3)
       : (settings.waterfallColumnsIpadPortrait ?? 3)
-  }, [isiPad, isLandscape, settings.waterfallColumnsIpadLandscape, settings.waterfallColumnsIpadPortrait])
+  }, [isiPad, isCompact, isLandscape, settings.waterfallColumnsIpadLandscape, settings.waterfallColumnsIpadPortrait])
 
   const flowCardWidth = useMemo(
-    () => calculateFlowCardWidth(screenWidth, columnCount),
-    [screenWidth, columnCount]
+    () => calculateFlowCardWidth(containerWidth, columnCount),
+    [containerWidth, columnCount]
   )
-  const heroCardWidth = useMemo(() => calculateHeroCardWidth(screenWidth), [screenWidth])
+  const heroCardWidth = useMemo(() => calculateHeroCardWidth(containerWidth), [containerWidth])
 
-  const isHeroActive = !isiPad && Boolean(props.enableHeroFirst && props.items.length > 0)
+  // 首图大卡片：紧凑窗口（iPhone 或 iPad 台前调度收缩窗口）且用户开启首图大卡设置时激活
+  const isHeroActive = (!isiPad || isCompact) && Boolean(props.enableHeroFirst && props.items.length > 0)
   const heroItem = isHeroActive ? props.items[0] : null
   const waterfallItems = isHeroActive ? props.items.slice(1) : props.items
   const startIndex = isHeroActive ? 1 : 0
@@ -582,7 +584,7 @@ export function IllustFlowFeed(props: {
       <VStack
         key={`hero:${heroItem.id}`}
         padding={{ horizontal: FLOW_HORIZONTAL_PADDING }}
-        frame={{ width: screenWidth }}
+        frame={{ width: containerWidth }}
       >
         <IllustCard
           key={heroItem.id}
@@ -599,7 +601,7 @@ export function IllustFlowFeed(props: {
     )
   }, [
     heroItem,
-    screenWidth,
+    containerWidth,
     heroCardWidth,
     props.cornerBadgeOf,
     props.footerTextOf,
@@ -615,7 +617,7 @@ export function IllustFlowFeed(props: {
           alignment="top"
           spacing={FLOW_COLUMN_SPACING}
           padding={{ horizontal: FLOW_HORIZONTAL_PADDING }}
-          frame={{ width: screenWidth }}
+          frame={{ width: containerWidth }}
         >
           {columnViews}
         </HStack>

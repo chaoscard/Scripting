@@ -1,4 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useColorScheme, Device, type Color, type KeywordPoint } from "scripting"
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useColorScheme,
+  createContext,
+  useContext,
+  GeometryReader,
+  Device,
+  type Color,
+  type KeywordPoint,
+} from "scripting"
 import { session } from "../api/session"
 import { getImageBatchSize, loadSettings, onSettingsChanged } from "../store/settings"
 import { onBlocklistChanged } from "../store/blocklist"
@@ -821,6 +834,8 @@ export function useNovelMarker(
   return [markerPage, setMarkerPage]
 }
 
+export const COMPACT_LAYOUT_MAX_WIDTH = 560
+
 export interface LayoutMetrics {
   width: number
   height: number
@@ -829,13 +844,40 @@ export interface LayoutMetrics {
   isPortrait: boolean
   isiPad: boolean
   isiPhone: boolean
+  isCompact: boolean
+}
+
+export interface ContainerLayoutContextValue {
+  width: number
+  height: number
+}
+
+export const ContainerLayoutContext = createContext<ContainerLayoutContextValue | null>()
+
+export function ResponsiveContainer(props: { children: any }) {
+  return (
+    <GeometryReader>
+      {(proxy) => (
+        <ContainerLayoutContext.Provider
+          value={{
+            width: proxy.size.width,
+            height: proxy.size.height,
+          }}
+        >
+          {props.children}
+        </ContainerLayoutContext.Provider>
+      )}
+    </GeometryReader>
+  )
 }
 
 /**
- * 监听设备旋转与屏幕尺寸变化的响应式 Hook
+ * 监听设备旋转与窗口/容器尺寸变化的响应式 Hook
+ * 支持在台前调度（Stage Manager）、分屏（Split View）等场景下精准感知实际窗口宽度
  */
 export function useLayoutMetrics(): LayoutMetrics {
-  const [metrics, setMetrics] = useState<LayoutMetrics>(() => ({
+  const container = useContext(ContainerLayoutContext)
+  const [deviceMetrics, setDeviceMetrics] = useState(() => ({
     width: Device.screen.width,
     height: Device.screen.height,
     scale: Device.screen.scale,
@@ -847,7 +889,7 @@ export function useLayoutMetrics(): LayoutMetrics {
 
   useEffect(() => {
     const updateMetrics = () => {
-      setMetrics({
+      setDeviceMetrics({
         width: Device.screen.width,
         height: Device.screen.height,
         scale: Device.screen.scale,
@@ -863,6 +905,17 @@ export function useLayoutMetrics(): LayoutMetrics {
     }
   }, [])
 
-  return metrics
+  const effectiveWidth =
+    container?.width && container.width > 0 ? container.width : deviceMetrics.width
+  const effectiveHeight =
+    container?.height && container.height > 0 ? container.height : deviceMetrics.height
+  const isCompact = effectiveWidth < COMPACT_LAYOUT_MAX_WIDTH || deviceMetrics.isiPhone
+
+  return {
+    ...deviceMetrics,
+    width: effectiveWidth,
+    height: effectiveHeight,
+    isCompact,
+  }
 }
 

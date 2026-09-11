@@ -19,6 +19,7 @@ import {
 } from "scripting"
 import { session } from "../api/session"
 import { loadSettings, onSettingsChanged, updateSettings } from "../store/settings"
+import { ResponsiveContainer } from "./hooks"
 import { FeatureHighlightsSheet } from "./components/FeatureHighlightsSheet"
 import {
   CapsuleAccessoryContainer,
@@ -181,14 +182,16 @@ export function RootView() {
         background="clear"
         ignoresSafeArea={true}
       >
-        <NavigationStack>
-          <LoginView
-            onClose={dismiss}
-            onSuccess={() => {
-              setLoggedIn(true)
-            }}
-          />
-        </NavigationStack>
+        <ResponsiveContainer>
+          <NavigationStack>
+            <LoginView
+              onClose={dismiss}
+              onSuccess={() => {
+                setLoggedIn(true)
+              }}
+            />
+          </NavigationStack>
+        </ResponsiveContainer>
       </ZStack>
     )
   }
@@ -212,7 +215,9 @@ export function RootView() {
       }}
     >
       {/* 底层：主界面在第 0 毫秒即挂载并全力在后台请求数据与预载图片 */}
-      <MainTabView onClose={dismiss} />
+      <ResponsiveContainer>
+        <MainTabView onClose={dismiss} />
+      </ResponsiveContainer>
 
       {/* 顶层：启动动画遮罩，根据调试设置自定义时长（默认 1500ms）平滑过渡 */}
       {!isReady ? (
