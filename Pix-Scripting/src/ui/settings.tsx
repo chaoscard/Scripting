@@ -616,7 +616,14 @@ export function SettingsView() {
           {Device.isiPad ? (
             <>
               <Picker
-                title="横屏图片列数"
+                label={
+                  <VStack alignment="leading" spacing={2}>
+                    <Text>横屏图片列数</Text>
+                    <Text font="caption2" foregroundStyle="secondaryLabel">
+                      在台前调度或分屏缩窄窗口时锁定为 2 列
+                    </Text>
+                  </VStack>
+                }
                 value={String(settings.waterfallColumnsIpadLandscape)}
                 onChanged={(value: string) =>
                   update({ waterfallColumnsIpadLandscape: Number(value) as 2 | 3 | 4 | 5 })
@@ -628,7 +635,14 @@ export function SettingsView() {
                 <Text tag="5">5 列</Text>
               </Picker>
               <Picker
-                title="竖屏图片列数"
+                label={
+                  <VStack alignment="leading" spacing={2}>
+                    <Text>竖屏图片列数</Text>
+                    <Text font="caption2" foregroundStyle="secondaryLabel">
+                      在台前调度或分屏缩窄窗口时锁定为 2 列
+                    </Text>
+                  </VStack>
+                }
                 value={String(settings.waterfallColumnsIpadPortrait)}
                 onChanged={(value: string) =>
                   update({ waterfallColumnsIpadPortrait: Number(value) as 2 | 3 | 4 })
@@ -648,7 +662,7 @@ export function SettingsView() {
               <Text>瀑布流首图全宽展示</Text>
               {Device.isiPad ? (
                 <Text font="caption2" foregroundStyle="secondaryLabel">
-                  此设置在 iPad / Mac 设备上不生效
+                  在台前调度或分屏缩窄窗口时生效
                 </Text>
               ) : null}
             </VStack>
