@@ -251,33 +251,53 @@ function MainTabView(props: {
 
   useEffect(() => {
     const unregisterDiscovery = registerTabNavigator("discovery", (route) => {
-      discoveryPath.setValue([...discoveryPath.value, route])
+      const cur = discoveryPath.value
+      if (cur.length > 0 && cur[cur.length - 1] === route) return
+      discoveryPath.setValue([...cur, route])
     })
     const unregisterRanking = registerTabNavigator("ranking", (route) => {
-      rankingPath.setValue([...rankingPath.value, route])
+      const cur = rankingPath.value
+      if (cur.length > 0 && cur[cur.length - 1] === route) return
+      rankingPath.setValue([...cur, route])
     })
     const unregisterFollowing = registerTabNavigator("following", (route) => {
-      followingPath.setValue([...followingPath.value, route])
+      const cur = followingPath.value
+      if (cur.length > 0 && cur[cur.length - 1] === route) return
+      followingPath.setValue([...cur, route])
     })
     const unregisterSearch = registerTabNavigator("search", (route) => {
-      searchPath.setValue([...searchPath.value, route])
+      const cur = searchPath.value
+      if (cur.length > 0 && cur[cur.length - 1] === route) return
+      searchPath.setValue([...cur, route])
     })
     const unregisterMore = registerTabNavigator("more", (route) => {
-      morePath.setValue([...morePath.value, route])
+      const cur = morePath.value
+      if (cur.length > 0 && cur[cur.length - 1] === route) return
+      morePath.setValue([...cur, route])
     })
 
     const unregisterGlobal = setPixivRouteNavigator((route: string) => {
       const activeTab = getActiveTabKind() || (selection.value as PixivTabKind) || initialTab || "discovery"
       if (activeTab === "ranking") {
-        rankingPath.setValue([...rankingPath.value, route])
+        const cur = rankingPath.value
+        if (cur.length > 0 && cur[cur.length - 1] === route) return
+        rankingPath.setValue([...cur, route])
       } else if (activeTab === "following") {
-        followingPath.setValue([...followingPath.value, route])
+        const cur = followingPath.value
+        if (cur.length > 0 && cur[cur.length - 1] === route) return
+        followingPath.setValue([...cur, route])
       } else if (activeTab === "search") {
-        searchPath.setValue([...searchPath.value, route])
+        const cur = searchPath.value
+        if (cur.length > 0 && cur[cur.length - 1] === route) return
+        searchPath.setValue([...cur, route])
       } else if (activeTab === "more") {
-        morePath.setValue([...morePath.value, route])
+        const cur = morePath.value
+        if (cur.length > 0 && cur[cur.length - 1] === route) return
+        morePath.setValue([...cur, route])
       } else {
-        discoveryPath.setValue([...discoveryPath.value, route])
+        const cur = discoveryPath.value
+        if (cur.length > 0 && cur[cur.length - 1] === route) return
+        discoveryPath.setValue([...cur, route])
       }
     })
 

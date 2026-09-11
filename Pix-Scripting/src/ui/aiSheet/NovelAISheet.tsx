@@ -407,7 +407,7 @@ export function NovelAISheet(props: {
             disabled={selectedPage <= 1 || loading || streaming}
             action={() => {
               setSelectedPage((p) => Math.max(1, p - 1))
-              triggerHaptic(0.3, 0.3)
+              triggerHaptic("selection")
             }}
           />
           <Spacer />
@@ -421,7 +421,7 @@ export function NovelAISheet(props: {
             disabled={selectedPage >= totalPages || loading || streaming}
             action={() => {
               setSelectedPage((p) => Math.min(totalPages, p + 1))
-              triggerHaptic(0.3, 0.3)
+              triggerHaptic("selection")
             }}
           />
         </HStack>
@@ -441,7 +441,7 @@ export function NovelAISheet(props: {
                     buttonStyle={isSelected ? "borderedProminent" : "bordered"}
                     action={() => {
                       setContinueInstruction(isSelected ? "" : prompt)
-                      triggerHaptic(0.3, 0.3)
+                      triggerHaptic("selection")
                     }}
                   />
                 )

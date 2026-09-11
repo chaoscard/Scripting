@@ -123,14 +123,14 @@ function VersionRow(props: {
     if (clickCountRef.current >= 5) {
       clickCountRef.current = 0
       props.onUnlock()
-      triggerHaptic(1.0, 1.0)
+      triggerHaptic("success")
       void Dialog.alert({
         title: "提示",
         message: "已解锁调试功能，请前往设置查看",
         buttonLabel: "好",
       })
     } else {
-      triggerHaptic(0.4, 0.4)
+      triggerHaptic("selection")
       timerRef.current = setTimeout(() => {
         clickCountRef.current = 0
       }, 2000)

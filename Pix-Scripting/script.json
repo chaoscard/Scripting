@@ -2,11 +2,11 @@
   "description": "Liquid Glass Pixiv Client",
   "iconImage": null,
   "intentInputTypes": [],
-  "version": "1.0.6",
+  "version": "1.0.7",
   "remoteResource": {
     "url": "https://raw.githubusercontent.com/chaoscard/Scripting/main/Release/Pix-Scripting.scripting",
     "autoUpdateInterval": null,
-    "hash": "1690b06971ef6e49408a53095ead7b46"
+    "hash": "79831a1a3c89bff0dfa86661b758767e"
   },
   "localizedNames": {
     "zh": ""

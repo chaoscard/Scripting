@@ -441,7 +441,7 @@ function SauceNAOConfigView(props: {
           if (trimmed) {
             setNewKeyInput(trimmed)
             try {
-              triggerHaptic(0.3, 0.3)
+              triggerHaptic("selection")
             } catch {}
           }
         }

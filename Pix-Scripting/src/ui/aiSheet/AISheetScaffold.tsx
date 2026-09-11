@@ -78,7 +78,7 @@ export function OriginalCaptionCollapsible(props: {
       <Button
         action={() => {
           onToggle()
-          triggerHaptic(0.3, 0.3)
+          triggerHaptic("selection")
         }}
       >
         <HStack spacing={6} alignment="center">

@@ -79,7 +79,7 @@ function PureArtworkWidgetView(props: {
       : undefined)
 
   const runUrl = targetRoute
-    ? Script.createRunSingleURLScheme("Pix-Scripting", {
+    ? Script.createRunURLScheme("Pix-Scripting", {
         route: targetRoute,
       })
     : undefined

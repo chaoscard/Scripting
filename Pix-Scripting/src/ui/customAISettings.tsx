@@ -135,15 +135,15 @@ export function CustomAISettingsView() {
 
     setTestingGeneral(true)
     setGeneralTestResult(null)
-    triggerHaptic(0.3, 0.3)
+    triggerHaptic("light")
 
     try {
       const res = await testCustomAIConnection(profile.general)
       setGeneralTestResult(res)
       if (res.success) {
-        triggerHaptic(0.6, 0.8)
+        triggerHaptic("success")
       } else {
-        triggerHaptic(0.8, 0.3)
+        triggerHaptic("error")
         void Dialog.alert({
           title: "模型测试失败",
           message: res.error || "连接测试未通过，请检查模型名称、API 密钥与网络配置。",
@@ -155,7 +155,7 @@ export function CustomAISettingsView() {
         success: false,
         error: errorMsg,
       })
-      triggerHaptic(0.8, 0.3)
+      triggerHaptic("error")
       void Dialog.alert({
         title: "模型测试失败",
         message: errorMsg,
@@ -180,15 +180,15 @@ export function CustomAISettingsView() {
 
     setTestingImage(true)
     setImageTestResult(null)
-    triggerHaptic(0.3, 0.3)
+    triggerHaptic("light")
 
     try {
       const res = await testCustomImageGenConnection(profile.imageGen, effectiveKey)
       setImageTestResult(res)
       if (res.success) {
-        triggerHaptic(0.6, 0.8)
+        triggerHaptic("success")
       } else {
-        triggerHaptic(0.8, 0.3)
+        triggerHaptic("error")
         void Dialog.alert({
           title: "生图模型测试失败",
           message: res.error || "生图测试未通过，请检查模型名称、API 密钥与网络配置。",
@@ -200,7 +200,7 @@ export function CustomAISettingsView() {
         success: false,
         error: errorMsg,
       })
-      triggerHaptic(0.8, 0.3)
+      triggerHaptic("error")
       void Dialog.alert({
         title: "生图模型测试失败",
         message: errorMsg,
@@ -246,7 +246,7 @@ export function CustomAISettingsView() {
 
   function applyPreset(presetId: string) {
     if (!presetId) return
-    triggerHaptic(0.3, 0.3)
+    triggerHaptic("selection")
     const next = switchCustomAIPreset(presetId)
     setProfile(next)
     setGeneralTestResult(null)
@@ -294,7 +294,7 @@ export function CustomAISettingsView() {
         } else {
           updateGeneral({ apiKey: trimmed })
         }
-        triggerHaptic(0.3, 0.4)
+        triggerHaptic("light")
       } else {
         void Dialog.alert({
           title: "剪贴板未包含有效文本",
@@ -311,7 +311,7 @@ export function CustomAISettingsView() {
    */
   async function handleOpenApiKeyConsole() {
     if (currentPreset?.apiKeyUrl) {
-      triggerHaptic(0.2, 0.2)
+      triggerHaptic("selection")
       try {
         await Safari.present(currentPreset.apiKeyUrl, false)
       } catch {
@@ -360,7 +360,7 @@ export function CustomAISettingsView() {
 
       if (res.success && res.models.length > 0) {
         setRemoteModels(res.models)
-        triggerHaptic(0.4, 0.6)
+        triggerHaptic("success")
 
         const currentModelInList = res.models.some((m) => m.id === profile.general.model)
         if (!currentModelInList || !profile.general.model) {
@@ -374,7 +374,7 @@ export function CustomAISettingsView() {
         }
       } else {
         setFetchError(res.error || "未在远端获取到可用模型")
-        triggerHaptic(0.5, 0.2)
+        triggerHaptic("warning")
       }
     } catch (err: any) {
       setFetchError(err?.message || "连接失败，请检查网络或密钥有效性")
@@ -448,7 +448,7 @@ export function CustomAISettingsView() {
 
       if (res.success && res.models.length > 0) {
         setImageRemoteModels(res.models)
-        triggerHaptic(0.4, 0.6)
+        triggerHaptic("success")
 
         const currentInList = res.models.some((m) => m.id === profile.imageGen.model)
         if (!currentInList || !profile.imageGen.model) {
@@ -458,7 +458,7 @@ export function CustomAISettingsView() {
         }
       } else {
         setImageFetchError(res.error || "未在远端获取到可用生图模型")
-        triggerHaptic(0.5, 0.2)
+        triggerHaptic("warning")
       }
     } catch (err: any) {
       setImageFetchError(err?.message || "连接失败，请检查生图端点与网络")

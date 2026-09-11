@@ -498,7 +498,7 @@ export function IllustAISheet(props: {
         },
       }
     })
-    triggerHaptic(0.3, 0.3)
+    triggerHaptic("selection")
   }
 
   // 点击坐标碰撞检测气泡（备用兜底）
@@ -955,7 +955,7 @@ export function IllustAISheet(props: {
                       systemImage={showAllOverlay ? "eye" : "eye.slash"}
                       action={() => {
                         setShowAllOverlay(!showAllOverlay)
-                        triggerHaptic(0.4, 0.4)
+                        triggerHaptic("selection")
                       }}
                     />
                   )}
@@ -1027,7 +1027,7 @@ export function IllustAISheet(props: {
                           action={() => {
                             const next = Math.max(0.7, Number((fontScale - 0.05).toFixed(2)))
                             setFontScale(next)
-                            triggerHaptic(0.3, 0.3)
+                            triggerHaptic("selection")
                           }}
                         >
                           <Text font="subheadline" fontWeight="bold" foregroundStyle="#007AFF">
@@ -1048,7 +1048,7 @@ export function IllustAISheet(props: {
                           action={() => {
                             const next = Math.min(1.5, Number((fontScale + 0.05).toFixed(2)))
                             setFontScale(next)
-                            triggerHaptic(0.3, 0.3)
+                            triggerHaptic("selection")
                           }}
                         >
                           <Text font="subheadline" fontWeight="bold" foregroundStyle="#007AFF">
