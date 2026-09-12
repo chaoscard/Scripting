@@ -2,6 +2,7 @@ import {
   Button,
   Device,
   Divider,
+  FlowLayout,
   Group,
   HStack,
   Image,
@@ -93,6 +94,7 @@ import type {
 } from "../types"
 import {
   categoryFromParams,
+  formatDateToPixivDate,
   getDefaultAdvancedSearchParams,
   SearchAdvancedSheet,
 } from "./searchAdvancedSheet"
@@ -387,16 +389,31 @@ declare const Animation: any
 let cachedTrendingIllust: PixivTrendingTag[] = []
 let cachedTrendingNovel: PixivTrendingTag[] = []
 
-function formatShortDateRange(startStr?: string, endStr?: string, presetLabel?: string): string {
+function formatShortDateRange(
+  startStr?: string,
+  endStr?: string,
+  presetLabel?: string
+): string {
   if (presetLabel) return presetLabel
   if (!startStr || !endStr) return ""
+
+  const todayStr = formatDateToPixivDate(Date.now())
+  if (startStr === todayStr && endStr === todayStr) {
+    return "今天"
+  }
+
   const formatSingle = (s: string) => {
     const parts = s.split("-")
     if (parts.length === 3) {
-      return `'${parts[0].slice(2)}.${parts[1]}.${parts[2]}`
+      return `${parts[0].slice(2)}.${parts[1]}.${parts[2]}`
     }
     return s
   }
+
+  if (startStr === endStr) {
+    return formatSingle(startStr)
+  }
+
   return `${formatSingle(startStr)} ~ ${formatSingle(endStr)}`
 }
 
@@ -1139,48 +1156,51 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
                 </Button>
               </HStack>
 
-              {/* 第二行：横向滚动高级筛选标签栏（仅在有筛选条件时展开） */}
+              {/* 第二行：高级筛选标签栏（仅在有筛选条件时展开） */}
               {activeFilterBadges.length > 0 ? (
-                <ScrollView axes="horizontal">
-                  <HStack alignment="center" spacing={8} padding={{ horizontal: 16, top: 0, bottom: 4 }}>
+                <VStack
+                  alignment="leading"
+                  spacing={6}
+                  padding={{ horizontal: 16, top: 0, bottom: 2 }}
+                  frame={{ maxWidth: "infinity" }}
+                >
+                  <FlowLayout spacing={6}>
                     {activeFilterBadges.map((badge) => (
-                      <HStack
+                      <Button
                         key={badge.key}
-                        alignment="center"
-                        spacing={6}
-                        padding={{ leading: 10, trailing: 8, vertical: 5 }}
-                        glassEffect="capsule"
-                        contentShape="capsule"
+                        action={badge.onClear}
+                        buttonStyle="glass"
+                        controlSize="mini"
+                        fixedSize={{ horizontal: true, vertical: false }}
                       >
-                        <Image
-                          systemName={badge.icon}
-                          font="caption2"
-                          foregroundStyle={badge.iconColor as any}
-                        />
-                        <Text
-                          font="caption"
-                          fontWeight="medium"
-                          foregroundStyle="label"
-                          lineLimit={1}
-                        >
-                          {badge.label}
-                        </Text>
-                        <Button
-                          buttonStyle="plain"
-                          action={badge.onClear}
-                        >
+                        <HStack alignment="center" spacing={3}>
                           <Image
-                            systemName="xmark.circle.fill"
-                            font="caption"
-                            foregroundStyle="tertiaryLabel"
+                            systemName={badge.icon}
+                            font="caption2"
+                            foregroundStyle={badge.iconColor as any}
                           />
-                        </Button>
-                      </HStack>
+                          <Text
+                            font="caption2"
+                            fontWeight="medium"
+                            foregroundStyle="label"
+                            lineLimit={1}
+                          >
+                            {badge.label}
+                          </Text>
+                          <Image
+                            systemName="xmark"
+                            font="caption2"
+                            foregroundStyle="secondaryLabel"
+                          />
+                        </HStack>
+                      </Button>
                     ))}
 
                     {activeFilterBadges.length > 1 ? (
                       <Button
-                        buttonStyle="plain"
+                        buttonStyle="glass"
+                        controlSize="mini"
+                        fixedSize={{ horizontal: true, vertical: false }}
                         action={() => {
                           setAdvancedParams((prev) => ({
                             ...prev,
@@ -1192,20 +1212,14 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
                           }))
                         }}
                       >
-                        <HStack
-                          alignment="center"
-                          spacing={4}
-                          padding={{ horizontal: 10, vertical: 5 }}
-                          glassEffect="capsule"
-                          contentShape="capsule"
-                        >
+                        <HStack alignment="center" spacing={3}>
                           <Image
                             systemName="arrow.counterclockwise"
                             font="caption2"
                             foregroundStyle="secondaryLabel"
                           />
                           <Text
-                            font="caption"
+                            font="caption2"
                             fontWeight="medium"
                             foregroundStyle="secondaryLabel"
                             lineLimit={1}
@@ -1215,8 +1229,8 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
                         </HStack>
                       </Button>
                     ) : null}
-                  </HStack>
-                </ScrollView>
+                  </FlowLayout>
+                </VStack>
               ) : null}
 
               {submittedDirectTargets.length > 0 ? (

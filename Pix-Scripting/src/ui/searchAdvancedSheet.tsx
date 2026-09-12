@@ -73,8 +73,8 @@ export function getDefaultAdvancedSearchParams(
   mediaFilter: SearchMediaFilter = "all"
 ): AdvancedSearchParams {
   const now = Date.now()
-  const oneMonthAgo = now - 30 * 86400000
   const category = categoryFromParams(scope, mediaFilter)
+  const todayStr = formatDateToPixivDate(now)
   return {
     word: initialWord,
     category,
@@ -84,9 +84,9 @@ export function getDefaultAdvancedSearchParams(
     mediaFilter: scope === "novel" ? "all" : mediaFilter,
     bookmarkThreshold: 0,
     useDateRange: false,
-    startDate: formatDateToPixivDate(oneMonthAgo),
-    endDate: formatDateToPixivDate(now),
-    startTimestamp: oneMonthAgo,
+    startDate: todayStr,
+    endDate: todayStr,
+    startTimestamp: now,
     endTimestamp: now,
     datePresetLabel: undefined,
   }
@@ -141,6 +141,24 @@ const QUICK_DATE_PRESETS: QuickDatePreset[] = [
       const now = Date.now()
       const d = new Date(now)
       d.setFullYear(d.getFullYear() - 3)
+      return { start: d.getTime(), end: now }
+    },
+  },
+  {
+    label: "过去5年",
+    getTimestamps: () => {
+      const now = Date.now()
+      const d = new Date(now)
+      d.setFullYear(d.getFullYear() - 5)
+      return { start: d.getTime(), end: now }
+    },
+  },
+  {
+    label: "过去10年",
+    getTimestamps: () => {
+      const now = Date.now()
+      const d = new Date(now)
+      d.setFullYear(d.getFullYear() - 10)
       return { start: d.getTime(), end: now }
     },
   },
@@ -434,9 +452,12 @@ export function SearchAdvancedSheet(props: {
               {useDateRange
                 ? `投稿时间 · ${
                     datePresetLabel ||
-                    `${formatDateToPixivDate(
-                      startTimestamp
-                    )} 至 ${formatDateToPixivDate(endTimestamp)}`
+                    (formatDateToPixivDate(startTimestamp) ===
+                    formatDateToPixivDate(endTimestamp)
+                      ? formatDateToPixivDate(startTimestamp)
+                      : `${formatDateToPixivDate(
+                          startTimestamp
+                        )} 至 ${formatDateToPixivDate(endTimestamp)}`)
                   }`
                 : "投稿时间"}
             </Text>
@@ -452,21 +473,26 @@ export function SearchAdvancedSheet(props: {
             <>
               <ScrollView axes="horizontal">
                 <HStack spacing={8} padding={{ vertical: 4 }}>
-                  {QUICK_DATE_PRESETS.map((preset) => (
-                    <Button
-                      key={preset.label}
-                      buttonStyle="bordered"
-                      controlSize="small"
-                      action={() => {
-                        const range = preset.getTimestamps()
-                        setStartTimestamp(range.start)
-                        setEndTimestamp(range.end)
-                        setDatePresetLabel(preset.label)
-                      }}
-                    >
-                      <Text font="caption">{preset.label}</Text>
-                    </Button>
-                  ))}
+                  {QUICK_DATE_PRESETS.map((preset) => {
+                    const isSelected = datePresetLabel === preset.label
+                    return (
+                      <Button
+                        key={preset.label}
+                        buttonStyle={
+                          isSelected ? "borderedProminent" : "bordered"
+                        }
+                        controlSize="small"
+                        action={() => {
+                          const range = preset.getTimestamps()
+                          setStartTimestamp(range.start)
+                          setEndTimestamp(range.end)
+                          setDatePresetLabel(preset.label)
+                        }}
+                      >
+                        <Text font="caption">{preset.label}</Text>
+                      </Button>
+                    )
+                  })}
                 </HStack>
               </ScrollView>
 
