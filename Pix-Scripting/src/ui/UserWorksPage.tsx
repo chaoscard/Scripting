@@ -21,7 +21,6 @@ import {
   deleteNovel,
   nextIllustrations,
   nextNovels,
-  userDetail,
   userNovels,
   userWorks,
 } from "../api/pixiv"
@@ -38,7 +37,7 @@ import {
 import { isUserFollowed, onUserFollowChanged } from "../store/userFollow"
 import { useAsyncGuard, useLatest, usePagedList, currentBatchSize } from "./hooks"
 import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl } from "./ambient"
-import type { PixivIllustration, PixivNovel, PixivUserDetail } from "../types"
+import type { PixivIllustration, PixivNovel } from "../types"
 import { triggerHaptic } from "../platform/haptics"
 import {
   EmptyView,
@@ -51,7 +50,6 @@ import {
   RefreshableScrollView,
 } from "./components"
 import {
-  DockInfoBar,
   DockSegmentedBar,
   useRegisterBottomAccessory,
 } from "./bottomAccessory"
@@ -63,11 +61,8 @@ export function UserWorksView(props: { userID?: number; title?: string }) {
   const isOwn = Boolean(
     currentUserID && session.userID && String(currentUserID) === String(session.userID)
   )
-  const [detail, setDetail] = useState<PixivUserDetail | null>(null)
-  const [detailLoading, setDetailLoading] = useState(true)
-  const [detailError, setDetailError] = useState<string | null>(null)
   const [tab, setTab] = useState<WorkTab>("illust")
-  const [visitedTabs, setVisitedTabs] = useState<Set<WorkTab>>(() => new Set(["illust"]))
+  const [visitedTabs, setVisitedTabs] = useState<Set<WorkTab>>(() => new Set([tab]))
 
   useEffect(() => {
     setVisitedTabs((prev) => {
@@ -77,110 +72,55 @@ export function UserWorksView(props: { userID?: number; title?: string }) {
       return next
     })
   }, [tab])
+
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
   const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
   const isAppleMusic = pageLayout === "appleMusic"
-  const [emptyKinds, setEmptyKinds] = useState<Partial<Record<WorkTab, boolean>>>({})
-  const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(() => getLastActiveAmbientImageUrl())
+  const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(
+    () => getLastActiveAmbientImageUrl()
+  )
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
-  const guard = useAsyncGuard()
-  const worksRefreshRef = useRef<() => Promise<void>>(() => Promise.resolve())
+  const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
   useEffect(() => {
     return onSettingsChanged(() => {
       const next = loadSettings()
       setHideNovels(next.hideNovels)
       setPageLayout(next.pageLayout)
-      setEmptyKinds({})
+      if (next.hideNovels && tab === "novel") {
+        setTab("illust")
+      }
     })
-  }, [])
+  }, [tab])
 
-  const loadDetail = useCallback(async () => {
-    if (currentUserID == null) return
-    const g = guard()
-    setDetailError(null)
-    try {
-      const result = await session.call((token) => userDetail(currentUserID, token))
-      if (!g.isCurrent()) return
-      setDetail(result)
-    } catch (e) {
-      if (!g.isCurrent()) return
-      setDetailError(e instanceof Error ? e.message : "获取用户信息失败")
-    } finally {
-      if (g.isCurrent()) setDetailLoading(false)
+  const userWorkItems = useMemo<Array<{ tag: WorkTab; label: string }>>(() => {
+    const items: Array<{ tag: WorkTab; label: string }> = [
+      { tag: "illust", label: "插画" },
+      { tag: "manga", label: "漫画" },
+    ]
+    if (!hideNovels) {
+      items.push({ tag: "novel", label: "小说" })
     }
-  }, [currentUserID, guard])
-
-  useEffect(() => {
-    void loadDetail()
-  }, [loadDetail])
-
-  const baseKinds = useMemo<WorkTab[]>(() => {
-    if (!detail) return []
-    const kinds: WorkTab[] = []
-    if ((detail.profile.total_illusts ?? 0) > 0) kinds.push("illust")
-    if ((detail.profile.total_manga ?? 0) > 0) kinds.push("manga")
-    if (!hideNovels && (detail.profile.total_novels ?? 0) > 0) kinds.push("novel")
-    return kinds
-  }, [
-    detail?.profile.total_illusts,
-    detail?.profile.total_manga,
-    detail?.profile.total_novels,
-    hideNovels,
-  ])
-
-  const availableKinds = useMemo<WorkTab[]>(() => {
-    return baseKinds.filter((k) => !emptyKinds[k])
-  }, [baseKinds, emptyKinds])
-
-  const activeTab: WorkTab = useMemo(() => {
-    if (availableKinds.length === 0) return baseKinds[0] ?? "illust"
-    if (availableKinds.includes(tab)) return tab
-    return availableKinds[0]
-  }, [availableKinds, baseKinds, tab])
-
-  useEffect(() => {
-    if (availableKinds.length > 0 && !availableKinds.includes(tab)) {
-      setTab(availableKinds[0])
-    }
-  }, [availableKinds, tab])
-
-  const userWorkItems = useMemo(() => {
-    return availableKinds.map((k) => ({
-      tag: k,
-      label: k === "illust" ? "插画" : k === "manga" ? "漫画" : "小说",
-    }))
-  }, [availableKinds])
+    return items
+  }, [hideNovels])
 
   useRegisterBottomAccessory(
     "userWorks",
-    availableKinds.length <= 1 ? (
-      <DockInfoBar
-        icon={isOwn ? "photo.stack.fill" : "photo.stack"}
-        title={isOwn ? "我的作品" : (props.title || "作品列表")}
-      />
-    ) : (
+    userWorkItems.length <= 1 ? null : (
       <DockSegmentedBar
         items={userWorkItems}
-        value={activeTab}
+        value={tab}
         onChanged={setTab}
       />
     ),
     isAppleMusic
   )
 
-  const handleKindEmpty = useCallback((targetKind: WorkTab, isEmpty: boolean) => {
-    setEmptyKinds((prev) => {
-      if (prev[targetKind] === isEmpty) return prev
-      return { ...prev, [targetKind]: isEmpty }
-    })
-  }, [])
-
   const toolbar = useMemo(() => {
     const baseTitle = props.title ?? (isOwn ? "我的作品" : "作品")
-    const tabName = activeTab === "illust" ? "插画" : activeTab === "manga" ? "漫画" : "小说"
     const isClassic = !isAppleMusic
-    const fullTitle = isClassic && availableKinds.length > 1 ? `${baseTitle} · ${tabName}` : baseTitle
+    const tabName = tab === "illust" ? "插画" : tab === "manga" ? "漫画" : "小说"
+    const fullTitle = isClassic ? `${baseTitle} · ${tabName}` : baseTitle
 
     const principalNode = (
       <Text font="title2" fontWeight="bold">
@@ -190,22 +130,17 @@ export function UserWorksView(props: { userID?: number; title?: string }) {
 
     const trailingButtons: any[] = []
 
-    if (isClassic && availableKinds.length > 1) {
+    if (isClassic) {
       trailingButtons.push(
         <Menu key="more-menu" label={<Image systemName="ellipsis.circle" />}>
           <Picker
             title="作品类型"
-            value={activeTab}
+            value={tab}
             onChanged={(k: string) => setTab(k as WorkTab)}
           >
-            {availableKinds.map((k) => (
-              <Label
-                key={k}
-                tag={k}
-                title={k === "illust" ? "插画" : k === "manga" ? "漫画" : "小说"}
-                systemImage={k === "illust" ? "photo" : k === "manga" ? "photo.on.rectangle" : "book"}
-              />
-            ))}
+            <Label tag="illust" title="插画" systemImage="photo" />
+            <Label tag="manga" title="漫画" systemImage="photo.on.rectangle" />
+            {!hideNovels && <Label tag="novel" title="小说" systemImage="book" />}
           </Picker>
           {isOwn && (
             <Menu title="投稿" systemImage="square.and.pencil">
@@ -266,43 +201,26 @@ export function UserWorksView(props: { userID?: number; title?: string }) {
       principal: principalNode,
       topBarTrailing: trailingButtons.length > 0 ? trailingButtons : undefined,
     }
-  }, [isOwn, isAppleMusic, availableKinds, activeTab, props.title])
+  }, [isOwn, isAppleMusic, tab, hideNovels, props.title])
 
   if (currentUserID == null) {
     return (
-      <RefreshableScrollView
-        navigationTitle={props.title ?? "作品"}
+      <ZStack
         navigationBarTitleDisplayMode="inline"
-        refreshable={() => Promise.resolve()}
-      >
-        <EmptyView text="请先登录以查看作品" systemImage="person.crop.circle.badge.exclamationmark" />
-      </RefreshableScrollView>
-    )
-  }
-
-  if (detailLoading && !detail) {
-    return (
-      <RefreshableScrollView
-        navigationTitle={props.title ?? (isOwn ? "我的作品" : "作品")}
-        navigationBarTitleDisplayMode="inline"
+        toolbarBackground="clear"
+        toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
         toolbar={toolbar}
-        refreshable={loadDetail}
+        background={ambientBackground}
+        frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
       >
-        <LoadingView />
-      </RefreshableScrollView>
-    )
-  }
-
-  if (detailError && !detail) {
-    return (
-      <RefreshableScrollView
-        navigationTitle={props.title ?? (isOwn ? "我的作品" : "作品")}
-        navigationBarTitleDisplayMode="inline"
-        toolbar={toolbar}
-        refreshable={loadDetail}
-      >
-        <ErrorView message={detailError} onRetry={loadDetail} />
-      </RefreshableScrollView>
+        <RefreshableScrollView
+          navigationTitle={props.title ?? "作品"}
+          navigationBarTitleDisplayMode="inline"
+          refreshable={() => Promise.resolve()}
+        >
+          <EmptyView text="请先登录以查看作品" systemImage="person.crop.circle.badge.exclamationmark" />
+        </RefreshableScrollView>
+      </ZStack>
     )
   }
 
@@ -315,47 +233,78 @@ export function UserWorksView(props: { userID?: number; title?: string }) {
       background={ambientBackground}
       frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
     >
-      {availableKinds.length === 0 ? (
-        <RefreshableScrollView
-          refreshable={loadDetail}
-        >
-          <EmptyView text="暂无作品投稿" systemImage="photo.on.rectangle.angled" />
+      {/* 1. 插画作品保活容器 */}
+      <VStack
+        frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+        opacity={tab === "illust" ? 1 : 0}
+        zIndex={tab === "illust" ? 1 : 0}
+        allowsHitTesting={tab === "illust"}
+      >
+        <RefreshableScrollView refreshable={() => refreshHandlerRef.current()}>
+          <VStack alignment="leading" spacing={8}>
+            <UserWorksFeed
+              userID={currentUserID}
+              tab="illust"
+              onFirstImageUrlChange={(url) => {
+                if (url && tab === "illust") setAmbientImageUrl(url)
+              }}
+              onRegisterRefresh={(fn) => {
+                if (tab === "illust") refreshHandlerRef.current = fn
+              }}
+            />
+          </VStack>
         </RefreshableScrollView>
-      ) : (
-        availableKinds.map((k) => {
-          if (!visitedTabs.has(k)) return null
-          const isCurrent = activeTab === k
-          return (
-            <VStack
-              key={k}
-              frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-              opacity={isCurrent ? 1 : 0}
-              zIndex={isCurrent ? 1 : 0}
-              allowsHitTesting={isCurrent}
-            >
-              <RefreshableScrollView
-                refreshable={async () => {
-                  await Promise.all([loadDetail(), worksRefreshRef.current()])
+      </VStack>
+
+      {/* 2. 漫画作品保活容器 */}
+      {visitedTabs.has("manga") ? (
+        <VStack
+          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          opacity={tab === "manga" ? 1 : 0}
+          zIndex={tab === "manga" ? 1 : 0}
+          allowsHitTesting={tab === "manga"}
+        >
+          <RefreshableScrollView refreshable={() => refreshHandlerRef.current()}>
+            <VStack alignment="leading" spacing={8}>
+              <UserWorksFeed
+                userID={currentUserID}
+                tab="manga"
+                onFirstImageUrlChange={(url) => {
+                  if (url && tab === "manga") setAmbientImageUrl(url)
                 }}
-              >
-                <VStack alignment="leading" spacing={8}>
-                  <UserWorksFeed
-                    userID={currentUserID}
-                    tab={k}
-                    onFirstImageUrlChange={(url) => {
-                      if (isCurrent) setAmbientImageUrl(url)
-                    }}
-                    onKindEmpty={handleKindEmpty}
-                    onRegisterRefresh={(fn) => {
-                      if (isCurrent) worksRefreshRef.current = fn
-                    }}
-                  />
-                </VStack>
-              </RefreshableScrollView>
+                onRegisterRefresh={(fn) => {
+                  if (tab === "manga") refreshHandlerRef.current = fn
+                }}
+              />
             </VStack>
-          )
-        })
-      )}
+          </RefreshableScrollView>
+        </VStack>
+      ) : null}
+
+      {/* 3. 小说作品保活容器 */}
+      {!hideNovels && visitedTabs.has("novel") ? (
+        <VStack
+          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          opacity={tab === "novel" ? 1 : 0}
+          zIndex={tab === "novel" ? 1 : 0}
+          allowsHitTesting={tab === "novel"}
+        >
+          <RefreshableScrollView refreshable={() => refreshHandlerRef.current()}>
+            <VStack alignment="leading" spacing={8}>
+              <UserWorksFeed
+                userID={currentUserID}
+                tab="novel"
+                onFirstImageUrlChange={(url) => {
+                  if (url && tab === "novel") setAmbientImageUrl(url)
+                }}
+                onRegisterRefresh={(fn) => {
+                  if (tab === "novel") refreshHandlerRef.current = fn
+                }}
+              />
+            </VStack>
+          </RefreshableScrollView>
+        </VStack>
+      ) : null}
     </ZStack>
   )
 }
@@ -366,10 +315,9 @@ function UserWorksFeed(props: {
   userID: number
   tab: WorkTab
   onFirstImageUrlChange?: (url: string | null) => void
-  onKindEmpty?: (kind: WorkTab, isEmpty: boolean) => void
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
-  const { userID, tab, onFirstImageUrlChange, onKindEmpty, onRegisterRefresh } = props
+  const { userID, tab, onFirstImageUrlChange, onRegisterRefresh } = props
   const [isFollowed, setIsFollowed] = useState(() => isUserFollowed(userID) ?? false)
   const isOwn = Boolean(
     userID && session.userID && String(userID) === String(session.userID)
@@ -570,101 +518,22 @@ function UserWorksFeed(props: {
   }, [isOwn, handleDeleteNovel])
 
   useEffect(() => {
-    if (
-      tab === "illust" &&
-      illustPaged.hasLoaded &&
-      !illustPaged.initialLoading &&
-      !illustPaged.loadingMore &&
-      !illustPaged.error
-    ) {
-      onKindEmpty?.("illust", illustPaged.items.length === 0 && !illustPaged.hasFilteredContent)
-    }
-  }, [
-    tab,
-    illustPaged.hasLoaded,
-    illustPaged.initialLoading,
-    illustPaged.loadingMore,
-    illustPaged.error,
-    illustPaged.items.length,
-    illustPaged.hasFilteredContent,
-    onKindEmpty,
-  ])
-
-  useEffect(() => {
-    if (
-      tab === "manga" &&
-      mangaPaged.hasLoaded &&
-      !mangaPaged.initialLoading &&
-      !mangaPaged.loadingMore &&
-      !mangaPaged.error
-    ) {
-      onKindEmpty?.("manga", mangaPaged.items.length === 0 && !mangaPaged.hasFilteredContent)
-    }
-  }, [
-    tab,
-    mangaPaged.hasLoaded,
-    mangaPaged.initialLoading,
-    mangaPaged.loadingMore,
-    mangaPaged.error,
-    mangaPaged.items.length,
-    mangaPaged.hasFilteredContent,
-    onKindEmpty,
-  ])
-
-  useEffect(() => {
-    if (
-      tab === "novel" &&
-      novelPaged.hasLoaded &&
-      !novelPaged.initialLoading &&
-      !novelPaged.loadingMore &&
-      !novelPaged.error
-    ) {
-      onKindEmpty?.("novel", novelPaged.items.length === 0 && !novelPaged.hasFilteredContent)
-    }
-  }, [
-    tab,
-    novelPaged.hasLoaded,
-    novelPaged.initialLoading,
-    novelPaged.loadingMore,
-    novelPaged.error,
-    novelPaged.items.length,
-    novelPaged.hasFilteredContent,
-    onKindEmpty,
-  ])
-
-  useEffect(() => {
     let url: string | null = null
-    let hasLoaded = false
-    let isEmpty = false
-    if (tab === "illust") {
-      if (illustPaged.items[0]) url = cardThumbUrlOf(illustPaged.items[0])
-      hasLoaded = !illustPaged.initialLoading
-      isEmpty = illustPaged.items.length === 0
-    } else if (tab === "manga") {
-      if (mangaPaged.items[0]) url = cardThumbUrlOf(mangaPaged.items[0])
-      hasLoaded = !mangaPaged.initialLoading
-      isEmpty = mangaPaged.items.length === 0
-    } else {
-      if (novelPaged.items[0]) url = novelThumbUrlOf(novelPaged.items[0])
-      hasLoaded = !novelPaged.initialLoading
-      isEmpty = novelPaged.items.length === 0
+    if (tab === "illust" && illustPaged.items[0]) {
+      url = cardThumbUrlOf(illustPaged.items[0])
+    } else if (tab === "manga" && mangaPaged.items[0]) {
+      url = cardThumbUrlOf(mangaPaged.items[0])
+    } else if (tab === "novel" && novelPaged.items[0]) {
+      url = novelThumbUrlOf(novelPaged.items[0])
     }
     if (url) {
       onFirstImageUrlChange?.(url)
-    } else if (hasLoaded && isEmpty) {
-      onFirstImageUrlChange?.(null)
     }
   }, [
     tab,
     illustPaged.items[0]?.id,
-    illustPaged.initialLoading,
-    illustPaged.items.length,
     mangaPaged.items[0]?.id,
-    mangaPaged.initialLoading,
-    mangaPaged.items.length,
     novelPaged.items[0]?.id,
-    novelPaged.initialLoading,
-    novelPaged.items.length,
     onFirstImageUrlChange,
   ])
 

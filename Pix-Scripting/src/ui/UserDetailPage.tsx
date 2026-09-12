@@ -636,6 +636,7 @@ export function UserDetailView(props: { userID: number }) {
           toolbarBackground="clear"
           toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
           scrollContentBackground="hidden"
+          background={ambientBackground}
         >
           <ErrorView message={detailError} onRetry={loadDetail} />
         </ScrollView>
@@ -648,6 +649,7 @@ export function UserDetailView(props: { userID: number }) {
         toolbarBackground="clear"
         toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
         scrollContentBackground="hidden"
+        background={ambientBackground}
       >
         <LoadingView />
       </ScrollView>
