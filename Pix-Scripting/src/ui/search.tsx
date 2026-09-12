@@ -23,6 +23,7 @@ import {
   VStack,
   ZStack,
 } from "scripting"
+import { AppNavigationLink, useDualRoute } from "./DualRouteContext"
 import { useIsCurrentTab } from "./routeNavigation"
 import {
   nextIllustrations,
@@ -418,6 +419,8 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
   const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
   const isAppleMusic = pageLayout === "appleMusic"
+  const { isCompact } = useLayoutMetrics()
+  const { isSplitViewActive } = useDualRoute()
   const [visitedScopes, setVisitedScopes] = useState<Set<SearchScope>>(() => new Set([scope]))
 
   useEffect(() => {
@@ -1319,6 +1322,8 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
         scope,
         hideNovels,
         isAppleMusic,
+        isCompact,
+        isSplitViewActive,
         onClose: props.onClose,
         onScopeChange: handleScopeChange,
         sort,
@@ -1382,13 +1387,15 @@ function searchToolbar(props: {
   scope: SearchScope
   hideNovels: boolean
   isAppleMusic?: boolean
+  isCompact?: boolean
+  isSplitViewActive?: boolean
   onClose: () => void
   onScopeChange: (scope: SearchScope) => void
   sort: SearchSort
   onSortChange: (sort: SearchSort) => void
   onAdvanced: () => void
 }) {
-  const isiPad = Device.isiPad
+  const isCompact = props.isCompact ?? (!Device.isiPad)
   const isClassic = !props.isAppleMusic
   const scopeLabel =
     props.scope === "illust"
@@ -1400,7 +1407,7 @@ function searchToolbar(props: {
   const fullTitle = `搜索 · ${scopeLabel}`
 
   const titleNode = (
-    <Text font={isiPad ? "headline" : "title2"} fontWeight="bold">
+    <Text font="title2" fontWeight="bold">
       {isClassic ? fullTitle : "搜索"}
     </Text>
   )
@@ -1412,7 +1419,7 @@ function searchToolbar(props: {
         ? "热门"
         : "最早"
 
-  const trailingMenuLabel = isiPad ? (
+  const trailingMenuLabel = !isCompact ? (
     <HStack alignment="center" spacing={4}>
       <Text font="subheadline" fontWeight="semibold">
         {props.isAppleMusic ? sortLabel : scopeLabel}
@@ -1429,7 +1436,7 @@ function searchToolbar(props: {
 
   return appToolbar(
     props.onClose,
-    titleNode,
+    undefined,
     <Menu label={trailingMenuLabel}>
       {isClassic && (
         <Picker
@@ -1462,7 +1469,12 @@ function searchToolbar(props: {
         systemImage="slider.horizontal.3"
         action={props.onAdvanced}
       />
-    </Menu>
+    </Menu>,
+    undefined,
+    {
+      isCompact,
+      hidePrincipalOnWide: true,
+    }
   )
 }
 
@@ -1494,7 +1506,7 @@ function DirectRouteSection(props: {
           return (
             <VStack key={`${target.type}-${target.id}`} spacing={0} frame={{ maxWidth: "infinity" }}>
               {index > 0 ? <Divider /> : null}
-              <NavigationLink
+              <AppNavigationLink
                 value={routeValue}
                 frame={{ maxWidth: "infinity", alignment: "leading" }}
                 contentShape="rect"
@@ -1531,7 +1543,7 @@ function DirectRouteSection(props: {
                   <Spacer />
                   <Image systemName="chevron.right" font="caption" foregroundStyle="tertiaryLabel" />
                 </HStack>
-              </NavigationLink>
+              </AppNavigationLink>
             </VStack>
           )
         })}

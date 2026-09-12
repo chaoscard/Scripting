@@ -36,13 +36,14 @@ import {
   isNovelContentVisible,
 } from "../store/contentFilter"
 import { destinationElement } from "./routes"
+import { useDualRoute } from "./DualRouteContext"
 import { requestPixivRoute, setActiveTabKind } from "./routeNavigation"
 import {
   DockActionBar,
   DockSegmentedBar,
   useRegisterBottomAccessory,
 } from "./bottomAccessory"
-import { useLatest, usePagedList, currentBatchSize } from "./hooks"
+import { useLatest, usePagedList, currentBatchSize, useLayoutMetrics } from "./hooks"
 import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl } from "./ambient"
 import type {
   PixivIllustration,
@@ -82,6 +83,8 @@ export function DiscoveryView(props: { onClose: () => void }) {
     () => getLastActiveAmbientImageUrl()
   )
   const isTabActive = useIsCurrentTab("discovery")
+  const { isCompact } = useLayoutMetrics()
+  const { isSplitViewActive } = useDualRoute()
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl, isTabActive)
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
@@ -156,6 +159,8 @@ export function DiscoveryView(props: { onClose: () => void }) {
         kind,
         hideNovels,
         isAppleMusic,
+        isCompact,
+        isSplitViewActive,
         onModeChange: setMode,
         onKindChange: setKind,
         onClose: props.onClose,
@@ -558,11 +563,13 @@ function exploreToolbar(props: {
   kind: FeedKind
   hideNovels?: boolean
   isAppleMusic?: boolean
+  isCompact?: boolean
+  isSplitViewActive?: boolean
   onModeChange: (mode: ExploreMode) => void
   onKindChange: (kind: FeedKind) => void
   onClose: () => void
 }) {
-  const isiPad = Device.isiPad
+  const isCompact = props.isCompact ?? (!Device.isiPad)
   const isClassic = !props.isAppleMusic
   const kindLabel =
     props.kind === "illustration" ? "插画" : props.kind === "manga" ? "漫画" : "小说"
@@ -577,12 +584,12 @@ function exploreToolbar(props: {
     props.mode === "pixivision" ? "特辑" : `${baseTitle} · ${kindLabel}`
 
   const titleNode = (
-    <Text font={isiPad ? "headline" : "title2"} fontWeight="bold">
+    <Text font="title2" fontWeight="bold">
       {isClassic ? fullTitle : baseTitle}
     </Text>
   )
 
-  const trailingMenuLabel = isiPad ? (
+  const trailingMenuLabel = !isCompact ? (
     <HStack alignment="center" spacing={4}>
       <Text font="subheadline" fontWeight="semibold">
         {props.isAppleMusic
@@ -630,7 +637,10 @@ function exploreToolbar(props: {
     </Menu>
   )
 
-  return appToolbar(props.onClose, titleNode, trailingMenu)
+  return appToolbar(props.onClose, undefined, trailingMenu, undefined, {
+    isCompact,
+    hidePrincipalOnWide: true,
+  })
 }
 
 function IllustFeedContent(props: {

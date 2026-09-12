@@ -10,7 +10,18 @@ let activeTabKind: PixivTabKind = "discovery"
 const activeTabListeners = new Set<(tab: PixivTabKind) => void>()
 const tabNavigators: Partial<Record<PixivTabKind, PixivRouteNavigator>> = {}
 let globalNavigator: PixivRouteNavigator | null = null
+type DualRouteDispatcher = (route: PixivRoute) => boolean
+let globalDualRouteDispatcher: DualRouteDispatcher | null = null
 let pendingRoute: { route: PixivRoute; explicitTab?: PixivTabKind } | null = null
+
+export function setDualRouteDispatcher(dispatcher: DualRouteDispatcher | null): () => void {
+  globalDualRouteDispatcher = dispatcher
+  return () => {
+    if (globalDualRouteDispatcher === dispatcher) {
+      globalDualRouteDispatcher = null
+    }
+  }
+}
 
 export function setActiveTabKind(tab: PixivTabKind): void {
   if (activeTabKind !== tab) {
@@ -87,6 +98,14 @@ export function requestPixivRoute(
   if (!rawRoute) return
   const route = normalizeRoute(rawRoute)
   if (!route) return
+
+  // 若处于双栏平行视界模式，优先分发至右侧详情宿主
+  if (globalDualRouteDispatcher) {
+    try {
+      const handled = globalDualRouteDispatcher(route)
+      if (handled) return
+    } catch {}
+  }
 
   const targetTab = explicitTab || activeTabKind
   const tabNav = tabNavigators[targetTab]

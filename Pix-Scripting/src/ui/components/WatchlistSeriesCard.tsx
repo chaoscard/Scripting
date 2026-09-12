@@ -5,12 +5,14 @@ import {
   Image,
   NavigationLink,
   ProgressView,
+  RoundedRectangle,
   Spacer,
   Text,
   VStack,
   ZStack,
   useState,
 } from "scripting"
+import { AppNavigationLink, useDualRoute } from "../DualRouteContext"
 import { AvatarImage, CachedImage } from "./CachedImage"
 import { formatNumber } from "./formatUtils"
 import {
@@ -50,6 +52,8 @@ export function WatchlistSeriesCard(props: {
 }) {
   const { item, kind = "manga", priority, onAppear } = props
   const isNovel = kind === "novel"
+  const { isItemActive } = useDualRoute()
+  const isSelected = isItemActive(isNovel ? "novelSeries" : "mangaSeries", item.id)
   if (item.latest_content_id) {
     recordWorkSeriesAssociation(
       item.latest_content_id,
@@ -115,7 +119,7 @@ export function WatchlistSeriesCard(props: {
 
   return (
     <ZStack alignment="bottomTrailing" frame={{ maxWidth: "infinity" }}>
-      <NavigationLink
+      <AppNavigationLink
         value={seriesRoute}
         contextMenu={{
           menuItems: (
@@ -146,7 +150,23 @@ export function WatchlistSeriesCard(props: {
           onAppear={onAppear}
           alignment="top"
           glassEffect={{ type: "rect", cornerRadius: 14 }}
-          shadow={{ color: "#0000000F", radius: 18, y: 8 }}
+          shadow={
+            isSelected
+              ? { color: "accentColor", radius: 10, y: 0 }
+              : { color: "#0000000F", radius: 18, y: 8 }
+          }
+          overlay={
+            isSelected ? (
+              <RoundedRectangle
+                cornerRadius={14}
+                stroke={{
+                  shapeStyle: "accentColor",
+                  strokeStyle: { lineWidth: 2.5 },
+                }}
+                frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+              />
+            ) : undefined
+          }
           frame={{ maxWidth: "infinity" }}
         >
           <ZStack
@@ -201,8 +221,8 @@ export function WatchlistSeriesCard(props: {
             </HStack>
           </VStack>
         </HStack>
-      </NavigationLink>
-      <NavigationLink value={targetRoute} buttonStyle="plain">
+      </AppNavigationLink>
+      <AppNavigationLink value={targetRoute} buttonStyle="plain">
         <ZStack
           alignment="center"
           frame={{ width: 34, height: 34 }}
@@ -218,7 +238,7 @@ export function WatchlistSeriesCard(props: {
             foregroundStyle="label"
           />
         </ZStack>
-      </NavigationLink>
+      </AppNavigationLink>
     </ZStack>
   )
 }

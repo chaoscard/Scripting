@@ -5,6 +5,7 @@ import {
   NavigationLink,
   Text,
 } from "scripting"
+import { AppNavigationLink } from "../DualRouteContext"
 import { blockTag } from "../../store/blocklist"
 import { TagPreview } from "./TagPreview"
 
@@ -48,7 +49,7 @@ export function TagChip(props: {
 }) {
   const { name, tagName = name, translatedName, value, compact = false } = props
   return (
-    <NavigationLink
+    <AppNavigationLink
       value={value}
       buttonStyle="glass"
       controlSize={compact ? "mini" : "small"}
@@ -76,6 +77,6 @@ export function TagChip(props: {
           </Text>
         ) : null}
       </HStack>
-    </NavigationLink>
+    </AppNavigationLink>
   )
 }

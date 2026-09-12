@@ -45,6 +45,7 @@ import {
   type DownloadTaskItem,
 } from "../downloader/downloadTaskManager"
 import { appToolbar } from "./components"
+import { useLayoutMetrics } from "./hooks"
 import { destinationElement } from "./routes"
 import { loadSettings, onSettingsChanged, updateSettings } from "../store/settings"
 import {
@@ -62,6 +63,7 @@ import { triggerHaptic } from "../platform/haptics"
 // ============================================================================
 
 export function DownloadManagerView(props: { onClose?: () => void }) {
+  const { isCompact } = useLayoutMetrics()
   const [overview, setOverview] = useState<StorageOverview | null>(null)
   const [cleaning, setCleaning] = useState(false)
   const [activeTasksCount, setActiveTasksCount] = useState(0)
@@ -253,7 +255,7 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
       }}
       toolbar={
         props.onClose
-          ? appToolbar(props.onClose, "下载与文件管理", topTrailingControls[0])
+          ? appToolbar(props.onClose, "下载与文件管理", topTrailingControls[0], undefined, { isCompact })
           : { topBarTrailing: topTrailingControls }
       }
     >
@@ -423,6 +425,7 @@ function DownloadCategoryRow(props: {
 // ============================================================================
 
 export function DownloadTasksView(props: { onClose?: () => void }) {
+  const { isCompact } = useLayoutMetrics()
   const [tasks, setTasks] = useState<DownloadTaskItem[]>([])
 
   const loadTasks = useCallback(() => {
@@ -512,7 +515,7 @@ export function DownloadTasksView(props: { onClose?: () => void }) {
       }}
       toolbar={
         props.onClose
-          ? appToolbar(props.onClose, "下载任务", menuToolbar)
+          ? appToolbar(props.onClose, "下载任务", menuToolbar, undefined, { isCompact })
           : { topBarTrailing: [menuToolbar] }
       }
     >

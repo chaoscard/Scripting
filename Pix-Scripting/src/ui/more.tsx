@@ -16,9 +16,11 @@ import {
   useState,
   ZStack,
 } from "scripting"
+import { AppNavigationLink, useDualRoute } from "./DualRouteContext"
 import { session } from "../api/session"
 import { loadSettings, onSettingsChanged } from "../store/settings"
 import { appToolbar, AvatarImage } from "./components"
+import { useLayoutMetrics } from "./hooks"
 import { destinationElement } from "./routes"
 import { requestPixivRoute, setActiveTabKind, useIsCurrentTab } from "./routeNavigation"
 import { DockActionBar, useRegisterBottomAccessory, type DockActionItem } from "./bottomAccessory"
@@ -36,6 +38,7 @@ export function MoreView(props: { onClose: () => void }) {
     setActiveTabKind("more")
   }, [])
 
+  const { isCompact } = useLayoutMetrics()
   const user = session.user
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
   const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
@@ -91,7 +94,7 @@ export function MoreView(props: { onClose: () => void }) {
       <List
         navigationBarTitleDisplayMode="inline"
         navigationDestination={destinationElement}
-        toolbar={appToolbar(props.onClose, "我的")}
+        toolbar={appToolbar(props.onClose, undefined, undefined, undefined, { isCompact })}
       >
         <Section header={<Text>账号</Text>}>
           <Text font="body" foregroundStyle="secondaryLabel">
@@ -110,7 +113,7 @@ export function MoreView(props: { onClose: () => void }) {
       navigationDestination={destinationElement}
       toolbar={appToolbar(
         props.onClose,
-        "我的",
+        undefined,
         [
           <Button
             key="reverse-search"
@@ -123,19 +126,21 @@ export function MoreView(props: { onClose: () => void }) {
           >
             <Image systemName="photo.badge.magnifyingglass" />
           </Button>,
-          <NavigationLink
+          <AppNavigationLink
             key="downloads"
             value="downloadManager"
           >
             <Image systemName="arrow.down.circle" />
-          </NavigationLink>,
-          <NavigationLink
+          </AppNavigationLink>,
+          <AppNavigationLink
             key="profile"
             value={`user:${user.id}`}
           >
             <AvatarImage url={avatarURL} size={28} />
-          </NavigationLink>,
-        ]
+          </AppNavigationLink>,
+        ],
+        undefined,
+        { isCompact }
       )}
     >
       {isVirtualNode(ambientBackground) ? (
@@ -161,44 +166,44 @@ export function MoreView(props: { onClose: () => void }) {
         }}
       >
       <Section header={<Text>浏览</Text>}>
-        <NavigationLink value="library">
+        <AppNavigationLink value="library">
           <MoreRow icon="heart.fill" iconColor="#FF375F" title="我的收藏" />
-        </NavigationLink>
-        <NavigationLink value="history">
+        </AppNavigationLink>
+        <AppNavigationLink value="history">
           <MoreRow icon="clock.fill" iconColor="#FF9F0A" title="浏览记录" />
-        </NavigationLink>
+        </AppNavigationLink>
         {hideNovels ? null : (
-          <NavigationLink value="novelBookmarks">
+          <AppNavigationLink value="novelBookmarks">
             <MoreRow icon="book.pages.fill" iconColor="#AF52DE" title="小说书签" />
-          </NavigationLink>
+          </AppNavigationLink>
         )}
       </Section>
 
       <Section header={<Text>关联</Text>}>
-        <NavigationLink value="connections:following">
+        <AppNavigationLink value="connections:following">
           <MoreRow icon="person.2.fill" iconColor="#007AFF" title="我的关注" />
-        </NavigationLink>
-        <NavigationLink value="connections:follower">
+        </AppNavigationLink>
+        <AppNavigationLink value="connections:follower">
           <MoreRow icon="person.2.badge.plus" iconColor="#34C759" title="我的粉丝" />
-        </NavigationLink>
-        <NavigationLink value="friends">
+        </AppNavigationLink>
+        <AppNavigationLink value="friends">
           <MoreRow icon="person.2.badge.gearshape" iconColor="#AF52DE" title="我的好友" />
-        </NavigationLink>
-        <NavigationLink value="myWorks">
+        </AppNavigationLink>
+        <AppNavigationLink value="myWorks">
           <MoreRow icon="photo.stack.fill" iconColor="#FF9500" title="我的作品" />
-        </NavigationLink>
-        <NavigationLink value="notifications">
+        </AppNavigationLink>
+        <AppNavigationLink value="notifications">
           <MoreRow icon="bell.fill" iconColor="#FF375F" title="我的通知" />
-        </NavigationLink>
+        </AppNavigationLink>
       </Section>
 
       <Section header={<Text>其他</Text>}>
-        <NavigationLink value="settings">
+        <AppNavigationLink value="settings">
           <MoreRow icon="gearshape.fill" iconColor="secondaryLabel" title="应用设置" />
-        </NavigationLink>
-        <NavigationLink value="about">
+        </AppNavigationLink>
+        <AppNavigationLink value="about">
           <MoreRow icon="info.circle.fill" iconColor="#007AFF" title="关于应用" />
-        </NavigationLink>
+        </AppNavigationLink>
         <Button
           buttonStyle="plain"
           action={() => {

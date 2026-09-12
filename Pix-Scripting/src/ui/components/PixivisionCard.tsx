@@ -2,6 +2,8 @@ import {
   Device,
   HStack,
   NavigationLink,
+  Rectangle,
+  RoundedRectangle,
   ScrollView,
   Spacer,
   Text,
@@ -10,6 +12,7 @@ import {
   useMemo,
   useState,
 } from "scripting"
+import { AppNavigationLink, useDualRoute } from "../DualRouteContext"
 import { CachedImage } from "./CachedImage"
 import { TagChip } from "./TagChip"
 import { useLayoutMetrics } from "../hooks"
@@ -29,6 +32,8 @@ export function PixivisionCard(props: {
   const { article, cardWidth: customCardWidth, onAppear, priority } = props
   const { width: screenWidth } = useLayoutMetrics()
   const [isAppeared, setIsAppeared] = useState(false)
+  const { isItemActive } = useDualRoute()
+  const isSelected = isItemActive("pixivision", article.id)
   const targetCardWidth = customCardWidth ?? Math.floor(screenWidth - FLOW_HORIZONTAL_PADDING * 2)
 
   const handleAppear = () => {
@@ -66,11 +71,27 @@ export function PixivisionCard(props: {
         onAppear={handleAppear}
         padding={6}
         glassEffect={{ type: "rect", cornerRadius: 16 }}
-        shadow={{ color: "#0000000F", radius: 20, y: 10 }}
+        shadow={
+          isSelected
+            ? { color: "accentColor", radius: 10, y: 0 }
+            : { color: "#0000000F", radius: 20, y: 10 }
+        }
+        overlay={
+          isSelected ? (
+            <RoundedRectangle
+              cornerRadius={16}
+              stroke={{
+                shapeStyle: "accentColor",
+                strokeStyle: { lineWidth: 2.5 },
+              }}
+              frame={cardFrame}
+            />
+          ) : undefined
+        }
       >
         {/* 1. 封面图片区（完全遵循先画框后绘图规范，支持自适应比例与零布局跳动） */}
         <ZStack alignment="bottomTrailing" frame={cardFrame}>
-          <NavigationLink value={`pixivision:${article.id}`} frame={cardFrame}>
+          <AppNavigationLink value={`pixivision:${article.id}`} frame={cardFrame}>
             <ZStack alignment="topLeading" frame={cardFrame}>
               <ZStack
                 alignment="topLeading"
@@ -90,7 +111,7 @@ export function PixivisionCard(props: {
                 />
               </ZStack>
             </ZStack>
-          </NavigationLink>
+          </AppNavigationLink>
         </ZStack>
 
         {/* 2. 分类与发布日期 */}
@@ -113,7 +134,7 @@ export function PixivisionCard(props: {
         </HStack>
 
         {/* 3. 特辑标题 */}
-        <NavigationLink value={`pixivision:${article.id}`}>
+        <AppNavigationLink value={`pixivision:${article.id}`}>
           <Text
             font="headline"
             fontWeight="bold"
@@ -124,7 +145,7 @@ export function PixivisionCard(props: {
           >
             {article.title}
           </Text>
-        </NavigationLink>
+        </AppNavigationLink>
 
         {/* 4. 特辑标签 */}
         {article.tags && article.tags.length > 0 ? (

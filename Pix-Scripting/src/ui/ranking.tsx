@@ -36,9 +36,10 @@ import {
   isNovelContentVisible,
 } from "../store/contentFilter"
 import { destinationElement } from "./routes"
+import { useDualRoute } from "./DualRouteContext"
 import { setActiveTabKind } from "./routeNavigation"
 import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
-import { useLatest, usePagedList, currentBatchSize } from "./hooks"
+import { useLatest, usePagedList, currentBatchSize, useLayoutMetrics } from "./hooks"
 import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl } from "./ambient"
 import type { PixivIllustration, PixivNovel } from "../types"
 import {
@@ -111,6 +112,8 @@ export function RankingView(props: { onClose: () => void }) {
     () => getLastActiveAmbientImageUrl()
   )
   const isTabActive = useIsCurrentTab("ranking")
+  const { isCompact } = useLayoutMetrics()
+  const { isSplitViewActive } = useDualRoute()
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl, isTabActive)
 
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
@@ -325,6 +328,8 @@ export function RankingView(props: { onClose: () => void }) {
         activeModes: activeModes ?? [],
         hideNovels: settings.hideNovels,
         isAppleMusic,
+        isCompact,
+        isSplitViewActive,
         onKindChange: handleKindChange,
         onModeChange: handleSelectMode,
         onOpenAdvancedSheet: () => setIsAdvancedSheetOpen(true),
@@ -473,12 +478,14 @@ function rankingToolbar(props: {
   activeModes: ReadonlyArray<{ value: string; title: string }>
   hideNovels: boolean
   isAppleMusic?: boolean
+  isCompact?: boolean
+  isSplitViewActive?: boolean
   onKindChange: (kind: RankingKind) => void
   onModeChange: (mode: string) => void
   onOpenAdvancedSheet: () => void
   onClose: () => void
 }) {
-  const isiPad = Device.isiPad
+  const isCompact = props.isCompact ?? (!Device.isiPad)
   const isClassic = !props.isAppleMusic
   const baseTitle =
     props.kind === "illustration"
@@ -498,12 +505,12 @@ function rankingToolbar(props: {
       : `${baseTitle} · ${modeTitle}`
 
   const titleNode = (
-    <Text font={isiPad ? "headline" : "title2"} fontWeight="bold">
+    <Text font="title2" fontWeight="bold">
       {isClassic ? fullTitle : baseTitle}
     </Text>
   )
 
-  const trailingMenuLabel = isiPad ? (
+  const trailingMenuLabel = !isCompact ? (
     <HStack alignment="center" spacing={4}>
       <Text font="subheadline" fontWeight="semibold">
         {props.isAppleMusic || props.kind === "advanced" || !modeTitle
@@ -564,7 +571,10 @@ function rankingToolbar(props: {
     </Menu>,
   ].filter(Boolean)
 
-  return appToolbar(props.onClose, titleNode, trailingItems)
+  return appToolbar(props.onClose, undefined, trailingItems, undefined, {
+    isCompact,
+    hidePrincipalOnWide: true,
+  })
 }
 
 function IllustRankingSection(props: {

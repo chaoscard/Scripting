@@ -14,6 +14,7 @@ import {
   VStack,
   ZStack,
 } from "scripting"
+import { AppNavigationLink } from "../DualRouteContext"
 import { session } from "../../api/session"
 import { followUser, unfollowUser } from "../../api/pixiv"
 import { loadSettings, onSettingsChanged } from "../../store/settings"
@@ -198,7 +199,7 @@ export function ConnectionRow(props: {
             </HStack>
           </Button>
         ) : (
-          <NavigationLink
+          <AppNavigationLink
             value={`user:${preview.user.id}`}
             frame={{ maxWidth: "infinity", alignment: "leading" }}
             contentShape="rect"
@@ -227,7 +228,7 @@ export function ConnectionRow(props: {
               </VStack>
               <Spacer />
             </HStack>
-          </NavigationLink>
+          </AppNavigationLink>
         )}
         {showFollowControl ? (
           <Button
@@ -336,12 +337,12 @@ export function ConnectionIllustThumbnail(props: {
   }
 
   return (
-    <NavigationLink
+    <AppNavigationLink
       value={`illust:${props.illustration.id}`}
       frame={{ width: props.side, height: props.side }}
     >
       {imageElement}
-    </NavigationLink>
+    </AppNavigationLink>
   )
 }
 
@@ -396,11 +397,11 @@ export function ConnectionNovelThumbnail(props: {
   }
 
   return (
-    <NavigationLink
+    <AppNavigationLink
       value={`novel:${props.novel.id}`}
       frame={{ width: props.side, height: props.side }}
     >
       {novelElement}
-    </NavigationLink>
+    </AppNavigationLink>
   )
 }

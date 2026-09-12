@@ -9,6 +9,7 @@ import {
   Menu,
   NavigationLink,
   ProgressView,
+  RoundedRectangle,
   Spacer,
   Text,
   VStack,
@@ -19,6 +20,7 @@ import {
   useRef,
   useState,
 } from "scripting"
+import { AppNavigationLink, useDualRoute } from "../DualRouteContext"
 import { CachedImage, PageCountBadge } from "./CachedImage"
 import { BookmarkButton, BookmarkDetailSheet } from "./BookmarkDetailSheet"
 import { BlockWorkSheet } from "./BlockWorkSheet"
@@ -104,6 +106,8 @@ export function IllustCard(props: {
   const [followBusy, setFollowBusy] = useState(false)
   const [showBookmarkDetail, setShowBookmarkDetail] = useState(false)
   const [showBlockSheet, setShowBlockSheet] = useState(false)
+  const { isItemActive } = useDualRoute()
+  const isSelected = isItemActive("illust", illust.id)
   const [downloading, setDownloading] = useState(false)
   const [compactSetting, setCompactSetting] = useState(() => loadSettings().compactIllustCard)
 
@@ -294,10 +298,26 @@ export function IllustCard(props: {
         onAppear={handleAppear}
         padding={hero ? 6 : 4}
         glassEffect={{ type: "rect", cornerRadius: hero ? 16 : 14 }}
-        shadow={{ color: "#0000000F", radius: hero ? 20 : 18, y: hero ? 10 : 8 }}
+        shadow={
+          isSelected
+            ? { color: "accentColor", radius: 10, y: 0 }
+            : { color: "#0000000F", radius: hero ? 20 : 18, y: hero ? 10 : 8 }
+        }
+        overlay={
+          isSelected ? (
+            <RoundedRectangle
+              cornerRadius={hero ? 16 : 14}
+              stroke={{
+                shapeStyle: "accentColor",
+                strokeStyle: { lineWidth: 2.5 },
+              }}
+              frame={cardFrame}
+            />
+          ) : undefined
+        }
       >
         <ZStack alignment="bottomTrailing" frame={cardFrame}>
-          <NavigationLink
+          <AppNavigationLink
             value={`illust:${illust.id}`}
             frame={cardFrame}
             contextMenu={resolvedContextMenu}
@@ -332,7 +352,7 @@ export function IllustCard(props: {
               </ZStack>
               {cornerBadge ?? null}
             </ZStack>
-          </NavigationLink>
+          </AppNavigationLink>
           {showBookmarkButton ? (
             <BookmarkButton
               hero={hero}
@@ -360,7 +380,7 @@ export function IllustCard(props: {
         </ZStack>
         {!isCompact ? (
           <>
-            <NavigationLink
+            <AppNavigationLink
               value={`illust:${illust.id}`}
               contextMenu={resolvedContextMenu}
             >
@@ -372,13 +392,13 @@ export function IllustCard(props: {
               >
                 {illust.title}
               </Text>
-            </NavigationLink>
+            </AppNavigationLink>
             <HStack
               spacing={hero ? 8 : 5}
               padding={{ horizontal: hero ? 6 : 4, bottom: footerText ? 0 : (hero ? 6 : 4) }}
               frame={{ maxWidth: "infinity" }}
             >
-              <NavigationLink
+              <AppNavigationLink
                 value={`illust:${illust.id}`}
                 frame={{ maxWidth: "infinity", alignment: "leading" }}
                 contextMenu={resolvedContextMenu}
@@ -391,7 +411,7 @@ export function IllustCard(props: {
                 >
                   {illust.user.name}
                 </Text>
-              </NavigationLink>
+              </AppNavigationLink>
               <HStack
                 spacing={hero ? 8 : 5}
                 fixedSize={{ horizontal: true, vertical: false }}

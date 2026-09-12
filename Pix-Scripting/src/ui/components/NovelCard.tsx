@@ -6,6 +6,7 @@ import {
   LongPressGesture,
   NavigationLink,
   ProgressView,
+  RoundedRectangle,
   Spacer,
   Text,
   VStack,
@@ -16,6 +17,7 @@ import {
   useRef,
   useState,
 } from "scripting"
+import { AppNavigationLink, useDualRoute } from "../DualRouteContext"
 import { CachedImage } from "./CachedImage"
 import { BookmarkButton, BookmarkDetailSheet } from "./BookmarkDetailSheet"
 import { CORNER_ICON_SIZE, formatNumber } from "./formatUtils"
@@ -67,6 +69,8 @@ export function NovelCard(props: {
   const [activeMarker] = useNovelMarker(novel.id, markerPage ?? null)
   const [bookmarkBusy, setBookmarkBusy] = useState(false)
   const [showBookmarkDetail, setShowBookmarkDetail] = useState(false)
+  const { isItemActive } = useDualRoute()
+  const isSelected = isItemActive("novel", novel.id)
   const [isAppeared, setIsAppeared] = useState(false)
 
   const handleAppear = useCallback(() => {
@@ -146,14 +150,30 @@ export function NovelCard(props: {
       frame={{ maxWidth: "infinity" }}
     >
       <ZStack alignment="bottomTrailing" frame={{ maxWidth: "infinity" }}>
-        <NavigationLink value={`novel:${novel.id}`} contextMenu={contextMenu}>
+        <AppNavigationLink value={`novel:${novel.id}`} contextMenu={contextMenu}>
           <HStack
             spacing={10}
             padding={10}
             onAppear={handleAppear}
             alignment="top"
             glassEffect={{ type: "rect", cornerRadius: 14 }}
-            shadow={{ color: "#0000000F", radius: 18, y: 8 }}
+            shadow={
+              isSelected
+                ? { color: "accentColor", radius: 10, y: 0 }
+                : { color: "#0000000F", radius: 18, y: 8 }
+            }
+            overlay={
+              isSelected ? (
+                <RoundedRectangle
+                  cornerRadius={14}
+                  stroke={{
+                    shapeStyle: "accentColor",
+                    strokeStyle: { lineWidth: 2.5 },
+                  }}
+                  frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+                />
+              ) : undefined
+            }
             frame={{ maxWidth: "infinity" }}
           >
             <ZStack
@@ -246,7 +266,7 @@ export function NovelCard(props: {
               </HStack>
             </VStack>
           </HStack>
-        </NavigationLink>
+        </AppNavigationLink>
         <BookmarkButton
           bookmarked={bookmarked}
           disabled={bookmarkBusy}

@@ -39,9 +39,10 @@ import {
 import { onWatchlistChanged } from "../store/bookmarkSync"
 import { recordWorkSeriesAssociation } from "../store/seriesCache"
 import { destinationElement } from "./routes"
+import { useDualRoute } from "./DualRouteContext"
 import { setActiveTabKind } from "./routeNavigation"
 import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
-import { useLatest, usePagedList, currentBatchSize } from "./hooks"
+import { useLatest, usePagedList, currentBatchSize, useLayoutMetrics } from "./hooks"
 import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl } from "./ambient"
 import type {
   PixivIllustration,
@@ -87,6 +88,8 @@ export function FollowFeedView(props: {
     () => getLastActiveAmbientImageUrl()
   )
   const isTabActive = useIsCurrentTab("following")
+  const { isCompact } = useLayoutMetrics()
+  const { isSplitViewActive } = useDualRoute()
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl, isTabActive)
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
@@ -156,6 +159,8 @@ export function FollowFeedView(props: {
         friendKind,
         hideNovels,
         isAppleMusic,
+        isCompact,
+        isSplitViewActive,
         onModeChange: setMode,
         onScopeChange: setScope,
         onKindChange: selectSegmentedKind,
@@ -213,12 +218,14 @@ function followToolbar(props: {
   friendKind: WorkKind
   hideNovels?: boolean
   isAppleMusic?: boolean
+  isCompact?: boolean
+  isSplitViewActive?: boolean
   onModeChange: (mode: FollowMode) => void
   onScopeChange: (scope: FollowScope) => void
   onKindChange: (kind: string) => void
   onClose: () => void
 }) {
-  const isiPad = Device.isiPad
+  const isCompact = props.isCompact ?? (!Device.isiPad)
   const isClassic = !props.isAppleMusic
   const baseTitle =
     props.mode === "following"
@@ -243,12 +250,12 @@ function followToolbar(props: {
     props.hideNovels || props.isAppleMusic ? baseTitle : `${baseTitle} · ${kindLabel}`
 
   const titleNode = (
-    <Text font={isiPad ? "headline" : "title2"} fontWeight="bold">
+    <Text font="title2" fontWeight="bold">
       {fullTitle}
     </Text>
   )
 
-  const trailingMenuLabel = isiPad ? (
+  const trailingMenuLabel = !isCompact ? (
     <HStack alignment="center" spacing={4}>
       <Text font="subheadline" fontWeight="semibold">
         {fullTitle}
@@ -272,7 +279,7 @@ function followToolbar(props: {
 
   return appToolbar(
     props.onClose,
-    titleNode,
+    undefined,
     <Menu label={trailingMenuLabel}>
       <Picker
         title="动态类型"
@@ -317,7 +324,12 @@ function followToolbar(props: {
             <Label tag="novel" title="小说" systemImage="book" />
           </Picker>
         ))}
-    </Menu>
+    </Menu>,
+    undefined,
+    {
+      isCompact,
+      hidePrincipalOnWide: true,
+    }
   )
 }
 

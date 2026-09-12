@@ -110,6 +110,7 @@ export interface AppSettings {
   exemptFilterForPersonal: boolean
   hideNovels: boolean
   pageLayout: PageLayout
+  splitViewEnabled: boolean
   waterfallColumnsIpadLandscape: WaterfallColumnsIpadLandscape
   waterfallColumnsIpadPortrait: WaterfallColumnsIpadPortrait
   heroFirstFeedCard: boolean
@@ -203,6 +204,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   exemptFilterForPersonal: true,
   hideNovels: false,
   pageLayout: "appleMusic",
+  splitViewEnabled: true,
   waterfallColumnsIpadLandscape: 3,
   waterfallColumnsIpadPortrait: 3,
   heroFirstFeedCard: true,
@@ -612,6 +614,7 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
     pageLayout: isOneOf(stored?.pageLayout, PAGE_LAYOUT_VALUES)
       ? stored.pageLayout
       : DEFAULT_SETTINGS.pageLayout,
+    splitViewEnabled: boolOr(stored?.splitViewEnabled, DEFAULT_SETTINGS.splitViewEnabled),
     waterfallColumnsIpadLandscape: parseWaterfallColumnsIpadLandscape(
       stored?.waterfallColumnsIpadLandscape
     ),

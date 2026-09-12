@@ -1,4 +1,5 @@
 import {
+  Device,
   Image,
   Navigation,
   NavigationStack,
@@ -20,6 +21,7 @@ import {
 import { session } from "../api/session"
 import { loadSettings, onSettingsChanged, updateSettings } from "../store/settings"
 import { ResponsiveContainer } from "./hooks"
+import { SplitViewContainer, useDualRoute } from "./DualRouteContext"
 import { FeatureHighlightsSheet } from "./components/FeatureHighlightsSheet"
 import {
   CapsuleAccessoryContainer,
@@ -126,6 +128,13 @@ export function RootView() {
   const [loggedIn, setLoggedIn] = useState(session.isAuthenticated)
   const [isReady, setIsReady] = useState(() => hasAppLaunchedOnce)
   const [showFeatureHighlights, setShowFeatureHighlights] = useState(false)
+  const [settings, setSettings] = useState(() => loadSettings())
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      setSettings(loadSettings())
+    })
+  }, [])
 
   useEffect(() => {
     return session.onAuthChanged(() => {
@@ -216,7 +225,9 @@ export function RootView() {
     >
       {/* 底层：主界面在第 0 毫秒即挂载并全力在后台请求数据与预载图片 */}
       <ResponsiveContainer>
-        <MainTabView onClose={dismiss} />
+        <SplitViewContainer splitViewEnabled={settings.splitViewEnabled}>
+          <MainTabView onClose={dismiss} />
+        </SplitViewContainer>
       </ResponsiveContainer>
 
       {/* 顶层：启动动画遮罩，根据调试设置自定义时长（默认 1500ms）平滑过渡 */}
@@ -321,7 +332,7 @@ function MainTabView(props: {
   const tabViewProps: any = {
     selection,
     tabBarMinimizeBehavior: "onScrollDown",
-    tabViewStyle: "sidebarAdaptable",
+    tabViewStyle: "tabBarOnly",
   }
 
   if (isAppleMusic) {

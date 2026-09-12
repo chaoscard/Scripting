@@ -19,6 +19,7 @@ import {
   useState,
   VStack,
 } from "scripting"
+import { AppNavigationLink } from "./DualRouteContext"
 import {
   cacheUsageBytes,
   clearCache,
@@ -416,7 +417,7 @@ export function SettingsView() {
             value={settings.hideNovels}
             onChanged={(value) => update({ hideNovels: value })}
           />
-          <NavigationLink value="blockedSettings">
+          <AppNavigationLink value="blockedSettings">
             <HStack spacing={8}>
               <Text font="body">屏蔽设置</Text>
               <Spacer />
@@ -424,7 +425,7 @@ export function SettingsView() {
                 标签 {blocklist.blockedTags.length} · 用户 {blocklist.blockedUsers.length}
               </Text>
             </HStack>
-          </NavigationLink>
+          </AppNavigationLink>
         </DisclosureGroup>
       </Section>
 
@@ -591,7 +592,7 @@ export function SettingsView() {
                   {[
                     settings.pageLayout === "appleMusic" ? "苹果音乐" : "经典样式",
                     Device.isiPad
-                      ? `${settings.waterfallColumnsIpadLandscape}横/${settings.waterfallColumnsIpadPortrait}竖`
+                      ? `${settings.splitViewEnabled ? "平行视界 · " : ""}${settings.waterfallColumnsIpadLandscape}横/${settings.waterfallColumnsIpadPortrait}竖`
                       : settings.heroFirstFeedCard ? "全宽" : "双列",
                     settings.compactIllustCard ? "简约" : null,
                     settings.ambientImmersion ? "沉浸" : null,
@@ -615,12 +616,23 @@ export function SettingsView() {
           </Picker>
           {Device.isiPad ? (
             <>
+              <Toggle
+                value={settings.splitViewEnabled}
+                onChanged={(value) => update({ splitViewEnabled: value })}
+              >
+                <VStack alignment="leading" spacing={2}>
+                  <Text>启用平行视界</Text>
+                  <Text font="caption2" foregroundStyle="secondaryLabel">
+                    左右分屏布局，在台前调度或分屏缩窄窗口时自动恢复为单栏
+                  </Text>
+                </VStack>
+              </Toggle>
               <Picker
                 label={
                   <VStack alignment="leading" spacing={2}>
                     <Text>横屏图片列数</Text>
                     <Text font="caption2" foregroundStyle="secondaryLabel">
-                      在台前调度或分屏缩窄窗口时锁定为 2 列
+                      在开启平行视界、台前调度或分屏缩窄窗口时锁定为 2 列
                     </Text>
                   </VStack>
                 }
@@ -662,7 +674,7 @@ export function SettingsView() {
               <Text>瀑布流首图全宽展示</Text>
               {Device.isiPad ? (
                 <Text font="caption2" foregroundStyle="secondaryLabel">
-                  在台前调度或分屏缩窄窗口时生效
+                  在平行视界、台前调度或分屏缩窄窗口时生效
                 </Text>
               ) : null}
             </VStack>
@@ -829,7 +841,7 @@ export function SettingsView() {
           />
           {settings.customRankingEnabled ? (
             <>
-              <NavigationLink value="rankingCustomPicker:illust">
+              <AppNavigationLink value="rankingCustomPicker:illust">
                 <HStack spacing={8}>
                   <Text font="body">插画</Text>
                   <Spacer />
@@ -837,8 +849,8 @@ export function SettingsView() {
                     {formatCustomRankingSummary("illust", settings)}
                   </Text>
                 </HStack>
-              </NavigationLink>
-              <NavigationLink value="rankingCustomPicker:manga">
+              </AppNavigationLink>
+              <AppNavigationLink value="rankingCustomPicker:manga">
                 <HStack spacing={8}>
                   <Text font="body">漫画</Text>
                   <Spacer />
@@ -846,9 +858,9 @@ export function SettingsView() {
                     {formatCustomRankingSummary("manga", settings)}
                   </Text>
                 </HStack>
-              </NavigationLink>
+              </AppNavigationLink>
               {!settings.hideNovels ? (
-                <NavigationLink value="rankingCustomPicker:novel">
+                <AppNavigationLink value="rankingCustomPicker:novel">
                   <HStack spacing={8}>
                     <Text font="body">小说</Text>
                     <Spacer />
@@ -856,7 +868,7 @@ export function SettingsView() {
                       {formatCustomRankingSummary("novel", settings)}
                     </Text>
                   </HStack>
-                </NavigationLink>
+                </AppNavigationLink>
               ) : null}
             </>
           ) : null}
@@ -934,7 +946,7 @@ export function SettingsView() {
           />
 
           {aiProfile.enabled ? (
-            <NavigationLink value="customAISettings">
+            <AppNavigationLink value="customAISettings">
               <HStack spacing={8}>
                 <Text font="body">模型配置与端点管理</Text>
                 <Spacer />
@@ -942,7 +954,7 @@ export function SettingsView() {
                   {getCustomAIProviderName(aiProfile)}
                 </Text>
               </HStack>
-            </NavigationLink>
+            </AppNavigationLink>
           ) : null}
         </DisclosureGroup>
       </Section>
@@ -1383,7 +1395,7 @@ export function SettingsView() {
             </Button>
           </HStack>
 
-          <NavigationLink value="downloadManager">
+          <AppNavigationLink value="downloadManager">
             <HStack spacing={8} alignment="center">
               <Text font="body">下载与文件管理</Text>
               <Spacer />
@@ -1391,7 +1403,7 @@ export function SettingsView() {
                 分类浏览与清理
               </Text>
             </HStack>
-          </NavigationLink>
+          </AppNavigationLink>
         </DisclosureGroup>
       </Section>
 

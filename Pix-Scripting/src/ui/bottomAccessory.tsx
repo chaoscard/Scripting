@@ -1588,3 +1588,110 @@ export function GlobalBottomAccessoryHost(props: {
   // 8. 根 Tab 初始状态直接同构呈现该 Tab 的真实分段栏/操作台，杜绝先出现文字兜底再跳变的闪烁现象！
   return renderDefaultRootTabAccessory(activeTab)
 }
+
+/**
+ * 浮动毛玻璃药丸胶囊容器（专用于右侧详情/自绘浮动底栏）
+ */
+export function FloatingGlassCapsuleContainer(props: {
+  children: any
+  maxWidth?: number | "infinity"
+}) {
+  return (
+    <HStack
+      alignment="center"
+      frame={{ maxWidth: "infinity" }}
+      padding={{ horizontal: 20, bottom: 16 }}
+    >
+      <HStack
+        alignment="center"
+        frame={{ maxWidth: props.maxWidth ?? 520 }}
+        padding={{ horizontal: 16, vertical: 8 }}
+        glassEffect="capsule"
+        contentShape="capsule"
+        shadow={{ color: "#0000002E", radius: 10, y: 3 }}
+      >
+        {props.children}
+      </HStack>
+    </HStack>
+  )
+}
+
+/**
+ * 右侧详情大屏专用苹果音乐底部配件宿主
+ */
+export function DetailBottomAccessoryHost(props: { route: string | null }) {
+  const { route } = props
+  if (!route) return null
+
+  if (route.startsWith("illust:") || route.startsWith("illustDetail:")) {
+    const parts = route.split(":")
+    const id = Number(parts[parts.length - 1])
+    if (Number.isFinite(id) && id > 0) {
+      return (
+        <FloatingGlassCapsuleContainer>
+          <IllustDetailDockBar key={route} illustID={id} />
+        </FloatingGlassCapsuleContainer>
+      )
+    }
+  }
+
+  if (route.startsWith("novel:") || route.startsWith("novelDetail:")) {
+    const parts = route.split(":")
+    const id = Number(parts[parts.length - 1])
+    if (Number.isFinite(id) && id > 0) {
+      return (
+        <FloatingGlassCapsuleContainer>
+          <NovelDetailDockBar key={route} novelID={id} />
+        </FloatingGlassCapsuleContainer>
+      )
+    }
+  }
+
+  if (route.startsWith("pixivision:")) {
+    const parts = route.split(":")
+    const id = Number(parts[parts.length - 1])
+    if (Number.isFinite(id) && id > 0) {
+      return (
+        <FloatingGlassCapsuleContainer>
+          <PixivisionDetailDockBar key={route} articleID={id} />
+        </FloatingGlassCapsuleContainer>
+      )
+    }
+  }
+
+  if (route.startsWith("mangaSeries:")) {
+    const parts = route.split(":")
+    const id = Number(parts[parts.length - 1])
+    if (Number.isFinite(id) && id > 0) {
+      return (
+        <FloatingGlassCapsuleContainer>
+          <SeriesDetailDockBar key={route} seriesID={id} kind="manga" />
+        </FloatingGlassCapsuleContainer>
+      )
+    }
+  }
+
+  if (route.startsWith("novelSeries:")) {
+    const parts = route.split(":")
+    const id = Number(parts[parts.length - 1])
+    if (Number.isFinite(id) && id > 0) {
+      return (
+        <FloatingGlassCapsuleContainer>
+          <SeriesDetailDockBar key={route} seriesID={id} kind="novel" />
+        </FloatingGlassCapsuleContainer>
+      )
+    }
+  }
+
+  const infoNode = renderRouteInfoBar(route)
+  if (infoNode) {
+    return (
+      <FloatingGlassCapsuleContainer>
+        {infoNode}
+      </FloatingGlassCapsuleContainer>
+    )
+  }
+
+  return null
+}
+

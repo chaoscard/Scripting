@@ -21,14 +21,21 @@ export function FullScreenToggleButton() {
   )
 }
 
+export interface AppToolbarOptions {
+  isCompact?: boolean
+  hidePrincipalOnWide?: boolean
+}
+
 export function appToolbar(
   dismiss: () => void,
   title?: any,
   trailing?: any,
-  principal?: any
+  principal?: any,
+  options?: AppToolbarOptions
 ) {
-  const isiPad = Device.isiPad
   const isHomeScreen = Script.env === "home_screen"
+  const isCompact = options?.isCompact ?? (!Device.isiPad)
+  const shouldHidePrincipal = !isCompact && options?.hidePrincipalOnWide === true
 
   let leadingButton = (
     <Button
@@ -60,7 +67,7 @@ export function appToolbar(
         ? trailing
         : [trailing]
       : undefined,
-    principal: isiPad
+    principal: shouldHidePrincipal
       ? undefined
       : principal
         ? Array.isArray(principal)
@@ -71,7 +78,7 @@ export function appToolbar(
             ? title
             : typeof title === "string"
               ? [
-                  <Text font="title2" fontWeight="bold">
+                  <Text font={isCompact ? "title2" : "headline"} fontWeight="bold">
                     {title}
                   </Text>,
                 ]
