@@ -21,4 +21,13 @@ export * from "./RecommendedUsersSheet"
 export * from "./TranscendAmbientBackground"
 export * from "./GeminiAmbientBackground"
 export * from "./FeatureHighlightsSheet"
-export { SeriesEpisodePager, useSeriesEpisodeNav } from "../seriesEpisodePager"
+export function SeriesEpisodePager(props: any): any {
+  const mod = require("../seriesEpisodePager")
+  const Comp = mod.SeriesEpisodePager || mod.default
+  return Comp(props)
+}
+
+export function useSeriesEpisodeNav(...args: any[]): any {
+  const mod = require("../seriesEpisodePager")
+  return mod.useSeriesEpisodeNav(...args)
+}

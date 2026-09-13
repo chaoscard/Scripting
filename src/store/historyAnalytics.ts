@@ -1,0 +1,607 @@
+// 历史记录纯本地数据分析与足迹计算引擎
+// 纯前端单次遍历 O(N) 毫秒级计算，零网络依赖，支持全维度画像与时间范围筛选
+import { getHistory, type HistoryContentKind, type IllustrationHistoryEntry, type NovelHistoryEntry } from "./history"
+import type { PixivIllustration, PixivNovel } from "../types"
+
+export type AnalyticsTimeRange = "all" | "year" | "quarter" | "month" | "week"
+export type AnalyticsScopeKind = "all" | HistoryContentKind
+
+export interface SummaryMetrics {
+  totalViews: number
+  uniqueCreators: number
+  activeDays: number
+  currentStreak: number
+  maxStreak: number
+  bookmarkedCount: number
+  bookmarkRate: number // 0~100 百分比
+  novelWordCount: number
+  peakDay: { dateStr: string; count: number } | null
+  timeSpanDesc: string
+}
+
+export interface HourlyDistribution {
+  hours: number[] // 0 ~ 23 小时计数
+  maxCount: number
+  peakHour: number
+  peakTimeRangeDesc: string
+  persona: string
+}
+
+export interface HeatmapDay {
+  dateStr: string // YYYY-MM-DD
+  count: number
+  level: number // 0 ~ 4 级深浅
+  dayOfWeek: number // 0 (Sun) ~ 6 (Sat)
+}
+
+export interface HeatmapData {
+  weeks: { days: HeatmapDay[] }[]
+  maxDailyCount: number
+  startDateStr: string
+  endDateStr: string
+}
+
+export interface TopTagItem {
+  name: string
+  translatedName: string | null
+  count: number
+  percentage: number
+}
+
+export interface TopCreatorItem {
+  id: number
+  name: string
+  viewCount: number
+  bookmarkCount: number
+  bookmarkRate: number
+}
+
+export interface AspectAndFormatDistribution {
+  aspectRatio: {
+    ultraTall: number // 手机超高壁纸 (h/w >= 1.6)
+    tall: number // 常规竖屏 (1.1 <= h/w < 1.6)
+    square: number // 方形 (0.9 <= h/w < 1.1)
+    wide: number // 横屏电脑壁纸 (h/w < 0.9)
+  }
+  mediaType: {
+    singleIllust: number
+    multiIllust: number
+    ugoira: number
+    manga: number
+    novel: number
+  }
+  aiDistribution: {
+    ai: number
+    nonAi: number
+  }
+}
+
+export interface NovelMilestone {
+  totalWords: number
+  averageWords: number
+  comparisonText: string
+  readingTimeMinutes: number
+}
+
+export interface HistoryAnalyticsResult {
+  scope: AnalyticsScopeKind
+  timeRange: AnalyticsTimeRange
+  calculatedAt: number
+  summary: SummaryMetrics
+  hourly: HourlyDistribution
+  heatmap: HeatmapData
+  topTags: TopTagItem[]
+  topCreators: TopCreatorItem[]
+  aspectAndFormat: AspectAndFormatDistribution
+  novelMilestone: NovelMilestone | null
+}
+
+function formatDateKey(timestamp: number): string {
+  const d = new Date(timestamp)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, "0")
+  const day = String(d.getDate()).padStart(2, "0")
+  return `${y}-${m}-${day}`
+}
+
+function getRangeStartTime(timeRange: AnalyticsTimeRange): number {
+  const now = Date.now()
+  switch (timeRange) {
+    case "week":
+      return now - 7 * 86400 * 1000
+    case "month":
+      return now - 30 * 86400 * 1000
+    case "quarter":
+      return now - 90 * 86400 * 1000
+    case "year":
+      return now - 365 * 86400 * 1000
+    case "all":
+    default:
+      return 0
+  }
+}
+
+function determinePersona(peakHour: number, nightShare: number): string {
+  if (peakHour >= 0 && peakHour < 5) {
+    return "深夜鉴赏家 · 灵感在子夜绽放"
+  } else if (peakHour >= 5 && peakHour < 9) {
+    return "晨曦探索者 · 随晨光开启视觉之旅"
+  } else if (peakHour >= 9 && peakHour < 12) {
+    return "专注采风者 · 享受上午的沉浸灵感"
+  } else if (peakHour >= 12 && peakHour < 14) {
+    return "午间摸鱼派 · 惬意的正午碎片拾光"
+  } else if (peakHour >= 14 && peakHour < 18) {
+    return "午后漫游者 · 伴随红茶与画卷"
+  } else if (peakHour >= 18 && peakHour < 21) {
+    return "暮色归航者 · 卸下疲惫的治愈时刻"
+  } else {
+    if (nightShare > 0.4) {
+      return "月夜守望者 · 沉迷静谧的深夜绘卷"
+    }
+    return "黄金夜读人 · 享受睡前的视觉盛宴"
+  }
+}
+
+function buildNovelComparison(totalWords: number): string {
+  if (totalWords <= 0) return ""
+  if (totalWords < 50000) {
+    return `已阅读 ${(totalWords / 10000).toFixed(1)} 万字，相当于读完了 1 本短篇小说集`
+  } else if (totalWords < 200000) {
+    return `已阅读 ${(totalWords / 10000).toFixed(1)} 万字，相当于读完了 1 本《小王子》或中篇名著`
+  } else if (totalWords < 500000) {
+    return `已阅读 ${(totalWords / 10000).toFixed(1)} 万字，相当于精读了 1 部长篇悬疑/科幻巨作`
+  } else if (totalWords < 1000000) {
+    return `已阅读 ${(totalWords / 10000).toFixed(1)} 万字，相当于通读了一整部《三体》三部曲（全书约 90 万字）`
+  } else {
+    const santiCount = (totalWords / 900000).toFixed(1)
+    return `已阅读 ${(totalWords / 10000).toFixed(1)} 万字，相当于读完了 ${santiCount} 部《三体》全集或一部超长连载神作`
+  }
+}
+
+// 缓存管理
+let memoizedResult: HistoryAnalyticsResult | null = null
+let memoizedCacheKey = ""
+
+/**
+ * 核心分析计算引擎：单次遍历多数据源并快速聚合
+ */
+export function computeHistoryAnalytics(
+  scope: AnalyticsScopeKind = "all",
+  timeRange: AnalyticsTimeRange = "all",
+  forceRefresh = false
+): HistoryAnalyticsResult {
+  const illustList = (scope === "all" || scope === "illustration") ? (getHistory("illustration") as IllustrationHistoryEntry[]) : []
+  const mangaList = (scope === "all" || scope === "manga") ? (getHistory("manga") as IllustrationHistoryEntry[]) : []
+  const novelList = (scope === "all" || scope === "novel") ? (getHistory("novel") as NovelHistoryEntry[]) : []
+
+  // 生成轻量快照指纹作为缓存 Key
+  const cacheKey = `${scope}_${timeRange}_${illustList.length}_${mangaList.length}_${novelList.length}_${
+    illustList[0]?.viewedAt ?? 0
+  }_${mangaList[0]?.viewedAt ?? 0}_${novelList[0]?.viewedAt ?? 0}`
+
+  if (!forceRefresh && memoizedResult && memoizedCacheKey === cacheKey) {
+    return memoizedResult
+  }
+
+  const startTime = getRangeStartTime(timeRange)
+
+  let totalViews = 0
+  let bookmarkedCount = 0
+  let novelWordCount = 0
+  let novelCount = 0
+
+  const creatorMap = new Map<number, { id: number; name: string; viewCount: number; bookmarkCount: number }>()
+  const tagMap = new Map<string, { name: string; translatedName: string | null; count: number }>()
+  const hours = new Array<number>(24).fill(0)
+  const dayCountMap = new Map<string, number>()
+
+  const aspectCounts = {
+    ultraTall: 0,
+    tall: 0,
+    square: 0,
+    wide: 0,
+  }
+
+  const mediaTypeCounts = {
+    singleIllust: 0,
+    multiIllust: 0,
+    ugoira: 0,
+    manga: 0,
+    novel: 0,
+  }
+
+  const aiCounts = {
+    ai: 0,
+    nonAi: 0,
+  }
+
+  // 1. 处理插画与漫画列表
+  const processIllustEntry = (entry: IllustrationHistoryEntry, defaultManga = false) => {
+    if (entry.viewedAt < startTime) return
+    totalViews++
+    const ill = entry.illustration
+    if (!ill) return
+
+    if (ill.is_bookmarked) {
+      bookmarkedCount++
+    }
+
+    // 活跃小时与日期分布
+    const d = new Date(entry.viewedAt)
+    const hour = d.getHours()
+    hours[hour] = (hours[hour] || 0) + 1
+    const dateKey = formatDateKey(entry.viewedAt)
+    dayCountMap.set(dateKey, (dayCountMap.get(dateKey) || 0) + 1)
+
+    // 作者聚合
+    if (ill.user?.id) {
+      const u = ill.user
+      const existing = creatorMap.get(u.id)
+      if (existing) {
+        existing.viewCount++
+        if (ill.is_bookmarked) existing.bookmarkCount++
+        if (u.name && !existing.name) existing.name = u.name
+      } else {
+        creatorMap.set(u.id, {
+          id: u.id,
+          name: u.name || `UID ${u.id}`,
+          viewCount: 1,
+          bookmarkCount: ill.is_bookmarked ? 1 : 0,
+        })
+      }
+    }
+
+    // 标签聚合
+    if (ill.tags && Array.isArray(ill.tags)) {
+      for (const t of ill.tags) {
+        if (!t?.name) continue
+        const existing = tagMap.get(t.name)
+        if (existing) {
+          existing.count++
+          if (!existing.translatedName && t.translated_name) {
+            existing.translatedName = t.translated_name
+          }
+        } else {
+          tagMap.set(t.name, {
+            name: t.name,
+            translatedName: t.translated_name || null,
+            count: 1,
+          })
+        }
+      }
+    }
+
+    // 媒体格式与画集判定
+    const isUgoira = ill.type === "ugoira"
+    const isManga = defaultManga || ill.type === "manga"
+    const pageCount = ill.page_count || 1
+
+    if (isUgoira) {
+      mediaTypeCounts.ugoira++
+    } else if (isManga) {
+      mediaTypeCounts.manga++
+    } else if (pageCount > 1) {
+      mediaTypeCounts.multiIllust++
+    } else {
+      mediaTypeCounts.singleIllust++
+    }
+
+    // 构图比例
+    if (ill.width && ill.height && ill.width > 0 && ill.height > 0) {
+      const ratio = ill.height / ill.width
+      if (ratio >= 1.6) {
+        aspectCounts.ultraTall++
+      } else if (ratio >= 1.1) {
+        aspectCounts.tall++
+      } else if (ratio >= 0.9) {
+        aspectCounts.square++
+      } else {
+        aspectCounts.wide++
+      }
+    }
+
+    // AI 判定 (illust_ai_type: 2 代表 AI 生成作品)
+    if (ill.illust_ai_type === 2) {
+      aiCounts.ai++
+    } else {
+      aiCounts.nonAi++
+    }
+  }
+
+  // 2. 处理小说列表
+  const processNovelEntry = (entry: NovelHistoryEntry) => {
+    if (entry.viewedAt < startTime) return
+    totalViews++
+    const nov = entry.novel
+    if (!nov) return
+
+    mediaTypeCounts.novel++
+
+    if (nov.is_bookmarked) {
+      bookmarkedCount++
+    }
+
+    // 字数累计
+    if (nov.text_length && nov.text_length > 0) {
+      novelWordCount += nov.text_length
+      novelCount++
+    }
+
+    // 活跃小时与日期分布
+    const d = new Date(entry.viewedAt)
+    const hour = d.getHours()
+    hours[hour] = (hours[hour] || 0) + 1
+    const dateKey = formatDateKey(entry.viewedAt)
+    dayCountMap.set(dateKey, (dayCountMap.get(dateKey) || 0) + 1)
+
+    // 作者聚合
+    if (nov.user?.id) {
+      const u = nov.user
+      const existing = creatorMap.get(u.id)
+      if (existing) {
+        existing.viewCount++
+        if (nov.is_bookmarked) existing.bookmarkCount++
+        if (u.name && !existing.name) existing.name = u.name
+      } else {
+        creatorMap.set(u.id, {
+          id: u.id,
+          name: u.name || `UID ${u.id}`,
+          viewCount: 1,
+          bookmarkCount: nov.is_bookmarked ? 1 : 0,
+        })
+      }
+    }
+
+    // 标签聚合
+    if (nov.tags && Array.isArray(nov.tags)) {
+      for (const t of nov.tags) {
+        if (!t?.name) continue
+        const existing = tagMap.get(t.name)
+        if (existing) {
+          existing.count++
+          if (!existing.translatedName && t.translated_name) {
+            existing.translatedName = t.translated_name
+          }
+        } else {
+          tagMap.set(t.name, {
+            name: t.name,
+            translatedName: t.translated_name || null,
+            count: 1,
+          })
+        }
+      }
+    }
+
+    // AI 判定 (novel_ai_type: 2 代表 AI 生成作品)
+    if (nov.novel_ai_type === 2) {
+      aiCounts.ai++
+    } else {
+      aiCounts.nonAi++
+    }
+  }
+
+  // 执行遍历
+  for (const item of illustList) processIllustEntry(item, false)
+  for (const item of mangaList) processIllustEntry(item, true)
+  for (const item of novelList) processNovelEntry(item)
+
+  // 3. 计算小时分布与时段画像
+  let maxHourlyCount = 0
+  let peakHour = 22
+  let nightCount = 0
+  for (let h = 0; h < 24; h++) {
+    const c = hours[h]
+    if (c > maxHourlyCount) {
+      maxHourlyCount = c
+      peakHour = h
+    }
+    if (h >= 22 || h < 4) {
+      nightCount += c
+    }
+  }
+  const nightShare = totalViews > 0 ? nightCount / totalViews : 0
+  const peakTimeRangeDesc = `${String(peakHour).padStart(2, "0")}:00 ~ ${String((peakHour + 1) % 24).padStart(2, "0")}:00`
+  const persona = determinePersona(peakHour, nightShare)
+
+  // 4. 计算活跃天数、连续打卡天数（Streak）与单日最高
+  const sortedDates = Array.from(dayCountMap.keys()).sort()
+  const activeDays = sortedDates.length
+
+  let peakDay: { dateStr: string; count: number } | null = null
+  let maxDailyCount = 0
+  for (const [dateStr, count] of dayCountMap.entries()) {
+    if (count > maxDailyCount) {
+      maxDailyCount = count
+      peakDay = { dateStr, count }
+    }
+  }
+
+  // 连续打卡计算
+  let currentStreak = 0
+  let maxStreak = 0
+  if (sortedDates.length > 0) {
+    const todayStr = formatDateKey(Date.now())
+    const yesterdayStr = formatDateKey(Date.now() - 86400 * 1000)
+
+    // 检查今天或昨天是否有记录（保证如果今天还没看但昨天看了，打卡不立即断）
+    const hasToday = dayCountMap.has(todayStr)
+    const hasYesterday = dayCountMap.has(yesterdayStr)
+
+    if (hasToday || hasYesterday) {
+      let checkDate = new Date(hasToday ? Date.now() : Date.now() - 86400 * 1000)
+      while (true) {
+        const k = formatDateKey(checkDate.getTime())
+        if (dayCountMap.has(k)) {
+          currentStreak++
+          checkDate = new Date(checkDate.getTime() - 86400 * 1000)
+        } else {
+          break
+        }
+      }
+    }
+
+    // 最长连续天数
+    let streakCounter = 0
+    let prevDateTimestamp = 0
+    for (const dStr of sortedDates) {
+      const [y, m, d] = dStr.split("-").map(Number)
+      const curTimestamp = new Date(y, m - 1, d).getTime()
+      if (prevDateTimestamp === 0) {
+        streakCounter = 1
+      } else {
+        const diffDays = Math.round((curTimestamp - prevDateTimestamp) / (86400 * 1000))
+        if (diffDays === 1) {
+          streakCounter++
+        } else {
+          streakCounter = 1
+        }
+      }
+      if (streakCounter > maxStreak) {
+        maxStreak = streakCounter
+      }
+      prevDateTimestamp = curTimestamp
+    }
+  }
+
+  // 5. 生成热力图数据（近 12 周 / 84 天网格）
+  const heatmapDaysTotal = 84
+  const today = new Date()
+  const heatmapDays: HeatmapDay[] = []
+
+  // 找到 84 天前的起始日期（对齐到周日）
+  const startDayOffset = heatmapDaysTotal - 1
+  const startDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() - startDayOffset)
+  // 向前回退到最近的周日
+  const startDayOfWeek = startDay.getDay()
+  startDay.setDate(startDay.getDate() - startDayOfWeek)
+
+  const endDate = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  const totalHeatmapSlots = Math.ceil((endDate.getTime() - startDay.getTime()) / (86400 * 1000)) + 1
+
+  const p75 = maxDailyCount > 0 ? Math.max(1, Math.round(maxDailyCount * 0.75)) : 10
+  const p50 = maxDailyCount > 0 ? Math.max(1, Math.round(maxDailyCount * 0.5)) : 5
+  const p25 = maxDailyCount > 0 ? Math.max(1, Math.round(maxDailyCount * 0.25)) : 2
+
+  for (let i = 0; i < totalHeatmapSlots; i++) {
+    const cur = new Date(startDay.getFullYear(), startDay.getMonth(), startDay.getDate() + i)
+    const k = formatDateKey(cur.getTime())
+    const c = dayCountMap.get(k) || 0
+
+    let level = 0
+    if (c > 0) {
+      if (c >= p75) level = 4
+      else if (c >= p50) level = 3
+      else if (c >= p25) level = 2
+      else level = 1
+    }
+
+    heatmapDays.push({
+      dateStr: k,
+      count: c,
+      level,
+      dayOfWeek: cur.getDay(),
+    })
+  }
+
+  // 将天按周切片 (每周 7 天)
+  const heatmapWeeks: { days: HeatmapDay[] }[] = []
+  for (let i = 0; i < heatmapDays.length; i += 7) {
+    heatmapWeeks.push({
+      days: heatmapDays.slice(i, i + 7),
+    })
+  }
+
+  // 6. Top 标签排序与占比 (取 Top 15)
+  const topTags: TopTagItem[] = Array.from(tagMap.values())
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 15)
+    .map((t) => ({
+      name: t.name,
+      translatedName: t.translatedName,
+      count: t.count,
+      percentage: totalViews > 0 ? Math.round((t.count / totalViews) * 100) : 0,
+    }))
+
+  // 7. Top 创作者排序 (取 Top 15)
+  const topCreators: TopCreatorItem[] = Array.from(creatorMap.values())
+    .sort((a, b) => b.viewCount - a.viewCount)
+    .slice(0, 15)
+    .map((c) => ({
+      id: c.id,
+      name: c.name,
+      viewCount: c.viewCount,
+      bookmarkCount: c.bookmarkCount,
+      bookmarkRate: c.viewCount > 0 ? Math.round((c.bookmarkCount / c.viewCount) * 100) : 0,
+    }))
+
+  // 8. 汇总指标卡片数据
+  const bookmarkRate = totalViews > 0 ? Number(((bookmarkedCount / totalViews) * 100).toFixed(1)) : 0
+  const timeSpanDesc =
+    timeRange === "week"
+      ? "近一周"
+      : timeRange === "month"
+      ? "近一月"
+      : timeRange === "quarter"
+      ? "近一季"
+      : timeRange === "year"
+      ? "近一年"
+      : "历史全量"
+
+  const summary: SummaryMetrics = {
+    totalViews,
+    uniqueCreators: creatorMap.size,
+    activeDays,
+    currentStreak,
+    maxStreak,
+    bookmarkedCount,
+    bookmarkRate,
+    novelWordCount,
+    peakDay,
+    timeSpanDesc,
+  }
+
+  // 9. 小说专属里程碑
+  let novelMilestone: NovelMilestone | null = null
+  if (novelCount > 0 || scope === "novel") {
+    const avg = novelCount > 0 ? Math.round(novelWordCount / novelCount) : 0
+    novelMilestone = {
+      totalWords: novelWordCount,
+      averageWords: avg,
+      comparisonText: buildNovelComparison(novelWordCount),
+      readingTimeMinutes: Math.round(novelWordCount / 400), // 按 400 字/分钟速读估算
+    }
+  }
+
+  const result: HistoryAnalyticsResult = {
+    scope,
+    timeRange,
+    calculatedAt: Date.now(),
+    summary,
+    hourly: {
+      hours,
+      maxCount: maxHourlyCount,
+      peakHour,
+      peakTimeRangeDesc,
+      persona,
+    },
+    heatmap: {
+      weeks: heatmapWeeks,
+      maxDailyCount,
+      startDateStr: heatmapDays[0]?.dateStr || "",
+      endDateStr: heatmapDays[heatmapDays.length - 1]?.dateStr || "",
+    },
+    topTags,
+    topCreators,
+    aspectAndFormat: {
+      aspectRatio: aspectCounts,
+      mediaType: mediaTypeCounts,
+      aiDistribution: aiCounts,
+    },
+    novelMilestone,
+  }
+
+  memoizedResult = result
+  memoizedCacheKey = cacheKey
+
+  return result
+}

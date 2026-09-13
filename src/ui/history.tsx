@@ -29,7 +29,6 @@ import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
 import {
   clearHistoryKind,
   getHistory,
-  historyKindCount,
   onHistoryChanged,
   refreshHistoryFromCloud,
   removeHistoryEntry,
@@ -49,6 +48,8 @@ import { cacheNovel } from "../store/novelCache"
 import { cardThumbUrlOf, novelThumbUrlOf, prefetch } from "../image/imageLoader"
 import { currentBatchSize, useLatest, usePagedList } from "./hooks"
 import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl } from "./ambient"
+import { useDualRoute } from "./DualRouteContext"
+import { HistoryAnalyticsView } from "./historyAnalytics"
 import type { PixivIllustration, PixivNovel } from "../types"
 
 export type HistoryKind = HistoryContentKind
@@ -165,6 +166,17 @@ export function HistoryView() {
   )
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
+  const [isAnalyticsPresented, setIsAnalyticsPresented] = useState(false)
+  const { isSplitViewActive, openDetailRoute } = useDualRoute()
+
+  const handleOpenAnalytics = useCallback(() => {
+    triggerHaptic("selection")
+    if (isSplitViewActive) {
+      openDetailRoute(`historyAnalytics:${kind}`)
+    } else {
+      setIsAnalyticsPresented(true)
+    }
+  }, [isSplitViewActive, openDetailRoute, kind])
 
   useEffect(() => {
     return onSettingsChanged(() => {
@@ -211,12 +223,31 @@ export function HistoryView() {
       toolbarBackground="clear"
       toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
       background={ambientBackground}
+      sheet={{
+        isPresented: isAnalyticsPresented,
+        onChanged: (val: boolean) => setIsAnalyticsPresented(val),
+        content: (
+          <HistoryAnalyticsView
+            initialScope={kind}
+            onDismiss={() => setIsAnalyticsPresented(false)}
+            onSelectTag={(tag) => {
+              setIsAnalyticsPresented(false)
+              setSearchQuery(tag)
+            }}
+            onSelectCreator={(_cId, cName) => {
+              setIsAnalyticsPresented(false)
+              setSearchQuery(cName)
+            }}
+          />
+        ),
+      }}
       toolbar={historyToolbar({
         kind,
         hideNovels,
         isAppleMusic,
         onKindChange: setKind,
         onClear: clearCurrentKind,
+        onOpenAnalytics: handleOpenAnalytics,
       })}
       searchable={{
         value: searchQuery,
@@ -234,7 +265,7 @@ export function HistoryView() {
         allowsHitTesting={kind === "illustration"}
       >
         <RefreshableScrollView refreshable={() => refreshHandlerRef.current()}>
-          <VStack alignment="leading" spacing={8}>
+          <VStack alignment="leading" spacing={8} frame={{ minHeight: 500, maxWidth: "infinity" }}>
             <HistoryFeed
               kind="illustration"
               searchQuery={searchQuery}
@@ -258,7 +289,7 @@ export function HistoryView() {
           allowsHitTesting={kind === "manga"}
         >
           <RefreshableScrollView refreshable={() => refreshHandlerRef.current()}>
-            <VStack alignment="leading" spacing={8}>
+            <VStack alignment="leading" spacing={8} frame={{ minHeight: 500, maxWidth: "infinity" }}>
               <HistoryFeed
                 kind="manga"
                 searchQuery={searchQuery}
@@ -283,7 +314,7 @@ export function HistoryView() {
           allowsHitTesting={kind === "novel"}
         >
           <RefreshableScrollView refreshable={() => refreshHandlerRef.current()}>
-            <VStack alignment="leading" spacing={8}>
+            <VStack alignment="leading" spacing={8} frame={{ minHeight: 500, maxWidth: "infinity" }}>
               <HistoryFeed
                 kind="novel"
                 searchQuery={searchQuery}
@@ -308,6 +339,7 @@ function historyToolbar(props: {
   isAppleMusic?: boolean
   onKindChange: (kind: HistoryKind) => void
   onClear: () => void
+  onOpenAnalytics?: () => void
 }) {
   const isClassic = !props.isAppleMusic
   const kindLabel = historyKindTitle(props.kind)
@@ -343,12 +375,25 @@ function historyToolbar(props: {
       </Text>
     ),
     topBarTrailing: [
+      <Button
+        key="analytics-button"
+        action={() => props.onOpenAnalytics?.()}
+      >
+        <Image systemName="chart.xyaxis.line" />
+      </Button>,
       props.isAppleMusic ? (
         <Button key="clear-button" action={handleClearConfirm}>
           <Image systemName="trash" foregroundStyle="systemRed" />
         </Button>
       ) : (
         <Menu key="more-menu" label={<Image systemName="ellipsis.circle" />}>
+          {props.onOpenAnalytics ? (
+            <Button
+              title="我的足迹"
+              systemImage="chart.bar.xaxis"
+              action={props.onOpenAnalytics}
+            />
+          ) : null}
           <Picker
             title="记录类型"
             value={props.kind}
@@ -469,11 +514,6 @@ function HistoryFeed(props: {
     }
   }, [])
 
-  const currentCount = useMemo(() => {
-    void historyVersion
-    return historyKindCount(kind)
-  }, [kind, historyVersion])
-
   const activeRefresh =
     kind === "illustration"
       ? illustPaged.refresh
@@ -530,20 +570,17 @@ function HistoryFeed(props: {
         <IllustHistoryContent
           paged={illustPaged}
           kind="illustration"
-          totalCount={currentCount}
           searchQuery={searchQuery}
         />
       ) : kind === "manga" ? (
         <IllustHistoryContent
           paged={mangaPaged}
           kind="manga"
-          totalCount={currentCount}
           searchQuery={searchQuery}
         />
       ) : (
         <NovelHistoryContent
           paged={novelPaged}
-          totalCount={currentCount}
           searchQuery={searchQuery}
         />
       )}
@@ -554,10 +591,9 @@ function HistoryFeed(props: {
 function IllustHistoryContent(props: {
   paged: ReturnType<typeof usePagedList<HistoryIllustItem>>
   kind: "illustration" | "manga"
-  totalCount: number
   searchQuery?: string
 }) {
-  const { paged, kind, totalCount, searchQuery = "" } = props
+  const { paged, kind, searchQuery = "" } = props
 
   const footerTextOf = useCallback((illust: PixivIllustration) => {
     const viewedAt = (illust as HistoryIllustItem).viewedAt
@@ -606,23 +642,9 @@ function IllustHistoryContent(props: {
     return <EmptyView text={text} systemImage="clock" />
   }
 
-  const countSummary = isSearching
-    ? `共 ${totalCount} 条记录 · 找到 ${paged.items.length} 条`
-    : `共 ${totalCount} 条记录`
-
   return (
-    <VStack alignment="leading" spacing={8}>
+    <VStack alignment="leading" spacing={8} frame={{ minHeight: 500, maxWidth: "infinity" }}>
       {paged.hasFilteredContent ? <FilteredContentNotice isNovel={false} /> : null}
-      <HStack frame={{ maxWidth: "infinity", alignment: "center" }} padding={{ horizontal: 14 }}>
-        <Text
-          font="caption"
-          foregroundStyle="secondaryLabel"
-          multilineTextAlignment="center"
-          frame={{ maxWidth: "infinity", alignment: "center" }}
-        >
-          {countSummary}
-        </Text>
-      </HStack>
       <IllustFlowFeed
         items={paged.items}
         onLoadMore={paged.loadMore}
@@ -637,10 +659,9 @@ function IllustHistoryContent(props: {
 
 function NovelHistoryContent(props: {
   paged: ReturnType<typeof usePagedList<HistoryNovelItem>>
-  totalCount: number
   searchQuery?: string
 }) {
-  const { paged, totalCount, searchQuery = "" } = props
+  const { paged, searchQuery = "" } = props
 
   const isSearching = Boolean(searchQuery.trim())
 
@@ -670,23 +691,10 @@ function NovelHistoryContent(props: {
   }
 
   const lastNovel = paged.items[paged.items.length - 1]
-  const countSummary = isSearching
-    ? `共 ${totalCount} 条记录 · 找到 ${paged.items.length} 条`
-    : `共 ${totalCount} 条记录`
 
   return (
-    <VStack alignment="leading" spacing={8}>
+    <VStack alignment="leading" spacing={8} frame={{ minHeight: 500, maxWidth: "infinity" }}>
       {paged.hasFilteredContent ? <FilteredContentNotice isNovel={true} /> : null}
-      <HStack frame={{ maxWidth: "infinity", alignment: "center" }} padding={{ horizontal: 14 }}>
-        <Text
-          font="caption"
-          foregroundStyle="secondaryLabel"
-          multilineTextAlignment="center"
-          frame={{ maxWidth: "infinity", alignment: "center" }}
-        >
-          {countSummary}
-        </Text>
-      </HStack>
       <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
         {paged.items.map((entry, index) => (
           <NovelCard

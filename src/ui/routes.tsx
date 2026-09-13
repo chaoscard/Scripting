@@ -15,7 +15,19 @@ import { HistoryView } from "./history"
 import { NotificationViewMoreView, NotificationsView } from "./notifications"
 import { BlockedSettingsView } from "./blockedSettings"
 import { CustomAISettingsView } from "./customAISettings"
-import { SeriesView } from "./seriesView"
+// 延迟引用 SeriesView 彻底解耦深层循环依赖
+function SeriesView(props: any) {
+  const mod = require("./seriesView")
+  const Comp = mod.SeriesView || mod.default
+  return <Comp {...props} />
+}
+
+// 延迟引用 HistoryAnalyticsView 解耦
+function HistoryAnalyticsView(props: any) {
+  const mod = require("./historyAnalytics")
+  const Comp = mod.HistoryAnalyticsView || mod.default
+  return <Comp {...props} />
+}
 import { UserBookmarksView } from "./UserBookmarksPage"
 import { UserConnectionsView, type ConnectionRouteKind } from "./UserConnectionsPage"
 import { UserWorksView } from "./UserWorksPage"
@@ -116,6 +128,10 @@ export function renderDestination(rawPage: string) {
   if (page === "library:novel") return <LibraryView initialKind="novel" />
   if (page === "library:illustration" || page === "library:illust" || page === "library") return <LibraryView initialKind="illustration" />
   if (page === "history") return <HistoryView key={`history-${Date.now()}`} />
+  if (page === "historyAnalytics" || page.startsWith("historyAnalytics:")) {
+    const scope = page.includes(":") ? page.split(":")[1] : undefined
+    return <HistoryAnalyticsView initialScope={scope as any} />
+  }
   if (page === "notifications") return <NotificationsView />
   if (page.startsWith("notificationsMore:")) {
     const id = parseID(page, "notificationsMore:")

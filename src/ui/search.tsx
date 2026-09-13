@@ -92,12 +92,26 @@ import type {
   SearchScope,
   SearchSort,
 } from "../types"
-import {
-  categoryFromParams,
-  formatDateToPixivDate,
-  getDefaultAdvancedSearchParams,
-  SearchAdvancedSheet,
-} from "./searchAdvancedSheet"
+function SearchAdvancedSheet(props: any): any {
+  const mod = require("./searchAdvancedSheet")
+  const Comp = mod.SearchAdvancedSheet || mod.default
+  return <Comp {...props} />
+}
+
+function getDefaultAdvancedSearchParams(...args: any[]): any {
+  const mod = require("./searchAdvancedSheet")
+  return mod.getDefaultAdvancedSearchParams(...args)
+}
+
+function categoryFromParams(...args: any[]): any {
+  const mod = require("./searchAdvancedSheet")
+  return mod.categoryFromParams(...args)
+}
+
+function formatDateToPixivDate(...args: any[]): any {
+  const mod = require("./searchAdvancedSheet")
+  return mod.formatDateToPixivDate(...args)
+}
 import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
 import {
   appToolbar,
@@ -1323,7 +1337,7 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
             key={`advanced-sheet-${advancedSheetKey}`}
             currentParams={advancedParams}
             settings={loadSettings()}
-            onApply={(params) => {
+            onApply={(params: any) => {
               setAdvancedParams(params)
               setScope(params.scope)
               setSort(params.sort)

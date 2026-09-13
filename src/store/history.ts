@@ -154,6 +154,7 @@ export async function prepareHistoryStorage(): Promise<void> {
   if (!FileManager.existsSync(dir)) {
     FileManager.createDirectorySync(dir, true)
   }
+  warmupHistoryStore()
 }
 
 function toStoredIllustData(illust: PixivIllustration): StoredIllustData {
@@ -452,6 +453,16 @@ export function parseRawEntriesForKind(
   }
 
   return valid.sort((a, b) => b.viewedAt - a.viewedAt)
+}
+
+export function warmupHistoryStore(): void {
+  try {
+    loadKindEntries("illustration")
+    loadKindEntries("manga")
+    loadKindEntries("novel")
+  } catch {
+    // 忽略静默预热错误
+  }
 }
 
 export function loadKindEntries(kind: HistoryContentKind): (IllustrationHistoryEntry | NovelHistoryEntry)[] {
