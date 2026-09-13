@@ -676,7 +676,7 @@ export function useUserFollow(
   initialFollowed = false
 ): [
   boolean,
-  (followed: boolean) => void,
+  (followed: boolean, restrict?: FollowRestrict | null) => void,
   FollowRestrict | null,
   (restrict: FollowRestrict | null) => void
 ] {
@@ -687,35 +687,65 @@ export function useUserFollow(
     return getUserFollowRestrict(userID) ?? null
   })
 
+  const stateRef = useRef({
+    followed: isUserFollowed(userID) ?? initialFollowed,
+    followRestrict: getUserFollowRestrict(userID) ?? null,
+  })
+
+  stateRef.current.followed = followed
+  stateRef.current.followRestrict = followRestrict
+
   const setFollowed = useCallback(
-    (nextFollowed: boolean) => {
+    (nextFollowed: boolean, nextRestrict?: FollowRestrict | null) => {
+      const resolvedRestrict = nextFollowed
+        ? (nextRestrict !== undefined
+            ? nextRestrict
+            : stateRef.current.followRestrict ?? "public")
+        : null
+
+      stateRef.current.followed = nextFollowed
+      stateRef.current.followRestrict = resolvedRestrict
+
       setFollowedState(nextFollowed)
-      notifyUserFollowChanged(userID, nextFollowed, followRestrict ?? "public")
+      setFollowRestrictState(resolvedRestrict)
+
+      notifyUserFollowChanged(
+        userID,
+        nextFollowed,
+        resolvedRestrict ?? undefined
+      )
     },
-    [userID, followRestrict]
+    [userID]
   )
 
   const setFollowRestrict = useCallback(
     (restrict: FollowRestrict | null) => {
+      const currentFollowed = stateRef.current.followed
+      stateRef.current.followRestrict = restrict
       setFollowRestrictState(restrict)
-      notifyUserFollowChanged(userID, followed, restrict ?? undefined)
+      notifyUserFollowChanged(userID, currentFollowed, restrict ?? undefined)
     },
-    [userID, followed]
+    [userID]
   )
 
   useEffect(() => {
     const cached = isUserFollowed(userID)
     if (cached !== undefined) {
       setFollowedState(cached)
+      stateRef.current.followed = cached
     }
     const cachedRestrict = getUserFollowRestrict(userID)
     if (cachedRestrict !== undefined) {
       setFollowRestrictState(cachedRestrict)
+      stateRef.current.followRestrict = cachedRestrict
     }
     return onUserFollowChanged((changedID, nextFollowed, nextRestrict) => {
       if (changedID === userID) {
+        const resolvedRestrict = nextFollowed ? (nextRestrict ?? "public") : null
+        stateRef.current.followed = nextFollowed
+        stateRef.current.followRestrict = resolvedRestrict
         setFollowedState(nextFollowed)
-        setFollowRestrictState(nextFollowed ? (nextRestrict ?? "public") : null)
+        setFollowRestrictState(resolvedRestrict)
       }
     })
   }, [userID])

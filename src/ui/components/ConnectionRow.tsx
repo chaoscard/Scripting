@@ -22,6 +22,7 @@ import { loadBlocklist, onBlocklistChanged } from "../../store/blocklist"
 import { isIllustContentVisible, isNovelContentVisible } from "../../store/contentFilter"
 import { isUserFollowed } from "../../store/userFollow"
 import { novelThumbUrlOf, thumbUrlOf } from "../../image/imageLoader"
+import { triggerHaptic } from "../../platform/haptics"
 import { useLayoutMetrics, useUserFollow } from "../hooks"
 import { AvatarImage, CachedImage } from "./CachedImage"
 import type { PixivIllustration, PixivNovel, PixivUserPreview } from "../../types"
@@ -133,11 +134,11 @@ export function ConnectionRow(props: {
 
   async function followWithVisibility(restrict: "public" | "private") {
     if (followBusy) return
+    triggerHaptic("medium")
     setFollowBusy(true)
     try {
       await session.call((token) => followUser(preview.user.id, restrict, token))
-      setFollowed(true)
-      setFollowRestrict(restrict)
+      setFollowed(true, restrict)
     } catch {
       // ignore
     } finally {
@@ -147,16 +148,15 @@ export function ConnectionRow(props: {
 
   async function toggleFollow() {
     if (followBusy) return
+    triggerHaptic("light")
     setFollowBusy(true)
     const nextFollowed = !followed
-    setFollowed(nextFollowed)
+    setFollowed(nextFollowed, nextFollowed ? "public" : null)
     try {
       if (nextFollowed) {
         await session.call((token) => followUser(preview.user.id, "public", token))
-        setFollowRestrict("public")
       } else {
         await session.call((token) => unfollowUser(preview.user.id, token))
-        setFollowRestrict(null)
       }
     } catch {
       setFollowed(!nextFollowed)

@@ -447,7 +447,7 @@ export function IllustDetailDockBar(props: { illustID: number }) {
   async function toggleFollow() {
     if (!userID || followLoading) return
     try {
-      triggerHaptic("selection")
+      triggerHaptic("light")
     } catch {}
     setFollowLoading(true)
     try {
@@ -456,7 +456,7 @@ export function IllustDetailDockBar(props: { illustID: number }) {
         setFollowed(false)
       } else {
         await session.call((token) => followUser(userID, "public", token))
-        setFollowed(true)
+        setFollowed(true, "public")
         if (loadSettings().showRelatedUsersOnFollow) {
           notifyOpenRelatedUsers(userID, illust?.user?.name ?? cached?.user?.name)
         }
@@ -470,13 +470,12 @@ export function IllustDetailDockBar(props: { illustID: number }) {
   async function followWithVisibility(visibility: "public" | "private") {
     if (!userID || followLoading) return
     try {
-      triggerHaptic("selection")
+      triggerHaptic("medium")
     } catch {}
     setFollowLoading(true)
     try {
       await session.call((token) => followUser(userID, visibility, token))
-      setFollowed(true)
-      setFollowRestrict(visibility)
+      setFollowed(true, visibility)
       if (loadSettings().showRelatedUsersOnFollow) {
         notifyOpenRelatedUsers(userID, illust?.user?.name ?? cached?.user?.name)
       }
@@ -831,7 +830,7 @@ export function NovelDetailDockBar(props: { novelID: number }) {
   async function toggleFollow() {
     if (!userID || followLoading) return
     try {
-      triggerHaptic("selection")
+      triggerHaptic("light")
     } catch {}
     setFollowLoading(true)
     try {
@@ -840,7 +839,7 @@ export function NovelDetailDockBar(props: { novelID: number }) {
         setFollowed(false)
       } else {
         await session.call((token) => followUser(userID, "public", token))
-        setFollowed(true)
+        setFollowed(true, "public")
         if (loadSettings().showRelatedUsersOnFollow) {
           notifyOpenRelatedUsers(userID, novel?.user?.name)
         }
@@ -854,13 +853,12 @@ export function NovelDetailDockBar(props: { novelID: number }) {
   async function followWithVisibility(visibility: "public" | "private") {
     if (!userID || followLoading) return
     try {
-      triggerHaptic("selection")
+      triggerHaptic("medium")
     } catch {}
     setFollowLoading(true)
     try {
       await session.call((token) => followUser(userID, visibility, token))
-      setFollowed(true)
-      setFollowRestrict(visibility)
+      setFollowed(true, visibility)
       if (loadSettings().showRelatedUsersOnFollow) {
         notifyOpenRelatedUsers(userID, novel?.user?.name)
       }

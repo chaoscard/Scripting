@@ -31,10 +31,15 @@ import { getLatestCachedArtworkPath } from "../image/imageLoader"
 import { DreamyFluidBackground } from "./components/DreamyBackground"
 import { DiscoveryView } from "./discovery"
 import { RankingView } from "./ranking"
-import { SearchView } from "./search"
 import { MoreView } from "./more"
 import { LoginView } from "./login"
 import { FollowFeedView } from "./followFeed"
+
+function SearchView(props: any): any {
+  const mod = require("./search")
+  const Comp = mod.SearchView || mod.default
+  return <Comp {...props} />
+}
 import {
   registerTabNavigator,
   setActiveTabKind,

@@ -58,6 +58,7 @@ import {
 import {
   getUserFollowRestrict,
   isUserFollowed,
+  notifyUserFollowChanged,
   onUserFollowChanged,
   recordUserFollowed,
   type FollowRestrict,
@@ -691,6 +692,7 @@ export function useIllustDetailState(illustID: number): {
       await session.call((token) => followUser(currentIllust.user.id, restrict, token))
       setFollowed(true)
       setFollowRestrict(restrict)
+      notifyUserFollowChanged(currentIllust.user.id, true, restrict)
       if (loadSettings().showRelatedUsersOnFollow) {
         setShowRelatedUsers(true)
       }
@@ -704,15 +706,30 @@ export function useIllustDetailState(illustID: number): {
   async function toggleFollow() {
     if (!currentIllust || followLoading) return
     if (!followed) {
-      await followWithVisibility("public")
+      triggerHaptic("light")
+      setFollowLoading(true)
+      try {
+        await session.call((token) => followUser(currentIllust.user.id, "public", token))
+        setFollowed(true)
+        setFollowRestrict("public")
+        notifyUserFollowChanged(currentIllust.user.id, true, "public")
+        if (loadSettings().showRelatedUsersOnFollow) {
+          setShowRelatedUsers(true)
+        }
+      } catch {
+        // ignore
+      } finally {
+        setFollowLoading(false)
+      }
       return
     }
-    triggerHaptic("medium")
+    triggerHaptic("light")
     setFollowLoading(true)
     try {
       await session.call((token) => unfollowUser(currentIllust.user.id, token))
       setFollowed(false)
       setFollowRestrict(null)
+      notifyUserFollowChanged(currentIllust.user.id, false)
     } catch {
       // ignore
     } finally {

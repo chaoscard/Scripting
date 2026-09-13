@@ -25,7 +25,6 @@ import {
   ZStack,
 } from "scripting"
 import { AppNavigationLink, useDualRoute } from "./DualRouteContext"
-import { useIsCurrentTab } from "./routeNavigation"
 import {
   nextIllustrations,
   nextNovels,
@@ -66,10 +65,12 @@ import {
   onSearchHistoryChanged,
   removeSearchHistory,
 } from "../store/searchHistory"
-import { destinationElement } from "./routes"
-import { requestPixivRoute, setActiveTabKind } from "./routeNavigation"
-
-declare const Pasteboard: any
+import {
+  destinationElement,
+  requestPixivRoute,
+  setActiveTabKind,
+  useIsCurrentTab,
+} from "./routeNavigation"
 import { triggerHaptic } from "../platform/haptics"
 import {
   currentBatchSize,
@@ -92,6 +93,23 @@ import type {
   SearchScope,
   SearchSort,
 } from "../types"
+import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
+import {
+  appToolbar,
+  ConnectionRow,
+  connectionPreviewImageURLs,
+  CachedImage,
+  EmptyView,
+  ErrorView,
+  LoadingView,
+  LoadMoreTrigger,
+  IllustFlowFeed,
+  NovelCard,
+  RefreshableScrollView,
+} from "./components"
+
+declare const Pasteboard: any
+
 function SearchAdvancedSheet(props: any): any {
   const mod = require("./searchAdvancedSheet")
   const Comp = mod.SearchAdvancedSheet || mod.default
@@ -112,20 +130,6 @@ function formatDateToPixivDate(...args: any[]): any {
   const mod = require("./searchAdvancedSheet")
   return mod.formatDateToPixivDate(...args)
 }
-import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
-import {
-  appToolbar,
-  ConnectionRow,
-  connectionPreviewImageURLs,
-  CachedImage,
-  EmptyView,
-  ErrorView,
-  LoadingView,
-  LoadMoreTrigger,
-  IllustFlowFeed,
-  NovelCard,
-  RefreshableScrollView,
-} from "./components"
 
 type UserItem = PixivUserPreview & { id: number }
 

@@ -74,6 +74,7 @@ import { getSeriesByWorkID, recordWorkSeriesAssociation } from "../store/seriesC
 import {
   getUserFollowRestrict,
   isUserFollowed,
+  notifyUserFollowChanged,
   onUserFollowChanged,
   recordUserFollowed,
   type FollowRestrict,
@@ -619,6 +620,7 @@ export function NovelDetailView(props: { novelID: number }) {
       await session.call((token) => followUser(novel.user.id, restrict, token))
       setFollowed(true)
       setFollowRestrict(restrict)
+      notifyUserFollowChanged(novel.user.id, true, restrict)
       if (loadSettings().showRelatedUsersOnFollow) {
         setShowRelatedUsers(true)
       }
@@ -632,15 +634,30 @@ export function NovelDetailView(props: { novelID: number }) {
   async function toggleFollow() {
     if (!novel || followLoading) return
     if (!followed) {
-      await followWithVisibility("public")
+      triggerHaptic("light")
+      setFollowLoading(true)
+      try {
+        await session.call((token) => followUser(novel.user.id, "public", token))
+        setFollowed(true)
+        setFollowRestrict("public")
+        notifyUserFollowChanged(novel.user.id, true, "public")
+        if (loadSettings().showRelatedUsersOnFollow) {
+          setShowRelatedUsers(true)
+        }
+      } catch {
+        // ignore
+      } finally {
+        setFollowLoading(false)
+      }
       return
     }
-    triggerHaptic("medium")
+    triggerHaptic("light")
     setFollowLoading(true)
     try {
       await session.call((token) => unfollowUser(novel.user.id, token))
       setFollowed(false)
       setFollowRestrict(null)
+      notifyUserFollowChanged(novel.user.id, false)
     } catch {
       // ignore
     } finally {
