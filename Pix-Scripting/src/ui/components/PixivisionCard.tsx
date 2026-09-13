@@ -28,8 +28,9 @@ export function PixivisionCard(props: {
   cardWidth?: number
   onAppear?: () => void
   priority?: number
+  isSprint?: boolean
 }) {
-  const { article, cardWidth: customCardWidth, onAppear, priority } = props
+  const { article, cardWidth: customCardWidth, onAppear, priority, isSprint } = props
   const { width: screenWidth } = useLayoutMetrics()
   const [isAppeared, setIsAppeared] = useState(false)
   const { isItemActive } = useDualRoute()
@@ -108,6 +109,7 @@ export function PixivisionCard(props: {
                   cornerRadius={12}
                   frame={imageFrame}
                   priority={effectivePriority}
+                  isSprint={isSprint || priority === 0}
                 />
               </ZStack>
             </ZStack>

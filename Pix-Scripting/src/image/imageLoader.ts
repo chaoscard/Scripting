@@ -292,6 +292,7 @@ interface DownloadTask {
   foregroundRequested: boolean
   prefetchOwners: Set<PrefetchState>
   priority: number
+  isSprint?: boolean
   queue: "foreground" | "prefetch" | null
   activeLane: "foreground" | "prefetch" | null
   run: () => void
@@ -302,6 +303,33 @@ let activeForegroundDownloads = 0
 let activePrefetchDownloads = 0
 const foregroundQueue: DownloadTask[] = []
 const prefetchQueue: DownloadTask[] = []
+
+let activeSprintTask: DownloadTask | null = null
+let sprintWatchdogTimer: any = null
+const SPRINT_WATCHDOG_TIMEOUT_MS = 400
+
+function clearSprintLock(): void {
+  if (sprintWatchdogTimer != null) {
+    clearTimeout(sprintWatchdogTimer)
+    sprintWatchdogTimer = null
+  }
+  activeSprintTask = null
+  pumpDownloads()
+}
+
+function startSprintWatchdog(task: DownloadTask, timeoutMs = SPRINT_WATCHDOG_TIMEOUT_MS): void {
+  if (sprintWatchdogTimer != null) {
+    clearTimeout(sprintWatchdogTimer)
+  }
+  activeSprintTask = task
+  sprintWatchdogTimer = setTimeout(() => {
+    if (activeSprintTask === task) {
+      activeSprintTask = null
+      sprintWatchdogTimer = null
+      pumpDownloads()
+    }
+  }, timeoutMs)
+}
 
 export function maxTotalConcurrency(): number {
   const settings = loadSettings()
@@ -328,7 +356,27 @@ function pumpDownloads(): void {
   const maxForeground = maxConcurrentDownloads()
   const maxPrefetch = maxPrefetchWorkers()
 
-  // 1. 优先满足前台滑动窗口（严格按 priority 升序推进）
+  // 1. 如果当前处于 Sprint 独占冲刺阶段：
+  if (activeSprintTask) {
+    if (activeSprintTask.generation !== cacheGeneration) {
+      clearSprintLock()
+      return
+    }
+    if (!activeSprintTask.started) {
+      const idx = foregroundQueue.indexOf(activeSprintTask)
+      if (idx >= 0) {
+        foregroundQueue.splice(idx, 1)
+      }
+      activeSprintTask.queue = null
+      activeSprintTask.activeLane = "foreground"
+      activeForegroundDownloads++
+      activeSprintTask.run()
+    }
+    // 独占状态下严格限制并发为 1（仅运行 activeSprintTask），暂不分发其他前台与预取任务
+    return
+  }
+
+  // 2. 正常全速并发：优先满足前台滑动窗口（严格按 priority 升序推进）
   while (
     activeForegroundDownloads + activePrefetchDownloads < maxTotal &&
     activeForegroundDownloads < maxForeground &&
@@ -342,7 +390,7 @@ function pumpDownloads(): void {
     task.run()
   }
 
-  // 2. 后台预取管道调度（在总上限与预取并发配额内执行）
+  // 3. 后台预取管道调度（在总上限与预取并发配额内执行）
   while (
     activeForegroundDownloads + activePrefetchDownloads < maxTotal &&
     activePrefetchDownloads < maxPrefetch &&
@@ -364,13 +412,21 @@ function releaseDownloadSlot(task: DownloadTask): void {
     activePrefetchDownloads = Math.max(0, activePrefetchDownloads - 1)
   }
   task.activeLane = null
-  pumpDownloads()
+  if (activeSprintTask === task) {
+    clearSprintLock()
+  } else {
+    pumpDownloads()
+  }
 }
 
 function insertForegroundTask(task: DownloadTask): void {
   task.queue = "foreground"
+  if (task.isSprint) {
+    foregroundQueue.unshift(task)
+    return
+  }
   // 保持按 priority 升序（priority 小的优先；相同 priority 保持先进先出）
-  const index = foregroundQueue.findIndex((t) => t.priority > task.priority)
+  const index = foregroundQueue.findIndex((t) => !t.isSprint && t.priority > task.priority)
   if (index === -1) {
     foregroundQueue.push(task)
   } else {
@@ -413,18 +469,24 @@ function promoteQueuedDownload(task: DownloadTask): void {
 // 可见图片会将同 URL 的排队预取提升为不可取消的前台任务，并以指定优先级排队。
 export async function loadImage(
   url: string,
-  priority = DEFAULT_IMAGE_PRIORITY
+  priority = DEFAULT_IMAGE_PRIORITY,
+  isSprint?: boolean
 ): Promise<string | null> {
-  return requestImage(url, undefined, priority)
+  return requestImage(url, undefined, priority, isSprint)
 }
 
 /**
  * 动态提升已有或正在排队图片的优先级（用于视口滚动出现时的即时抢占）
  */
-export function boostImagePriority(url: string, priority: number): void {
+export function boostImagePriority(url: string, priority: number, isSprint?: boolean): void {
   const task = inflightDownloads.get(url)
   if (!task || task.generation !== cacheGeneration) return
   task.foregroundRequested = true
+  if (isSprint) {
+    task.isSprint = true
+    task.priority = Math.min(task.priority, -20000)
+    startSprintWatchdog(task)
+  }
   updateTaskPriority(task, priority)
   promoteQueuedDownload(task)
 }
@@ -432,7 +494,8 @@ export function boostImagePriority(url: string, priority: number): void {
 function requestImage(
   url: string,
   prefetchOwner?: PrefetchState,
-  priority = DEFAULT_IMAGE_PRIORITY
+  priority = DEFAULT_IMAGE_PRIORITY,
+  isSprint?: boolean
 ): Promise<string | null> {
   if (!url) return Promise.resolve(null)
   const requestGeneration = cacheGeneration
@@ -441,13 +504,18 @@ function requestImage(
     touchCachedFile(url)
     return Promise.resolve(existing)
   }
+  const effectivePriority = isSprint ? Math.min(priority, -20000) : priority
   const running = inflightDownloads.get(url)
   if (running && running.generation === requestGeneration) {
     if (prefetchOwner) {
       running.prefetchOwners.add(prefetchOwner)
     } else {
       running.foregroundRequested = true
-      updateTaskPriority(running, priority)
+      if (isSprint) {
+        running.isSprint = true
+        startSprintWatchdog(running)
+      }
+      updateTaskPriority(running, effectivePriority)
       promoteQueuedDownload(running)
     }
     return running.promise
@@ -459,10 +527,14 @@ function requestImage(
     started: false,
     foregroundRequested: !prefetchOwner,
     prefetchOwners: new Set(prefetchOwner ? [prefetchOwner] : []),
-    priority: prefetchOwner ? DEFAULT_IMAGE_PRIORITY : priority,
+    priority: prefetchOwner ? DEFAULT_IMAGE_PRIORITY : effectivePriority,
+    isSprint: Boolean(isSprint),
     queue: null,
     activeLane: null,
     run: () => {},
+  }
+  if (isSprint) {
+    startSprintWatchdog(record)
   }
   record.promise = new Promise<string | null>((resolve, reject) => {
     record.run = () => {
@@ -585,6 +657,11 @@ export function cacheUsageBytes(): number {
 export function clearCache(): void {
   cacheGeneration += 1
   cacheRevision += 1
+  if (sprintWatchdogTimer != null) {
+    clearTimeout(sprintWatchdogTimer)
+    sprintWatchdogTimer = null
+  }
+  activeSprintTask = null
   if (metaSaveTimer != null) {
     clearTimeout(metaSaveTimer)
     metaSaveTimer = null

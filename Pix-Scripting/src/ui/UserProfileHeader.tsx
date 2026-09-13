@@ -353,6 +353,7 @@ export function UserProfileHeader(props: {
               contentMode="fill"
               cornerRadius={{ topLeading: 0, topTrailing: 0, bottomLeading: 8, bottomTrailing: 8 }}
               priority={0}
+              isSprint={true}
               frame={{ maxWidth: "infinity" }}
             />
             {/* 底部羽化过渡遮罩：让封面图与下方环境底色自然交融 */}
@@ -389,6 +390,7 @@ export function UserProfileHeader(props: {
             url={user.profile_image_urls?.medium ?? null}
             size={avatarSize}
             priority={1}
+            isSprint={true}
           />
         </ZStack>
       </ZStack>

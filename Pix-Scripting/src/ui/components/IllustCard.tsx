@@ -79,6 +79,7 @@ export function IllustCard(props: {
   cardWidth?: number
   showBookmarkButton?: boolean
   priority?: number
+  isSprint?: boolean
   cornerBadge?: any
   footerText?: string
   topTrailingAction?: IllustCardAction
@@ -93,6 +94,7 @@ export function IllustCard(props: {
     cardWidth,
     showBookmarkButton = true,
     priority,
+    isSprint,
     cornerBadge,
     footerText,
     topTrailingAction,
@@ -120,6 +122,8 @@ export function IllustCard(props: {
   // 流式或Hero卡片只在进入原生可见区后请求图片；骨架尺寸仍由作品元数据提前固定。
   const [imageVisible, setImageVisible] = useState(!flow && !hero)
   const [isAppeared, setIsAppeared] = useState(!flow && !hero)
+  const isHeroOrFirst = hero || (priority === 0 && (isAppeared || flow))
+  const isSprintCard = isSprint ?? isHeroOrFirst
   const rawRatio = illust.width > 0 && illust.height > 0 ? illust.width / illust.height : 0.75
   const isExtremeTall = (flow || hero) && rawRatio < MIN_FLOW_IMAGE_RATIO
 
@@ -347,6 +351,7 @@ export function IllustCard(props: {
                   cornerRadius={hero ? 12 : 10}
                   frame={imageFrame}
                   priority={effectivePriority}
+                  isSprint={isSprintCard}
                 />
                 {illust.page_count > 1 ? (
                   <PageCountBadge count={illust.page_count} hero={hero} />
@@ -562,6 +567,7 @@ export function IllustFlowFeed(props: {
           cardWidth={flowCardWidth}
           flow={true}
           priority={index}
+          isSprint={index === 0}
           cornerBadge={props.cornerBadgeOf?.(illust, index)}
           footerText={props.footerTextOf?.(illust, index)}
           topTrailingAction={props.topTrailingActionOf?.(illust, index)}
@@ -614,6 +620,7 @@ export function IllustFlowFeed(props: {
           cardWidth={heroCardWidth}
           hero={true}
           priority={0}
+          isSprint={true}
           cornerBadge={props.cornerBadgeOf?.(heroItem, 0)}
           footerText={props.footerTextOf?.(heroItem, 0)}
           topTrailingAction={props.topTrailingActionOf?.(heroItem, 0)}

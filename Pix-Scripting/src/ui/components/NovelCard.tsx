@@ -37,6 +37,7 @@ export function NovelCard(props: {
   novel: PixivNovel
   onAppear?: () => void
   priority?: number
+  isSprint?: boolean
   footerText?: string
   markerPage?: number
   showEpisodeNumber?: boolean
@@ -47,6 +48,7 @@ export function NovelCard(props: {
     novel,
     onAppear,
     priority,
+    isSprint,
     footerText,
     markerPage,
     showEpisodeNumber = true,
@@ -187,6 +189,7 @@ export function NovelCard(props: {
                 cornerRadius={0}
                 contentMode="fill"
                 priority={effectivePriority}
+                isSprint={isSprint || priority === 0}
                 frame={{ width: 68, height: 96 }}
               />
             </ZStack>

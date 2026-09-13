@@ -116,13 +116,14 @@ export function RecommendedUsersSheet(props: {
                     padding={{ horizontal: CONNECTION_LIST_HORIZONTAL_PADDING, top: 12, bottom: 24 }}
                     frame={{ maxWidth: "infinity" }}
                   >
-                    {paged.items.map((item) => (
+                    {paged.items.map((item, index) => (
                       <ConnectionRow
                         key={`recommended-${item.user.id}`}
                         preview={item}
                         showFollowControl={item.user.id !== session.userID}
                         previewSide={previewSide}
                         hideNovels={hideNovels}
+                        priority={index}
                         onNavigate={handleNavigate}
                       />
                     ))}

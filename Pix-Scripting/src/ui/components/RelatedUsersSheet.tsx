@@ -121,13 +121,14 @@ export function RelatedUsersSheet(props: {
                     padding={{ horizontal: CONNECTION_LIST_HORIZONTAL_PADDING, top: 12, bottom: 24 }}
                     frame={{ maxWidth: "infinity" }}
                   >
-                    {users.map((item) => (
+                    {users.map((item, index) => (
                       <ConnectionRow
                         key={`related-${item.user.id}`}
                         preview={item}
                         showFollowControl={item.user.id !== session.userID}
                         previewSide={previewSide}
                         hideNovels={hideNovels}
+                        priority={index}
                         onNavigate={handleNavigate}
                       />
                     ))}

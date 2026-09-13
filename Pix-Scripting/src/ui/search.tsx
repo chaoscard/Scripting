@@ -1692,12 +1692,13 @@ function UserSuggestionsSection(props: {
 
   return (
     <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10, bottom: 20 }}>
-      {items.map((preview) => (
+      {items.map((preview, index) => (
         <ConnectionRow
           key={preview.user.id}
           preview={preview}
           showFollowControl={preview.user.id !== session.userID}
           hideNovels={hideNovels}
+          priority={index}
         />
       ))}
     </LazyVStack>
@@ -2162,12 +2163,13 @@ function RecommendedUsersSection(props: {
 
   return (
     <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10, bottom: 20 }}>
-      {paged.items.map((preview) => (
+      {paged.items.map((preview, index) => (
         <ConnectionRow
           key={preview.user.id}
           preview={preview}
           showFollowControl={preview.user.id !== session.userID}
           hideNovels={hideNovels}
+          priority={index}
         />
       ))}
       {tail ? (
@@ -2191,12 +2193,13 @@ function UserResults(props: {
 
   return (
     <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10, bottom: 20 }}>
-      {paged.items.map((preview) => (
+      {paged.items.map((preview, index) => (
         <ConnectionRow
           key={preview.user.id}
           preview={preview}
           showFollowControl={preview.user.id !== session.userID}
           hideNovels={hideNovels}
+          priority={index}
         />
       ))}
       {tail ? (

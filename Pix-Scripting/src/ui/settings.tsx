@@ -1651,7 +1651,7 @@ export function SettingsView() {
               title="锐化失焦半径"
               unit="pt"
               value={settings.sharpenBlurRadius}
-              defaultValue={0.5}
+              defaultValue={0.3}
               min={0}
               max={8}
               allowFloat={true}

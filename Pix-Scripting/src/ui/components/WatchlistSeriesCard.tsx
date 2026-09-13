@@ -48,9 +48,10 @@ export function WatchlistSeriesCard(props: {
   item: PixivWatchlistSeries
   kind?: "manga" | "novel"
   priority?: number
+  isSprint?: boolean
   onAppear?: () => void
 }) {
-  const { item, kind = "manga", priority, onAppear } = props
+  const { item, kind = "manga", priority, isSprint, onAppear } = props
   const isNovel = kind === "novel"
   const { isItemActive } = useDualRoute()
   const isSelected = isItemActive(isNovel ? "novelSeries" : "mangaSeries", item.id)
@@ -181,6 +182,7 @@ export function WatchlistSeriesCard(props: {
               contentMode="fill"
               frame={{ width: 68, height: 96 }}
               priority={priority}
+              isSprint={isSprint || priority === 0}
             />
           </ZStack>
           <VStack

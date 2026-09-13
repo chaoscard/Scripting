@@ -65,13 +65,20 @@ function IllustGalleryPage(props: IllustGalleryPageProps) {
     onDismissDragEnd,
   } = props
 
+  const detailQuality = useMemo(() => getDetailImageQuality(), [])
   const isDefaultOriginal = useMemo(() => {
-    return getDetailImageQuality() === "original"
-  }, [])
+    return detailQuality === "original"
+  }, [detailQuality])
+
+  const previewQuality: "medium" | "large" =
+    detailQuality === "large" || detailQuality === "original" ? "large" : "medium"
+
+  const pageThumbQuality: "medium" | "large" =
+    pageIndex === 0 ? previewQuality : "medium"
 
   const largeUrl = useMemo(() => imageUrlOf(illust, pageIndex, "large"), [illust, pageIndex])
   const originalUrl = useMemo(() => imageUrlOf(illust, pageIndex, "original"), [illust, pageIndex])
-  const thumbUrl = useMemo(() => pageThumbUrlOf(illust, pageIndex), [illust, pageIndex])
+  const thumbUrl = useMemo(() => pageThumbUrlOf(illust, pageIndex, pageThumbQuality), [illust, pageIndex, pageThumbQuality])
 
   const initialOriginalPath = useMemo(() => (originalUrl ? cachedFilePath(originalUrl) : null), [originalUrl])
   const initialLargePath = useMemo(() => (largeUrl ? cachedFilePath(largeUrl) : null), [largeUrl])
@@ -452,19 +459,21 @@ export function IllustGalleryView(props: {
 
   // 深度预热：预热当前页面前后所有相邻页面的缩略图与高清大图
   useEffect(() => {
-    const quality = getDetailImageQuality()
+    const detailQuality = getDetailImageQuality()
+    const previewQuality: "medium" | "large" =
+      detailQuality === "large" || detailQuality === "original" ? "large" : "medium"
     const urlsToPrefetch: (string | null | undefined)[] = []
     
     for (let offset = 1; offset <= 2; offset++) {
       const prevIdx = currentPageIndex - offset
       const nextIdx = currentPageIndex + offset
       if (prevIdx >= 0) {
-        urlsToPrefetch.push(pageThumbUrlOf(illust, prevIdx))
-        urlsToPrefetch.push(imageUrlOf(illust, prevIdx, quality))
+        urlsToPrefetch.push(pageThumbUrlOf(illust, prevIdx, prevIdx === 0 ? previewQuality : "medium"))
+        urlsToPrefetch.push(imageUrlOf(illust, prevIdx, detailQuality))
       }
       if (nextIdx < pageCount) {
-        urlsToPrefetch.push(pageThumbUrlOf(illust, nextIdx))
-        urlsToPrefetch.push(imageUrlOf(illust, nextIdx, quality))
+        urlsToPrefetch.push(pageThumbUrlOf(illust, nextIdx, nextIdx === 0 ? previewQuality : "medium"))
+        urlsToPrefetch.push(imageUrlOf(illust, nextIdx, detailQuality))
       }
     }
     if (urlsToPrefetch.length > 0) {

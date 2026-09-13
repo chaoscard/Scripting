@@ -49,12 +49,12 @@ export function IllustMediaViewport(props: IllustMediaViewportProps) {
         ? "sharp"
         : "blur"
 
-  // 当为多页作品时，在详情页挂载的第一时间高优先级并发预热所有页面的缩略图（中图或大图），
+  // 当为多页作品时，在详情页挂载的第一时间高优先级并发预热所有页面的缩略图（首图按画质设置预热，后续页预热轻量 medium），
   // 确保用户滚动到后续各页之前所有缩略图已写入本地磁盘，首帧 0 延迟命中真实物理比例与底图
   useEffect(() => {
     if (!illust || pageCount <= 1) return
     for (let idx = 0; idx < pageCount; idx++) {
-      const thumb = pageThumbUrlOf(illust, idx, previewQuality)
+      const thumb = pageThumbUrlOf(illust, idx, idx === 0 ? previewQuality : "medium")
       if (thumb && !cachedFilePath(thumb)) {
         void loadImage(thumb, idx === 0 ? -6000 : -1000 + idx)
       }
@@ -79,8 +79,9 @@ export function IllustMediaViewport(props: IllustMediaViewportProps) {
       ) : pageCount > 1 ? (
         <LazyVStack spacing={0} alignment="center">
           {pageURLs.map((url, idx) => {
-            const preview = pageThumbUrlOf(illust, idx, previewQuality)
             const isFirst = idx === 0
+            const preview = pageThumbUrlOf(illust, idx, isFirst ? previewQuality : "medium")
+            const itemPreviewMode = isFirst ? previewMode : "blur"
             const isLast = idx === pageCount - 1
             const cornerRadii = isFirst
               ? { topLeading: 8, topTrailing: 8, bottomLeading: 0, bottomTrailing: 0 }
@@ -91,15 +92,16 @@ export function IllustMediaViewport(props: IllustMediaViewportProps) {
               <CachedImage
                 key={`illust-page-${illust.id}-${idx}`}
                 url={url}
-                previewUrl={(idx === 0 ? illust.extra_preview_url : null) || preview}
-                previewMode={previewMode}
+                previewUrl={(isFirst ? illust.extra_preview_url : null) || preview}
+                previewMode={itemPreviewMode}
                 aspectRatioValue={pageAspect}
                 useIntrinsicAspectRatio={true}
                 cornerRadius={cornerRadii}
                 contentMode="fit"
                 frame={{ maxWidth: "infinity" }}
-                priority={idx === 0 ? -5000 : idx}
-                onLoaded={idx === 0 ? onMainImageLoaded : undefined}
+                priority={isFirst ? -5000 : idx}
+                isSprint={isFirst}
+                onLoaded={isFirst ? onMainImageLoaded : undefined}
                 onTapGesture={() => onOpenGallery(idx)}
               />
             )
@@ -117,6 +119,7 @@ export function IllustMediaViewport(props: IllustMediaViewportProps) {
           contentMode="fit"
           frame={{ maxWidth: "infinity" }}
           priority={-5000}
+          isSprint={true}
           onLoaded={onMainImageLoaded}
           onTapGesture={() => onOpenGallery(0)}
         />

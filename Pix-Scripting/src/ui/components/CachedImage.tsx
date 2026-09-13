@@ -38,7 +38,8 @@ export function sharpenFadeDurationSec(): number {
 function useCachedImage(
   url: string | null,
   onLoaded?: (success: boolean) => void,
-  priority?: number
+  priority?: number,
+  isSprint?: boolean
 ) {
   const [cacheRevision, setCacheRevision] = useState(imageCacheRevision())
   const [loaded, setLoaded] = useState<{
@@ -89,7 +90,7 @@ function useCachedImage(
     }
 
     const doLoad = (isRetry = false) => {
-      loadImage(url, priority)
+      loadImage(url, priority, isSprint)
         .then((p) => {
           if (!cancelled) {
             if (p) {
@@ -129,7 +130,7 @@ function useCachedImage(
       cancelled = true
       if (retryTimer != null) clearTimeout(retryTimer)
     }
-  }, [url, cacheRevision, cachedPath, onLoadedRef, priority])
+  }, [url, cacheRevision, cachedPath, onLoadedRef, priority, isSprint])
 
   return { path, isTargetLoaded: Boolean(targetPath), failed, cacheRevision }
 }
@@ -159,6 +160,7 @@ export function CachedImage(props: {
   frame?: any // 覆盖默认整宽 frame（如固定尺寸缩略图）
   onLoaded?: (success: boolean) => void
   priority?: number
+  isSprint?: boolean
   onTapGesture?: (() => void) | { count: number; perform: () => void }
 }) {
   const {
@@ -178,9 +180,10 @@ export function CachedImage(props: {
     frame,
     onLoaded,
     priority,
+    isSprint,
     onTapGesture,
   } = props
-  const { path, isTargetLoaded, failed, cacheRevision } = useCachedImage(url, onLoaded, priority)
+  const { path, isTargetLoaded, failed, cacheRevision } = useCachedImage(url, onLoaded, priority, isSprint)
   const initialHitRef = useRef<boolean>(Boolean(url && cachedFilePath(url)))
   const lastUrlRef = useRef<string | null>(url)
   if (lastUrlRef.current !== url) {
@@ -205,7 +208,7 @@ export function CachedImage(props: {
     }
     let active = true
     const thumbPriority = Math.min(-1000, (priority ?? 0) - 1000)
-    loadImage(previewUrl, thumbPriority)
+    loadImage(previewUrl, thumbPriority, isSprint)
       .then((p) => {
         if (active && p) {
           setPreviewLoadedPath(p)
@@ -215,7 +218,7 @@ export function CachedImage(props: {
     return () => {
       active = false
     }
-  }, [previewUrl, previewCached, priority])
+  }, [previewUrl, previewCached, priority, isSprint])
 
   const previewPath = previewCached ?? previewLoadedPath
 
@@ -230,7 +233,7 @@ export function CachedImage(props: {
   const isNoneMode = previewMode === "none"
   const isSharpMode = previewMode === "sharp"
   const resolvedSharpenBlurRadius =
-    sharpenBlurRadius ?? loadSettings().sharpenBlurRadius ?? 0.5
+    sharpenBlurRadius ?? loadSettings().sharpenBlurRadius ?? 0.3
   const resolvedBlurPreviewRadius =
     blurPreviewRadius ?? loadSettings().blurCrossFadeRadius ?? 2
 
@@ -593,9 +596,10 @@ export function AvatarImage(props: {
   size?: number
   cornerRadius?: number
   priority?: number
+  isSprint?: boolean
 }) {
-  const { url, size = 36, cornerRadius = size / 2, priority } = props
-  const { path } = useCachedImage(url, undefined, priority)
+  const { url, size = 36, cornerRadius = size / 2, priority, isSprint } = props
+  const { path } = useCachedImage(url, undefined, priority, isSprint)
 
   return (
     <ZStack

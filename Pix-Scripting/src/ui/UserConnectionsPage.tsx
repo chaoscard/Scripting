@@ -211,13 +211,14 @@ export function UserConnectionsView(props: {
               />
             ) : (
               <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
-                {paged.items.map((preview) => (
+                {paged.items.map((preview, index) => (
                   <ConnectionRow
                     key={preview.user.id}
                     preview={preview}
                     showFollowControl={preview.user.id !== session.userID}
                     previewSide={previewSide}
                     hideNovels={hideNovels}
+                    priority={index}
                   />
                 ))}
                 <LoadMoreTrigger

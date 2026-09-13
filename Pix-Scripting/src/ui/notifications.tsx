@@ -259,6 +259,7 @@ function NotificationRow(props: {
             cornerRadius={0}
             contentMode="fill"
             priority={priority}
+            isSprint={priority === 0}
             frame={{ width: 68, height: 96 }}
           />
         </ZStack>
@@ -267,7 +268,7 @@ function NotificationRow(props: {
           frame={{ width: 68, height: 96 }}
           alignment="center"
         >
-          <AvatarImage url={leadingIcon} size={48} priority={priority} />
+          <AvatarImage url={leadingIcon} size={48} priority={priority} isSprint={priority === 0} />
         </ZStack>
       ) : (
         <ZStack
@@ -290,7 +291,7 @@ function NotificationRow(props: {
       >
         {coverURL && leadingIcon ? (
           <HStack spacing={6} alignment="center">
-            <AvatarImage url={leadingIcon} size={18} priority={priority} />
+            <AvatarImage url={leadingIcon} size={18} priority={priority} isSprint={priority === 0} />
             <Text
               font="subheadline"
               fontWeight="semibold"

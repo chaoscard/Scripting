@@ -86,9 +86,18 @@ export function ConnectionRow(props: {
   showFollowControl?: boolean
   previewSide?: number
   hideNovels?: boolean
+  priority?: number
+  isSprint?: boolean
   onNavigate?: (route: string) => void
 }) {
-  const { preview, hideNovels = false, showFollowControl = true } = props
+  const {
+    preview,
+    hideNovels = false,
+    showFollowControl = true,
+    priority,
+    isSprint,
+  } = props
+  const isSprintRow = isSprint ?? (priority === 0)
   const [followed, setFollowed, followRestrict, setFollowRestrict] = useUserFollow(
     preview.user.id,
     preview.user.is_followed ?? false
@@ -185,7 +194,12 @@ export function ConnectionRow(props: {
                   glassEffect={true}
                   frame={{ width: 38, height: 38 }}
                 />
-                <AvatarImage url={preview.user.profile_image_urls?.medium ?? null} size={32} />
+                <AvatarImage
+                  url={preview.user.profile_image_urls?.medium ?? null}
+                  size={32}
+                  priority={priority}
+                  isSprint={isSprintRow}
+                />
               </ZStack>
               <VStack alignment="leading" spacing={2}>
                 <Text font="body" fontWeight="semibold" lineLimit={1}>
@@ -216,7 +230,12 @@ export function ConnectionRow(props: {
                   glassEffect={true}
                   frame={{ width: 38, height: 38 }}
                 />
-                <AvatarImage url={preview.user.profile_image_urls?.medium ?? null} size={32} />
+                <AvatarImage
+                  url={preview.user.profile_image_urls?.medium ?? null}
+                  size={32}
+                  priority={priority}
+                  isSprint={isSprintRow}
+                />
               </ZStack>
               <VStack alignment="leading" spacing={2}>
                 <Text font="body" fontWeight="semibold" lineLimit={1}>
@@ -292,6 +311,8 @@ export function ConnectionRow(props: {
                 key={`illust:${item.item.id}`}
                 illustration={item.item}
                 side={previewSide}
+                priority={priority}
+                isSprint={isSprintRow}
                 onNavigate={props.onNavigate}
               />
             ) : (
@@ -299,6 +320,8 @@ export function ConnectionRow(props: {
                 key={`novel:${item.item.id}`}
                 novel={item.item}
                 side={previewSide}
+                priority={priority}
+                isSprint={isSprintRow}
                 onNavigate={props.onNavigate}
               />
             )
@@ -313,6 +336,8 @@ export function ConnectionIllustThumbnail(props: {
   illustration: PixivIllustration
   side: number
   onNavigate?: (route: string) => void
+  priority?: number
+  isSprint?: boolean
 }) {
   const imageElement = (
     <CachedImage
@@ -320,6 +345,8 @@ export function ConnectionIllustThumbnail(props: {
       aspectRatioValue={1}
       useIntrinsicAspectRatio={false}
       cornerRadius={6}
+      priority={props.priority}
+      isSprint={props.isSprint}
       frame={{ width: props.side, height: props.side }}
     />
   )
@@ -350,6 +377,8 @@ export function ConnectionNovelThumbnail(props: {
   novel: PixivNovel
   side: number
   onNavigate?: (route: string) => void
+  priority?: number
+  isSprint?: boolean
 }) {
   const coverWidth = props.side * NOVEL_PREVIEW_COVER_RATIO
 
@@ -367,6 +396,8 @@ export function ConnectionNovelThumbnail(props: {
         useIntrinsicAspectRatio={false}
         contentMode="fill"
         cornerRadius={0}
+        priority={props.priority}
+        isSprint={props.isSprint}
         frame={{ width: coverWidth, height: props.side }}
       />
       <Text
