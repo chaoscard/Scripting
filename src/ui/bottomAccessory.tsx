@@ -55,6 +55,7 @@ import {
   exportNovelToEpub,
   exportUgoiraToAlbum,
   exportUgoiraZip,
+  presentPixivisionDownloadActionSheet,
 } from "../downloader"
 import { imageUrlOf } from "../image/imageLoader"
 import { requestPixivRoute } from "./routeNavigation"
@@ -997,6 +998,8 @@ export function PixivisionDetailDockBar(props: { articleID: number }) {
     isPixivisionBookmarked(articleID)
   )
   const [detail, setDetail] = useState<PixivisionDetail | null>(null)
+  const [downloadStatus, setDownloadStatus] = useState<string | null>(null)
+  const isDownloading = downloadStatus != null
 
   useEffect(() => {
     setBookmarked(isPixivisionBookmarked(articleID))
@@ -1041,6 +1044,14 @@ export function PixivisionDetailDockBar(props: { articleID: number }) {
     void ShareSheet.present([shareText])
   }
 
+  const handleDownload = () => {
+    if (!detail) return
+    if (isDownloading) return
+    void presentPixivisionDownloadActionSheet(detail, (status) => {
+      setDownloadStatus(status)
+    })
+  }
+
   const items: DockActionItem[] = [
     {
       key: "bookmark",
@@ -1055,6 +1066,13 @@ export function PixivisionDetailDockBar(props: { articleID: number }) {
       icon: "square.and.arrow.up",
       color: "systemBlue",
       action: handleShare,
+    },
+    {
+      key: "download",
+      label: isDownloading ? (downloadStatus ? (downloadStatus.length > 5 ? "下载中" : downloadStatus) : "下载中") : "下载",
+      icon: isDownloading ? "arrow.down.circle.fill" : "square.and.arrow.down",
+      color: "systemBlue",
+      action: handleDownload,
     },
   ]
 
@@ -1345,6 +1363,8 @@ export function renderRouteInfoBar(top: string) {
         ? "漫画下载"
         : cat === "novels"
         ? "小说下载"
+        : cat === "pixivision"
+        ? "特辑导出"
         : "全部下载文件"
     const catIcon =
       cat === "illustrations"
@@ -1355,6 +1375,8 @@ export function renderRouteInfoBar(top: string) {
         ? "photo.on.rectangle.fill"
         : cat === "novels"
         ? "book.fill"
+        : cat === "pixivision"
+        ? "rectangle.stack.fill"
         : "folder.fill"
     return <DockInfoBar icon={catIcon} title={catTitle} />
   }

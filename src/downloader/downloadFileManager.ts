@@ -1,7 +1,7 @@
 import { getAuthorDownloadDirectory, getCategoryDirectory, getDownloadRootDirectory, sanitizeFileName } from "./directoryResolver"
 import { yieldIfExceeded } from "./downloadHelper"
 
-export type DownloadFileCategory = "all" | "illustrations" | "ugoira" | "manga" | "novels" | "creators"
+export type DownloadFileCategory = "all" | "illustrations" | "ugoira" | "manga" | "novels" | "pixivision" | "creators"
 
 export type DownloadFilesChangeListener = () => void
 
@@ -96,7 +96,7 @@ export interface ManagedFileItem {
   modifiedTime: number
   formattedTime: string
   extension: string
-  category: "illustrations" | "ugoira" | "manga" | "novels" | "other"
+  category: "illustrations" | "ugoira" | "manga" | "novels" | "pixivision" | "other"
   creatorFolder?: string
   artworkId?: number
   title?: string
@@ -132,6 +132,8 @@ export interface StorageOverview {
   mangaCount: number
   novelsSize: number
   novelsCount: number
+  pixivisionSize: number
+  pixivisionCount: number
   creatorsSize: number
   creatorsCount: number
   tempSize: number
@@ -196,9 +198,14 @@ export function extractFileMeta(fileName: string): { artworkId?: number; title: 
 export function detectCategory(
   fullPath: string,
   ext: string
-): "illustrations" | "ugoira" | "manga" | "novels" | "other" {
+): "illustrations" | "ugoira" | "manga" | "novels" | "pixivision" | "other" {
   const lowerExt = ext.toLowerCase()
   const lowerPath = fullPath.toLowerCase()
+
+  // 特辑判定：路径包含 pixivision / 文件名带 pixivision / pdf 格式
+  if (lowerPath.includes("/pixivision/") || lowerPath.includes("pixivision_") || lowerExt === "pdf") {
+    return "pixivision"
+  }
 
   // 动图判定：mp4 / gif / 路径包含 ugoira 或文件名带 ugoira
   if (
@@ -383,6 +390,7 @@ export async function getStorageOverview(forceRefresh = false): Promise<StorageO
   const ugDir = `${root}/Ugoira`
   const mangaDir = `${root}/Manga`
   const novelDir = `${root}/Novels`
+  const pixivisionDir = `${root}/Pixivision`
   const creatorsDir = `${root}/Creators`
   const tempDir = getCategoryDirectory("temp")
 
@@ -391,6 +399,7 @@ export async function getStorageOverview(forceRefresh = false): Promise<StorageO
   const ugPhysicalStats = calculateDirStats(ugDir)
   const mangaPhysicalStats = calculateDirStats(mangaDir)
   const novelPhysicalStats = calculateDirStats(novelDir)
+  const pixivisionPhysicalStats = calculateDirStats(pixivisionDir)
   const creatorsStats = calculateDirStats(creatorsDir)
   const tempStats = calculateDirStats(tempDir)
 
@@ -399,6 +408,7 @@ export async function getStorageOverview(forceRefresh = false): Promise<StorageO
     ugPhysicalStats.totalSize +
     mangaPhysicalStats.totalSize +
     novelPhysicalStats.totalSize +
+    pixivisionPhysicalStats.totalSize +
     creatorsStats.totalSize
 
   const totalFilesCount =
@@ -406,6 +416,7 @@ export async function getStorageOverview(forceRefresh = false): Promise<StorageO
     ugPhysicalStats.fileCount +
     mangaPhysicalStats.fileCount +
     novelPhysicalStats.fileCount +
+    pixivisionPhysicalStats.fileCount +
     creatorsStats.fileCount
 
   // 2. 穿透聚合各分类统计（根目录 + 所有画师对应分类子目录，保证内外口径一致）
@@ -438,6 +449,8 @@ export async function getStorageOverview(forceRefresh = false): Promise<StorageO
     mangaCount: mangaStats.fileCount,
     novelsSize: novelStats.totalSize,
     novelsCount: novelStats.fileCount,
+    pixivisionSize: pixivisionPhysicalStats.totalSize,
+    pixivisionCount: pixivisionPhysicalStats.fileCount,
     creatorsSize: creatorsStats.totalSize,
     creatorsCount: creatorFolderCount,
     tempSize: tempStats.totalSize,
@@ -494,7 +507,7 @@ export async function scanCategoryFiles(
 
     if (category === "all") {
       // 扫描所有目录
-      const subDirs = ["Illustrations", "Ugoira", "Manga", "Novels"]
+      const subDirs = ["Illustrations", "Ugoira", "Manga", "Novels", "Pixivision"]
       for (const sub of subDirs) {
         const items = await scanDirectoryFiles(`${root}/${sub}`)
         results.push(...items)
@@ -527,6 +540,7 @@ export async function scanCategoryFiles(
       if (category === "ugoira") subName = "Ugoira"
       else if (category === "manga") subName = "Manga"
       else if (category === "novels") subName = "Novels"
+      else if (category === "pixivision") subName = "Pixivision"
 
       // 1. 扫描对应根子目录
       const rootItems = await scanDirectoryFiles(`${root}/${subName}`)
@@ -747,12 +761,27 @@ export async function scanCreatorFiles(
 }
 
 /**
- * 删除单个文件
+ * 删除单个文件（支持防文件锁阻塞与安全隔离）
  */
 export async function deleteManagedFile(filePath: string): Promise<boolean> {
   if (!FileManager.existsSync(filePath)) return true
   try {
-    FileManager.removeSync(filePath)
+    try {
+      FileManager.removeSync(filePath)
+    } catch {
+      // 备用机制：若被系统句柄或协调锁占用，先原子移至临时目录再清理
+      const tempDir = getCategoryDirectory("temp")
+      if (!FileManager.existsSync(tempDir)) {
+        try {
+          FileManager.createDirectorySync(tempDir, true)
+        } catch {}
+      }
+      const trashPath = `${tempDir}/.trash_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+      FileManager.renameSync(filePath, trashPath)
+      try {
+        FileManager.removeSync(trashPath)
+      } catch {}
+    }
     notifyDownloadFilesChanged()
     return true
   } catch (e: any) {
@@ -783,7 +812,21 @@ export async function deleteManagedFiles(
 export async function deleteCreatorDirectory(folderPath: string): Promise<boolean> {
   if (!FileManager.existsSync(folderPath)) return true
   try {
-    FileManager.removeSync(folderPath)
+    try {
+      FileManager.removeSync(folderPath)
+    } catch {
+      const tempDir = getCategoryDirectory("temp")
+      if (!FileManager.existsSync(tempDir)) {
+        try {
+          FileManager.createDirectorySync(tempDir, true)
+        } catch {}
+      }
+      const trashPath = `${tempDir}/.trash_dir_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+      FileManager.renameSync(folderPath, trashPath)
+      try {
+        FileManager.removeSync(trashPath)
+      } catch {}
+    }
     notifyDownloadFilesChanged()
     return true
   } catch (e: any) {

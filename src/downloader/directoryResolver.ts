@@ -1,6 +1,6 @@
 import { loadSettings } from "../store/settings"
 
-export type DownloadCategory = "novels" | "manga" | "illustrations" | "ugoira" | "temp"
+export type DownloadCategory = "novels" | "manga" | "illustrations" | "ugoira" | "pixivision" | "temp"
 
 /**
  * 过滤文件名中的非法字符，防止文件系统路径错误
@@ -74,6 +74,7 @@ export function getCategoryDirectory(category: DownloadCategory): string {
   else if (category === "manga") subName = "Manga"
   else if (category === "illustrations") subName = "Illustrations"
   else if (category === "ugoira") subName = "Ugoira"
+  else if (category === "pixivision") subName = "Pixivision"
 
   const targetPath = `${root}/${subName}`
   if (!FileManager.existsSync(targetPath)) {

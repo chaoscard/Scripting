@@ -27,7 +27,12 @@ import {
 import { pixivisionDetail } from "../api/pixiv"
 import { cacheIllust, getCachedIllust } from "../store/illustCache"
 import { cachedFilePath, derivePixivThumbUrl, getPixivisionCoverUrl, loadImage } from "../image/imageLoader"
-import { fetchImageBinaryWithRetry, saveImageToPixivAlbum, withAlbumKeepAlive } from "../downloader"
+import {
+  fetchImageBinaryWithRetry,
+  presentPixivisionDownloadActionSheet,
+  saveImageToPixivAlbum,
+  withAlbumKeepAlive,
+} from "../downloader"
 import { renderDestination } from "./routes"
 import { useAsyncGuard, useLayoutMetrics } from "./hooks"
 import { useExperimentalAmbientPalette } from "./ambient"
@@ -73,6 +78,8 @@ export function PixivisionDetailView(props: { articleID: number }) {
   const [error, setError] = useState<string | null>(null)
   const [isTocExpanded, setIsTocExpanded] = useState(true)
   const [bookmarked, setBookmarked] = useState<boolean>(() => isPixivisionBookmarked(articleID))
+  const [downloadStatus, setDownloadStatus] = useState<string | null>(null)
+  const isDownloading = downloadStatus != null
   const guard = useAsyncGuard()
   const proxyRef = useRef<ScrollViewProxy | null>(null)
 
@@ -101,7 +108,34 @@ export function PixivisionDetailView(props: { articleID: number }) {
   }, [articleID])
 
   const handleShare = useCallback(async () => {
-    await ShareSheet.present([`https://www.pixivision.net/zh/a/${articleID}`])
+    try {
+      triggerHaptic("light")
+    } catch {}
+    const shareUrl = `https://www.pixivision.net/zh/a/${articleID}`
+    const shareText = detail?.title ? `${detail.title}\n${shareUrl}` : shareUrl
+    await ShareSheet.present([shareText])
+  }, [articleID, detail])
+
+  const handleDownload = useCallback(() => {
+    if (!detail) return
+    if (isDownloading) return
+    void presentPixivisionDownloadActionSheet(detail, (status) => {
+      setDownloadStatus(status)
+    })
+  }, [detail, isDownloading])
+
+  const handleCopyLink = useCallback(() => {
+    try {
+      triggerHaptic("light")
+    } catch {}
+    void Pasteboard.setString(`https://www.pixivision.net/zh/a/${articleID}`)
+  }, [articleID])
+
+  const handleOpenInBrowser = useCallback(() => {
+    try {
+      triggerHaptic("light")
+    } catch {}
+    void presentExternalURL(`https://www.pixivision.net/zh/a/${articleID}`)
   }, [articleID])
 
   const scrollToTarget = useCallback((targetId: string) => {
@@ -443,53 +477,107 @@ export function PixivisionDetailView(props: { articleID: number }) {
             toolbarBackground="clear"
             toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
             toolbar={{
-              topBarTrailing: [
-                ...(detail.tableOfContents && detail.tableOfContents.length > 0
-                  ? [
-                      <Menu key="toc-menu" label={<Image systemName="list.bullet" />}>
-                        {detail.tableOfContents.map((item, idx) => (
-                          <Button
-                            key={item.id || `toc-${idx}`}
-                            title={`${idx + 1}. ${item.title}`}
-                            action={() => {
-                              if (item.id) {
-                                scrollToTarget(item.id)
-                              }
-                            }}
-                          />
-                        ))}
-                      </Menu>,
-                    ]
-                  : []),
-                <Button
-                  key="bookmark"
-                  action={() => {
-                    try {
-                      triggerHaptic("medium")
-                    } catch {}
-                    if (!detail) return
-                    const next = togglePixivisionBookmark({
-                      id: articleID,
-                      title: detail.title,
-                      thumbnailURL: detail.thumbnailURL || firstImageUrl || undefined,
-                      category: detail.category,
-                      categoryLabel: detail.category,
-                      publishedAt: detail.date,
-                      tags: detail.tags ? detail.tags.map((t) => t.name) : undefined,
-                      bookmarkedAt: Date.now(),
-                    })
-                    setBookmarked(next)
-                  }}
-                >
-                  <Image
-                    systemName={bookmarked ? "heart.fill" : "heart"}
-                    foregroundStyle={bookmarked ? "#FF2D55" : undefined}
-                  />
-                </Button>,
-                <Button key="share" action={handleShare}>
-                  <Image systemName="square.and.arrow.up" />
-                </Button>,
-              ],
+              topBarTrailing: detail.tableOfContents && detail.tableOfContents.length > 0
+                ? [
+                    // 场景 1：有目录，iPad与iPhone均展示 3 个按钮：[目录] + [收藏] + [更多(下载/分享/浏览器/复制)]
+                    <Menu key="toc-menu" label={<Image systemName="list.bullet" />}>
+                      {detail.tableOfContents.map((item, idx) => (
+                        <Button
+                          key={item.id || `toc-${idx}`}
+                          title={`${idx + 1}. ${item.title}`}
+                          action={() => {
+                            if (item.id) {
+                              scrollToTarget(item.id)
+                            }
+                          }}
+                        />
+                      ))}
+                    </Menu>,
+                    <Button
+                      key="bookmark"
+                      action={() => {
+                        try {
+                          triggerHaptic("medium")
+                        } catch {}
+                        if (!detail) return
+                        const next = togglePixivisionBookmark({
+                          id: articleID,
+                          title: detail.title,
+                          thumbnailURL: detail.thumbnailURL || firstImageUrl || undefined,
+                          category: detail.category,
+                          categoryLabel: detail.category,
+                          publishedAt: detail.date,
+                          tags: detail.tags ? detail.tags.map((t) => t.name) : undefined,
+                          bookmarkedAt: Date.now(),
+                        })
+                        setBookmarked(next)
+                      }}
+                    >
+                      <Image
+                        systemName={bookmarked ? "heart.fill" : "heart"}
+                        foregroundStyle={bookmarked ? "#FF2D55" : undefined}
+                      />
+                    </Button>,
+                    <Menu key="more-menu" label={<Image systemName="ellipsis.circle" />}>
+                      <Button
+                        title={isDownloading ? (downloadStatus || "下载中…") : "下载与导出特辑"}
+                        systemImage={isDownloading ? "arrow.down.circle.fill" : "square.and.arrow.down"}
+                        action={handleDownload}
+                      />
+                      <Button
+                        title="分享特辑"
+                        systemImage="square.and.arrow.up"
+                        action={handleShare}
+                      />
+                      <Button
+                        title="在内置浏览器中打开"
+                        systemImage="safari"
+                        action={handleOpenInBrowser}
+                      />
+                      <Button
+                        title="复制特辑链接"
+                        systemImage="link"
+                        action={handleCopyLink}
+                      />
+                    </Menu>,
+                  ]
+                : [
+                    // 场景 2：无目录，展示 3 个按钮：[收藏] + [分享] + [下载]
+                    <Button
+                      key="bookmark"
+                      action={() => {
+                        try {
+                          triggerHaptic("medium")
+                        } catch {}
+                        if (!detail) return
+                        const next = togglePixivisionBookmark({
+                          id: articleID,
+                          title: detail.title,
+                          thumbnailURL: detail.thumbnailURL || firstImageUrl || undefined,
+                          category: detail.category,
+                          categoryLabel: detail.category,
+                          publishedAt: detail.date,
+                          tags: detail.tags ? detail.tags.map((t) => t.name) : undefined,
+                          bookmarkedAt: Date.now(),
+                        })
+                        setBookmarked(next)
+                      }}
+                    >
+                      <Image
+                        systemName={bookmarked ? "heart.fill" : "heart"}
+                        foregroundStyle={bookmarked ? "#FF2D55" : undefined}
+                      />
+                    </Button>,
+                    <Button key="share" action={handleShare}>
+                      <Image systemName="square.and.arrow.up" />
+                    </Button>,
+                    <Button key="download" action={handleDownload}>
+                      <Image
+                        systemName={isDownloading ? "arrow.down.circle.fill" : "square.and.arrow.down"}
+                        foregroundStyle={isDownloading ? "#0096FA" : undefined}
+                      />
+                    </Button>,
+                  ],
             }}
           >
             <VStack
