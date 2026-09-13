@@ -219,7 +219,7 @@ export function SettingsView() {
         key: "title",
         label: "应用设置",
         icon: "gearshape.fill",
-        color: "#EE2F49",
+        color: "systemPink",
         action: () => {
           try {
             triggerHaptic("selection")
@@ -230,7 +230,7 @@ export function SettingsView() {
         key: "reset",
         label: "重置设置",
         icon: "arrow.counterclockwise",
-        color: "#3172EB",
+        color: "systemBlue",
         action: () => {
           try {
             triggerHaptic("selection")

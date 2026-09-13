@@ -119,7 +119,7 @@ export function DiscoveryView(props: { onClose: () => void }) {
               key: "pixivisionBookmarks",
               label: "特辑收藏",
               icon: "heart",
-              color: "#3172EB",
+              color: "systemBlue",
               action: () => {
                 try {
                   triggerHaptic("selection")

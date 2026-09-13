@@ -97,7 +97,7 @@ export function UserConnectionsView(props: {
         key: "public",
         label: "公开",
         icon: "globe",
-        color: restrict === "public" ? "#EE2F49" : "#3172EB",
+        color: restrict === "public" ? "systemPink" : "systemBlue",
         action: () => {
           try {
             triggerHaptic("selection")
@@ -109,7 +109,7 @@ export function UserConnectionsView(props: {
         key: "private",
         label: "私密",
         icon: "lock",
-        color: restrict === "private" ? "#EE2F49" : "#3172EB",
+        color: restrict === "private" ? "systemPink" : "systemBlue",
         action: () => {
           try {
             triggerHaptic("selection")
@@ -121,7 +121,7 @@ export function UserConnectionsView(props: {
         key: "recommended",
         label: "推荐",
         icon: "sparkles",
-        color: "#3172EB",
+        color: "systemBlue",
         action: () => {
           try {
             triggerHaptic("selection")

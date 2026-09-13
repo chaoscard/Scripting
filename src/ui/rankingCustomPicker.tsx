@@ -126,7 +126,7 @@ export function RankingCustomPickerView(props: { kind: CustomRankingPickerKind }
         key: "count",
         label: `${title}榜 (${currentKindSelectedCount}/${maxLimit})`,
         icon: "slider.horizontal.3",
-        color: "#EE2F49",
+        color: "systemPink",
         action: () => {
           try {
             triggerHaptic("selection")
@@ -137,7 +137,7 @@ export function RankingCustomPickerView(props: { kind: CustomRankingPickerKind }
         key: "reset",
         label: "恢复默认",
         icon: "arrow.counterclockwise",
-        color: "#3172EB",
+        color: "systemBlue",
         action: () => {
           try {
             triggerHaptic("selection")

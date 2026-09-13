@@ -182,7 +182,7 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
         key: "tasks",
         label: activeTasksCount > 0 ? `任务 (${activeTasksCount})` : "任务列表",
         icon: activeTasksCount > 0 ? "hourglass" : "list.clipboard",
-        color: activeTasksCount > 0 ? "#EE2F49" : "#3172EB",
+        color: activeTasksCount > 0 ? "systemPink" : "systemBlue",
         action: () => {
           try {
             triggerHaptic("selection")
@@ -194,7 +194,7 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
         key: "clean",
         label: cleaning ? "清理中…" : "清理缓存",
         icon: "trash",
-        color: "#3172EB",
+        color: "systemBlue",
         disabled: cleaning,
         action: () => {
           try {
@@ -1094,7 +1094,7 @@ export function DownloadDetailListView(props: {
         key: "sort",
         label: sortInfo.label,
         icon: sortInfo.icon,
-        color: "#3172EB",
+        color: "systemBlue",
         action: () => {
           try {
             triggerHaptic("selection")
@@ -1654,7 +1654,7 @@ export function DownloadCreatorsListView(props: { onClose?: () => void }) {
         key: "sort",
         label: sortInfo.label,
         icon: sortInfo.icon,
-        color: "#3172EB",
+        color: "systemBlue",
         action: () => {
           try {
             triggerHaptic("selection")

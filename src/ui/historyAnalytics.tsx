@@ -426,7 +426,7 @@ function TopTagsSection(props: {
 
           return (
             <Button
-              key={`tag-${tag.name}`}
+              key={`tag-${idx}-${tag.name}`}
               buttonStyle="plain"
               action={() => {
                 triggerHaptic("selection")
@@ -557,7 +557,7 @@ function TopCreatorsSection(props: {
 
           return (
             <HStack
-              key={`creator-${c.id}`}
+              key={`creator-${idx}-${c.id}`}
               alignment="center"
               spacing={10}
               padding={{ vertical: 2 }}

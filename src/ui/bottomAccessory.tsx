@@ -224,7 +224,7 @@ export function DockSegmentedBar<T extends string = string>(props: {
               <Text
                 font="subheadline"
                 fontWeight="bold"
-                foregroundStyle={isSelected ? "#EE2F49" : "#3172EB"}
+                foregroundStyle={isSelected ? ("systemPink" as any) : ("systemBlue" as any)}
                 lineLimit={1}
                 fixedSize={{ horizontal: true, vertical: false }}
               >
@@ -260,7 +260,7 @@ export function DockActionBar(props: {
       padding={{ horizontal: 6 }}
     >
       {props.items.map((item) => {
-        const color = item.color ?? "#3172EB"
+        const color = item.color ?? "systemBlue"
         return (
           <Button
             key={item.key}
@@ -307,7 +307,7 @@ export function DockInfoBar(props: {
   title: string
   color?: string
 }) {
-  const color = props.color ?? "#3172EB"
+  const color = props.color ?? "systemBlue"
   return (
     <HStack
       alignment="center"
@@ -699,7 +699,7 @@ export function IllustDetailDockBar(props: { illustID: number }) {
       key: "follow",
       label: followed ? "已关注" : "关注",
       icon: followed ? "person.crop.circle.badge.checkmark" : "person.crop.circle.badge.plus",
-      color: followed ? "#EE2F49" : "#3172EB",
+      color: followed ? "systemPink" : "systemBlue",
       disabled: !userID || followLoading,
       action: toggleFollow,
       contextMenu: followContextMenu,
@@ -708,7 +708,7 @@ export function IllustDetailDockBar(props: { illustID: number }) {
       key: "bookmark",
       label: bookmarked ? "已收藏" : "收藏",
       icon: bookmarked ? "heart.fill" : "heart",
-      color: bookmarked ? "#EE2F49" : "#3172EB",
+      color: bookmarked ? "systemPink" : "systemBlue",
       disabled: bookmarkLoading || bookmarkLongPressLocked,
       action: toggleBookmark,
       simultaneousGesture: LongPressGesture({ minDuration: 500 }).onEnded(() => {
@@ -721,7 +721,7 @@ export function IllustDetailDockBar(props: { illustID: number }) {
       key: "download",
       label: downloading ? "下载中…" : "下载",
       icon: downloading ? "arrow.down.circle.fill" : "arrow.down.circle",
-      color: downloading ? "secondaryLabel" : "#3172EB",
+      color: downloading ? "secondaryLabel" : "systemBlue",
       disabled: downloading,
       action: handleDownloadDefault,
       contextMenu: downloadContextMenu,
@@ -960,7 +960,7 @@ export function NovelDetailDockBar(props: { novelID: number }) {
       key: "follow",
       label: followed ? "已关注" : "关注",
       icon: followed ? "person.crop.circle.badge.checkmark" : "person.crop.circle.badge.plus",
-      color: followed ? "#EE2F49" : "#3172EB",
+      color: followed ? "systemPink" : "systemBlue",
       disabled: !userID || followLoading,
       action: toggleFollow,
       contextMenu: followContextMenu,
@@ -969,7 +969,7 @@ export function NovelDetailDockBar(props: { novelID: number }) {
       key: "bookmark",
       label: bookmarked ? "已收藏" : "收藏",
       icon: bookmarked ? "heart.fill" : "heart",
-      color: bookmarked ? "#EE2F49" : "#3172EB",
+      color: bookmarked ? "systemPink" : "systemBlue",
       disabled: bookmarkLoading || bookmarkLongPressLocked,
       action: toggleBookmark,
       simultaneousGesture: LongPressGesture({ minDuration: 500 }).onEnded(() => {
@@ -982,7 +982,7 @@ export function NovelDetailDockBar(props: { novelID: number }) {
       key: "download",
       label: downloading ? "下载中…" : "下载",
       icon: downloading ? "arrow.down.circle.fill" : "arrow.down.circle",
-      color: downloading ? "secondaryLabel" : "#3172EB",
+      color: downloading ? "secondaryLabel" : "systemBlue",
       disabled: downloading,
       action: handleDownload,
     },
@@ -1046,14 +1046,14 @@ export function PixivisionDetailDockBar(props: { articleID: number }) {
       key: "bookmark",
       label: bookmarked ? "已收藏" : "收藏",
       icon: bookmarked ? "heart.fill" : "heart",
-      color: bookmarked ? "#EE2F49" : "#3172EB",
+      color: bookmarked ? "systemPink" : "systemBlue",
       action: toggleBookmark,
     },
     {
       key: "share",
       label: "分享",
       icon: "square.and.arrow.up",
-      color: "#3172EB",
+      color: "systemBlue",
       action: handleShare,
     },
   ]
@@ -1210,7 +1210,7 @@ export function SeriesDetailDockBar(props: {
       key: "watchlist",
       label: isWatched ? "已追更" : "追更",
       icon: isWatched ? "bookmark.fill" : "bookmark",
-      color: isWatched ? "#EE2F49" : "#3172EB",
+      color: isWatched ? "systemPink" : "systemBlue",
       disabled: watchLoading,
       action: toggleWatchlist,
     },
@@ -1218,14 +1218,14 @@ export function SeriesDetailDockBar(props: {
       key: "sort",
       label: isAscending ? "正序" : "倒序",
       icon: isAscending ? "arrow.up" : "arrow.down",
-      color: "#3172EB",
+      color: "systemBlue",
       action: toggleSortOrder,
     },
     {
       key: "download",
       label: seriesDownloading ? "下载中…" : "下载",
       icon: seriesDownloading ? "arrow.down.circle.fill" : "square.and.arrow.down",
-      color: seriesDownloading ? "secondaryLabel" : "#3172EB",
+      color: seriesDownloading ? "secondaryLabel" : "systemBlue",
       disabled: seriesDownloading,
       action: handleDownloadSeries,
     },
@@ -1242,7 +1242,7 @@ export function TagFeedDockBar(props: { tagName: string }) {
       key: "tag",
       label: tagName || "标签",
       icon: "number",
-      color: "#3172EB",
+      color: "systemBlue",
       action: () => {
         try {
           triggerHaptic("selection")

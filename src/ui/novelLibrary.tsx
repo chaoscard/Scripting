@@ -77,7 +77,7 @@ export function NovelLibraryView() {
         key: "title",
         label: "小说书签",
         icon: "book.pages.fill",
-        color: "#EE2F49",
+        color: "systemPink",
         action: () => {
           try {
             triggerHaptic("selection")
@@ -88,7 +88,7 @@ export function NovelLibraryView() {
         key: "sort",
         label: isAscending ? "正序" : "倒序",
         icon: isAscending ? "arrow.up" : "arrow.down",
-        color: "#3172EB",
+        color: "systemBlue",
         action: () => {
           try {
             triggerHaptic("selection")
