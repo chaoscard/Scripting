@@ -494,7 +494,7 @@ export function PixivisionDetailView(props: { articleID: number }) {
           >
             <VStack
               alignment="leading"
-              spacing={14}
+              spacing={12}
               padding={{ top: 12, bottom: 32 }}
               scrollTargetLayout={true}
             >
