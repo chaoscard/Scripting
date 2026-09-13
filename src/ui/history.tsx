@@ -49,6 +49,7 @@ import { cardThumbUrlOf, novelThumbUrlOf, prefetch } from "../image/imageLoader"
 import { currentBatchSize, useLatest, usePagedList } from "./hooks"
 import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl } from "./ambient"
 import { useDualRoute } from "./DualRouteContext"
+import { requestPixivRoute } from "./routeNavigation"
 import { HistoryAnalyticsView } from "./historyAnalytics"
 import type { PixivIllustration, PixivNovel } from "../types"
 
@@ -238,6 +239,12 @@ export function HistoryView() {
               setIsAnalyticsPresented(false)
               setSearchQuery(cName)
             }}
+            onOpenUserDetail={(userId) => {
+              setIsAnalyticsPresented(false)
+              setTimeout(() => {
+                requestPixivRoute(`user:${userId}`)
+              }, 260)
+            }}
           />
         ),
       }}
@@ -374,46 +381,46 @@ function historyToolbar(props: {
         {isClassic ? `浏览记录 · ${kindLabel}` : "浏览记录"}
       </Text>
     ),
-    topBarTrailing: [
-      <Button
-        key="analytics-button"
-        action={() => props.onOpenAnalytics?.()}
-      >
-        <Image systemName="chart.xyaxis.line" />
-      </Button>,
-      props.isAppleMusic ? (
+    topBarTrailing: props.isAppleMusic ? (
+      [
+        <Button
+          key="analytics-button"
+          action={() => props.onOpenAnalytics?.()}
+        >
+          <Image systemName="chart.xyaxis.line" />
+        </Button>,
         <Button key="clear-button" action={handleClearConfirm}>
           <Image systemName="trash" foregroundStyle="systemRed" />
-        </Button>
-      ) : (
-        <Menu key="more-menu" label={<Image systemName="ellipsis.circle" />}>
-          {props.onOpenAnalytics ? (
-            <Button
-              title="我的足迹"
-              systemImage="chart.bar.xaxis"
-              action={props.onOpenAnalytics}
-            />
-          ) : null}
-          <Picker
-            title="记录类型"
-            value={props.kind}
-            onChanged={(v: string) => props.onKindChange(v as HistoryKind)}
-          >
-            <Label tag="illustration" title="插画" systemImage="photo" />
-            <Label tag="manga" title="漫画" systemImage="photo.on.rectangle" />
-            {!props.hideNovels && (
-              <Label tag="novel" title="小说" systemImage="book" />
-            )}
-          </Picker>
+        </Button>,
+      ]
+    ) : (
+      <Menu key="more-menu" label={<Image systemName="ellipsis.circle" />}>
+        {props.onOpenAnalytics ? (
           <Button
-            title={`清空${kindLabel}记录`}
-            systemImage="trash"
-            role="destructive"
-            action={handleClearConfirm}
+            title="我的足迹"
+            systemImage="chart.xyaxis.line"
+            action={props.onOpenAnalytics}
           />
-        </Menu>
-      ),
-    ],
+        ) : null}
+        <Picker
+          title="记录类型"
+          value={props.kind}
+          onChanged={(v: string) => props.onKindChange(v as HistoryKind)}
+        >
+          <Label tag="illustration" title="插画" systemImage="photo" />
+          <Label tag="manga" title="漫画" systemImage="photo.on.rectangle" />
+          {!props.hideNovels && (
+            <Label tag="novel" title="小说" systemImage="book" />
+          )}
+        </Picker>
+        <Button
+          title={`清空${kindLabel}记录`}
+          systemImage="trash"
+          role="destructive"
+          action={handleClearConfirm}
+        />
+      </Menu>
+    ),
   }
 }
 

@@ -33,6 +33,7 @@ import {
 } from "../store/historyAnalytics"
 import { useLayoutMetrics } from "./hooks"
 import { useDualRoute } from "./DualRouteContext"
+import { requestPixivRoute } from "./routeNavigation"
 import { triggerHaptic } from "../platform/haptics"
 
 export interface HistoryAnalyticsViewProps {
@@ -41,6 +42,7 @@ export interface HistoryAnalyticsViewProps {
   onDismiss?: () => void
   onSelectTag?: (tag: string) => void
   onSelectCreator?: (creatorId: number, creatorName: string) => void
+  onOpenUserDetail?: (userId: number) => void
 }
 
 /**
@@ -925,9 +927,20 @@ export function HistoryAnalyticsView(props: HistoryAnalyticsViewProps) {
 
   const handleOpenUserDetail = useCallback(
     (userId: number) => {
-      openDetailRoute(`user:${userId}`)
+      if (props.onOpenUserDetail) {
+        props.onOpenUserDetail(userId)
+        return
+      }
+      if (props.onDismiss) {
+        props.onDismiss()
+        setTimeout(() => {
+          requestPixivRoute(`user:${userId}`)
+        }, 260)
+      } else {
+        requestPixivRoute(`user:${userId}`)
+      }
     },
-    [openDetailRoute]
+    [props.onOpenUserDetail, props.onDismiss]
   )
 
   const isWide = metrics.width >= 620
@@ -988,7 +1001,7 @@ export function HistoryAnalyticsView(props: HistoryAnalyticsViewProps) {
                   setScope(val as AnalyticsScopeKind)
                 }}
               >
-                <Label tag="all" title="全类型" systemImage="square.grid.2x2" />
+                <Label tag="all" title="全部类型" systemImage="square.grid.2x2" />
                 <Label tag="illustration" title="插画" systemImage="photo" />
                 <Label tag="manga" title="漫画" systemImage="photo.on.rectangle" />
                 <Label tag="novel" title="小说" systemImage="book" />
