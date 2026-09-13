@@ -1,0 +1,514 @@
+import {
+  Button,
+  HStack,
+  Image,
+  Label,
+  LazyVStack,
+  Menu,
+  Picker,
+  ScrollView,
+  Text,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  VStack,
+  ZStack,
+} from "scripting"
+import {
+  bookmarkTags,
+  bookmarks,
+  nextIllustrations,
+  nextNovels,
+  novelBookmarkTags,
+  userNovelBookmarks,
+} from "../api/pixiv"
+import { session } from "../api/session"
+import { cardThumbUrlOf, novelThumbUrlOf, prefetch } from "../image/imageLoader"
+import {
+  loadSettings,
+  onSettingsChanged,
+} from "../store/settings"
+import {
+  isIllustContentVisible,
+  isNovelContentVisible,
+} from "../store/contentFilter"
+import {
+  getCachedIllustBookmark,
+  getCachedNovelBookmark,
+} from "../store/bookmarkSync"
+import { useAsyncGuard, useLatest, usePagedList, currentBatchSize } from "./hooks"
+import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl } from "./ambient"
+import type { PixivBookmarkTag, PixivIllustration, PixivNovel } from "../types"
+import {
+  EmptyView,
+  ErrorView,
+  FilteredContentNotice,
+  LoadingView,
+  LoadMoreTrigger,
+  IllustFlowFeed,
+  NovelCard,
+  RefreshableScrollView,
+} from "./components"
+import { requestPixivRoute } from "./routeNavigation"
+import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
+import { PixivisionBookmarksContent } from "./pixivisionBookmarks"
+
+type Visibility = "public" | "private"
+type LibraryKind = "illustration" | "novel" | "pixivision"
+
+const MAX_TAG_CHIPS = 20
+
+export function LibraryView(props?: { initialKind?: LibraryKind }) {
+  const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
+  const [kind, setKind] = useState<LibraryKind>(() => props?.initialKind ?? "illustration")
+  const [restrict, setRestrict] = useState<Visibility>("public")
+  const [isAscending, setIsAscending] = useState(false)
+  const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
+  const isAppleMusic = pageLayout === "appleMusic"
+  const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(
+    () => getLastActiveAmbientImageUrl()
+  )
+  const [visitedKinds, setVisitedKinds] = useState<Set<LibraryKind>>(() => new Set([kind]))
+
+  useEffect(() => {
+    setVisitedKinds((prev) => {
+      if (prev.has(kind)) return prev
+      const next = new Set(prev)
+      next.add(kind)
+      return next
+    })
+  }, [kind])
+  const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
+  const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      const next = loadSettings()
+      setHideNovels(next.hideNovels)
+      setPageLayout(next.pageLayout)
+      if (next.hideNovels && kind === "novel") {
+        setKind("illustration")
+      }
+    })
+  }, [kind])
+
+  const libraryItems = useMemo<Array<{ tag: LibraryKind; label: string }>>(() => {
+    const items: Array<{ tag: LibraryKind; label: string }> = [
+      { tag: "illustration", label: "插画·漫画" },
+    ]
+    if (!hideNovels) {
+      items.push({ tag: "novel", label: "小说" })
+    }
+    items.push({ tag: "pixivision", label: "特辑" })
+    return items
+  }, [hideNovels])
+
+  useRegisterBottomAccessory(
+    "library",
+    libraryItems.length <= 1 ? null : (
+      <DockSegmentedBar
+        items={libraryItems}
+        value={kind}
+        onChanged={setKind}
+      />
+    ),
+    isAppleMusic
+  )
+
+  return (
+    <ZStack
+      navigationBarTitleDisplayMode="inline"
+      toolbarBackground="clear"
+      toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+      background={ambientBackground}
+      toolbar={libraryToolbar({
+        kind,
+        hideNovels,
+        isAppleMusic,
+        restrict,
+        isAscending,
+        onKindChange: setKind,
+        onRestrictChange: setRestrict,
+        onAscendingChange: setIsAscending,
+      })}
+      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+    >
+      {/* 1. 插画·漫画收藏 */}
+      <VStack
+        frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+        opacity={kind === "illustration" ? 1 : 0}
+        zIndex={kind === "illustration" ? 1 : 0}
+        allowsHitTesting={kind === "illustration"}
+      >
+        <RefreshableScrollView refreshable={() => refreshHandlerRef.current()}>
+          <VStack alignment="leading" spacing={8}>
+            <LibraryFeed
+              key={`library-illust:${restrict}`}
+              kind="illustration"
+              restrict={restrict}
+              onFirstImageUrlChange={(url) => {
+                if (kind === "illustration") setAmbientImageUrl(url)
+              }}
+              onRegisterRefresh={(fn) => {
+                if (kind === "illustration") refreshHandlerRef.current = fn
+              }}
+            />
+          </VStack>
+        </RefreshableScrollView>
+      </VStack>
+
+      {/* 2. 小说收藏 */}
+      {!hideNovels && visitedKinds.has("novel") ? (
+        <VStack
+          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          opacity={kind === "novel" ? 1 : 0}
+          zIndex={kind === "novel" ? 1 : 0}
+          allowsHitTesting={kind === "novel"}
+        >
+          <RefreshableScrollView refreshable={() => refreshHandlerRef.current()}>
+            <VStack alignment="leading" spacing={8}>
+              <LibraryFeed
+                key={`library-novel:${restrict}`}
+                kind="novel"
+                restrict={restrict}
+                onFirstImageUrlChange={(url) => {
+                  if (kind === "novel") setAmbientImageUrl(url)
+                }}
+                onRegisterRefresh={(fn) => {
+                  if (kind === "novel") refreshHandlerRef.current = fn
+                }}
+              />
+            </VStack>
+          </RefreshableScrollView>
+        </VStack>
+      ) : null}
+
+      {/* 3. 特辑收藏 */}
+      {visitedKinds.has("pixivision") ? (
+        <VStack
+          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          opacity={kind === "pixivision" ? 1 : 0}
+          zIndex={kind === "pixivision" ? 1 : 0}
+          allowsHitTesting={kind === "pixivision"}
+        >
+          <PixivisionBookmarksContent
+            isAscending={isAscending}
+            onFirstImageUrlChange={(url) => {
+              if (kind === "pixivision") setAmbientImageUrl(url)
+            }}
+          />
+        </VStack>
+      ) : null}
+    </ZStack>
+  )
+}
+
+function libraryToolbar(props: {
+  kind: LibraryKind
+  hideNovels: boolean
+  isAppleMusic?: boolean
+  restrict: Visibility
+  isAscending: boolean
+  onKindChange: (kind: LibraryKind) => void
+  onRestrictChange: (restrict: Visibility) => void
+  onAscendingChange: (isAscending: boolean) => void
+}) {
+  const isClassic = !props.isAppleMusic
+  const kindLabel =
+    props.kind === "illustration"
+      ? "插画·漫画"
+      : props.kind === "novel"
+      ? "小说"
+      : "特辑"
+
+  return {
+    principal: (
+      <Text font="title2" fontWeight="bold">
+        {isClassic ? `我的收藏 · ${kindLabel}` : "我的收藏"}
+      </Text>
+    ),
+    topBarTrailing: [
+      <Menu key="more-menu" label={<Image systemName="ellipsis.circle" />}>
+        {isClassic && (
+          <Picker
+            title="收藏类型"
+            value={props.kind}
+            onChanged={(value: string) => props.onKindChange(value as LibraryKind)}
+          >
+            <Label tag="illustration" title="插画·漫画" systemImage="photo.on.rectangle" />
+            {!props.hideNovels && (
+              <Label tag="novel" title="小说" systemImage="book" />
+            )}
+            <Label tag="pixivision" title="特辑" systemImage="rectangle.stack" />
+          </Picker>
+        )}
+        {props.kind === "pixivision" ? (
+          <Picker
+            title="排序方式"
+            value={props.isAscending ? "asc" : "desc"}
+            onChanged={(value: string) => props.onAscendingChange(value === "asc")}
+          >
+            <Label tag="desc" title="最新在前" systemImage="arrow.down" />
+            <Label tag="asc" title="最早在前" systemImage="arrow.up" />
+          </Picker>
+        ) : (
+          <Picker
+            title="收藏范围"
+            value={props.restrict}
+            onChanged={(value: string) => props.onRestrictChange(value as Visibility)}
+          >
+            <Label tag="public" title="公开收藏" systemImage="globe" />
+            <Label tag="private" title="私密收藏" systemImage="lock" />
+          </Picker>
+        )}
+      </Menu>,
+    ],
+  }
+}
+
+export function BookmarkTags(props: {
+  tags: PixivBookmarkTag[]
+  activeTag: string | null
+  onTagChange: (tag: string | null) => void
+}) {
+  if (props.tags.length === 0) return null
+  return (
+    <ScrollView axes="horizontal">
+      <HStack spacing={8} padding={{ horizontal: 14 }}>
+        {props.activeTag ? (
+          <Button
+            title={`✕ ${props.activeTag}`}
+            buttonStyle="glass"
+            controlSize="small"
+            action={() => props.onTagChange(null)}
+          />
+        ) : null}
+        {props.tags.slice(0, MAX_TAG_CHIPS).map((tag) => (
+          <Button
+            key={tag.name}
+            title={`${tag.name} (${tag.count})`}
+            buttonStyle={props.activeTag === tag.name ? "glassProminent" : "glass"}
+            tint={props.activeTag === tag.name ? "#0096FA" : undefined}
+            controlSize="small"
+            action={() => props.onTagChange(tag.name)}
+          />
+        ))}
+      </HStack>
+    </ScrollView>
+  )
+}
+
+
+
+function LibraryFeed(props: {
+  kind: LibraryKind
+  restrict: Visibility
+  onFirstImageUrlChange?: (url: string | null) => void
+  onRegisterRefresh?: (fn: () => Promise<void>) => void
+}) {
+  const { kind, restrict, onFirstImageUrlChange, onRegisterRefresh } = props
+
+  const [illustTags, setIllustTags] = useState<PixivBookmarkTag[]>([])
+  const [illustActiveTag, setIllustActiveTag] = useState<string | null>(null)
+  const illustGuard = useAsyncGuard()
+
+  const [novelTags, setNovelTags] = useState<PixivBookmarkTag[]>([])
+  const [novelActiveTag, setNovelActiveTag] = useState<string | null>(null)
+  const novelGuard = useAsyncGuard()
+
+  async function loadIllustTags(curRestrict: Visibility) {
+    const userID = session.userID
+    if (!userID) return
+    const g = illustGuard()
+    try {
+      const page = await session.call((token) => bookmarkTags(userID, curRestrict, token))
+      if (g.isCurrent()) setIllustTags(page.items)
+    } catch {
+      if (g.isCurrent()) setIllustTags([])
+    }
+  }
+
+  async function loadNovelTags(curRestrict: Visibility) {
+    const userID = session.userID
+    if (!userID) return
+    const g = novelGuard()
+    try {
+      const page = await session.call((token) => novelBookmarkTags(curRestrict, token))
+      if (g.isCurrent()) setNovelTags(page.items)
+    } catch {
+      if (g.isCurrent()) setNovelTags([])
+    }
+  }
+
+  const illustPaged = usePagedList<PixivIllustration>({
+    first: (token) => {
+      const userID = session.userID
+      if (!userID) throw new Error("未登录")
+      return bookmarks(userID, restrict, illustActiveTag, token)
+    },
+    more: (nextURL, token) => nextIllustrations(nextURL, token),
+    filter: filterIllustrationBookmarks,
+    deps: [restrict, illustActiveTag],
+    enabled: kind === "illustration",
+    onBatchPublished: (_, pendingItems) =>
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
+  })
+
+  const novelPaged = usePagedList<PixivNovel>({
+    first: (token) => {
+      const userID = session.userID
+      if (!userID) throw new Error("未登录")
+      return userNovelBookmarks(userID, restrict, novelActiveTag, token)
+    },
+    more: (nextURL, token) => nextNovels(nextURL, token),
+    filter: filterNovelBookmarks,
+    deps: [restrict, novelActiveTag],
+    enabled: kind === "novel",
+    onBatchPublished: (_, pendingItems) =>
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
+  })
+
+  const illustPagedRef = useLatest(illustPaged)
+  const novelPagedRef = useLatest(novelPaged)
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      illustPagedRef.current.reapplyFilter()
+      novelPagedRef.current.reapplyFilter()
+    })
+  }, [])
+
+  useEffect(() => {
+    if (kind === "illustration") {
+      void loadIllustTags(restrict)
+    } else {
+      void loadNovelTags(restrict)
+    }
+  }, [kind, restrict])
+
+  useEffect(() => {
+    if (kind === "illustration") {
+      const first = illustPaged.items[0]
+      if (first) {
+        onFirstImageUrlChange?.(cardThumbUrlOf(first))
+      } else if (!illustPaged.initialLoading && illustPaged.items.length === 0) {
+        onFirstImageUrlChange?.(null)
+      }
+    } else {
+      const first = novelPaged.items[0]
+      if (first) {
+        onFirstImageUrlChange?.(novelThumbUrlOf(first))
+      } else if (!novelPaged.initialLoading && novelPaged.items.length === 0) {
+        onFirstImageUrlChange?.(null)
+      }
+    }
+  }, [
+    kind,
+    illustPaged.items[0]?.id,
+    illustPaged.initialLoading,
+    illustPaged.items.length,
+    novelPaged.items[0]?.id,
+    novelPaged.initialLoading,
+    novelPaged.items.length,
+    onFirstImageUrlChange,
+  ])
+
+  const activeRefresh = useCallback(async () => {
+    if (kind === "illustration") {
+      await Promise.all([illustPaged.refresh(), loadIllustTags(restrict)])
+    } else {
+      await Promise.all([novelPaged.refresh(), loadNovelTags(restrict)])
+    }
+  }, [kind, restrict, illustPaged.refresh, novelPaged.refresh])
+
+  useEffect(() => {
+    onRegisterRefresh?.(activeRefresh)
+  }, [activeRefresh, onRegisterRefresh])
+
+  if (kind === "illustration") {
+    return (
+      <VStack alignment="leading" spacing={10}>
+        <BookmarkTags tags={illustTags} activeTag={illustActiveTag} onTagChange={setIllustActiveTag} />
+        {illustPaged.initialLoading ? (
+          <LoadingView />
+        ) : illustPaged.error && illustPaged.items.length === 0 ? (
+          <ErrorView message={illustPaged.error} onRetry={illustPaged.refresh} />
+        ) : illustPaged.items.length === 0 ? (
+          <EmptyView
+            text={
+              illustPaged.hasFilteredContent
+                ? "当前页面部分作品被内容显示设置过滤，暂时无法显示"
+                : "暂无收藏作品"
+            }
+            systemImage={illustPaged.hasFilteredContent ? "eye.slash" : "heart"}
+          />
+        ) : (
+          <VStack alignment="leading" spacing={6} frame={{ maxWidth: "infinity" }}>
+            {illustPaged.hasFilteredContent ? <FilteredContentNotice isNovel={false} /> : null}
+            <IllustFlowFeed
+              items={illustPaged.items}
+              onLoadMore={illustPaged.loadMore}
+              hasMore={illustPaged.hasMore}
+              isLoading={illustPaged.loadingMore}
+            />
+          </VStack>
+        )}
+      </VStack>
+    )
+  }
+
+  return (
+    <VStack alignment="leading" spacing={10}>
+      <BookmarkTags tags={novelTags} activeTag={novelActiveTag} onTagChange={setNovelActiveTag} />
+      {novelPaged.initialLoading ? (
+        <LoadingView />
+      ) : novelPaged.error && novelPaged.items.length === 0 ? (
+        <ErrorView message={novelPaged.error} onRetry={novelPaged.refresh} />
+      ) : novelPaged.items.length === 0 ? (
+        <EmptyView
+          text={
+            novelPaged.hasFilteredContent
+              ? "当前页面部分小说被内容显示设置过滤，暂时无法显示"
+              : "还没有收藏小说"
+          }
+          systemImage={novelPaged.hasFilteredContent ? "eye.slash" : "book"}
+        />
+      ) : (
+        <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
+          {novelPaged.hasFilteredContent ? <FilteredContentNotice isNovel={true} /> : null}
+          {novelPaged.items.map((novel, index) => (
+            <NovelCard key={novel.id} novel={novel} priority={index} />
+          ))}
+          <LoadMoreTrigger
+            anchor={novelPaged.items[novelPaged.items.length - 1]?.id}
+            onLoadMore={novelPaged.loadMore}
+            hasMore={novelPaged.hasMore}
+            isLoading={novelPaged.loadingMore}
+          />
+        </LazyVStack>
+      )}
+    </VStack>
+  )
+}
+
+export function filterIllustrationBookmarks(items: PixivIllustration[]): PixivIllustration[] {
+  const settings = loadSettings()
+  return items.filter((item) => {
+    if (getCachedIllustBookmark(item.id) === false) return false
+    return isIllustContentVisible(item, settings, undefined, {
+      exemptRestrictions: settings.exemptFilterForPersonal,
+    })
+  })
+}
+
+export function filterNovelBookmarks(items: PixivNovel[]): PixivNovel[] {
+  const settings = loadSettings()
+  return items.filter((item) => {
+    if (getCachedNovelBookmark(item.id) === false) return false
+    return isNovelContentVisible(item, settings, undefined, {
+      exemptRestrictions: settings.exemptFilterForPersonal,
+    })
+  })
+}

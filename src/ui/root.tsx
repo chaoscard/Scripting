@@ -1,0 +1,383 @@
+import {
+  Device,
+  Image,
+  Navigation,
+  NavigationStack,
+  ProgressView,
+  Rectangle,
+  Script,
+  Spacer,
+  Tab,
+  TabView,
+  Text,
+  VStack,
+  ZStack,
+  useEffect,
+  useMemo,
+  useObservable,
+  useRef,
+  useState,
+} from "scripting"
+import { session } from "../api/session"
+import { loadSettings, onSettingsChanged, updateSettings } from "../store/settings"
+import { ResponsiveContainer } from "./hooks"
+import { SplitViewContainer, useDualRoute } from "./DualRouteContext"
+import { FeatureHighlightsSheet } from "./components/FeatureHighlightsSheet"
+import {
+  CapsuleAccessoryContainer,
+  GlobalBottomAccessoryHost,
+} from "./bottomAccessory"
+import { getLatestCachedArtworkPath } from "../image/imageLoader"
+import { DreamyFluidBackground } from "./components/DreamyBackground"
+import { DiscoveryView } from "./discovery"
+import { RankingView } from "./ranking"
+import { SearchView } from "./search"
+import { MoreView } from "./more"
+import { LoginView } from "./login"
+import { FollowFeedView } from "./followFeed"
+import {
+  registerTabNavigator,
+  setActiveTabKind,
+  getActiveTabKind,
+  setPixivRouteNavigator,
+  type PixivTabKind,
+} from "./routeNavigation"
+
+function LaunchExperienceView() {
+  const bgImage = useMemo(() => {
+    try {
+      const cachedPath = getLatestCachedArtworkPath()
+      if (cachedPath) {
+        const raw = UIImage.fromFile(cachedPath)
+        if (raw) {
+          return raw.blurred(1)
+        }
+      }
+    } catch {}
+    return null
+  }, [])
+
+  return (
+    <ZStack
+      alignment="center"
+      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+      ignoresSafeArea={true}
+      background="#070D1E"
+    >
+      {/* 1. 背景层：若有缓存插画则展示柔和高斯模糊图，若无则无缝展示梦幻流体光晕 */}
+      {bgImage ? (
+        <>
+          <Rectangle
+            fill="clear"
+            frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+            ignoresSafeArea={true}
+            clipped={true}
+            overlay={
+              <Image
+                image={bgImage}
+                resizable={true}
+                aspectRatio={{ contentMode: "fill" }}
+                frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+                clipped={true}
+                ignoresSafeArea={true}
+              />
+            }
+          />
+          <Rectangle
+            fill={{
+              colors: [
+                "rgba(0, 0, 0, 0.02)",
+                "rgba(0, 0, 0, 0.08)",
+                "rgba(0, 0, 0, 0.18)",
+              ],
+              startPoint: "top",
+              endPoint: "bottom",
+            }}
+            ignoresSafeArea={true}
+          />
+        </>
+      ) : (
+        <DreamyFluidBackground />
+      )}
+
+      {/* 2. 居中品牌字与加载组件（严格与登录页保持一致的高质感排版） */}
+      <VStack
+        alignment="center"
+        spacing={24}
+        frame={{ maxWidth: "infinity", maxHeight: "infinity", alignment: "center" }}
+        padding={32}
+      >
+        <Text
+          font={38}
+          fontWeight="heavy"
+          foregroundStyle="white"
+          shadow={{ color: "rgba(0, 0, 0, 0.32)", radius: 10, y: 3 }}
+        >
+          Pix-Scripting
+        </Text>
+        <VStack spacing={14} alignment="center" padding={{ top: 12 }}>
+          <ProgressView progressViewStyle="circular" />
+        </VStack>
+      </VStack>
+    </ZStack>
+  )
+}
+
+let hasAppLaunchedOnce = false
+
+export function RootView() {
+  const [loggedIn, setLoggedIn] = useState(session.isAuthenticated)
+  const [isReady, setIsReady] = useState(() => hasAppLaunchedOnce)
+  const [showFeatureHighlights, setShowFeatureHighlights] = useState(false)
+  const [settings, setSettings] = useState(() => loadSettings())
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      setSettings(loadSettings())
+    })
+  }, [])
+
+  useEffect(() => {
+    return session.onAuthChanged(() => {
+      setLoggedIn(session.isAuthenticated)
+    })
+  }, [])
+
+  useEffect(() => {
+    if (hasAppLaunchedOnce) {
+      setIsReady(true)
+      return
+    }
+    let cancelled = false
+    const hasStartupRoute = Boolean(
+      Script.queryParameters?.route || Script.widgetParameter
+    )
+    const defaultDuration = loadSettings().launchAnimationDuration ?? 1500
+    // 冷启动过渡体验：从小组件/外部直达特定作品时缩短至 100ms，直接展现内容；常规启动保留完整就绪缓冲
+    const duration = hasStartupRoute ? 100 : defaultDuration
+    const timer = setTimeout(() => {
+      if (!cancelled) {
+        hasAppLaunchedOnce = true
+        setIsReady(true)
+      }
+    }, duration)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isReady || !loggedIn) return
+    const hasStartupRoute = Boolean(
+      Script.queryParameters?.route || Script.widgetParameter
+    )
+    if (hasStartupRoute) return
+
+    const currentSettings = loadSettings()
+    if (!currentSettings.hasSeenFeatureHighlights) {
+      const timer = setTimeout(() => {
+        setShowFeatureHighlights(true)
+      }, 400)
+      return () => clearTimeout(timer)
+    }
+  }, [isReady, loggedIn])
+
+  const dismiss = Navigation.useDismiss()
+
+  if (!loggedIn) {
+    return (
+      <ZStack
+        frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+        background="clear"
+        ignoresSafeArea={true}
+      >
+        <ResponsiveContainer>
+          <NavigationStack>
+            <LoginView
+              onClose={dismiss}
+              onSuccess={() => {
+                setLoggedIn(true)
+              }}
+            />
+          </NavigationStack>
+        </ResponsiveContainer>
+      </ZStack>
+    )
+  }
+
+  return (
+    <ZStack
+      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+      background="systemBackground"
+      ignoresSafeArea={true}
+      sheet={{
+        isPresented: showFeatureHighlights,
+        onChanged: (val: boolean) => setShowFeatureHighlights(val),
+        content: (
+          <FeatureHighlightsSheet
+            onClose={() => {
+              setShowFeatureHighlights(false)
+              updateSettings({ hasSeenFeatureHighlights: true })
+            }}
+          />
+        ),
+      }}
+    >
+      {/* 底层：主界面在第 0 毫秒即挂载并全力在后台请求数据与预载图片 */}
+      <ResponsiveContainer>
+        <SplitViewContainer splitViewEnabled={settings.splitViewEnabled}>
+          <MainTabView onClose={dismiss} />
+        </SplitViewContainer>
+      </ResponsiveContainer>
+
+      {/* 顶层：启动动画遮罩，根据调试设置自定义时长（默认 1500ms）平滑过渡 */}
+      {!isReady ? (
+        <LaunchExperienceView />
+      ) : null}
+    </ZStack>
+  )
+}
+
+function MainTabView(props: {
+  onClose: () => void
+}) {
+  const [settings, setSettings] = useState(() => loadSettings())
+  const initialTab = useRef(settings.launchPage).current
+  const selection = useObservable<string>(initialTab)
+  const discoveryPath = useObservable<string[]>([])
+  const rankingPath = useObservable<string[]>([])
+  const followingPath = useObservable<string[]>([])
+  const searchPath = useObservable<string[]>([])
+  const morePath = useObservable<string[]>([])
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      setSettings(loadSettings())
+    })
+  }, [])
+
+  useEffect(() => {
+    setActiveTabKind(selection.value as PixivTabKind)
+    return selection.subscribe
+      ? selection.subscribe(() => {
+          setActiveTabKind(selection.value as PixivTabKind)
+        })
+      : undefined
+  }, [selection])
+
+  useEffect(() => {
+    const unregisterDiscovery = registerTabNavigator("discovery", (route) => {
+      const cur = discoveryPath.value
+      if (cur.length > 0 && cur[cur.length - 1] === route) return
+      discoveryPath.setValue([...cur, route])
+    })
+    const unregisterRanking = registerTabNavigator("ranking", (route) => {
+      const cur = rankingPath.value
+      if (cur.length > 0 && cur[cur.length - 1] === route) return
+      rankingPath.setValue([...cur, route])
+    })
+    const unregisterFollowing = registerTabNavigator("following", (route) => {
+      const cur = followingPath.value
+      if (cur.length > 0 && cur[cur.length - 1] === route) return
+      followingPath.setValue([...cur, route])
+    })
+    const unregisterSearch = registerTabNavigator("search", (route) => {
+      const cur = searchPath.value
+      if (cur.length > 0 && cur[cur.length - 1] === route) return
+      searchPath.setValue([...cur, route])
+    })
+    const unregisterMore = registerTabNavigator("more", (route) => {
+      const cur = morePath.value
+      if (cur.length > 0 && cur[cur.length - 1] === route) return
+      morePath.setValue([...cur, route])
+    })
+
+    const unregisterGlobal = setPixivRouteNavigator((route: string) => {
+      const activeTab = getActiveTabKind() || (selection.value as PixivTabKind) || initialTab || "discovery"
+      if (activeTab === "ranking") {
+        const cur = rankingPath.value
+        if (cur.length > 0 && cur[cur.length - 1] === route) return
+        rankingPath.setValue([...cur, route])
+      } else if (activeTab === "following") {
+        const cur = followingPath.value
+        if (cur.length > 0 && cur[cur.length - 1] === route) return
+        followingPath.setValue([...cur, route])
+      } else if (activeTab === "search") {
+        const cur = searchPath.value
+        if (cur.length > 0 && cur[cur.length - 1] === route) return
+        searchPath.setValue([...cur, route])
+      } else if (activeTab === "more") {
+        const cur = morePath.value
+        if (cur.length > 0 && cur[cur.length - 1] === route) return
+        morePath.setValue([...cur, route])
+      } else {
+        const cur = discoveryPath.value
+        if (cur.length > 0 && cur[cur.length - 1] === route) return
+        discoveryPath.setValue([...cur, route])
+      }
+    })
+
+    return () => {
+      unregisterDiscovery()
+      unregisterRanking()
+      unregisterFollowing()
+      unregisterSearch()
+      unregisterMore()
+      unregisterGlobal()
+    }
+  }, [selection, discoveryPath, rankingPath, followingPath, searchPath, morePath, initialTab])
+
+  const isAppleMusic = settings.pageLayout === "appleMusic"
+
+  const tabViewProps: any = {
+    selection,
+    tabBarMinimizeBehavior: "onScrollDown",
+    tabViewStyle: "tabBarOnly",
+  }
+
+  if (isAppleMusic) {
+    tabViewProps.tabViewBottomAccessory = (
+      <CapsuleAccessoryContainer>
+        <GlobalBottomAccessoryHost
+          selection={selection}
+          discoveryPath={discoveryPath}
+          rankingPath={rankingPath}
+          followingPath={followingPath}
+          searchPath={searchPath}
+          morePath={morePath}
+        />
+      </CapsuleAccessoryContainer>
+    )
+  }
+
+  return (
+    <TabView {...tabViewProps}>
+      <Tab title="探索" systemImage="photo.on.rectangle.angled" value="discovery">
+        <NavigationStack path={discoveryPath}>
+          <DiscoveryView onClose={props.onClose} />
+        </NavigationStack>
+      </Tab>
+      <Tab title="排行" systemImage="trophy" value="ranking">
+        <NavigationStack path={rankingPath}>
+          <RankingView onClose={props.onClose} />
+        </NavigationStack>
+      </Tab>
+      <Tab title="关注" systemImage="person.2.fill" value="following">
+        <NavigationStack path={followingPath}>
+          <FollowFeedView onClose={props.onClose} />
+        </NavigationStack>
+      </Tab>
+      <Tab title="搜索" systemImage="magnifyingglass" value="search" role="search">
+        <NavigationStack path={searchPath}>
+          <SearchView onClose={props.onClose} />
+        </NavigationStack>
+      </Tab>
+      <Tab title="我的" systemImage="person.crop.circle" value="more">
+        <NavigationStack path={morePath}>
+          <MoreView onClose={props.onClose} />
+        </NavigationStack>
+      </Tab>
+    </TabView>
+  )
+}

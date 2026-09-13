@@ -1,0 +1,967 @@
+import {
+  Button,
+  Device,
+  Divider,
+  Group,
+  HStack,
+  Image,
+  Label,
+  Menu,
+  NavigationLink,
+  Picker,
+  ScrollView,
+  Text,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  VStack,
+  ZStack,
+} from "scripting"
+import {
+  downloadAuthorIllustrationsToAlbum,
+  downloadAuthorUgoiraToAlbum,
+  exportAuthorIllustrationsToZip,
+  exportAuthorManga,
+  exportAuthorNovels,
+  exportAuthorUgoiraToFiles,
+  exportAuthorUgoiraZipToFiles,
+  fetchAllUserIllustrations,
+  fetchAllUserNovels,
+} from "../downloader"
+import {
+  fetchUserWorkTags,
+  fetchWebUserDetail,
+  followDetail,
+  followUser,
+  unfollowUser,
+  userDetail,
+} from "../api/pixiv"
+import { triggerHaptic } from "../platform/haptics"
+import { session } from "../api/session"
+import {
+  cachedFileExists,
+  loadImage,
+} from "../image/imageLoader"
+import {
+  loadSettings,
+  onSettingsChanged,
+} from "../store/settings"
+import {
+  blockUser,
+  isUserBlocked,
+  unblockUser,
+} from "../store/blocklist"
+import {
+  getUserFollowRestrict,
+  isUserFollowed,
+  onUserFollowChanged,
+  recordUserFollowed,
+  type FollowRestrict,
+} from "../store/userFollow"
+import { useAsyncGuard, useOpenRelatedUsersListener } from "./hooks"
+import { useUserAmbientPalette } from "./ambient"
+import type {
+  PixivUserDetail,
+  PixivWebUserDetail,
+  PixivWebUserTag,
+} from "../types"
+import {
+  EmptyView,
+  ErrorView,
+  LoadingView,
+  RefreshableScrollView,
+  RelatedUsersSheet,
+} from "./components"
+import { UserProfileHeader } from "./UserProfileHeader"
+import { UserWorkTagFilterBar } from "./UserWorkTagFilterBar"
+import { UserWorksFeedSection, type UserWorkKind } from "./UserWorksFeedSection"
+import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
+
+export function UserDetailView(props: { userID: number }) {
+  const { userID } = props
+
+  const [detail, setDetail] = useState<PixivUserDetail | null>(null)
+  const [webDetail, setWebDetail] = useState<PixivWebUserDetail | null>(null)
+  const [followed, setFollowed] = useState(() => isUserFollowed(userID) ?? false)
+  const [followRestrict, setFollowRestrict] = useState<FollowRestrict | null>(
+    () => getUserFollowRestrict(userID) ?? null
+  )
+  const [detailError, setDetailError] = useState<string | null>(null)
+  const [followBusy, setFollowBusy] = useState(false)
+  const [showRelatedUsers, setShowRelatedUsers] = useState(false)
+  useOpenRelatedUsersListener(userID, () => {
+    setShowRelatedUsers(true)
+  })
+  const [kind, setKind] = useState<UserWorkKind>("illust")
+  const [selectedTag, setSelectedTag] = useState<string | null>(null)
+  const [tagsByKind, setTagsByKind] = useState<Partial<Record<UserWorkKind, PixivWebUserTag[]>>>({})
+  const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
+  const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
+  const isAppleMusic = pageLayout === "appleMusic"
+  const [emptyKinds, setEmptyKinds] = useState<Partial<Record<UserWorkKind, boolean>>>({})
+  const { ambientBackground } = useUserAmbientPalette(
+    detail?.profile.background_image_url || detail?.user.profile_image_urls?.medium
+  )
+
+  const baseKinds = useMemo<UserWorkKind[]>(() => {
+    if (!detail) return []
+    const kinds: UserWorkKind[] = []
+    if ((detail.profile.total_illusts ?? 0) > 0) kinds.push("illust")
+    if ((detail.profile.total_manga ?? 0) > 0) kinds.push("manga")
+    if (!hideNovels && (detail.profile.total_novels ?? 0) > 0) kinds.push("novel")
+    return kinds
+  }, [
+    detail?.profile.total_illusts,
+    detail?.profile.total_manga,
+    detail?.profile.total_novels,
+    hideNovels,
+  ])
+
+  const availableKinds = useMemo<UserWorkKind[]>(() => {
+    return baseKinds.filter((k: UserWorkKind) => !emptyKinds[k])
+  }, [baseKinds, emptyKinds])
+
+  const activeKind: UserWorkKind = useMemo(() => {
+    if (availableKinds.length === 0) return baseKinds[0] ?? "illust"
+    if (availableKinds.includes(kind)) return kind
+    return availableKinds[0]
+  }, [availableKinds, baseKinds, kind])
+
+  const [visitedKinds, setVisitedKinds] = useState<Set<UserWorkKind>>(() => new Set(["illust"]))
+
+  useEffect(() => {
+    setVisitedKinds((prev) => {
+      if (prev.has(activeKind)) return prev
+      const next = new Set(prev)
+      next.add(activeKind)
+      return next
+    })
+  }, [activeKind])
+
+  useEffect(() => {
+    if (availableKinds.length > 0 && !availableKinds.includes(kind)) {
+      setKind(availableKinds[0])
+    }
+  }, [availableKinds, kind])
+
+  useEffect(() => {
+    setSelectedTag(null)
+    if (!tagsByKind[activeKind]) {
+      fetchUserWorkTags(userID, activeKind, 20)
+        .then((tags) => {
+          setTagsByKind((prev) => ({ ...prev, [activeKind]: tags }))
+        })
+        .catch(() => {})
+    }
+  }, [userID, activeKind])
+
+  const handleKindEmpty = useCallback((targetKind: UserWorkKind, isEmpty: boolean) => {
+    setEmptyKinds((prev) => {
+      if (prev[targetKind] === isEmpty) return prev
+      return { ...prev, [targetKind]: isEmpty }
+    })
+  }, [])
+
+  const guard = useAsyncGuard()
+  const followStateVersionRef = useRef(0)
+  const isOwnProfile = session.userID === userID
+  const worksRefreshRef = useRef<() => Promise<void>>(() => Promise.resolve())
+
+  async function loadDetail() {
+    const g = guard()
+    const followStateVersion = followStateVersionRef.current
+    setDetailError(null)
+    try {
+      const [result, webResult, currentTags] = await Promise.all([
+        session.call((token) => userDetail(userID, token)),
+        fetchWebUserDetail(userID),
+        fetchUserWorkTags(userID, activeKind, 20),
+      ])
+      if (!g.isCurrent()) return
+      setTagsByKind((prev) => ({ ...prev, [activeKind]: currentTags }))
+
+      // 优先预热背景图与头像，确保首次渲染即获得真实比例，防止头像位置跳动
+      const bgUrl = result.profile.background_image_url
+      const preheatDuration = loadSettings().backgroundPreheatDuration ?? 1000
+      if (bgUrl && !cachedFileExists(bgUrl) && preheatDuration > 0) {
+        await Promise.race([
+          loadImage(bgUrl, 0),
+          new Promise((resolve) => setTimeout(() => resolve(null), preheatDuration)),
+        ])
+      }
+
+      if (!g.isCurrent()) return
+      setDetail(result)
+      setWebDetail(webResult)
+      const isFollowed = result.user.is_followed ?? false
+      if (result.user?.id) {
+        recordUserFollowed(result.user.id, isFollowed)
+      }
+      if (followStateVersion === followStateVersionRef.current) {
+        setFollowed(isFollowed)
+      }
+      if (isFollowed && !isOwnProfile) {
+        session
+          .call((token) => followDetail(userID, token))
+          .then((followDetail) => {
+            if (
+              g.isCurrent() &&
+              followStateVersion === followStateVersionRef.current
+            ) {
+              setFollowed(followDetail.is_followed)
+              if (followDetail.is_followed) {
+                const rest = followDetail.restrict ?? "public"
+                setFollowRestrict(rest)
+                recordUserFollowed(userID, true, rest)
+              } else {
+                setFollowRestrict(null)
+              }
+            }
+          })
+          .catch(() => {})
+      } else if (!isFollowed) {
+        setFollowRestrict(null)
+      }
+    } catch (error: any) {
+      if (g.isCurrent()) setDetailError(error?.message ?? "加载失败")
+    }
+  }
+
+
+  useEffect(() => {
+    return onUserFollowChanged((changedUserID, nextFollowed, nextRestrict) => {
+      if (changedUserID !== userID) return
+      followStateVersionRef.current++
+      setFollowed(nextFollowed)
+      setFollowRestrict(nextFollowed ? (nextRestrict ?? "public") : null)
+      setEmptyKinds({})
+      if (nextFollowed && baseKinds.length > 0) {
+        setKind(baseKinds[0])
+      }
+    })
+  }, [userID, baseKinds])
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      const next = loadSettings()
+      setHideNovels(next.hideNovels)
+      setPageLayout(next.pageLayout)
+      setEmptyKinds({})
+    })
+  }, [])
+
+  const userWorkItems = useMemo(() => {
+    return availableKinds.map((k) => ({
+      tag: k,
+      label: k === "illust" ? "插画" : k === "manga" ? "漫画" : "小说",
+    }))
+  }, [availableKinds])
+
+  useRegisterBottomAccessory(
+    "userWorks",
+    availableKinds.length <= 1 ? null : (
+      <DockSegmentedBar
+        items={userWorkItems}
+        value={activeKind}
+        onChanged={(k) => {
+          setSelectedTag(null)
+          setKind(k)
+        }}
+      />
+    ),
+    isAppleMusic
+  )
+
+  useEffect(() => {
+    void loadDetail()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userID])
+
+  async function followWithVisibility(restrict: "public" | "private") {
+    if (followBusy || isOwnProfile) return
+    triggerHaptic("medium")
+    followStateVersionRef.current++
+    setFollowBusy(true)
+    try {
+      await session.call((token) => followUser(userID, restrict, token))
+      setFollowed(true)
+      setFollowRestrict(restrict)
+      if (loadSettings().showRelatedUsersOnFollow) {
+        setShowRelatedUsers(true)
+      }
+    } catch {
+      // Keep the current UI state when the request fails.
+    } finally {
+      setFollowBusy(false)
+    }
+  }
+
+  async function toggleFollow() {
+    if (followBusy || isOwnProfile) return
+    if (!followed) {
+      await followWithVisibility("public")
+      return
+    }
+    triggerHaptic("medium")
+    followStateVersionRef.current++
+    setFollowBusy(true)
+    try {
+      await session.call((token) => unfollowUser(userID, token))
+      setFollowed(false)
+      setFollowRestrict(null)
+    } catch {
+      // Keep the current UI state when the request fails.
+    } finally {
+      setFollowBusy(false)
+    }
+  }
+
+  const [downloading, setDownloading] = useState(false)
+  const [downloadStatusText, setDownloadStatusText] = useState("")
+
+  const handleDownloadClick = async () => {
+    if (!detail) return
+    if (downloading) {
+      void Dialog.alert({
+        title: "下载正在进行中",
+        message: "当前已有批量下载任务正在执行，请稍候完成。",
+      })
+      return
+    }
+
+    const totalIllusts = detail.profile.total_illusts ?? 0
+    const totalManga = detail.profile.total_manga ?? 0
+    const totalNovels = hideNovels ? 0 : (detail.profile.total_novels ?? 0)
+
+    if (totalIllusts === 0 && totalManga === 0 && totalNovels === 0) {
+      void Dialog.alert({
+        title: "提示",
+        message: "该创作者暂无作品投稿。",
+      })
+      return
+    }
+
+    // 构造可选作品类别列表
+    const categories: { key: "illust" | "ugoira" | "manga" | "novel"; label: string }[] = []
+    if (totalIllusts > 0) {
+      categories.push({ key: "illust", label: `下载插画作品 (静态图片)` })
+      categories.push({ key: "ugoira", label: `下载动图作品 (视频/GIF)` })
+    }
+    if (totalManga > 0) {
+      categories.push({ key: "manga", label: `下载全部漫画 (${totalManga} 部)` })
+    }
+    if (totalNovels > 0) {
+      categories.push({ key: "novel", label: `下载全部小说 (${totalNovels} 部)` })
+    }
+
+    let selectedCatKey: "illust" | "ugoira" | "manga" | "novel" = categories[0].key
+
+    if (categories.length > 1) {
+      const choice = await Dialog.actionSheet({
+        title: "下载创作者作品",
+        message: `用户：${detail.user.name}`,
+        actions: categories.map((c) => ({ label: c.label })),
+      })
+      if (choice == null || choice < 0 || choice >= categories.length) {
+        return
+      }
+      selectedCatKey = categories[choice].key
+    }
+
+    // 分类下载处理
+    if (selectedCatKey === "illust") {
+      const choice = await Dialog.actionSheet({
+        title: "插画下载方式",
+        message: "静态插画下载与打包归档",
+        actions: [
+          { label: "下载至系统相簿" },
+          { label: "打包为 ZIP 归档 (存入文件)" },
+        ],
+      })
+      if (choice !== 0 && choice !== 1) return
+
+      if (choice === 0) {
+        const albumName = loadSettings().downloadPhotoAlbumName || "Pix-Scripting"
+        const confirmed = await Dialog.confirm({
+          title: "确认下载全部插画？",
+          message: `将拉取用户「${detail.user.name}」全部静态插画并保存至专属相簿「${albumName}」。`,
+          confirmLabel: "开始下载",
+          cancelLabel: "取消",
+        })
+        if (!confirmed) return
+
+        setDownloading(true)
+        try {
+          const list = await fetchAllUserIllustrations(userID, "illust", (msg) => setDownloadStatusText(msg))
+          const pureIllusts = list.filter((it) => it.type !== "ugoira")
+          if (pureIllusts.length === 0) {
+            void Dialog.alert({ title: "提示", message: "未获取到静态插画作品" })
+            return
+          }
+          const result = await downloadAuthorIllustrationsToAlbum(detail.user.name, pureIllusts, (msg) => setDownloadStatusText(msg))
+          void Dialog.alert({
+            title: "下载完成",
+            message: `已成功将 ${result.successCount} 部插画保存至相簿「${albumName}」。`,
+          })
+        } catch (e: any) {
+          void Dialog.alert({ title: "下载失败", message: e?.message ?? "下载插画时发生错误" })
+        } finally {
+          setDownloading(false)
+          setDownloadStatusText("")
+        }
+      } else {
+        const confirmed = await Dialog.confirm({
+          title: "确认打包全部插画？",
+          message: `将拉取用户「${detail.user.name}」全部静态插画原图并打包为 ZIP 归档，多页插画将归入独立子文件夹，请在“文件”App 或“下载与文件管理”中查看。`,
+          confirmLabel: "开始下载",
+          cancelLabel: "取消",
+        })
+        if (!confirmed) return
+
+        setDownloading(true)
+        try {
+          const list = await fetchAllUserIllustrations(userID, "illust", (msg) => setDownloadStatusText(msg))
+          const pureIllusts = list.filter((it) => it.type !== "ugoira")
+          if (pureIllusts.length === 0) {
+            void Dialog.alert({ title: "提示", message: "未获取到静态插画作品" })
+            return
+          }
+          const zipPath = await exportAuthorIllustrationsToZip(detail.user.name, userID, pureIllusts, (msg) => setDownloadStatusText(msg))
+          if (zipPath) {
+            void Dialog.alert({
+              title: "打包完成",
+              message: "插画全集 ZIP 归档已保存，请在“下载与文件管理”或“文件”App 查看。",
+            })
+          } else {
+            void Dialog.alert({ title: "打包失败", message: "生成插画 ZIP 归档包失败" })
+          }
+        } catch (e: any) {
+          void Dialog.alert({ title: "打包失败", message: e?.message ?? "打包插画时发生错误" })
+        } finally {
+          setDownloading(false)
+          setDownloadStatusText("")
+        }
+      }
+    } else if (selectedCatKey === "ugoira") {
+      const format = loadSettings().ugoiraExportFormat ?? "mp4"
+      const formatLabel = format.toUpperCase()
+      const choice = await Dialog.actionSheet({
+        title: "动图下载方式",
+        message: "动图合成与导出归档",
+        actions: [
+          { label: `合成并保存至相簿 (${formatLabel})` },
+          { label: `导出动图文件至 Ugoira 目录 (${formatLabel})` },
+          { label: "导出原始 ZIP 帧包至 Ugoira 目录" },
+        ],
+      })
+      if (choice !== 0 && choice !== 1 && choice !== 2) return
+
+      if (choice === 0) {
+        const albumName = loadSettings().downloadPhotoAlbumName || "Pix-Scripting"
+        const confirmed = await Dialog.confirm({
+          title: "确认下载全部动图？",
+          message: `将拉取用户「${detail.user.name}」全部动图，合成为 ${formatLabel} 并保存至专属相簿「${albumName}」。`,
+          confirmLabel: "开始下载",
+          cancelLabel: "取消",
+        })
+        if (!confirmed) return
+
+        setDownloading(true)
+        try {
+          const list = await fetchAllUserIllustrations(userID, "illust", (msg) => setDownloadStatusText(msg))
+          const ugoiras = list.filter((it) => it.type === "ugoira")
+          if (ugoiras.length === 0) {
+            void Dialog.alert({ title: "提示", message: "该创作者未投稿动图作品" })
+            return
+          }
+          const result = await downloadAuthorUgoiraToAlbum(detail.user.name, ugoiras, (msg) => setDownloadStatusText(msg))
+          void Dialog.alert({
+            title: "下载完成",
+            message: `已成功将 ${result.successCount} 部动图保存至相簿「${albumName}」。`,
+          })
+        } catch (e: any) {
+          void Dialog.alert({ title: "下载失败", message: e?.message ?? "下载动图时发生错误" })
+        } finally {
+          setDownloading(false)
+          setDownloadStatusText("")
+        }
+      } else if (choice === 1) {
+        const confirmed = await Dialog.confirm({
+          title: "确认导出全部动图？",
+          message: `将拉取用户「${detail.user.name}」全部动图并合成为 ${formatLabel} 文件，存入 Ugoira 独立目录中。`,
+          confirmLabel: "开始导出",
+          cancelLabel: "取消",
+        })
+        if (!confirmed) return
+
+        setDownloading(true)
+        try {
+          const list = await fetchAllUserIllustrations(userID, "illust", (msg) => setDownloadStatusText(msg))
+          const ugoiras = list.filter((it) => it.type === "ugoira")
+          if (ugoiras.length === 0) {
+            void Dialog.alert({ title: "提示", message: "该创作者未投稿动图作品" })
+            return
+          }
+          const result = await exportAuthorUgoiraToFiles(detail.user.name, userID, ugoiras, (msg) => setDownloadStatusText(msg))
+          void Dialog.alert({
+            title: "导出完成",
+            message: `已成功将 ${result.successCount} 部动图导出至 Ugoira 文件夹，请在“下载与文件管理”中查看。`,
+          })
+        } catch (e: any) {
+          void Dialog.alert({ title: "导出失败", message: e?.message ?? "导出动图时发生错误" })
+        } finally {
+          setDownloading(false)
+          setDownloadStatusText("")
+        }
+      } else {
+        const confirmed = await Dialog.confirm({
+          title: "确认导出原始 ZIP 帧包？",
+          message: `将拉取用户「${detail.user.name}」全部动图，分别打包为包含高清无损序列帧与完整延迟数据 (info.json) 的独立 ZIP 压缩包，存入画师专属 Ugoira 目录。`,
+          confirmLabel: "开始导出",
+          cancelLabel: "取消",
+        })
+        if (!confirmed) return
+
+        setDownloading(true)
+        try {
+          const list = await fetchAllUserIllustrations(userID, "illust", (msg) => setDownloadStatusText(msg))
+          const ugoiras = list.filter((it) => it.type === "ugoira")
+          if (ugoiras.length === 0) {
+            void Dialog.alert({ title: "提示", message: "该创作者未投稿动图作品" })
+            return
+          }
+          const result = await exportAuthorUgoiraZipToFiles(detail.user.name, userID, ugoiras, (msg) => setDownloadStatusText(msg))
+          void Dialog.alert({
+            title: "导出完成",
+            message: `已成功将 ${result.successCount} 部动图原始 ZIP 帧包导出至画师 Ugoira 文件夹，请在“下载与文件管理”中查看。`,
+          })
+        } catch (e: any) {
+          void Dialog.alert({ title: "导出失败", message: e?.message ?? "导出动图帧包时发生错误" })
+        } finally {
+          setDownloading(false)
+          setDownloadStatusText("")
+        }
+      }
+    } else if (selectedCatKey === "manga") {
+      const choice = await Dialog.actionSheet({
+        title: "漫画下载格式",
+        message: `共 ${totalManga} 部漫画作品`,
+        actions: [
+          { label: "打包为 CBZ 漫画包" },
+          { label: "打包为 EPUB 电子书" },
+        ],
+      })
+      if (choice !== 0 && choice !== 1) return
+      const format: "cbz" | "epub" = choice === 0 ? "cbz" : "epub"
+      const formatLabel = format === "cbz" ? "CBZ 漫画包" : "EPUB 电子书"
+
+      const confirmed = await Dialog.confirm({
+        title: "确认下载全部漫画？",
+        message: `将拉取用户「${detail.user.name}」全部漫画（共 ${totalManga} 部），连载系列将自动合并为全集卷，短篇将独立导出为单本，格式为 ${formatLabel}，请在“文件”App 查看。`,
+        confirmLabel: "开始下载",
+        cancelLabel: "取消",
+      })
+      if (!confirmed) return
+
+      setDownloading(true)
+      try {
+        const mangaList = await fetchAllUserIllustrations(userID, "manga", (msg) => setDownloadStatusText(msg))
+        if (mangaList.length === 0) {
+          void Dialog.alert({ title: "提示", message: "未获取到漫画作品" })
+          return
+        }
+        const res = await exportAuthorManga(detail.user.name, userID, mangaList, format, (msg) => setDownloadStatusText(msg))
+        void Dialog.alert({
+          title: "导出完成",
+          message: `已成功导出 ${res.totalExported} 本漫画文件，请在“文件”App 查看。`,
+        })
+      } catch (e: any) {
+        void Dialog.alert({ title: "导出失败", message: e?.message ?? "导出漫画时发生错误" })
+      } finally {
+        setDownloading(false)
+        setDownloadStatusText("")
+      }
+    } else if (selectedCatKey === "novel") {
+      const confirmed = await Dialog.confirm({
+        title: "确认下载全部小说？",
+        message: `将拉取用户「${detail.user.name}」全部小说（共 ${totalNovels} 部），连载系列将自动合并为多章节整本电子书，短篇将独立导出为单本，请在“文件”App 查看。`,
+        confirmLabel: "开始下载",
+        cancelLabel: "取消",
+      })
+      if (!confirmed) return
+
+      setDownloading(true)
+      try {
+        const novelList = await fetchAllUserNovels(userID, (msg) => setDownloadStatusText(msg))
+        if (novelList.length === 0) {
+          void Dialog.alert({ title: "提示", message: "未获取到小说作品" })
+          return
+        }
+        const res = await exportAuthorNovels(detail.user.name, userID, novelList, (msg) => setDownloadStatusText(msg))
+        void Dialog.alert({
+          title: "导出完成",
+          message: `已成功导出 ${res.totalExported} 本 EPUB 电子书，请在“文件”App 查看。`,
+        })
+      } catch (e: any) {
+        void Dialog.alert({ title: "导出失败", message: e?.message ?? "导出小说时发生错误" })
+      } finally {
+        setDownloading(false)
+        setDownloadStatusText("")
+      }
+    }
+  }
+
+  async function handleRefresh() {
+    await Promise.all([loadDetail(), worksRefreshRef.current()])
+  }
+
+  const showStandaloneShare =
+    !Device.isiPad && (isOwnProfile || isAppleMusic || availableKinds.length <= 1)
+  const showStandaloneDownload =
+    !Device.isiPad || isAppleMusic || availableKinds.length <= 1
+
+  const handleShare = () => {
+    triggerHaptic("selection")
+    void ShareSheet.present([`https://www.pixiv.net/users/${userID}`])
+  }
+
+  if (!detail) {
+    if (detailError) {
+      return (
+        <ScrollView
+          navigationTitle=""
+          navigationBarTitleDisplayMode="inline"
+          toolbarBackground="clear"
+          toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+          scrollContentBackground="hidden"
+          background={ambientBackground}
+        >
+          <ErrorView message={detailError} onRetry={loadDetail} />
+        </ScrollView>
+      )
+    }
+    return (
+      <ScrollView
+        navigationTitle="用户主页"
+        navigationBarTitleDisplayMode="inline"
+        toolbarBackground="clear"
+        toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+        scrollContentBackground="hidden"
+        background={ambientBackground}
+      >
+        <LoadingView />
+      </ScrollView>
+    )
+  }
+
+  return (
+    <ZStack
+      navigationTitle=""
+      navigationBarTitleDisplayMode="inline"
+      toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+      ignoresSafeArea={{ edges: ["top", "bottom"] }}
+      toolbar={{
+        topBarTrailing: [
+          ...(!isOwnProfile ? [
+            <Button
+              key="follow-button"
+              disabled={followBusy}
+              action={toggleFollow}
+              contextMenu={{
+                menuItems: (
+                  <Group>
+                    {followed ? (
+                      followRestrict === "private" ? (
+                        <Button
+                          title="设为公开关注"
+                          systemImage="globe"
+                          disabled={followBusy}
+                          action={() => void followWithVisibility("public")}
+                        />
+                      ) : (
+                        <Button
+                          title="设为私密关注"
+                          systemImage="lock"
+                          disabled={followBusy}
+                          action={() => void followWithVisibility("private")}
+                        />
+                      )
+                    ) : (
+                      <Button
+                        title="私密关注"
+                        systemImage="lock"
+                        disabled={followBusy}
+                        action={() => void followWithVisibility("private")}
+                      />
+                    )}
+                  </Group>
+                ),
+              }}
+            >
+              <Image
+                systemName={
+                  followed
+                    ? (followRestrict === "private"
+                        ? "person.badge.shield.checkmark"
+                        : "person.fill.checkmark")
+                    : "person.badge.plus"
+                }
+              />
+            </Button>,
+          ] : []),
+          ...(showStandaloneShare
+            ? [
+                <Button
+                  key="share-button"
+                  action={handleShare}
+                >
+                  <Image systemName="square.and.arrow.up" />
+                </Button>,
+              ]
+            : []),
+          ...(showStandaloneDownload
+            ? [
+                <Button
+                  key="download-button"
+                  disabled={downloading}
+                  action={() => {
+                    triggerHaptic("light")
+                    void handleDownloadClick()
+                  }}
+                >
+                  <Image systemName={downloading ? "arrow.down.circle.fill" : "square.and.arrow.down"} />
+                </Button>,
+              ]
+            : []),
+          ...(!isAppleMusic && availableKinds.length > 1
+            ? [
+                <Menu
+                  key="work-type-menu"
+                  label={
+                    <Image
+                      systemName={
+                        activeKind === "illust"
+                          ? "photo"
+                          : activeKind === "manga"
+                            ? "photo.on.rectangle"
+                            : "book"
+                      }
+                    />
+                  }
+                >
+                  <Picker
+                    title="作品类型"
+                    value={activeKind}
+                    onChanged={(newK: string) => {
+                      setSelectedTag(null)
+                      setKind(newK as UserWorkKind)
+                    }}
+                  >
+                    {availableKinds.map((k) => (
+                      <Label
+                        key={k}
+                        tag={k}
+                        title={k === "illust" ? "插画" : k === "manga" ? "漫画" : "小说"}
+                        systemImage={
+                          k === "illust"
+                            ? "photo"
+                            : k === "manga"
+                              ? "photo.on.rectangle"
+                              : "book"
+                        }
+                      />
+                    ))}
+                  </Picker>
+                </Menu>,
+              ]
+            : []),
+          <Menu key="more-menu" label={<Image systemName="ellipsis.circle" />}>
+            {!showStandaloneShare ? (
+              <Button
+                title="分享"
+                systemImage="square.and.arrow.up"
+                action={handleShare}
+              />
+            ) : null}
+            {!showStandaloneDownload ? (
+              <Button
+                title={downloading ? (downloadStatusText || "正在下载…") : "批量下载作品"}
+                systemImage={downloading ? "arrow.down.circle.fill" : "square.and.arrow.down"}
+                disabled={downloading}
+                action={() => {
+                  triggerHaptic("light")
+                  void handleDownloadClick()
+                }}
+              />
+            ) : null}
+            <NavigationLink value={`userConnections:following:${userID}`}>
+              <Label title="查看关注" systemImage="person.2" />
+            </NavigationLink>
+            <NavigationLink value={`userConnections:mypixiv:${userID}`}>
+              <Label title="查看好友" systemImage="person.2.badge.gearshape" />
+            </NavigationLink>
+            <NavigationLink value={`userBookmarks:${userID}`}>
+              <Label title="查看收藏" systemImage="heart" />
+            </NavigationLink>
+            <Menu title="查看信息" systemImage="info.circle">
+              <Button
+                title={`用户：${detail.user.name}`}
+                action={() => void Pasteboard.setString(detail.user.name)}
+              />
+              <Button
+                title={`账户：@${detail.user.account}`}
+                action={() => void Pasteboard.setString(detail.user.account)}
+              />
+              <Button
+                title={`UID：${detail.user.id}`}
+                action={() => void Pasteboard.setString(String(detail.user.id))}
+              />
+            </Menu>
+            {!isOwnProfile ? (
+              <Group>
+                <Divider />
+                {followed ? (
+                  followRestrict === "private" ? (
+                    <Button
+                      title="设为公开关注"
+                      systemImage="globe"
+                      disabled={followBusy}
+                      action={() => void followWithVisibility("public")}
+                    />
+                  ) : (
+                    <Button
+                      title="设为私密关注"
+                      systemImage="lock"
+                      disabled={followBusy}
+                      action={() => void followWithVisibility("private")}
+                    />
+                  )
+                ) : (
+                  <Button
+                    title="私密关注"
+                    systemImage="lock"
+                    disabled={followBusy}
+                    action={() => void followWithVisibility("private")}
+                  />
+                )}
+                <Button
+                  title={isUserBlocked(detail.user.id) ? "解除屏蔽用户" : "屏蔽用户"}
+                  systemImage={
+                    isUserBlocked(detail.user.id)
+                      ? "person.badge.plus"
+                      : "person.crop.circle.badge.xmark"
+                  }
+                  role={isUserBlocked(detail.user.id) ? undefined : "destructive"}
+                  action={() => {
+                    if (isUserBlocked(detail.user.id)) {
+                      unblockUser(detail.user.id)
+                    } else {
+                      blockUser(detail.user)
+                    }
+                  }}
+                />
+              </Group>
+            ) : null}
+          </Menu>,
+        ],
+      }}
+      background={ambientBackground}
+      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+    >
+      {availableKinds.length === 0 ? (
+        <RefreshableScrollView
+          refreshable={handleRefresh}
+        >
+          <VStack
+            alignment="leading"
+            spacing={12}
+            padding={{ top: 0, bottom: 20 }}
+            frame={{ maxWidth: "infinity" }}
+          >
+            <UserProfileHeader detail={detail} webDetail={webDetail} />
+            <EmptyView text="暂无作品投稿" systemImage="photo.on.rectangle.angled" />
+          </VStack>
+        </RefreshableScrollView>
+      ) : (
+        availableKinds.map((k) => {
+          if (!visitedKinds.has(k)) return null
+          const isCurrent = activeKind === k
+          return (
+            <VStack
+              key={k}
+              frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+              opacity={isCurrent ? 1 : 0}
+              zIndex={isCurrent ? 1 : 0}
+              allowsHitTesting={isCurrent}
+            >
+              <RefreshableScrollView
+                refreshable={handleRefresh}
+              >
+                <VStack
+                  alignment="leading"
+                  spacing={12}
+                  padding={{ top: 0, bottom: 20 }}
+                  frame={{ maxWidth: "infinity" }}
+                >
+                  <UserProfileHeader detail={detail} webDetail={webDetail} />
+                  <UserWorkTagFilterBar
+                    tags={tagsByKind[k] ?? []}
+                    selectedTag={isCurrent ? selectedTag : null}
+                    onSelectTag={setSelectedTag}
+                  />
+
+                  {downloading ? (
+                    <HStack
+                      spacing={8}
+                      padding={{ horizontal: 16, vertical: 10 }}
+                      background="systemGray6"
+                      clipShape={{ type: "rect", cornerRadius: 10 }}
+                      frame={{ maxWidth: "infinity" }}
+                      alignment="center"
+                    >
+                      <Image systemName="arrow.down.circle.fill" foregroundStyle="tintColor" />
+                      <Text
+                        font="footnote"
+                        foregroundStyle="secondaryLabel"
+                        lineLimit={1}
+                      >
+                        {downloadStatusText || "正在下载作品…"}
+                      </Text>
+                    </HStack>
+                  ) : null}
+
+                  <UserWorksFeedSection
+                    userID={userID}
+                    kind={k}
+                    selectedTag={isCurrent ? selectedTag : null}
+                    isAuthorFollowed={followed || isOwnProfile}
+                    onKindEmpty={handleKindEmpty}
+                    onRegisterRefresh={(fn) => {
+                      if (isCurrent) worksRefreshRef.current = fn
+                    }}
+                  />
+                </VStack>
+              </RefreshableScrollView>
+            </VStack>
+          )
+        })
+      )}
+
+      <VStack
+        sheet={{
+          content: (
+            <RelatedUsersSheet
+              seedUserID={userID}
+              seedUserName={detail?.user?.name}
+              onClose={() => setShowRelatedUsers(false)}
+            />
+          ),
+          isPresented: showRelatedUsers,
+          onChanged: setShowRelatedUsers,
+        }}
+      />
+    </ZStack>
+  )
+}

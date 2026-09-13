@@ -1,0 +1,414 @@
+import {
+  Button,
+  Divider,
+  HStack,
+  Image,
+  Menu,
+  NavigationStack,
+  ScrollView,
+  Slider,
+  Spacer,
+  Text,
+  useCallback,
+  useEffect,
+  useState,
+  VStack,
+} from "scripting"
+import { isScriptingPro } from "../platform/pro"
+import { triggerHaptic } from "../platform/haptics"
+import {
+  DEFAULT_NOVEL_READER_SETTINGS,
+  loadNovelReaderSettings,
+  onNovelReaderSettingsChanged,
+  saveNovelReaderSettings,
+  type BuiltinFontId,
+  type NovelReaderSettings,
+} from "../store/novelReaderSettings"
+
+const PRESET_FONTS: { id: BuiltinFontId; name: string; desc: string }[] = [
+  { id: "system", name: "系统默认", desc: "苹方 PingFang" },
+  { id: "songti", name: "经典宋体", desc: "宋体 / 纸书感" },
+  { id: "kaiti", name: "优美楷体", desc: "楷体 / 古雅" },
+  { id: "yuanti", name: "柔和圆体", desc: "圆体 / 亲和" },
+]
+
+export function NovelTypographySheet(props: { onClose?: () => void }) {
+  const { onClose } = props
+  const [settings, setSettings] = useState<NovelReaderSettings>(() => loadNovelReaderSettings())
+  const [isPickingFont, setIsPickingFont] = useState(false)
+  const [fontError, setFontError] = useState<string | null>(null)
+
+  useEffect(() => {
+    return onNovelReaderSettingsChanged((updated) => {
+      setSettings(updated)
+    })
+  }, [])
+
+  const updateSetting = useCallback((partial: Partial<NovelReaderSettings>) => {
+    const updated = saveNovelReaderSettings(partial)
+    setSettings(updated)
+  }, [])
+
+  const handlePickFont = useCallback(async () => {
+    if (isPickingFont) return
+    setIsPickingFont(true)
+    setFontError(null)
+
+    // 1. 检查 Scripting PRO 会员权限
+    if (!isScriptingPro()) {
+      setIsPickingFont(false)
+      const msg = "从系统字体库选取第三方已安装字体需要 Scripting PRO 会员。\n\n您可以直接在上方「字体」菜单中免费选用经典宋体、优美楷体、柔和圆体等精选预设字体。"
+      try {
+        if (typeof Dialog !== "undefined" && typeof Dialog.alert === "function") {
+          await Dialog.alert({
+            title: "需要 Scripting PRO",
+            message: msg,
+          })
+          return
+        }
+      } catch {}
+      setFontError("从系统字体库选取需要 Scripting PRO，建议使用上方预设字体")
+      return
+    }
+
+    // 2. PRO 用户调用系统字体选择器
+    try {
+      if (typeof FontPicker !== "undefined" && typeof FontPicker.pickFont === "function") {
+        const picked = await FontPicker.pickFont()
+        if (picked && picked.trim().length > 0) {
+          updateSetting({
+            fontId: "custom",
+            customFontPostscriptName: picked.trim(),
+          })
+        }
+      } else {
+        setFontError("当前运行环境暂不支持系统字体选择器")
+      }
+    } catch (e: any) {
+      console.log("FontPicker error:", e?.message ?? e)
+    } finally {
+      setIsPickingFont(false)
+    }
+  }, [isPickingFont, updateSetting])
+
+  const handleReset = useCallback(() => {
+    triggerHaptic("warning")
+    const updated = saveNovelReaderSettings(DEFAULT_NOVEL_READER_SETTINGS)
+    setSettings(updated)
+  }, [])
+
+  return (
+    <NavigationStack
+      presentationDetents={[0.65, "large"]}
+      presentationDragIndicator="visible"
+    >
+      <ScrollView
+        navigationTitle="版式"
+        navigationBarTitleDisplayMode="inline"
+        toolbar={{
+          topBarLeading: onClose
+            ? [
+                <Button
+                  title="关闭"
+                  systemImage="xmark"
+                  action={onClose}
+                />,
+              ]
+            : undefined,
+          topBarTrailing: [
+            <Menu
+              title="重置"
+              systemImage="arrow.counterclockwise"
+              primaryAction={() => {
+                triggerHaptic("medium")
+              }}
+            >
+              <Button
+                title="重置为默认版式"
+                role="destructive"
+                systemImage="arrow.counterclockwise"
+                action={handleReset}
+              />
+            </Menu>,
+            onClose ? (
+              <Button
+                title="完成"
+                systemImage="checkmark"
+                fontWeight="bold"
+                action={onClose}
+              />
+            ) : undefined,
+          ].filter(Boolean) as any,
+        }}
+      >
+        <VStack spacing={20} padding={{ horizontal: 16, top: 12, bottom: 32 }} frame={{ maxWidth: "infinity" }}>
+          {/* 1. 排版 */}
+          <VStack alignment="leading" spacing={8} frame={{ maxWidth: "infinity" }}>
+            <HStack spacing={6} alignment="center">
+              <Image systemName="rectangle.and.text.magnifyingglass" font="headline" foregroundStyle="#007AFF" />
+              <Text font="headline" fontWeight="bold">
+                排版
+              </Text>
+            </HStack>
+
+            <VStack
+              spacing={0}
+              glassEffect={{ type: "rect", cornerRadius: 14 }}
+              contentShape={{ type: "rect", cornerRadius: 14 }}
+              frame={{ maxWidth: "infinity" }}
+            >
+              {/* 方向 */}
+              <HStack alignment="center" padding={{ horizontal: 16, vertical: 13 }} frame={{ maxWidth: "infinity" }}>
+                <Text font="body">方向</Text>
+                <Spacer />
+                <Menu
+                  label={
+                    <HStack spacing={4} alignment="center">
+                      <Text font="body" foregroundStyle="secondaryLabel">
+                        {settings.layoutDirection === "horizontal" ? "横排" : "竖排"}
+                      </Text>
+                      <Image systemName="chevron.up.chevron.down" font="caption2" foregroundStyle="tertiaryLabel" />
+                    </HStack>
+                  }
+                >
+                  <Button
+                    title="横排"
+                    systemImage={settings.layoutDirection === "horizontal" ? "checkmark" : undefined}
+                    action={() => updateSetting({ layoutDirection: "horizontal" })}
+                  />
+                  <Button
+                    title="竖排"
+                    systemImage={settings.layoutDirection === "vertical" ? "checkmark" : undefined}
+                    action={() => updateSetting({ layoutDirection: "vertical" })}
+                  />
+                </Menu>
+              </HStack>
+
+              <Divider padding={{ leading: 16 }} />
+
+              {/* 行距 */}
+              <HStack alignment="center" padding={{ horizontal: 16, vertical: 13 }} frame={{ maxWidth: "infinity" }}>
+                <Text font="body">行距</Text>
+                <Spacer />
+                <Menu
+                  label={
+                    <HStack spacing={4} alignment="center">
+                      <Text font="body" foregroundStyle="secondaryLabel">
+                        {settings.lineSpacingLevel === "compact"
+                          ? "紧凑"
+                          : settings.lineSpacingLevel === "loose"
+                          ? "宽松"
+                          : "标准"}
+                      </Text>
+                      <Image systemName="chevron.up.chevron.down" font="caption2" foregroundStyle="tertiaryLabel" />
+                    </HStack>
+                  }
+                >
+                  <Button
+                    title="紧凑"
+                    systemImage={settings.lineSpacingLevel === "compact" ? "checkmark" : undefined}
+                    action={() => updateSetting({ lineSpacingLevel: "compact" })}
+                  />
+                  <Button
+                    title="标准"
+                    systemImage={settings.lineSpacingLevel === "normal" ? "checkmark" : undefined}
+                    action={() => updateSetting({ lineSpacingLevel: "normal" })}
+                  />
+                  <Button
+                    title="宽松"
+                    systemImage={settings.lineSpacingLevel === "loose" ? "checkmark" : undefined}
+                    action={() => updateSetting({ lineSpacingLevel: "loose" })}
+                  />
+                </Menu>
+              </HStack>
+            </VStack>
+          </VStack>
+
+          {/* 2. 字体 */}
+          <VStack alignment="leading" spacing={8} frame={{ maxWidth: "infinity" }}>
+            <HStack spacing={6} alignment="center">
+              <Text font="headline" fontWeight="bold" foregroundStyle="#007AFF">
+                Aa
+              </Text>
+              <Text font="headline" fontWeight="bold">
+                字体
+              </Text>
+            </HStack>
+
+            <VStack
+              spacing={0}
+              glassEffect={{ type: "rect", cornerRadius: 14 }}
+              contentShape={{ type: "rect", cornerRadius: 14 }}
+              frame={{ maxWidth: "infinity" }}
+            >
+              {/* 第一行：字体（预设字体菜单） */}
+              <HStack alignment="center" padding={{ horizontal: 16, vertical: 13 }} frame={{ maxWidth: "infinity" }}>
+                <Text font="body">字体</Text>
+                <Spacer />
+                <Menu
+                  label={
+                    <HStack spacing={4} alignment="center">
+                      <Text font="body" foregroundStyle="secondaryLabel">
+                        {settings.fontId !== "custom"
+                          ? PRESET_FONTS.find((f) => f.id === settings.fontId)?.name ?? "系统默认"
+                          : "自定义字体"}
+                      </Text>
+                      <Image systemName="chevron.up.chevron.down" font="caption2" foregroundStyle="tertiaryLabel" />
+                    </HStack>
+                  }
+                >
+                  {PRESET_FONTS.map((item) => {
+                    const isSelected = settings.fontId === item.id
+                    return (
+                      <Button
+                        key={item.id}
+                        title={item.name}
+                        systemImage={isSelected ? "checkmark" : undefined}
+                        action={() => updateSetting({ fontId: item.id })}
+                      />
+                    )
+                  })}
+                </Menu>
+              </HStack>
+
+              <Divider padding={{ leading: 16 }} />
+
+              {/* 第二行：自定义字体 */}
+              <HStack alignment="center" padding={{ horizontal: 16, vertical: 13 }} frame={{ maxWidth: "infinity" }}>
+                <HStack spacing={6} alignment="center">
+                  <Text font="body">自定义字体</Text>
+                  {!isScriptingPro() ? (
+                    <HStack
+                      padding={{ horizontal: 5, vertical: 1.5 }}
+                      background="#FF950020"
+                      clipShape={{ type: "capsule", style: "continuous" }}
+                    >
+                      <Text
+                        font="caption2"
+                        fontWeight="bold"
+                        foregroundStyle="#FF9500"
+                      >
+                        PRO
+                      </Text>
+                    </HStack>
+                  ) : null}
+                </HStack>
+                <Spacer />
+                <Button
+                  buttonStyle="plain"
+                  action={() => void handlePickFont()}
+                >
+                  <HStack spacing={4} alignment="center">
+                    <Text font="body" foregroundStyle="secondaryLabel" lineLimit={1}>
+                      {settings.fontId === "custom" && settings.customFontPostscriptName
+                        ? settings.customFontPostscriptName
+                        : "从系统字体库选取"}
+                    </Text>
+                    <Image
+                      systemName="chevron.right"
+                      font="footnote"
+                      foregroundStyle="tertiaryLabel"
+                    />
+                  </HStack>
+                </Button>
+              </HStack>
+
+              {fontError ? (
+                <Text font="caption2" foregroundStyle="#FF3B30" padding={{ horizontal: 16, bottom: 8 }}>
+                  {fontError}
+                </Text>
+              ) : null}
+
+              <Divider padding={{ leading: 16 }} />
+
+              {/* 第三行：字重（纤细，标准，加粗） */}
+              <HStack alignment="center" padding={{ horizontal: 16, vertical: 13 }} frame={{ maxWidth: "infinity" }}>
+                <Text font="body">字重</Text>
+                <Spacer />
+                <Menu
+                  label={
+                    <HStack spacing={4} alignment="center">
+                      <Text font="body" foregroundStyle="secondaryLabel">
+                        {settings.fontWeight === "regular"
+                          ? "纤细"
+                          : settings.fontWeight === "bold"
+                          ? "加粗"
+                          : "标准"}
+                      </Text>
+                      <Image systemName="chevron.up.chevron.down" font="caption2" foregroundStyle="tertiaryLabel" />
+                    </HStack>
+                  }
+                >
+                  <Button
+                    title="纤细"
+                    systemImage={settings.fontWeight === "regular" ? "checkmark" : undefined}
+                    action={() => updateSetting({ fontWeight: "regular" })}
+                  />
+                  <Button
+                    title="标准"
+                    systemImage={settings.fontWeight === "medium" ? "checkmark" : undefined}
+                    action={() => updateSetting({ fontWeight: "medium" })}
+                  />
+                  <Button
+                    title="加粗"
+                    systemImage={settings.fontWeight === "bold" ? "checkmark" : undefined}
+                    action={() => updateSetting({ fontWeight: "bold" })}
+                  />
+                </Menu>
+              </HStack>
+
+              <Divider padding={{ leading: 16 }} />
+
+              {/* 第四行：字号 */}
+              <VStack spacing={8} padding={{ horizontal: 16, vertical: 13 }} frame={{ maxWidth: "infinity" }}>
+                <HStack alignment="center" frame={{ maxWidth: "infinity" }}>
+                  <Text font="body">字号</Text>
+                  <Spacer />
+                  <Text font="body" foregroundStyle="secondaryLabel">
+                    {settings.fontSize} pt
+                  </Text>
+                </HStack>
+
+                <HStack spacing={12} alignment="center" frame={{ maxWidth: "infinity" }}>
+                  <Button
+                    buttonStyle="plain"
+                    action={() => {
+                      const nextSize = Math.max(14, settings.fontSize - 1)
+                      updateSetting({ fontSize: nextSize })
+                    }}
+                  >
+                    <Text font="subheadline" fontWeight="bold" foregroundStyle="#007AFF">
+                      A -
+                    </Text>
+                  </Button>
+
+                  <Slider
+                    min={14}
+                    max={32}
+                    step={1}
+                    value={settings.fontSize}
+                    onChanged={(val) => updateSetting({ fontSize: Math.round(val) })}
+                  />
+
+                  <Button
+                    buttonStyle="plain"
+                    action={() => {
+                      const nextSize = Math.min(32, settings.fontSize + 1)
+                      updateSetting({ fontSize: nextSize })
+                    }}
+                  >
+                    <Text font="subheadline" fontWeight="bold" foregroundStyle="#007AFF">
+                      A +
+                    </Text>
+                  </Button>
+                </HStack>
+              </VStack>
+            </VStack>
+          </VStack>
+        </VStack>
+      </ScrollView>
+    </NavigationStack>
+  )
+}
+
+export default NovelTypographySheet

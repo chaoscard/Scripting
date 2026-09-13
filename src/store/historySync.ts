@@ -1,0 +1,593 @@
+// 历史记录与阅读进度 iCloud 低频双向同步引擎
+// 5 个独立同构文件按需低频同步，支持 15条阈值 + 10秒空闲 + 30秒兜底多维触发、互斥锁与在途变更尾随排队（Trailing Queue）及 Tombstone（30天TTL）机制。
+import {
+  pixivCloudHistoryDirectory,
+  pixivHistoryDirectory,
+} from "./dataDirectory"
+import { recoverFile, writeTextSafely } from "./safeFile"
+import { session } from "../api/session"
+import {
+  clearHistoryMemoryCache,
+  flushHistory,
+  getHistory,
+  getHistoryLimitForKind,
+  historyFilePath,
+  loadKindEntries,
+  onHistoryChanged,
+  parseRawEntriesForKind,
+  replaceKindEntries,
+  toStoredEntry,
+  type HistoryContentKind,
+  type HistoryEntry,
+  type IllustrationHistoryEntry,
+  type NovelHistoryEntry,
+} from "./history"
+import {
+  flushNovelProgress,
+  getAllNovelProgressMap,
+  replaceNovelProgressMap,
+  type NovelReadingProgress,
+} from "./novelProgress"
+import {
+  flushSearchHistory,
+  getFullSearchHistoryStore,
+  replaceSearchHistoryStore,
+  type SearchHistoryScope,
+  type SearchHistoryStore,
+} from "./searchHistory"
+
+export interface HistorySyncState {
+  lastSyncTime: number
+  tombstones: { [key: string]: number } // "kind:id" -> timestamp
+  clearBefore: { [kind in HistoryContentKind]?: number }
+  searchTombstones?: { [key: string]: number } // "scope:query" -> timestamp
+  searchClearBefore?: { [scope in SearchHistoryScope]?: number } // scope -> timestamp
+}
+
+const SYNC_STATE_FILE = "sync_state.json"
+const TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000 // 30 天
+const STARTUP_DELAY_MS = 2000 // 启动 2 秒后静默拉取
+const RESUME_DELAY_MS = 2000 // 切回前台 2 秒后检查
+const MIN_RESUME_SYNC_INTERVAL_MS = 30 * 1000 // 切回前台最小检查间隔 30 秒
+
+// 多维触发配置
+const MUTATION_COUNT_THRESHOLD = 15 // 1. 累计 15 条变更立即触发同步
+const IDLE_SYNC_DELAY_MS = 10 * 1000 // 2. 前台操作停止空闲 10 秒后自动同步
+const MAX_WAIT_THROTTLE_MS = 30 * 1000 // 3. 自首次变更起，最多 30 秒兜底强制同步
+const AUTO_SYNC_FALLBACK_INTERVAL_MS = 60 * 1000 // 前台轮询兜底周期 60 秒
+
+// 单飞互斥锁与尾随排队标记
+let isSyncing = false
+let hasQueuedSync = false
+let queuedUserId: string | number | null | undefined = undefined
+
+let schedulerTimer: ReturnType<typeof setTimeout> | null = null
+let idleSyncTimer: ReturnType<typeof setTimeout> | null = null
+let maxWaitTimer: ReturnType<typeof setTimeout> | null = null
+let isSchedulerRunning = false
+let pendingMutationCount = 0
+let firstMutationTime = 0
+
+function syncStateFilePath(userId?: string | number | null): string {
+  return `${pixivHistoryDirectory(userId)}/${SYNC_STATE_FILE}`
+}
+
+function loadSyncState(userId?: string | number | null): HistorySyncState {
+  const path = syncStateFilePath(userId)
+  try {
+    recoverFile(path)
+    if (FileManager.existsSync(path)) {
+      const raw = FileManager.readAsStringSync(path, "utf-8")
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed === "object") {
+        return {
+          lastSyncTime: typeof parsed.lastSyncTime === "number" ? parsed.lastSyncTime : 0,
+          tombstones: parsed.tombstones && typeof parsed.tombstones === "object" ? parsed.tombstones : {},
+          clearBefore: parsed.clearBefore && typeof parsed.clearBefore === "object" ? parsed.clearBefore : {},
+          searchTombstones:
+            parsed.searchTombstones && typeof parsed.searchTombstones === "object" ? parsed.searchTombstones : {},
+          searchClearBefore:
+            parsed.searchClearBefore && typeof parsed.searchClearBefore === "object" ? parsed.searchClearBefore : {},
+        }
+      }
+    }
+  } catch {}
+  return {
+    lastSyncTime: 0,
+    tombstones: {},
+    clearBefore: {},
+    searchTombstones: {},
+    searchClearBefore: {},
+  }
+}
+
+function saveSyncState(state: HistorySyncState, userId?: string | number | null): void {
+  try {
+    const path = syncStateFilePath(userId)
+    writeTextSafely(path, JSON.stringify(state))
+  } catch (e: any) {
+    console.warn("saveSyncState failed:", e?.message ?? e)
+  }
+}
+
+export function recordTombstone(kind: HistoryContentKind, id: number): void {
+  const state = loadSyncState()
+  state.tombstones[`${kind}:${id}`] = Date.now()
+  pruneTombstones(state)
+  saveSyncState(state)
+  notifyLocalMutation()
+}
+
+export function recordClearBefore(kind: HistoryContentKind): void {
+  const state = loadSyncState()
+  state.clearBefore[kind] = Date.now()
+  saveSyncState(state)
+  notifyLocalMutation()
+}
+
+export function recordSearchTombstone(scope: SearchHistoryScope, query: string): void {
+  const trimmed = typeof query === "string" ? query.trim() : ""
+  if (!trimmed) return
+  const state = loadSyncState()
+  if (!state.searchTombstones) {
+    state.searchTombstones = {}
+  }
+  state.searchTombstones[`${scope}:${trimmed}`] = Date.now()
+  pruneTombstones(state)
+  saveSyncState(state)
+  notifyLocalMutation()
+}
+
+export function removeSearchTombstone(scope: SearchHistoryScope, query: string): void {
+  const trimmed = typeof query === "string" ? query.trim() : ""
+  if (!trimmed) return
+  const state = loadSyncState()
+  const key = `${scope}:${trimmed}`
+  if (state.searchTombstones && typeof state.searchTombstones[key] === "number") {
+    delete state.searchTombstones[key]
+    saveSyncState(state)
+  }
+}
+
+export function recordSearchClearBefore(scope: SearchHistoryScope): void {
+  const state = loadSyncState()
+  if (!state.searchClearBefore) {
+    state.searchClearBefore = {}
+  }
+  state.searchClearBefore[scope] = Date.now()
+  // 顺便清空该 scope 下的所有已有单条墓碑，避免墓碑膨胀
+  if (state.searchTombstones) {
+    const prefix = `${scope}:`
+    for (const key of Object.keys(state.searchTombstones)) {
+      if (key.startsWith(prefix)) {
+        delete state.searchTombstones[key]
+      }
+    }
+  }
+  saveSyncState(state)
+  notifyLocalMutation()
+}
+
+function resetMutationTracking(): void {
+  pendingMutationCount = 0
+  firstMutationTime = 0
+  if (idleSyncTimer) {
+    clearTimeout(idleSyncTimer)
+    idleSyncTimer = null
+  }
+  if (maxWaitTimer) {
+    clearTimeout(maxWaitTimer)
+    maxWaitTimer = null
+  }
+}
+
+// 当本地 5 项记录（插画/漫画/小说历史、小说进度、搜索历史）中任意一项发生变更时触发：
+// 采用「15条阈值立即触发 + 10秒空闲防抖 + 30秒最大等待兜底 + 执行中排队尾随」机制
+export function notifyLocalMutation(): void {
+  pendingMutationCount++
+  const now = Date.now()
+  if (firstMutationTime === 0) {
+    firstMutationTime = now
+  }
+
+  // 若当前正在执行同步，标记尾随排队，确保本轮执行完毕后自动无缝触发下一轮补跑
+  if (isSyncing) {
+    hasQueuedSync = true
+  }
+
+  // 维度 1：累积 15 条变更立即触发同步
+  if (pendingMutationCount >= MUTATION_COUNT_THRESHOLD) {
+    resetMutationTracking()
+    syncHistoryNow().catch(() => {})
+    return
+  }
+
+  // 维度 2：达到 30 秒最大等待时间，强制触发兜底同步
+  if (now - firstMutationTime >= MAX_WAIT_THROTTLE_MS) {
+    resetMutationTracking()
+    syncHistoryNow().catch(() => {})
+    return
+  }
+
+  // 维度 3：重置 10 秒空闲防抖定时器（用户停顿看图 10 秒即触发）
+  if (idleSyncTimer) {
+    clearTimeout(idleSyncTimer)
+    idleSyncTimer = null
+  }
+  idleSyncTimer = setTimeout(() => {
+    idleSyncTimer = null
+    resetMutationTracking()
+    syncHistoryNow().catch(() => {})
+  }, IDLE_SYNC_DELAY_MS)
+
+  // 维度 4：启动 30 秒最大等待兜底计时器
+  if (!maxWaitTimer) {
+    const remaining = Math.max(0, MAX_WAIT_THROTTLE_MS - (now - firstMutationTime))
+    maxWaitTimer = setTimeout(() => {
+      maxWaitTimer = null
+      resetMutationTracking()
+      syncHistoryNow().catch(() => {})
+    }, remaining)
+  }
+}
+
+function pruneTombstones(state: HistorySyncState): void {
+  const threshold = Date.now() - TOMBSTONE_TTL_MS
+  for (const [k, ts] of Object.entries(state.tombstones)) {
+    if (typeof ts === "number" && ts < threshold) {
+      delete state.tombstones[k]
+    }
+  }
+  if (state.searchTombstones) {
+    for (const [k, ts] of Object.entries(state.searchTombstones)) {
+      if (typeof ts === "number" && ts < threshold) {
+        delete state.searchTombstones[k]
+      }
+    }
+  }
+}
+
+async function prepareCloudFile(filePath: string): Promise<boolean> {
+  if (!FileManager.existsSync(filePath)) return false
+  if (!FileManager.isFileStoredIniCloud(filePath)) return true
+  if (FileManager.isiCloudFileDownloaded(filePath)) return true
+  try {
+    return await FileManager.downloadFileFromiCloud(filePath)
+  } catch {
+    return false
+  }
+}
+
+function readCloudJson<T = any>(filePath: string): T | null {
+  try {
+    recoverFile(filePath)
+    if (!FileManager.existsSync(filePath)) return null
+    const raw = FileManager.readAsStringSync(filePath, "utf-8")
+    if (!raw || !raw.trim()) return null
+    return JSON.parse(raw) as T
+  } catch {
+    return null
+  }
+}
+
+// 1. 同步单个历史分类 (illustration / manga / novel)
+async function syncHistoryCategory(
+  kind: HistoryContentKind,
+  localDir: string,
+  cloudDir: string,
+  state: HistorySyncState,
+  userId?: string | number | null
+): Promise<void> {
+  const fileName =
+    kind === "illustration"
+      ? "history_illust.json"
+      : kind === "manga"
+        ? "history_manga.json"
+        : "history_novel.json"
+
+  const localFile = `${localDir}/${fileName}`
+  const cloudFile = `${cloudDir}/${fileName}`
+
+  // 读取本地已缓存的 entries
+  const localEntries = loadKindEntries(kind)
+  const localStored = localEntries.map(toStoredEntry)
+
+  // 读取云端
+  await prepareCloudFile(cloudFile)
+  const cloudRaw = readCloudJson<any[]>(cloudFile)
+  const cloudStored: any[] = Array.isArray(cloudRaw) ? cloudRaw : []
+
+  // 内存双向合并
+  const map = new Map<number, any>()
+  const tombstones = state.tombstones
+  const clearBeforeTs = state.clearBefore[kind] ?? 0
+
+  // 放入本地
+  for (const entry of localStored) {
+    const id = entry.kind === "illust" ? entry.illustration?.id : entry.novel?.id
+    if (!id) continue
+    const key = `${kind}:${id}`
+    if (tombstones[key] && entry.viewedAt <= tombstones[key]) continue
+    if (clearBeforeTs > 0 && entry.viewedAt <= clearBeforeTs) continue
+    map.set(id, entry)
+  }
+
+  // 放入云端
+  for (const entry of cloudStored) {
+    const id = entry.kind === "illust" ? entry.illustration?.id : entry.novel?.id
+    if (!id) continue
+    const key = `${kind}:${id}`
+    if (tombstones[key] && entry.viewedAt <= tombstones[key]) continue
+    if (clearBeforeTs > 0 && entry.viewedAt <= clearBeforeTs) continue
+
+    const existing = map.get(id)
+    if (!existing || (typeof entry.viewedAt === "number" && entry.viewedAt > existing.viewedAt)) {
+      map.set(id, entry)
+    }
+  }
+
+  const maxLimit = getHistoryLimitForKind(kind)
+  const mergedStored = Array.from(map.values())
+    .sort((a, b) => b.viewedAt - a.viewedAt)
+    .slice(0, maxLimit)
+  const localDecoded = parseRawEntriesForKind(kind, mergedStored)
+
+  // 比对并更新本地
+  const localJson = JSON.stringify(localStored)
+  const mergedJson = JSON.stringify(mergedStored)
+  if (localJson !== mergedJson) {
+    replaceKindEntries(kind, localDecoded as any, true)
+  }
+
+  // 比对并更新云端
+  const cloudJson = JSON.stringify(cloudStored)
+  if (cloudJson !== mergedJson) {
+    try {
+      writeTextSafely(cloudFile, mergedJson)
+    } catch (e: any) {
+      console.warn(`write cloud history for ${kind} error:`, e?.message ?? e)
+    }
+  }
+}
+
+// 2. 同步小说进度 (novel_progress.json)
+async function syncNovelProgressFile(
+  localDir: string,
+  cloudDir: string,
+  userId?: string | number | null
+): Promise<void> {
+  const fileName = "novel_progress.json"
+  const localFile = `${localDir}/${fileName}`
+  const cloudFile = `${cloudDir}/${fileName}`
+
+  const localMap = getAllNovelProgressMap()
+  const localList = Array.from(localMap.values())
+
+  await prepareCloudFile(cloudFile)
+  const cloudRaw = readCloudJson<NovelReadingProgress[]>(cloudFile)
+  const cloudList: NovelReadingProgress[] = Array.isArray(cloudRaw) ? cloudRaw : []
+
+  const map = new Map<number, NovelReadingProgress>()
+  for (const item of localList) {
+    if (item && item.novelID > 0) {
+      map.set(item.novelID, item)
+    }
+  }
+  for (const item of cloudList) {
+    if (item && item.novelID > 0) {
+      const existing = map.get(item.novelID)
+      if (!existing || (typeof item.updatedAt === "number" && item.updatedAt > existing.updatedAt)) {
+        map.set(item.novelID, item)
+      }
+    }
+  }
+
+  const mergedList = Array.from(map.values())
+  const localJson = JSON.stringify(localList)
+  const mergedJson = JSON.stringify(mergedList)
+
+  if (localJson !== mergedJson) {
+    replaceNovelProgressMap(map, true)
+  }
+
+  const cloudJson = JSON.stringify(cloudList)
+  if (cloudJson !== mergedJson) {
+    try {
+      writeTextSafely(cloudFile, mergedJson)
+    } catch (e: any) {
+      console.warn("write cloud novel progress error:", e?.message ?? e)
+    }
+  }
+}
+
+// 3. 同步搜索历史 (search_history.json)
+async function syncSearchHistoryFile(
+  localDir: string,
+  cloudDir: string,
+  state: HistorySyncState,
+  userId?: string | number | null
+): Promise<void> {
+  const fileName = "search_history.json"
+  const localFile = `${localDir}/${fileName}`
+  const cloudFile = `${cloudDir}/${fileName}`
+
+  const localStore = getFullSearchHistoryStore()
+  const localUpdated = typeof localStore.updatedAt === "number" ? localStore.updatedAt : 0
+
+  await prepareCloudFile(cloudFile)
+  const cloudRaw = readCloudJson<any>(cloudFile)
+  const cloudUpdated = typeof cloudRaw?.updatedAt === "number" ? cloudRaw.updatedAt : 0
+  const cloudStore: SearchHistoryStore = {
+    illust: Array.isArray(cloudRaw?.illust) ? cloudRaw.illust : [],
+    novel: Array.isArray(cloudRaw?.novel) ? cloudRaw.novel : [],
+    user: Array.isArray(cloudRaw?.user) ? cloudRaw.user : [],
+    updatedAt: cloudUpdated,
+  }
+
+  const searchTombstones = state.searchTombstones ?? {}
+  const searchClearBefore = state.searchClearBefore ?? {}
+
+  // 双向增量合并（过滤已删除墓碑与已清空旧条目，保留双端新增搜索词）
+  function mergeScopeList(scope: SearchHistoryScope, localArr: string[], cloudArr: string[]): string[] {
+    const clearBeforeTs = searchClearBefore[scope] ?? 0
+    const set = new Set<string>()
+    const result: string[] = []
+
+    // 1. 本地条目（过滤处于墓碑中的条目）
+    for (const it of localArr) {
+      const trimmed = typeof it === "string" ? it.trim() : ""
+      if (!trimmed) continue
+      const tombstoneTs = searchTombstones[`${scope}:${trimmed}`] ?? 0
+      if (tombstoneTs > 0) continue
+      if (!set.has(trimmed)) {
+        set.add(trimmed)
+        result.push(trimmed)
+      }
+    }
+
+    // 2. 云端条目（若处于墓碑中，或者云端文件更新时间早于清空时间，则剔除）
+    for (const it of cloudArr) {
+      const trimmed = typeof it === "string" ? it.trim() : ""
+      if (!trimmed) continue
+      const tombstoneTs = searchTombstones[`${scope}:${trimmed}`] ?? 0
+      if (tombstoneTs > 0) continue
+      if (clearBeforeTs > 0 && cloudUpdated <= clearBeforeTs) continue
+
+      if (!set.has(trimmed)) {
+        set.add(trimmed)
+        result.push(trimmed)
+      }
+    }
+    return result
+  }
+
+  const mergedStore: SearchHistoryStore = {
+    illust: mergeScopeList("illust", localStore.illust, cloudStore.illust),
+    novel: mergeScopeList("novel", localStore.novel, cloudStore.novel),
+    user: mergeScopeList("user", localStore.user, cloudStore.user),
+    updatedAt: Math.max(localUpdated, cloudUpdated, Date.now()),
+  }
+
+  const localJson = JSON.stringify(localStore)
+  const cloudJson = JSON.stringify(cloudStore)
+  const mergedJson = JSON.stringify(mergedStore)
+
+  // 1. 若合并结果与本地存在差异，增量刷新本地存储
+  if (localJson !== mergedJson) {
+    replaceSearchHistoryStore(mergedStore, true)
+  }
+
+  // 2. 若合并结果与云端存在差异，安全推送到云端（彻底清除云端被删除的脏条目）
+  if (cloudJson !== mergedJson) {
+    try {
+      writeTextSafely(cloudFile, mergedJson)
+    } catch (e: any) {
+      console.warn("write cloud search history error:", e?.message ?? e)
+    }
+  }
+}
+
+// 统一立即同步入口（用于下拉刷新、多维触发或定时调度）
+export async function syncHistoryNow(userId?: string | number | null): Promise<boolean> {
+  // 单飞互斥保护：若当前已经在执行同步，记录排队请求并安全退出，防止在途重入冲突
+  if (isSyncing) {
+    hasQueuedSync = true
+    queuedUserId = userId
+    return false
+  }
+
+  const cloudDir = pixivCloudHistoryDirectory(userId)
+  if (!cloudDir) return false
+
+  isSyncing = true
+  hasQueuedSync = false
+  try {
+    // 1. 同步前先强制刷盘本地所有未持久化数据
+    flushHistory()
+    flushNovelProgress()
+    flushSearchHistory()
+
+    const localDir = pixivHistoryDirectory(userId)
+    const state = loadSyncState(userId)
+    pruneTombstones(state)
+
+    // 2. 依次同步 5 个独立文件
+    await syncHistoryCategory("illustration", localDir, cloudDir, state, userId)
+    await syncHistoryCategory("manga", localDir, cloudDir, state, userId)
+    await syncHistoryCategory("novel", localDir, cloudDir, state, userId)
+    await syncNovelProgressFile(localDir, cloudDir, userId)
+    await syncSearchHistoryFile(localDir, cloudDir, state, userId)
+
+    // 3. 更新同步状态
+    state.lastSyncTime = Date.now()
+    saveSyncState(state, userId)
+    return true
+  } catch (error: any) {
+    console.warn("syncHistoryNow error:", error?.message ?? error)
+    return false
+  } finally {
+    isSyncing = false
+    // 4. 尾随排队检测：如果本次同步期间产生了新变更或新的同步请求，无缝自动启动下一轮补跑
+    if (hasQueuedSync) {
+      hasQueuedSync = false
+      const nextUid = queuedUserId
+      queuedUserId = undefined
+      setTimeout(() => {
+        syncHistoryNow(nextUid).catch(() => {})
+      }, 50)
+    }
+  }
+}
+
+// 启动后台低频同步调度器
+export function startHistorySyncScheduler(): () => void {
+  isSchedulerRunning = true
+
+  if (schedulerTimer) {
+    clearTimeout(schedulerTimer)
+    schedulerTimer = null
+  }
+
+  // 启动 2 秒后延迟执行一次静默拉取
+  schedulerTimer = setTimeout(() => {
+    syncHistoryNow().catch(() => {})
+  }, STARTUP_DELAY_MS)
+
+  // 循环调度：定期检查
+  function scheduleNextCheck() {
+    if (!isSchedulerRunning) return
+    schedulerTimer = setTimeout(async () => {
+      if (!isSchedulerRunning) return
+      try {
+        const state = loadSyncState()
+        if (pendingMutationCount > 0 || Date.now() - state.lastSyncTime >= AUTO_SYNC_FALLBACK_INTERVAL_MS) {
+          await syncHistoryNow()
+        }
+      } catch {}
+      if (isSchedulerRunning) {
+        scheduleNextCheck()
+      }
+    }, 15000)
+  }
+
+  scheduleNextCheck()
+
+  return () => {
+    isSchedulerRunning = false
+    if (schedulerTimer) {
+      clearTimeout(schedulerTimer)
+      schedulerTimer = null
+    }
+    resetMutationTracking()
+  }
+}
+
+// 切回前台时的同步检查：满 30 秒后延迟 2 秒拉取
+export function triggerResumeSync(): void {
+  const state = loadSyncState()
+  if (Date.now() - state.lastSyncTime >= MIN_RESUME_SYNC_INTERVAL_MS) {
+    setTimeout(() => {
+      syncHistoryNow().catch(() => {})
+    }, RESUME_DELAY_MS)
+  }
+}

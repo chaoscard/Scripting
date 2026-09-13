@@ -1,0 +1,104 @@
+import { useEffect, useState, VStack } from "scripting"
+import { nextIllustrations, relatedIllustrations } from "../api/pixiv"
+import { cardThumbUrlOf, prefetch } from "../image/imageLoader"
+import { loadSettings, onSettingsChanged } from "../store/settings"
+import { isIllustContentVisible } from "../store/contentFilter"
+import {
+  useLatest,
+  usePagedList,
+  currentBatchSize,
+} from "./hooks"
+import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl } from "./ambient"
+import type { PixivIllustration } from "../types"
+import {
+  EmptyView,
+  ErrorView,
+  LoadingView,
+  IllustFlowFeed,
+  RefreshableScrollView,
+} from "./components"
+import { destinationElement } from "./routes"
+import { getCachedIllust } from "../store/illustCache"
+
+export function RelatedIllustFeedView(props: { illustID: number }) {
+  const { illustID } = props
+  const cached = getCachedIllust(illustID)
+  const navTitle = cached?.title ? `相关作品 · ${cached.title}` : "相关作品"
+
+  // 1. 优先使用源作品缩略图作为第 0 毫秒环境色，若无则回退最近活跃环境光垫底
+  const initialAmbientUrl = cached ? cardThumbUrlOf(cached) : getLastActiveAmbientImageUrl()
+  const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(initialAmbientUrl)
+
+  const paged = usePagedList<PixivIllustration>({
+    first: (token) => relatedIllustrations(illustID, token),
+    more: (nextURL, token) => nextIllustrations(nextURL, token),
+    filter: (items) => filterRelatedIllusts(items, illustID),
+    deps: [illustID],
+    onBatchPublished: (_, pendingItems) =>
+      prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
+  })
+
+  const pagedRef = useLatest(paged)
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      pagedRef.current.reapplyFilter()
+    })
+  }, [])
+
+  // 2. 列表首图就绪后动态追色
+  useEffect(() => {
+    const firstUrl = paged.items[0] ? cardThumbUrlOf(paged.items[0]) : null
+    if (firstUrl) {
+      setAmbientImageUrl(firstUrl)
+    } else if (!paged.initialLoading && paged.items.length === 0) {
+      setAmbientImageUrl(null)
+    }
+  }, [paged.items[0]?.id, paged.initialLoading, paged.items.length])
+
+  // 3. 接入实验性沉浸氛围算法
+  const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
+
+  return (
+    <RefreshableScrollView
+      navigationTitle={navTitle}
+      navigationBarTitleDisplayMode="inline"
+      navigationDestination={destinationElement}
+      background={ambientBackground}
+      refreshable={paged.refresh}
+    >
+      <VStack alignment="leading" spacing={10} padding={{ top: 4 }}>
+        {paged.initialLoading ? (
+          <LoadingView />
+        ) : paged.error && paged.items.length === 0 ? (
+          <ErrorView message={paged.error} onRetry={paged.refresh} />
+        ) : paged.items.length === 0 ? (
+          <EmptyView
+            text={
+              paged.hasFilteredContent
+                ? "当前页面部分作品被内容显示设置过滤，暂时无法显示"
+                : "暂无相关作品"
+            }
+            systemImage={paged.hasFilteredContent ? "eye.slash" : undefined}
+          />
+        ) : (
+          <IllustFlowFeed
+            items={paged.items}
+            onLoadMore={paged.loadMore}
+            hasMore={paged.hasMore}
+            isLoading={paged.loadingMore}
+          />
+        )}
+      </VStack>
+    </RefreshableScrollView>
+  )
+}
+
+function filterRelatedIllusts(
+  items: PixivIllustration[],
+  targetID: number
+): PixivIllustration[] {
+  const settings = loadSettings()
+  return items.filter(
+    (item) => item.id !== targetID && isIllustContentVisible(item, settings)
+  )
+}
