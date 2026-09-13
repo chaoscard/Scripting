@@ -183,7 +183,7 @@ export function parseDirectRouteTargets(
           type: "novel",
           id,
           title: `查看小说`,
-          subtitle: `UID: ${id}`,
+          subtitle: `NID: ${id}`,
           icon: "book.closed",
           color: "#FF9500",
         })
@@ -193,7 +193,7 @@ export function parseDirectRouteTargets(
         type: "novel",
         id,
         title: `查看小说`,
-        subtitle: `UID: ${id}`,
+        subtitle: `NID: ${id}`,
         icon: "book.closed",
         color: "#FF9500",
       })
@@ -235,7 +235,7 @@ export function parseDirectRouteTargets(
           type: "novel",
           id,
           title: `查看小说`,
-          subtitle: `UID: ${id}`,
+          subtitle: `NID: ${id}`,
           icon: "book.closed",
           color: "#FF9500",
         })
@@ -265,9 +265,29 @@ export function parseDirectRouteTargets(
     }
   }
 
+  // 漫画系列：pixiv.net/user/19291125/series/292133 或 pixiv.net/users/19291125/series/292133
+  const mangaSeriesMatch =
+    trimmed.match(/(?:pixiv\.net\/(?:[a-z]{2}\/)?(?:user|users)\/\d+\/series\/|(?:user|users)\/\d+\/series\/|manga\/series\/)(\d+)/i) ||
+    trimmed.match(/(?:illust_series|user_series)\.php\?series_id=(\d+)/i)
+  if (mangaSeriesMatch) {
+    const id = parseInt(mangaSeriesMatch[1], 10)
+    if (id > 0) {
+      return [
+        {
+          type: "mangaSeries",
+          id,
+          title: `直达漫画系列`,
+          subtitle: `SID: ${id}`,
+          icon: "photo.stack",
+          color: "#007AFF",
+        },
+      ]
+    }
+  }
+
   // 用户主页：pixiv.net/users/123456 或 pixiv.net/u/123456 或 member.php?id=123456
   const userMatch =
-    trimmed.match(/(?:pixiv\.net\/(?:[a-z]{2}\/)?(?:users|u)\/|users\/)(\d+)/i) ||
+    trimmed.match(/(?:pixiv\.net\/(?:[a-z]{2}\/)?(?:users|user|u)\/|(?:users|user)\/)(\d+)/i) ||
     trimmed.match(/member\.php\?id=(\d+)/i)
   if (userMatch) {
     const id = parseInt(userMatch[1], 10)
@@ -297,7 +317,7 @@ export function parseDirectRouteTargets(
           type: "novelSeries",
           id,
           title: `直达小说系列`,
-          subtitle: `UID: ${id}`,
+          subtitle: `SID: ${id}`,
           icon: "books.vertical",
           color: "#FF9500",
         },
@@ -315,7 +335,7 @@ export function parseDirectRouteTargets(
           type: "novel",
           id,
           title: `直达小说详情`,
-          subtitle: `UID: ${id}`,
+          subtitle: `NID: ${id}`,
           icon: "book.closed",
           color: "#FF9500",
         },

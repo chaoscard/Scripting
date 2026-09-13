@@ -56,9 +56,22 @@ export function normalizeRoute(rawRoute: string): string {
     return `illust:${decoded}`
   }
   // 网页链接匹配 https://www.pixiv.net/artworks/123456
-  const artworkMatch = decoded.match(/artworks\/(\d+)/)
+  const artworkMatch = decoded.match(/(?:artworks|i)\/(\d+)/i) || decoded.match(/illust_id=(\d+)/i)
   if (artworkMatch) {
     return `illust:${artworkMatch[1]}`
+  }
+  const mangaSeriesMatch =
+    decoded.match(/(?:user|users)\/\d+\/series\/(\d+)/i) ||
+    decoded.match(/manga\/series\/(\d+)/i) ||
+    decoded.match(/(?:illust_series|user_series)\.php\?series_id=(\d+)/i)
+  if (mangaSeriesMatch) {
+    return `mangaSeries:${mangaSeriesMatch[1]}`
+  }
+  const novelSeriesMatch =
+    decoded.match(/novel\/series\/(\d+)/i) ||
+    decoded.match(/novel\/series\.php\?id=(\d+)/i)
+  if (novelSeriesMatch) {
+    return `novelSeries:${novelSeriesMatch[1]}`
   }
   const pixivisionMatch = decoded.match(/(?:pixivision\.net)?\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?a\/(\d+)/)
   if (pixivisionMatch) {
@@ -68,11 +81,11 @@ export function normalizeRoute(rawRoute: string): string {
   if (pixivisionTagMatch) {
     return `pixivision-tag:${pixivisionTagMatch[1]}`
   }
-  const novelMatch = decoded.match(/novel\/(?:show|series)\.php\?id=(\d+)/)
+  const novelMatch = decoded.match(/novel\/(?:show|series)\.php\?id=(\d+)/) || decoded.match(/novel\/(?:show|show\.php\?id=)(\d+)/i) || decoded.match(/novel_id=(\d+)/i)
   if (novelMatch) {
     return `novel:${novelMatch[1]}`
   }
-  const userMatch = decoded.match(/users\/(\d+)/)
+  const userMatch = decoded.match(/(?:users|user|u)\/(\d+)/i) || decoded.match(/member\.php\?id=(\d+)/i)
   if (userMatch) {
     return `user:${userMatch[1]}`
   }

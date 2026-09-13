@@ -655,10 +655,7 @@ export function imageUrlOf(
   quality: "medium" | "large" | "original"
 ): string | null {
   if (!i) return null
-  const ratio = i.width && i.height ? i.width / i.height : 1
-  // 详情页兜底：宽高比达到 1:3（极窄长图）启用原图画质
-  const effectiveQuality: "medium" | "large" | "original" =
-    ratio < 1 / 3 ? "original" : quality
+  const effectiveQuality = quality
 
   // 多页：优先 meta_pages 对应页
   if (i.meta_pages && i.meta_pages.length > 0) {
@@ -761,14 +758,7 @@ export function cardThumbUrlOf(
   if (selectedQuality === "large") {
     return i.image_urls?.large ?? i.image_urls?.medium ?? i.image_urls?.square_medium ?? null
   }
-  if (quality === "medium") {
-    return i.image_urls?.medium ?? i.image_urls?.large ?? i.image_urls?.square_medium ?? null
-  }
-  const ratio = i.width && i.height ? i.width / i.height : 1
-  const preferLarge = ratio < 1 / 2
-  return preferLarge
-    ? (i.image_urls?.large ?? i.image_urls?.medium ?? i.image_urls?.square_medium ?? null)
-    : (i.image_urls?.medium ?? i.image_urls?.large ?? i.image_urls?.square_medium ?? null)
+  return i.image_urls?.medium ?? i.image_urls?.large ?? i.image_urls?.square_medium ?? null
 }
 
 // Hero 全宽卡片图片 URL：画质从当前瀑布流画质自动升一档（medium -> large，large -> original）。若无 original 则自动回退 large。
@@ -883,7 +873,7 @@ export function seedIllustDetailFromCache(
 ): void {
   if (!i || quality !== "large") return
   const targetUrl = imageUrlOf(i as any, 0, "large")
-  if (!targetUrl) return
+  if (!targetUrl || targetUrl.includes("/img-original/")) return
 
   const targetPath = cacheFilePath(targetUrl)
   if (FileManager.existsSync(targetPath)) return

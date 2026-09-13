@@ -58,9 +58,8 @@ export function calculateHeroCardWidth(containerWidth: number = Device.screen.wi
   return Math.floor(containerWidth - FLOW_HORIZONTAL_PADDING * 2)
 }
 
-// 流式布局允许最长 1:4 的竖图保留原始比例；更极端的图片仍受此下限保护。
-const MIN_FLOW_IMAGE_RATIO = 1 / 4
-const MAX_FLOW_IMAGE_RATIO = 2.5
+// 流式布局允许最长 1:3 的竖图保留原始比例；更极端的超长竖图受此下限保护并启用顶部等比无损裁切。
+const MIN_FLOW_IMAGE_RATIO = 1 / 3
 
 
 export interface IllustCardAction {
@@ -122,6 +121,7 @@ export function IllustCard(props: {
   const [imageVisible, setImageVisible] = useState(!flow && !hero)
   const [isAppeared, setIsAppeared] = useState(!flow && !hero)
   const rawRatio = illust.width > 0 && illust.height > 0 ? illust.width / illust.height : 0.75
+  const isExtremeTall = (flow || hero) && rawRatio < MIN_FLOW_IMAGE_RATIO
 
   let imageRatio = 1
   let imageFrame: { width?: number; height?: number } | undefined = undefined
@@ -131,11 +131,11 @@ export function IllustCard(props: {
 
   if (hero) {
     cardFrame = { width: computedCardWidth }
-    imageRatio = Math.min(Math.max(rawRatio, MIN_FLOW_IMAGE_RATIO), MAX_FLOW_IMAGE_RATIO)
+    imageRatio = Math.max(rawRatio, MIN_FLOW_IMAGE_RATIO)
     imageFrame = { width: computedCardWidth, height: computedCardWidth / imageRatio }
   } else if (flow) {
     cardFrame = { width: computedCardWidth }
-    imageRatio = Math.min(Math.max(rawRatio, MIN_FLOW_IMAGE_RATIO), MAX_FLOW_IMAGE_RATIO)
+    imageRatio = Math.max(rawRatio, MIN_FLOW_IMAGE_RATIO)
     imageFrame = { width: computedCardWidth, height: computedCardWidth / imageRatio }
   }
 
@@ -340,7 +340,9 @@ export function IllustCard(props: {
                   }
                   previewUrl={hero ? cardThumbUrlOf(illust, "medium") : undefined}
                   aspectRatioValue={flow || hero ? imageRatio : 1}
-                  contentMode={flow || hero ? "fit" : "fill"}
+                  contentMode={flow || hero ? (isExtremeTall ? "fill" : "fit") : "fill"}
+                  centerCropAspect={isExtremeTall ? MIN_FLOW_IMAGE_RATIO : undefined}
+                  cropAnchor={isExtremeTall ? "top" : "center"}
                   centerCropSquare={!flow && !hero}
                   cornerRadius={hero ? 12 : 10}
                   frame={imageFrame}
@@ -682,7 +684,7 @@ function distributeFlowItems(
     const rawRatio = illust.width > 0 && illust.height > 0
       ? illust.width / illust.height
       : 0.75
-    const ratio = Math.min(Math.max(rawRatio, MIN_FLOW_IMAGE_RATIO), MAX_FLOW_IMAGE_RATIO)
+    const ratio = Math.max(rawRatio, MIN_FLOW_IMAGE_RATIO)
     const imageHeight = cardWidth / ratio
     const textHeight = 62
     const footerHeight = 10
