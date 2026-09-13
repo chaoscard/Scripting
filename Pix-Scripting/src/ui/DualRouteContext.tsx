@@ -18,9 +18,8 @@ import {
   VStack,
   ZStack,
 } from "scripting"
-import { normalizeRoute, renderDestination } from "./routes"
 import { ContainerLayoutContext, useLayoutMetrics } from "./hooks"
-import { setDualRouteDispatcher } from "./routeNavigation"
+import { normalizeRoute, renderDetailDestination, setDualRouteDispatcher } from "./routeNavigation"
 import { DetailBottomAccessoryHost } from "./bottomAccessory"
 import { loadSettings, onSettingsChanged } from "../store/settings"
 
@@ -154,7 +153,7 @@ function DetailPaneRouteView(props: {
   onBack: () => void
   onClose: () => void
 }) {
-  const content = renderDestination(props.route)
+  const content = renderDetailDestination(props.route)
 
   return (
     <ZStack

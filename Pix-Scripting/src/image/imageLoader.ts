@@ -784,10 +784,10 @@ export function heroCardThumbUrlOf(
   )
 }
 
-// 多页插画与漫画的中等缩略图获取与推导函数（等比例缩放，严禁使用方形裁剪的 square_medium 以免消融时发生比例跳变）：
-// 1. 第 0 页：优先复用中等比例的 cardThumbUrlOf / medium / large。
-// 2. 第 1 页及后续页：优先从 meta_pages[pageIndex] 取保持原图纵横比的 medium 缩略图；若无则回退 large。
-// 3. 若 meta_pages 缺失或长度不足：通过第一页中等缩略图的 URL 规则算法推导 _p${pageIndex} 对应页的中图。
+// 多页插画与漫画的缩略图获取与推导函数（等比例缩放，严禁使用方形裁剪的 square_medium 以免消融时发生比例跳变）：
+// 1. 第 0 页：依据 quality（默认 feedImageQuality）复用 cardThumbUrlOf / medium / large。
+// 2. 第 1 页及后续页：优先从 meta_pages[pageIndex] 取保持原图纵横比的对应清晰度缩略图（medium/large）；若无则互相回退。
+// 3. 若 meta_pages 缺失或长度不足：通过第一页对应清晰度缩略图的 URL 规则算法推导 _p${pageIndex} 对应页的缩略图。
 export function pageThumbUrlOf(
   i: {
     width?: number
@@ -796,22 +796,37 @@ export function pageThumbUrlOf(
     meta_pages?: { image_urls: PixivImageUrls }[]
     meta_single_page?: { original_image_url?: string }
   },
-  pageIndex: number
+  pageIndex: number,
+  quality?: "medium" | "large" | unknown
 ): string | null {
   if (!i) return null
+  const selectedQuality =
+    quality === "medium" || quality === "large"
+      ? quality
+      : getFeedImageQuality()
+
   if (pageIndex === 0) {
     return (
-      cardThumbUrlOf(i) ||
-      i.image_urls?.medium ||
-      i.image_urls?.large ||
+      cardThumbUrlOf(i, selectedQuality) ||
+      (selectedQuality === "large"
+        ? (i.image_urls?.large ?? i.image_urls?.medium)
+        : (i.image_urls?.medium ?? i.image_urls?.large)) ||
       i.image_urls?.square_medium ||
       null
     )
   }
-  // 多页作品：优先使用 meta_pages 中该页保持原始比例的中等缩略图（medium），避免方形裁切导致的比例跳变
+  // 多页作品：依据 selectedQuality 从 meta_pages 中选取对应清晰度且保持原始比例的缩略图
   if (i.meta_pages && i.meta_pages.length > pageIndex) {
     const page = i.meta_pages[pageIndex]
     if (page?.image_urls) {
+      if (selectedQuality === "large") {
+        return (
+          page.image_urls.large ??
+          page.image_urls.medium ??
+          page.image_urls.square_medium ??
+          null
+        )
+      }
       return (
         page.image_urls.medium ??
         page.image_urls.large ??
@@ -820,10 +835,12 @@ export function pageThumbUrlOf(
       )
     }
   }
-  // 若 meta_pages 未返回（如单页数据进入多页长图模式）：以第一页的保持比例中图推导
+  // 若 meta_pages 未返回（如单页数据进入多页长图模式）：以第一页对应清晰度的保持比例缩略图推导
+  const first = i.meta_pages?.[0]?.image_urls
   const baseThumb =
-    i.image_urls?.medium ??
-    i.image_urls?.large ??
+    (selectedQuality === "large"
+      ? (first?.large ?? first?.medium ?? i.image_urls?.large ?? i.image_urls?.medium)
+      : (first?.medium ?? first?.large ?? i.image_urls?.medium ?? i.image_urls?.large)) ??
     i.image_urls?.square_medium ??
     null
   return derivePageURL(baseThumb, pageIndex)

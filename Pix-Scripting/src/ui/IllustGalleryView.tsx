@@ -27,6 +27,7 @@ import {
   pageThumbUrlOf,
   prefetch,
 } from "../image/imageLoader"
+import { sharpenFadeDurationSec } from "./components/CachedImage"
 import {
   downloadIllustToAlbum,
   fetchImageBinaryWithRetry,
@@ -364,6 +365,7 @@ function IllustGalleryPage(props: IllustGalleryPageProps) {
             resizable={true}
             aspectRatio={{ value: detectedAspect, contentMode: "fit" }}
             frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+            transition={sharpenFadeDurationSec() > 0 ? Transition.fade(sharpenFadeDurationSec()) : undefined}
           />
         ) : null}
       </ZStack>

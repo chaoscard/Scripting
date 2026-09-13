@@ -30,6 +30,11 @@ function blurCrossFadeDurationSec(): number {
   return Math.max(0, Math.min(0.25, ms / 1000))
 }
 
+export function sharpenFadeDurationSec(): number {
+  const ms = loadSettings().sharpenFadeDuration ?? 35
+  return Math.max(0, Math.min(0.25, ms / 1000))
+}
+
 function useCachedImage(
   url: string | null,
   onLoaded?: (success: boolean) => void,
@@ -135,7 +140,9 @@ function useCachedImage(
 export function CachedImage(props: {
   url: string | null
   previewUrl?: string | null
+  previewMode?: "blur" | "sharp" | "none"
   blurPreviewRadius?: number
+  sharpenBlurRadius?: number
   aspectRatioValue?: number // 宽/高
   cornerRadius?: number | {
     topLeading?: number
@@ -157,7 +164,9 @@ export function CachedImage(props: {
   const {
     url,
     previewUrl,
-    blurPreviewRadius = 8,
+    previewMode = "blur",
+    blurPreviewRadius,
+    sharpenBlurRadius,
     aspectRatioValue,
     cornerRadius = 10,
     contentMode = "fill",
@@ -218,24 +227,32 @@ export function CachedImage(props: {
     }
   }, [isTargetLoaded, path])
 
+  const isNoneMode = previewMode === "none"
+  const isSharpMode = previewMode === "sharp"
+  const resolvedSharpenBlurRadius =
+    sharpenBlurRadius ?? loadSettings().sharpenBlurRadius ?? 0.5
+  const resolvedBlurPreviewRadius =
+    blurPreviewRadius ?? loadSettings().blurCrossFadeRadius ?? 2
+
   // 过渡动画状态管理：
-  // 1. 首帧命中或显式禁用淡入时，直接标记为已完成；
-  // 2. 异步大图下载并就绪时启动过渡计时器，在消融/淡入动画结束（duration + 50ms 缓冲）后标记完成，
+  // 1. 首帧命中或显式禁用淡入/无动画模式时，直接标记为已完成；
+  // 2. 异步大图下载并就绪时启动过渡计时器，在消融/淡入/锐化动画结束（duration + 50ms 缓冲）后标记完成，
   //    用于及时卸载底层垫底图与恢复透明背景，释放位图内存并杜绝亚像素边缘露白。
   const [transitionCompleted, setTransitionCompleted] = useState(
-    () => initialHitRef.current || disableFadeIn
+    () => initialHitRef.current || disableFadeIn || isNoneMode
   )
 
   useEffect(() => {
-    if (initialHitRef.current || disableFadeIn) {
+    if (initialHitRef.current || disableFadeIn || isNoneMode) {
       setTransitionCompleted(true)
       return
     }
     setTransitionCompleted(false)
-  }, [url, disableFadeIn])
+  }, [url, disableFadeIn, isNoneMode])
 
   const fadeDuration = imageFadeDurationSec()
   const crossFadeDuration = blurCrossFadeDurationSec()
+  const sharpenDuration = sharpenFadeDurationSec()
 
   const underlayPath = (
     !transitionCompleted &&
@@ -243,26 +260,30 @@ export function CachedImage(props: {
     previousLoadedPathRef.current !== path
   ) ? previousLoadedPathRef.current : null
 
-  const showBlurPreview = Boolean(
+  const showPreview = Boolean(
     !underlayPath &&
     !transitionCompleted &&
     !initialHitRef.current &&
+    !isNoneMode &&
     previewPath &&
     previewPath !== path
   )
 
   useEffect(() => {
     if (transitionCompleted || !isTargetLoaded) return
-    if (initialHitRef.current || disableFadeIn) {
+    if (initialHitRef.current || disableFadeIn || isNoneMode) {
       setTransitionCompleted(true)
       return
     }
-    const durationMs = (showBlurPreview || underlayPath ? crossFadeDuration : fadeDuration) * 1000
+    const durationSec = isSharpMode
+      ? sharpenDuration
+      : (showPreview || underlayPath ? crossFadeDuration : fadeDuration)
+    const durationMs = durationSec * 1000
     const timer = setTimeout(() => {
       setTransitionCompleted(true)
     }, Math.max(50, durationMs + 50))
     return () => clearTimeout(timer)
-  }, [isTargetLoaded, showBlurPreview, underlayPath, crossFadeDuration, fadeDuration, transitionCompleted, disableFadeIn])
+  }, [isTargetLoaded, showPreview, underlayPath, crossFadeDuration, fadeDuration, sharpenDuration, isSharpMode, transitionCompleted, disableFadeIn, isNoneMode])
 
   const croppedImage = useMemo(() => {
     if (!path) return null
@@ -317,8 +338,8 @@ export function CachedImage(props: {
     return null
   }, [path, centerCropSquare, centerCropAspect, cropAnchor])
 
-  const previewBlurredImage = useMemo(() => {
-    if (!showBlurPreview || !previewPath) return null
+  const previewRenderImage = useMemo(() => {
+    if (!showPreview || !previewPath) return null
     try {
       const image = UIImage.fromFile(previewPath)
       if (!image || image.width <= 0 || image.height <= 0) return null
@@ -358,11 +379,20 @@ export function CachedImage(props: {
           }
         }
       }
-      return targetImg.blurred(blurPreviewRadius) ?? targetImg
+      if (isSharpMode) {
+        if (resolvedSharpenBlurRadius > 0) {
+          return targetImg.blurred(resolvedSharpenBlurRadius) ?? targetImg
+        }
+        return targetImg
+      }
+      if (resolvedBlurPreviewRadius > 0) {
+        return targetImg.blurred(resolvedBlurPreviewRadius) ?? targetImg
+      }
+      return targetImg
     } catch {
       return null
     }
-  }, [showBlurPreview, previewPath, centerCropSquare, centerCropAspect, cropAnchor, blurPreviewRadius])
+  }, [showPreview, previewPath, centerCropSquare, centerCropAspect, cropAnchor, resolvedBlurPreviewRadius, isSharpMode, resolvedSharpenBlurRadius])
 
   const underlayCroppedImage = useMemo(() => {
     if (!underlayPath) return null
@@ -459,17 +489,20 @@ export function CachedImage(props: {
     }
   }, [cornerRadius])
 
-  // 首帧已命中缓存或显式禁用淡入时直接硬切呈现（0ms 动画），秒开无延时无白闪；
+  // 首帧已命中缓存或显式禁用淡入/无动画模式时直接硬切呈现（0ms 动画），秒开无延时无白闪；
   // 异步加载完成后：
-  // 1. 有旧图垫底或本地模糊预览图垫底时，采用配置的模糊消融（0-250ms，默认 100ms），平滑过渡；
-  // 2. 无本地预览图垫底时（如普通卡片/冷启动），使用标准设置淡入。
+  // 1. 锐化模式（如大图+原图）下采用配置的锐化时长，平滑覆盖；
+  // 2. 有旧图垫底或本地模糊预览图垫底时，采用配置的模糊消融（0-250ms，默认 80ms），平滑过渡；
+  // 3. 无本地预览图垫底时（如普通卡片/冷启动），使用标准设置淡入。
   // 注意：此 transition 属性在首次决定后必须保持稳定，绝不可在 transitionCompleted 后动态变更为 undefined，
   // 否则会因修改已挂载视图的修饰符结构（_ModifiedContent -> 原生 View）触发 SwiftUI 视图销毁重建，在淡入动画结束瞬间引发闪屏！
-  const imageTransition = disableFadeIn || initialHitRef.current
+  const imageTransition = disableFadeIn || initialHitRef.current || isNoneMode
     ? undefined
-    : (previewUrl || previousLoadedPathRef.current)
-      ? (crossFadeDuration > 0 ? Transition.fade(crossFadeDuration) : undefined)
-      : (fadeDuration > 0 ? Transition.fade(fadeDuration) : undefined)
+    : isSharpMode
+      ? (sharpenDuration > 0 ? Transition.fade(sharpenDuration) : undefined)
+      : (previewUrl || previousLoadedPathRef.current)
+        ? (crossFadeDuration > 0 ? Transition.fade(crossFadeDuration) : undefined)
+        : (fadeDuration > 0 ? Transition.fade(fadeDuration) : undefined)
 
   return (
     <ZStack
@@ -519,9 +552,9 @@ export function CachedImage(props: {
             frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
           />
         )
-      ) : showBlurPreview && previewBlurredImage ? (
+      ) : showPreview && previewRenderImage ? (
         <Image
-          image={previewBlurredImage}
+          image={previewRenderImage}
           resizable={true}
           aspectRatio={{ value: effectiveRatio, contentMode: contentMode }}
           frame={{ maxWidth: "infinity", maxHeight: "infinity" }}

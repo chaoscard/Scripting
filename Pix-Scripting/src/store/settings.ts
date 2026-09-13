@@ -25,6 +25,9 @@ export type ImageBatchConcurrency = number
 export type AITranslateConcurrency = number
 export type ImageFadeInDuration = number
 export type BlurCrossFadeDuration = number
+export type BlurCrossFadeRadius = number
+export type SharpenFadeDuration = number
+export type SharpenBlurRadius = number
 export type BackgroundPreheatDuration = number
 export type LoadingAnimationDuration = number
 export type NovelLoadingDuration = number
@@ -157,6 +160,9 @@ export interface AppSettings {
   aiTranslateConcurrency: AITranslateConcurrency
   imageFadeInDuration: ImageFadeInDuration
   blurCrossFadeDuration: BlurCrossFadeDuration
+  blurCrossFadeRadius: BlurCrossFadeRadius
+  sharpenFadeDuration: SharpenFadeDuration
+  sharpenBlurRadius: SharpenBlurRadius
   backgroundPreheatDuration: BackgroundPreheatDuration
   loadingAnimationDuration: LoadingAnimationDuration
   novelLoadingDuration: NovelLoadingDuration
@@ -251,6 +257,9 @@ const DEFAULT_SETTINGS: AppSettings = {
   aiTranslateConcurrency: 4,
   imageFadeInDuration: 65,
   blurCrossFadeDuration: 80,
+  blurCrossFadeRadius: 2,
+  sharpenFadeDuration: 35,
+  sharpenBlurRadius: 0.5,
   backgroundPreheatDuration: 1000,
   loadingAnimationDuration: 400,
   novelLoadingDuration: 1000,
@@ -461,6 +470,27 @@ function parseBlurCrossFadeDuration(value: unknown): number {
     return Math.max(0, Math.min(250, Math.round(value)))
   }
   return DEFAULT_SETTINGS.blurCrossFadeDuration
+}
+
+function parseBlurCrossFadeRadius(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+    return Math.max(0, Math.min(30, Math.round(value * 10) / 10))
+  }
+  return DEFAULT_SETTINGS.blurCrossFadeRadius
+}
+
+function parseSharpenFadeDuration(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+    return Math.max(0, Math.min(250, Math.round(value)))
+  }
+  return DEFAULT_SETTINGS.sharpenFadeDuration
+}
+
+function parseSharpenBlurRadius(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+    return Math.max(0, Math.min(8, Math.round(value * 10) / 10))
+  }
+  return DEFAULT_SETTINGS.sharpenBlurRadius
 }
 
 function parseBackgroundPreheatDuration(value: unknown): number {
@@ -728,6 +758,9 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
     aiTranslateConcurrency: parseAITranslateConcurrency(stored?.aiTranslateConcurrency),
     imageFadeInDuration: parseFadeInDuration(stored?.imageFadeInDuration),
     blurCrossFadeDuration: parseBlurCrossFadeDuration(stored?.blurCrossFadeDuration),
+    blurCrossFadeRadius: parseBlurCrossFadeRadius(stored?.blurCrossFadeRadius),
+    sharpenFadeDuration: parseSharpenFadeDuration(stored?.sharpenFadeDuration),
+    sharpenBlurRadius: parseSharpenBlurRadius(stored?.sharpenBlurRadius),
     backgroundPreheatDuration: parseBackgroundPreheatDuration(stored?.backgroundPreheatDuration),
     loadingAnimationDuration: parseLoadingDuration(stored?.loadingAnimationDuration),
     novelLoadingDuration: parseNovelLoadingDuration(stored?.novelLoadingDuration),

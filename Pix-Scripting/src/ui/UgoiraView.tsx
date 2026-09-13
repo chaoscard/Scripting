@@ -36,7 +36,7 @@ export function UgoiraPlayerView(props: {
     illustID,
     aspectRatioValue,
     previewUrl,
-    blurPreviewRadius = 8,
+    blurPreviewRadius,
     cornerRadius = 8,
     frame,
     onLoaded,
@@ -148,16 +148,22 @@ export function UgoiraPlayerView(props: {
     }
   }, [doLoadFrames])
 
+  const resolvedBlurRadius =
+    blurPreviewRadius ?? loadSettings().blurCrossFadeRadius ?? 2
+
   const previewBlurredImage = useMemo(() => {
     if (!previewPath) return null
     try {
       const image = UIImage.fromFile(previewPath)
       if (!image || image.width <= 0 || image.height <= 0) return null
-      return image.blurred(blurPreviewRadius) ?? image
+      if (resolvedBlurRadius > 0) {
+        return image.blurred(resolvedBlurRadius) ?? image
+      }
+      return image
     } catch {
       return null
     }
-  }, [previewPath, blurPreviewRadius])
+  }, [previewPath, resolvedBlurRadius])
 
   const intrinsicAspect = useMemo(() => {
     if (framesData && framesData.width && framesData.height && framesData.width > 0 && framesData.height > 0) {

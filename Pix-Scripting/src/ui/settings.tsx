@@ -49,7 +49,6 @@ import {
   type DockActionItem,
 } from "./bottomAccessory"
 
-declare const Dialog: any
 import { triggerHaptic } from "../platform/haptics"
 import { isScriptingPro } from "../platform/pro"
 import {
@@ -63,6 +62,8 @@ import { editAIShowSettings, syncWebCookies } from "../api/pixiv"
 import { session } from "../api/session"
 import { clearUgoiraCache, enforceUgoiraCacheLimit, ugoiraCacheUsageBytes } from "../ugoira/ugoira"
 import { useTimedFlag } from "./hooks"
+
+declare const Dialog: any
 
 const CACHE_LIMIT_OPTIONS = [300, 500, 1000, 2000] as const
 
@@ -1628,6 +1629,35 @@ export function SettingsView() {
               onSave={(val) => update({ blurCrossFadeDuration: val })}
             />
             <AdvancedNumberRow
+              title="模糊消融半径"
+              unit="pt"
+              value={settings.blurCrossFadeRadius}
+              defaultValue={2}
+              min={0}
+              max={30}
+              allowFloat={true}
+              onSave={(val) => update({ blurCrossFadeRadius: val })}
+            />
+            <AdvancedNumberRow
+              title="锐化动画时长"
+              unit="ms"
+              value={settings.sharpenFadeDuration}
+              defaultValue={35}
+              min={0}
+              max={250}
+              onSave={(val) => update({ sharpenFadeDuration: val })}
+            />
+            <AdvancedNumberRow
+              title="锐化失焦半径"
+              unit="pt"
+              value={settings.sharpenBlurRadius}
+              defaultValue={0.5}
+              min={0}
+              max={8}
+              allowFloat={true}
+              onSave={(val) => update({ sharpenBlurRadius: val })}
+            />
+            <AdvancedNumberRow
               title="背景预热时长"
               unit="ms"
               value={settings.backgroundPreheatDuration}
@@ -1799,18 +1829,34 @@ function AdvancedNumberRow(props: {
   defaultValue: number
   min?: number
   max?: number
+  allowFloat?: boolean
   onSave: (num: number) => void
 }) {
-  const { title, unit, value, defaultValue, min = 0, max = 30000, onSave } = props
+  const { title, unit, value, defaultValue, min = 0, max = 30000, allowFloat = false, onSave } = props
   const [text, setText] = useState(String(value ?? defaultValue))
 
   useEffect(() => {
     setText(String(value ?? defaultValue))
   }, [value, defaultValue])
 
+  const sanitize = (raw: string) => {
+    if (allowFloat) {
+      let clean = raw.replace(/[^0-9.]/g, "")
+      const parts = clean.split(".")
+      if (parts.length > 2) {
+        clean = parts[0] + "." + parts.slice(1).join("")
+      }
+      return clean
+    }
+    return raw.replace(/\D/g, "")
+  }
+
   const commit = (inputStr: string) => {
-    const raw = parseInt(inputStr.replace(/\D/g, ""), 10)
-    const finalVal = !isNaN(raw) ? Math.max(min, Math.min(max, raw)) : defaultValue
+    const clean = sanitize(inputStr)
+    const raw = allowFloat ? parseFloat(clean) : parseInt(clean, 10)
+    const finalVal = !isNaN(raw)
+      ? Math.max(min, Math.min(max, allowFloat ? Math.round(raw * 10) / 10 : raw))
+      : defaultValue
     setText(String(finalVal))
     onSave(finalVal)
   }
@@ -1825,12 +1871,13 @@ function AdvancedNumberRow(props: {
           prompt={String(defaultValue)}
           value={text}
           onChanged={(v: string) => {
-            const sanitized = v.replace(/\D/g, "")
+            const sanitized = sanitize(v)
             setText(sanitized)
-            if (sanitized) {
-              const num = parseInt(sanitized, 10)
+            if (sanitized && !sanitized.endsWith(".")) {
+              const num = allowFloat ? parseFloat(sanitized) : parseInt(sanitized, 10)
               if (!isNaN(num)) {
-                onSave(Math.max(min, Math.min(max, num)))
+                const clamped = Math.max(min, Math.min(max, allowFloat ? Math.round(num * 10) / 10 : num))
+                onSave(clamped)
               }
             }
           }}

@@ -14,7 +14,6 @@ import { LibraryView } from "./library"
 import { HistoryView } from "./history"
 import { NotificationViewMoreView, NotificationsView } from "./notifications"
 import { BlockedSettingsView } from "./blockedSettings"
-import { SettingsView } from "./settings"
 import { CustomAISettingsView } from "./customAISettings"
 import { SeriesView } from "./seriesView"
 import { UserBookmarksView } from "./UserBookmarksPage"
@@ -30,66 +29,14 @@ import {
 } from "./downloadManager"
 import { seedIllustFromWidgetPool, seedPixivisionFromWidgetPool } from "../store/widgetStore"
 import { seedIllustFromPixivCache } from "../image/imageLoader"
+import { normalizeRoute, setGlobalRouteRenderer, setDetailRouteRenderer } from "./routeNavigation"
+export { normalizeRoute, destinationElement } from "./routeNavigation"
 
-// 解析与规范化各类路由格式（支持 URL 编码如 %3A、纯数字 ID、Pixiv 网页链接等）
-export function normalizeRoute(rawRoute: string): string {
-  if (!rawRoute || typeof rawRoute !== "string") return ""
-  let decoded = rawRoute.trim()
-  try {
-    decoded = decodeURIComponent(decoded)
-  } catch {}
-  if (
-    decoded.includes("%3A") ||
-    decoded.includes("%3a") ||
-    decoded.includes("%2F") ||
-    decoded.includes("%2f")
-  ) {
-    try {
-      decoded = decodeURIComponent(decoded)
-    } catch {}
-  }
-  decoded = decoded.replace(/^["']|["']$/g, "").trim()
-  if (!decoded) return ""
-
-  // 纯数字当作插画/漫画 ID
-  if (/^\d+$/.test(decoded)) {
-    return `illust:${decoded}`
-  }
-  // 网页链接匹配 https://www.pixiv.net/artworks/123456
-  const artworkMatch = decoded.match(/(?:artworks|i)\/(\d+)/i) || decoded.match(/illust_id=(\d+)/i)
-  if (artworkMatch) {
-    return `illust:${artworkMatch[1]}`
-  }
-  const mangaSeriesMatch =
-    decoded.match(/(?:user|users)\/\d+\/series\/(\d+)/i) ||
-    decoded.match(/manga\/series\/(\d+)/i) ||
-    decoded.match(/(?:illust_series|user_series)\.php\?series_id=(\d+)/i)
-  if (mangaSeriesMatch) {
-    return `mangaSeries:${mangaSeriesMatch[1]}`
-  }
-  const novelSeriesMatch =
-    decoded.match(/novel\/series\/(\d+)/i) ||
-    decoded.match(/novel\/series\.php\?id=(\d+)/i)
-  if (novelSeriesMatch) {
-    return `novelSeries:${novelSeriesMatch[1]}`
-  }
-  const pixivisionMatch = decoded.match(/(?:pixivision\.net)?\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?a\/(\d+)/)
-  if (pixivisionMatch) {
-    return `pixivision:${pixivisionMatch[1]}`
-  }
-  const pixivisionTagMatch = decoded.match(/(?:pixivision\.net)?\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?t\/([^/?#]+)/)
-  if (pixivisionTagMatch) {
-    return `pixivision-tag:${pixivisionTagMatch[1]}`
-  }
-  const novelMatch = decoded.match(/novel\/(?:show|series)\.php\?id=(\d+)/) || decoded.match(/novel\/(?:show|show\.php\?id=)(\d+)/i) || decoded.match(/novel_id=(\d+)/i)
-  if (novelMatch) {
-    return `novel:${novelMatch[1]}`
-  }
-  const userMatch = decoded.match(/(?:users|user|u)\/(\d+)/i) || decoded.match(/member\.php\?id=(\d+)/i)
-  if (userMatch) {
-    return `user:${userMatch[1]}`
-  }
-  return decoded
+// 延迟引用 SettingsView 彻底解耦深层循环依赖
+function SettingsView(props: any) {
+  const mod = require("./settings")
+  const Comp = mod.SettingsView || mod.default
+  return <Comp {...props} />
 }
 
 // 解析 "xxx:123" 形式的数值 id；非法输入返回 null（避免 NaN 传给详情页）
@@ -239,10 +186,6 @@ export function renderDestination(rawPage: string) {
   return <NotFoundRouteView rawRoute={rawPage} />
 }
 
-// 每个 Tab 根视图通过 navigationDestination 属性挂载路由
-// 用法：<ScrollView navigationDestination={destinationElement} ...>
-export const destinationElement = (
-  <NavigationDestination>
-    {(path: string) => renderDestination(path)}
-  </NavigationDestination>
-)
+// 注册平行视界右侧详情渲染器与全局路由渲染器
+setDetailRouteRenderer(renderDestination)
+setGlobalRouteRenderer(renderDestination)
