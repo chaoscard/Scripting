@@ -31,7 +31,7 @@ export interface HeatmapDay {
   dateStr: string // YYYY-MM-DD
   count: number
   level: number // 0 ~ 4 级深浅
-  dayOfWeek: number // 0 (Sun) ~ 6 (Sat)
+  dayOfWeek: number // 1 (Mon) ~ 7 (Sun)
 }
 
 export interface HeatmapData {
@@ -151,10 +151,10 @@ function buildNovelComparison(totalWords: number): string {
   } else if (totalWords < 500000) {
     return `已阅读 ${(totalWords / 10000).toFixed(1)} 万字，相当于精读了 1 部长篇悬疑/科幻巨作`
   } else if (totalWords < 1000000) {
-    return `已阅读 ${(totalWords / 10000).toFixed(1)} 万字，相当于通读了一整部《三体》三部曲（全书约 90 万字）`
+    return `已阅读 ${(totalWords / 10000).toFixed(1)} 万字，相当于通读了一整部《红楼梦》（全书约 73 万字）`
   } else {
-    const santiCount = (totalWords / 900000).toFixed(1)
-    return `已阅读 ${(totalWords / 10000).toFixed(1)} 万字，相当于读完了 ${santiCount} 部《三体》全集或一部超长连载神作`
+    const bookCount = (totalWords / 730000).toFixed(1)
+    return `已阅读 ${(totalWords / 10000).toFixed(1)} 万字，相当于读完了 ${bookCount} 部《红楼梦》或一部超长连载神作`
   }
 }
 
@@ -463,29 +463,37 @@ export function computeHistoryAnalytics(
     }
   }
 
-  // 5. 生成热力图数据（近 12 周 / 84 天网格）
-  const heatmapDaysTotal = 84
+  // 5. 生成热力图数据（近 20 周 / 140 天网格，自然撑满卡片宽度，每周从周一开始）
+  const heatmapWeeksCount = 20
+  const heatmapDaysTotal = heatmapWeeksCount * 7
   const today = new Date()
   const heatmapDays: HeatmapDay[] = []
 
-  // 找到 84 天前的起始日期（对齐到周日）
+  // 找到 (heatmapWeeksCount - 1) 周前的起始日期（对齐到周一）
   const startDayOffset = heatmapDaysTotal - 1
   const startDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() - startDayOffset)
-  // 向前回退到最近的周日
-  const startDayOfWeek = startDay.getDay()
-  startDay.setDate(startDay.getDate() - startDayOfWeek)
+  // 向前回退到最近的周一 (0=周日回退6天, 1=周一回退0天...)
+  const mondayOffset = (startDay.getDay() + 6) % 7
+  startDay.setDate(startDay.getDate() - mondayOffset)
 
-  const endDate = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  // 结束日期：对齐到当前周的周日，保证最后一列整齐对齐 7 天（周一至周日）
+  const todayMondayIdx = (today.getDay() + 6) % 7
+  const daysToSunday = 6 - todayMondayIdx
+  const endDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() + daysToSunday)
   const totalHeatmapSlots = Math.ceil((endDate.getTime() - startDay.getTime()) / (86400 * 1000)) + 1
 
   const p75 = maxDailyCount > 0 ? Math.max(1, Math.round(maxDailyCount * 0.75)) : 10
   const p50 = maxDailyCount > 0 ? Math.max(1, Math.round(maxDailyCount * 0.5)) : 5
   const p25 = maxDailyCount > 0 ? Math.max(1, Math.round(maxDailyCount * 0.25)) : 2
 
+  const todayTimestamp = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()
+
   for (let i = 0; i < totalHeatmapSlots; i++) {
     const cur = new Date(startDay.getFullYear(), startDay.getMonth(), startDay.getDate() + i)
-    const k = formatDateKey(cur.getTime())
-    const c = dayCountMap.get(k) || 0
+    const curTimestamp = cur.getTime()
+    const k = formatDateKey(curTimestamp)
+    const isFuture = curTimestamp > todayTimestamp
+    const c = isFuture ? 0 : dayCountMap.get(k) || 0
 
     let level = 0
     if (c > 0) {
@@ -499,16 +507,19 @@ export function computeHistoryAnalytics(
       dateStr: k,
       count: c,
       level,
-      dayOfWeek: cur.getDay(),
+      dayOfWeek: cur.getDay() === 0 ? 7 : cur.getDay(),
     })
   }
 
   // 将天按周切片 (每周 7 天)
   const heatmapWeeks: { days: HeatmapDay[] }[] = []
   for (let i = 0; i < heatmapDays.length; i += 7) {
-    heatmapWeeks.push({
-      days: heatmapDays.slice(i, i + 7),
-    })
+    const weekSlice = heatmapDays.slice(i, i + 7)
+    if (weekSlice.length > 0) {
+      heatmapWeeks.push({
+        days: weekSlice,
+      })
+    }
   }
 
   // 6. Top 标签排序与占比 (取 Top 15)
@@ -568,7 +579,7 @@ export function computeHistoryAnalytics(
       totalWords: novelWordCount,
       averageWords: avg,
       comparisonText: buildNovelComparison(novelWordCount),
-      readingTimeMinutes: Math.round(novelWordCount / 400), // 按 400 字/分钟速读估算
+      readingTimeMinutes: Math.round(novelWordCount / 500), // 按 Pixiv 官方 500 字/分钟速读基准换算
     }
   }
 

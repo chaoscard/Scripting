@@ -328,15 +328,15 @@ function ActivityHeatmapSection(props: {
         </Text>
         <Spacer />
         <Text font="footnote" foregroundStyle="secondaryLabel">
-          近 12 周 · {props.activeDays} 活跃天
+          近 {weeks.length} 周 · {props.activeDays} 活跃天
         </Text>
       </HStack>
 
       {/* 热力网格 */}
       <ScrollView axes="horizontal">
-        <HStack spacing={3} padding={{ top: 4, bottom: 4 }}>
+        <HStack spacing={3.5} padding={{ top: 4, bottom: 4 }}>
           {weeks.map((week, wIdx) => (
-            <VStack key={`week-${wIdx}`} spacing={3}>
+            <VStack key={`week-${wIdx}`} spacing={3.5}>
               {week.days.map((day, dIdx) => (
                 <RoundedRectangle
                   key={`day-${wIdx}-${dIdx}`}
@@ -751,7 +751,15 @@ function FormatAndAspectSection(props: {
   distribution: HistoryAnalyticsResult["aspectAndFormat"]
 }) {
   const { aspectRatio, mediaType, aiDistribution } = props.distribution
+  const visualArtworkCount =
+    mediaType.singleIllust + mediaType.multiIllust + mediaType.ugoira + mediaType.manga
   const totalAspect = aspectRatio.ultraTall + aspectRatio.tall + aspectRatio.square + aspectRatio.wide
+
+  // 纯小说浏览或无美术作品记录时隐藏美学构图卡片
+  if (visualArtworkCount <= 0 && totalAspect <= 0) {
+    return null
+  }
+
   const totalMedia =
     mediaType.singleIllust + mediaType.multiIllust + mediaType.ugoira + mediaType.manga + mediaType.novel
   const totalAi = aiDistribution.ai + aiDistribution.nonAi
@@ -849,6 +857,17 @@ function NovelMilestoneSection(props: {
   if (!props.milestone || props.milestone.totalWords <= 0) return null
   const { totalWords, averageWords, comparisonText, readingTimeMinutes } = props.milestone
 
+  const formatReadingTime = (minutes: number) => {
+    if (minutes < 60) {
+      return `${Math.max(1, minutes)} 分钟`
+    }
+    if (minutes < 600) {
+      const hours = (minutes / 60).toFixed(1)
+      return `${hours.endsWith(".0") ? hours.slice(0, -2) : hours} 小时`
+    }
+    return `${Math.round(minutes / 60)} 小时`
+  }
+
   return (
     <VStack
       alignment="leading"
@@ -877,7 +896,7 @@ function NovelMilestoneSection(props: {
         </Text>
         <Spacer />
         <Text font="footnote" foregroundStyle="secondaryLabel">
-          累计阅读约 {Math.round(readingTimeMinutes / 60)} 小时 (篇均 {averageWords} 字)
+          累计阅读约 {formatReadingTime(readingTimeMinutes)} (篇均 {averageWords} 字)
         </Text>
       </HStack>
 
