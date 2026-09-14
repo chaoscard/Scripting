@@ -1,5 +1,6 @@
 import {
   Button,
+  FlowLayout,
   HStack,
   Image,
   LazyVGrid,
@@ -827,7 +828,8 @@ function CommentBody(props: { comment: PixivComment }) {
     )
   }
 
-  const tokens = tokenizeCommentText(comment.comment ?? "")
+  const rawComment = comment.comment ?? ""
+  const tokens = tokenizeCommentText(rawComment)
   const hasEmoji = tokens.some((t) => t.type === "emoji")
 
   if (!hasEmoji) {
@@ -837,37 +839,68 @@ function CommentBody(props: { comment: PixivComment }) {
         multilineTextAlignment="leading"
         frame={{ maxWidth: "infinity", alignment: "leading" }}
       >
-        {comment.comment}
+        {rawComment}
       </Text>
     )
   }
 
+  const lines = rawComment.replace(/\r\n|\r/g, "\n").split("\n")
+
   return (
-    <HStack
-      spacing={3}
-      alignment="center"
+    <VStack
+      alignment="leading"
+      spacing={4}
       frame={{ maxWidth: "infinity", alignment: "leading" }}
     >
-      {tokens.map((tok, idx) => {
-        if (tok.type === "text") {
+      {lines.map((line, lineIdx) => {
+        if (!line) {
+          return <Spacer key={lineIdx} frame={{ height: 4 }} />
+        }
+        const lineTokens = tokenizeCommentText(line)
+        const lineHasEmoji = lineTokens.some((t) => t.type === "emoji")
+
+        if (!lineHasEmoji) {
           return (
-            <Text key={idx} font="footnote" multilineTextAlignment="leading">
-              {tok.text}
+            <Text
+              key={lineIdx}
+              font="footnote"
+              multilineTextAlignment="leading"
+              frame={{ maxWidth: "infinity", alignment: "leading" }}
+            >
+              {line}
             </Text>
           )
         }
+
         return (
-          <CachedImage
-            key={idx}
-            url={tok.url}
-            frame={{ width: 20, height: 20 }}
-            cornerRadius={0}
-            aspectRatioValue={1}
-            contentMode="fit"
-          />
+          <FlowLayout
+            key={lineIdx}
+            horizontalSpacing={2}
+            verticalSpacing={2}
+          >
+            {lineTokens.map((tok, tokIdx) => {
+              if (tok.type === "text") {
+                return (
+                  <Text key={tokIdx} font="footnote">
+                    {tok.text}
+                  </Text>
+                )
+              }
+              return (
+                <CachedImage
+                  key={tokIdx}
+                  url={tok.url}
+                  frame={{ width: 18, height: 18 }}
+                  cornerRadius={0}
+                  aspectRatioValue={1}
+                  contentMode="fit"
+                />
+              )
+            })}
+          </FlowLayout>
         )
       })}
-    </HStack>
+    </VStack>
   )
 }
 
