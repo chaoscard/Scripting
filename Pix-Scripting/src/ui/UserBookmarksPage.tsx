@@ -317,7 +317,7 @@ function UserBookmarksFeed(props: {
                 ? "当前页面部分作品被内容显示设置过滤，暂时无法显示"
                 : "暂无公开收藏作品"
             }
-            systemImage={illustPaged.hasFilteredContent ? "eye.slash" : "heart"}
+            systemImage={illustPaged.hasFilteredContent ? "eye.slash" : "photo.on.rectangle"}
           />
         ) : (
           <IllustFlowFeed

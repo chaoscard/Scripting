@@ -61,6 +61,7 @@ import {
   recordUserFollowed,
   type FollowRestrict,
 } from "../store/userFollow"
+import { requestPixivRoute } from "../store/routeNavigation"
 import { useAsyncGuard, useOpenRelatedUsersListener } from "./hooks"
 import { useUserAmbientPalette } from "./ambient"
 import type {
@@ -814,15 +815,27 @@ export function UserDetailView(props: { userID: number }) {
                 }}
               />
             ) : null}
-            <NavigationLink value={`userConnections:following:${userID}`}>
-              <Label title="查看关注" systemImage="person.2" />
-            </NavigationLink>
-            <NavigationLink value={`userConnections:mypixiv:${userID}`}>
-              <Label title="查看好友" systemImage="person.2.badge.gearshape" />
-            </NavigationLink>
-            <NavigationLink value={`userBookmarks:${userID}`}>
-              <Label title="查看收藏" systemImage="heart" />
-            </NavigationLink>
+            <Button
+              title="查看关注"
+              systemImage="person.2"
+              action={() => {
+                requestPixivRoute(`userConnections:following:${userID}`)
+              }}
+            />
+            <Button
+              title="查看好友"
+              systemImage="person.2.badge.gearshape"
+              action={() => {
+                requestPixivRoute(`userConnections:mypixiv:${userID}`)
+              }}
+            />
+            <Button
+              title="查看收藏"
+              systemImage="heart"
+              action={() => {
+                requestPixivRoute(`userBookmarks:${userID}`)
+              }}
+            />
             <Menu title="查看信息" systemImage="info.circle">
               <Button
                 title={`用户：${detail.user.name}`}

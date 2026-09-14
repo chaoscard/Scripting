@@ -419,7 +419,7 @@ function LibraryFeed(props: {
                 ? "当前页面部分作品被内容显示设置过滤，暂时无法显示"
                 : "暂无收藏作品"
             }
-            systemImage={illustPaged.hasFilteredContent ? "eye.slash" : "heart"}
+            systemImage={illustPaged.hasFilteredContent ? "eye.slash" : "photo.on.rectangle"}
           />
         ) : (
           <VStack alignment="leading" spacing={6} frame={{ maxWidth: "infinity" }}>
@@ -452,7 +452,7 @@ function LibraryFeed(props: {
           text={
             novelPaged.hasFilteredContent
               ? "当前页面部分小说被内容显示设置过滤，暂时无法显示"
-              : "还没有收藏小说"
+              : "暂无收藏小说"
           }
           systemImage={novelPaged.hasFilteredContent ? "eye.slash" : "book"}
         />

@@ -21,7 +21,7 @@ import {
 import { loadSettings } from "../../store/settings"
 import { useLatest } from "../hooks"
 function imageFadeDurationSec(): number {
-  const ms = loadSettings().imageFadeInDuration ?? 65
+  const ms = loadSettings().imageFadeInDuration ?? 80
   return Math.max(0.001, Math.min(0.5, ms / 1000))
 }
 
@@ -31,7 +31,7 @@ function blurCrossFadeDurationSec(): number {
 }
 
 export function sharpenFadeDurationSec(): number {
-  const ms = loadSettings().sharpenFadeDuration ?? 65
+  const ms = loadSettings().sharpenFadeDuration ?? 80
   return Math.max(0, Math.min(0.25, ms / 1000))
 }
 
