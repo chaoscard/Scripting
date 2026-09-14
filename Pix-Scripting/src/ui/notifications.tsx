@@ -122,7 +122,7 @@ function NotificationList(props: {
         key: "title",
         label: props.title,
         icon: "bell.fill",
-        color: "#EE2F49",
+        color: "systemPink",
         action: () => {
           try {
             triggerHaptic("selection")
@@ -133,7 +133,7 @@ function NotificationList(props: {
         key: "refresh",
         label: isRefreshing ? "刷新中…" : "刷新",
         icon: "arrow.clockwise",
-        color: isRefreshing ? "secondaryLabel" : "#3172EB",
+        color: isRefreshing ? "secondaryLabel" : "systemBlue",
         disabled: isRefreshing,
         action: () => {
           void handleRefresh()

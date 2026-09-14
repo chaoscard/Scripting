@@ -55,6 +55,7 @@ import {
   exportNovelToEpub,
   exportUgoiraToAlbum,
   exportUgoiraZip,
+  presentPixivisionDownloadActionSheet,
 } from "../downloader"
 import { imageUrlOf } from "../image/imageLoader"
 import { requestPixivRoute } from "./routeNavigation"
@@ -224,7 +225,7 @@ export function DockSegmentedBar<T extends string = string>(props: {
               <Text
                 font="subheadline"
                 fontWeight="bold"
-                foregroundStyle={isSelected ? "#EE2F49" : "#3172EB"}
+                foregroundStyle={isSelected ? ("systemPink" as any) : ("systemBlue" as any)}
                 lineLimit={1}
                 fixedSize={{ horizontal: true, vertical: false }}
               >
@@ -260,7 +261,7 @@ export function DockActionBar(props: {
       padding={{ horizontal: 6 }}
     >
       {props.items.map((item) => {
-        const color = item.color ?? "#3172EB"
+        const color = item.color ?? "systemBlue"
         return (
           <Button
             key={item.key}
@@ -307,7 +308,7 @@ export function DockInfoBar(props: {
   title: string
   color?: string
 }) {
-  const color = props.color ?? "#3172EB"
+  const color = props.color ?? "systemBlue"
   return (
     <HStack
       alignment="center"
@@ -446,7 +447,7 @@ export function IllustDetailDockBar(props: { illustID: number }) {
   async function toggleFollow() {
     if (!userID || followLoading) return
     try {
-      triggerHaptic("selection")
+      triggerHaptic("light")
     } catch {}
     setFollowLoading(true)
     try {
@@ -455,7 +456,7 @@ export function IllustDetailDockBar(props: { illustID: number }) {
         setFollowed(false)
       } else {
         await session.call((token) => followUser(userID, "public", token))
-        setFollowed(true)
+        setFollowed(true, "public")
         if (loadSettings().showRelatedUsersOnFollow) {
           notifyOpenRelatedUsers(userID, illust?.user?.name ?? cached?.user?.name)
         }
@@ -469,13 +470,12 @@ export function IllustDetailDockBar(props: { illustID: number }) {
   async function followWithVisibility(visibility: "public" | "private") {
     if (!userID || followLoading) return
     try {
-      triggerHaptic("selection")
+      triggerHaptic("medium")
     } catch {}
     setFollowLoading(true)
     try {
       await session.call((token) => followUser(userID, visibility, token))
-      setFollowed(true)
-      setFollowRestrict(visibility)
+      setFollowed(true, visibility)
       if (loadSettings().showRelatedUsersOnFollow) {
         notifyOpenRelatedUsers(userID, illust?.user?.name ?? cached?.user?.name)
       }
@@ -699,7 +699,7 @@ export function IllustDetailDockBar(props: { illustID: number }) {
       key: "follow",
       label: followed ? "已关注" : "关注",
       icon: followed ? "person.crop.circle.badge.checkmark" : "person.crop.circle.badge.plus",
-      color: followed ? "#EE2F49" : "#3172EB",
+      color: followed ? "systemPink" : "systemBlue",
       disabled: !userID || followLoading,
       action: toggleFollow,
       contextMenu: followContextMenu,
@@ -708,7 +708,7 @@ export function IllustDetailDockBar(props: { illustID: number }) {
       key: "bookmark",
       label: bookmarked ? "已收藏" : "收藏",
       icon: bookmarked ? "heart.fill" : "heart",
-      color: bookmarked ? "#EE2F49" : "#3172EB",
+      color: bookmarked ? "systemPink" : "systemBlue",
       disabled: bookmarkLoading || bookmarkLongPressLocked,
       action: toggleBookmark,
       simultaneousGesture: LongPressGesture({ minDuration: 500 }).onEnded(() => {
@@ -721,7 +721,7 @@ export function IllustDetailDockBar(props: { illustID: number }) {
       key: "download",
       label: downloading ? "下载中…" : "下载",
       icon: downloading ? "arrow.down.circle.fill" : "arrow.down.circle",
-      color: downloading ? "secondaryLabel" : "#3172EB",
+      color: downloading ? "secondaryLabel" : "systemBlue",
       disabled: downloading,
       action: handleDownloadDefault,
       contextMenu: downloadContextMenu,
@@ -830,7 +830,7 @@ export function NovelDetailDockBar(props: { novelID: number }) {
   async function toggleFollow() {
     if (!userID || followLoading) return
     try {
-      triggerHaptic("selection")
+      triggerHaptic("light")
     } catch {}
     setFollowLoading(true)
     try {
@@ -839,7 +839,7 @@ export function NovelDetailDockBar(props: { novelID: number }) {
         setFollowed(false)
       } else {
         await session.call((token) => followUser(userID, "public", token))
-        setFollowed(true)
+        setFollowed(true, "public")
         if (loadSettings().showRelatedUsersOnFollow) {
           notifyOpenRelatedUsers(userID, novel?.user?.name)
         }
@@ -853,13 +853,12 @@ export function NovelDetailDockBar(props: { novelID: number }) {
   async function followWithVisibility(visibility: "public" | "private") {
     if (!userID || followLoading) return
     try {
-      triggerHaptic("selection")
+      triggerHaptic("medium")
     } catch {}
     setFollowLoading(true)
     try {
       await session.call((token) => followUser(userID, visibility, token))
-      setFollowed(true)
-      setFollowRestrict(visibility)
+      setFollowed(true, visibility)
       if (loadSettings().showRelatedUsersOnFollow) {
         notifyOpenRelatedUsers(userID, novel?.user?.name)
       }
@@ -960,7 +959,7 @@ export function NovelDetailDockBar(props: { novelID: number }) {
       key: "follow",
       label: followed ? "已关注" : "关注",
       icon: followed ? "person.crop.circle.badge.checkmark" : "person.crop.circle.badge.plus",
-      color: followed ? "#EE2F49" : "#3172EB",
+      color: followed ? "systemPink" : "systemBlue",
       disabled: !userID || followLoading,
       action: toggleFollow,
       contextMenu: followContextMenu,
@@ -969,7 +968,7 @@ export function NovelDetailDockBar(props: { novelID: number }) {
       key: "bookmark",
       label: bookmarked ? "已收藏" : "收藏",
       icon: bookmarked ? "heart.fill" : "heart",
-      color: bookmarked ? "#EE2F49" : "#3172EB",
+      color: bookmarked ? "systemPink" : "systemBlue",
       disabled: bookmarkLoading || bookmarkLongPressLocked,
       action: toggleBookmark,
       simultaneousGesture: LongPressGesture({ minDuration: 500 }).onEnded(() => {
@@ -982,7 +981,7 @@ export function NovelDetailDockBar(props: { novelID: number }) {
       key: "download",
       label: downloading ? "下载中…" : "下载",
       icon: downloading ? "arrow.down.circle.fill" : "arrow.down.circle",
-      color: downloading ? "secondaryLabel" : "#3172EB",
+      color: downloading ? "secondaryLabel" : "systemBlue",
       disabled: downloading,
       action: handleDownload,
     },
@@ -997,6 +996,8 @@ export function PixivisionDetailDockBar(props: { articleID: number }) {
     isPixivisionBookmarked(articleID)
   )
   const [detail, setDetail] = useState<PixivisionDetail | null>(null)
+  const [downloadStatus, setDownloadStatus] = useState<string | null>(null)
+  const isDownloading = downloadStatus != null
 
   useEffect(() => {
     setBookmarked(isPixivisionBookmarked(articleID))
@@ -1041,20 +1042,35 @@ export function PixivisionDetailDockBar(props: { articleID: number }) {
     void ShareSheet.present([shareText])
   }
 
+  const handleDownload = () => {
+    if (!detail) return
+    if (isDownloading) return
+    void presentPixivisionDownloadActionSheet(detail, (status) => {
+      setDownloadStatus(status)
+    })
+  }
+
   const items: DockActionItem[] = [
     {
       key: "bookmark",
       label: bookmarked ? "已收藏" : "收藏",
       icon: bookmarked ? "heart.fill" : "heart",
-      color: bookmarked ? "#EE2F49" : "#3172EB",
+      color: bookmarked ? "systemPink" : "systemBlue",
       action: toggleBookmark,
     },
     {
       key: "share",
       label: "分享",
       icon: "square.and.arrow.up",
-      color: "#3172EB",
+      color: "systemBlue",
       action: handleShare,
+    },
+    {
+      key: "download",
+      label: isDownloading ? (downloadStatus ? (downloadStatus.length > 5 ? "下载中" : downloadStatus) : "下载中") : "下载",
+      icon: isDownloading ? "arrow.down.circle.fill" : "square.and.arrow.down",
+      color: "systemBlue",
+      action: handleDownload,
     },
   ]
 
@@ -1210,7 +1226,7 @@ export function SeriesDetailDockBar(props: {
       key: "watchlist",
       label: isWatched ? "已追更" : "追更",
       icon: isWatched ? "bookmark.fill" : "bookmark",
-      color: isWatched ? "#EE2F49" : "#3172EB",
+      color: isWatched ? "systemPink" : "systemBlue",
       disabled: watchLoading,
       action: toggleWatchlist,
     },
@@ -1218,14 +1234,14 @@ export function SeriesDetailDockBar(props: {
       key: "sort",
       label: isAscending ? "正序" : "倒序",
       icon: isAscending ? "arrow.up" : "arrow.down",
-      color: "#3172EB",
+      color: "systemBlue",
       action: toggleSortOrder,
     },
     {
       key: "download",
       label: seriesDownloading ? "下载中…" : "下载",
       icon: seriesDownloading ? "arrow.down.circle.fill" : "square.and.arrow.down",
-      color: seriesDownloading ? "secondaryLabel" : "#3172EB",
+      color: seriesDownloading ? "secondaryLabel" : "systemBlue",
       disabled: seriesDownloading,
       action: handleDownloadSeries,
     },
@@ -1242,7 +1258,7 @@ export function TagFeedDockBar(props: { tagName: string }) {
       key: "tag",
       label: tagName || "标签",
       icon: "number",
-      color: "#3172EB",
+      color: "systemBlue",
       action: () => {
         try {
           triggerHaptic("selection")
@@ -1345,6 +1361,8 @@ export function renderRouteInfoBar(top: string) {
         ? "漫画下载"
         : cat === "novels"
         ? "小说下载"
+        : cat === "pixivision"
+        ? "特辑导出"
         : "全部下载文件"
     const catIcon =
       cat === "illustrations"
@@ -1355,6 +1373,8 @@ export function renderRouteInfoBar(top: string) {
         ? "photo.on.rectangle.fill"
         : cat === "novels"
         ? "book.fill"
+        : cat === "pixivision"
+        ? "rectangle.stack.fill"
         : "folder.fill"
     return <DockInfoBar icon={catIcon} title={catTitle} />
   }

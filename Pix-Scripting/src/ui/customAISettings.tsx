@@ -521,7 +521,7 @@ export function CustomAISettingsView() {
         key: "provider",
         label: providerName,
         icon: "sparkles",
-        color: "#EE2F49",
+        color: "systemPink",
         action: () => {
           try {
             triggerHaptic("selection")

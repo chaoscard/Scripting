@@ -11,6 +11,7 @@ export type DownloadTaskType =
   | "manga_cbz"
   | "manga_epub"
   | "novel_epub"
+  | "pixivision_epub"
   | "custom"
 
 export type DownloadTaskStatus =
@@ -282,7 +283,9 @@ class DownloadTaskManagerImpl {
 
     const defaultIcon =
       options.categoryIcon ||
-      (options.type.includes("novel")
+      (options.type.includes("pixivision")
+        ? "rectangle.stack.fill"
+        : options.type.includes("novel")
         ? "book.closed.fill"
         : options.type.includes("manga")
         ? "books.vertical.fill"

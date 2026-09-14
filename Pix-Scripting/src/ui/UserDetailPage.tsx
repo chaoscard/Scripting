@@ -56,6 +56,7 @@ import {
 import {
   getUserFollowRestrict,
   isUserFollowed,
+  notifyUserFollowChanged,
   onUserFollowChanged,
   recordUserFollowed,
   type FollowRestrict,
@@ -288,6 +289,7 @@ export function UserDetailView(props: { userID: number }) {
       await session.call((token) => followUser(userID, restrict, token))
       setFollowed(true)
       setFollowRestrict(restrict)
+      notifyUserFollowChanged(userID, true, restrict)
       if (loadSettings().showRelatedUsersOnFollow) {
         setShowRelatedUsers(true)
       }
@@ -301,16 +303,32 @@ export function UserDetailView(props: { userID: number }) {
   async function toggleFollow() {
     if (followBusy || isOwnProfile) return
     if (!followed) {
-      await followWithVisibility("public")
+      triggerHaptic("light")
+      followStateVersionRef.current++
+      setFollowBusy(true)
+      try {
+        await session.call((token) => followUser(userID, "public", token))
+        setFollowed(true)
+        setFollowRestrict("public")
+        notifyUserFollowChanged(userID, true, "public")
+        if (loadSettings().showRelatedUsersOnFollow) {
+          setShowRelatedUsers(true)
+        }
+      } catch {
+        // Keep the current UI state when the request fails.
+      } finally {
+        setFollowBusy(false)
+      }
       return
     }
-    triggerHaptic("medium")
+    triggerHaptic("light")
     followStateVersionRef.current++
     setFollowBusy(true)
     try {
       await session.call((token) => unfollowUser(userID, token))
       setFollowed(false)
       setFollowRestrict(null)
+      notifyUserFollowChanged(userID, false)
     } catch {
       // Keep the current UI state when the request fails.
     } finally {

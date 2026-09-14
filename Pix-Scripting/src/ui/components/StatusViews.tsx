@@ -53,7 +53,7 @@ export function EmptyView(props: { text?: string; systemImage?: string }) {
   return (
     <ZStack
       frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-      padding={60}
+      padding={{ vertical: 40, horizontal: 20 }}
     >
       <VStack alignment="center" spacing={14}>
         <Image
@@ -61,7 +61,11 @@ export function EmptyView(props: { text?: string; systemImage?: string }) {
           font="largeTitle"
           foregroundStyle="secondaryLabel"
         />
-        <Text font="subheadline" foregroundStyle="secondaryLabel">
+        <Text
+          font="subheadline"
+          foregroundStyle="secondaryLabel"
+          multilineTextAlignment="center"
+        >
           {props.text ?? "暂无内容"}
         </Text>
       </VStack>

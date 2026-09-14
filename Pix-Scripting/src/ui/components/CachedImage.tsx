@@ -31,7 +31,7 @@ function blurCrossFadeDurationSec(): number {
 }
 
 export function sharpenFadeDurationSec(): number {
-  const ms = loadSettings().sharpenFadeDuration ?? 35
+  const ms = loadSettings().sharpenFadeDuration ?? 65
   return Math.max(0, Math.min(0.25, ms / 1000))
 }
 

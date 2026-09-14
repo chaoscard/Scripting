@@ -279,7 +279,7 @@ function followToolbar(props: {
 
   return appToolbar(
     props.onClose,
-    undefined,
+    titleNode,
     <Menu label={trailingMenuLabel}>
       <Picker
         title="动态类型"
@@ -328,6 +328,7 @@ function followToolbar(props: {
     undefined,
     {
       isCompact,
+      isSplitViewActive: props.isSplitViewActive,
       hidePrincipalOnWide: true,
     }
   )

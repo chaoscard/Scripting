@@ -1,5 +1,6 @@
 import {
   Button,
+  Device,
   Group,
   HStack,
   Image,
@@ -328,6 +329,7 @@ export function UserProfileHeader(props: {
 
   const avatarSize = 74
   const ringSize = avatarSize + 4
+  const defaultHeaderHeight = Math.round((Device.screen?.width || 393) / 2.4)
 
   return (
     <VStack
@@ -372,7 +374,7 @@ export function UserProfileHeader(props: {
           </ZStack>
         ) : (
           <VStack
-            frame={{ maxWidth: "infinity", height: 130 }}
+            frame={{ maxWidth: "infinity", height: defaultHeaderHeight }}
             background="clear"
           />
         )}

@@ -39,6 +39,7 @@ export function MoreView(props: { onClose: () => void }) {
   }, [])
 
   const { isCompact } = useLayoutMetrics()
+  const { isSplitViewActive } = useDualRoute()
   const user = session.user
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
   const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
@@ -94,7 +95,11 @@ export function MoreView(props: { onClose: () => void }) {
       <List
         navigationBarTitleDisplayMode="inline"
         navigationDestination={destinationElement}
-        toolbar={appToolbar(props.onClose, undefined, undefined, undefined, { isCompact })}
+        toolbar={appToolbar(props.onClose, "我的", undefined, undefined, {
+          isCompact,
+          isSplitViewActive,
+          hidePrincipalOnWide: true,
+        })}
       >
         <Section header={<Text>账号</Text>}>
           <Text font="body" foregroundStyle="secondaryLabel">
@@ -113,7 +118,7 @@ export function MoreView(props: { onClose: () => void }) {
       navigationDestination={destinationElement}
       toolbar={appToolbar(
         props.onClose,
-        undefined,
+        "我的",
         [
           <Button
             key="reverse-search"
@@ -140,7 +145,11 @@ export function MoreView(props: { onClose: () => void }) {
           </AppNavigationLink>,
         ],
         undefined,
-        { isCompact }
+        {
+          isCompact,
+          isSplitViewActive,
+          hidePrincipalOnWide: true,
+        }
       )}
     >
       {isVirtualNode(ambientBackground) ? (

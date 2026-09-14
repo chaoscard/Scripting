@@ -258,7 +258,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   imageFadeInDuration: 65,
   blurCrossFadeDuration: 80,
   blurCrossFadeRadius: 2,
-  sharpenFadeDuration: 35,
+  sharpenFadeDuration: 65,
   sharpenBlurRadius: 0.3,
   backgroundPreheatDuration: 1000,
   loadingAnimationDuration: 400,

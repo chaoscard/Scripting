@@ -119,7 +119,7 @@ export function DiscoveryView(props: { onClose: () => void }) {
               key: "pixivisionBookmarks",
               label: "特辑收藏",
               icon: "heart",
-              color: "#3172EB",
+              color: "systemBlue",
               action: () => {
                 try {
                   triggerHaptic("selection")
@@ -637,8 +637,9 @@ function exploreToolbar(props: {
     </Menu>
   )
 
-  return appToolbar(props.onClose, undefined, trailingMenu, undefined, {
+  return appToolbar(props.onClose, titleNode, trailingMenu, undefined, {
     isCompact,
+    isSplitViewActive: props.isSplitViewActive,
     hidePrincipalOnWide: true,
   })
 }

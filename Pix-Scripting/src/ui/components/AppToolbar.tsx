@@ -24,6 +24,7 @@ export function FullScreenToggleButton() {
 export interface AppToolbarOptions {
   isCompact?: boolean
   hidePrincipalOnWide?: boolean
+  isSplitViewActive?: boolean
 }
 
 export function appToolbar(
@@ -34,8 +35,13 @@ export function appToolbar(
   options?: AppToolbarOptions
 ) {
   const isHomeScreen = Script.env === "home_screen"
-  const isCompact = options?.isCompact ?? (!Device.isiPad)
-  const shouldHidePrincipal = !isCompact && options?.hidePrincipalOnWide === true
+  const isPad = Device.isiPad
+  const isCompact = options?.isCompact ?? (!isPad)
+  const isSplit = options?.isSplitViewActive ?? false
+  const shouldHidePrincipal =
+    (isPad && options?.hidePrincipalOnWide !== false) ||
+    (!isCompact && options?.hidePrincipalOnWide === true) ||
+    isSplit
 
   let leadingButton = (
     <Button

@@ -25,15 +25,15 @@ export interface NovelHistoryEntry {
 
 export type HistoryEntry = IllustrationHistoryEntry | NovelHistoryEntry
 
-// 磁盘精简存储模型（剔除长富文本简介、原图大图、完整分页等高开销字段）
+// 磁盘精简存储模型（剔除长富文本简介、完整分页等高开销字段）
 interface StoredIllustData {
   id: number
   title: string
   type?: "illust" | "manga" | "ugoira"
   image_urls?: {
     medium?: string
-    square_medium?: string
     large?: string
+    original?: string
   }
   user: {
     id: number
@@ -60,7 +60,6 @@ interface StoredNovelData {
   title: string
   image_urls?: {
     medium?: string
-    square_medium?: string
     large?: string
   } | null
   cover?: {
@@ -155,9 +154,17 @@ export async function prepareHistoryStorage(): Promise<void> {
   if (!FileManager.existsSync(dir)) {
     FileManager.createDirectorySync(dir, true)
   }
+  warmupHistoryStore()
 }
 
 function toStoredIllustData(illust: PixivIllustration): StoredIllustData {
+  const origUrl =
+    illust.meta_single_page?.original_image_url ||
+    illust.image_urls?.original ||
+    (illust.meta_pages && illust.meta_pages.length > 0
+      ? illust.meta_pages[0]?.image_urls?.original
+      : undefined)
+
   return {
     id: illust.id,
     title: illust.title ?? "",
@@ -165,7 +172,7 @@ function toStoredIllustData(illust: PixivIllustration): StoredIllustData {
     image_urls: {
       large: illust.image_urls?.large,
       medium: illust.image_urls?.medium,
-      square_medium: illust.image_urls?.square_medium,
+      original: origUrl,
     },
     user: {
       id: illust.user?.id ?? 0,
@@ -195,7 +202,7 @@ function toStoredNovelData(novel: PixivNovel): StoredNovelData {
     image_urls: novel.image_urls
       ? {
           medium: novel.image_urls.medium,
-          square_medium: novel.image_urls.square_medium,
+          large: novel.image_urls.large,
         }
       : null,
     cover: novel.cover?.urls ? { urls: novel.cover.urls } : null,
@@ -234,15 +241,17 @@ export function toStoredEntry(entry: HistoryEntry): StoredHistoryEntry {
 }
 
 function inflateIllust(data: StoredIllustData): PixivIllustration {
+  const originalUrl = data.image_urls?.original
   return {
     id: data.id,
     title: data.title,
     type: data.type ?? "illust",
     image_urls: {
-      square_medium: data.image_urls?.square_medium,
       medium: data.image_urls?.medium,
       large: data.image_urls?.large,
+      original: originalUrl,
     },
+    meta_single_page: originalUrl ? { original_image_url: originalUrl } : {},
     caption: "",
     user: {
       id: data.user.id,
@@ -444,6 +453,16 @@ export function parseRawEntriesForKind(
   }
 
   return valid.sort((a, b) => b.viewedAt - a.viewedAt)
+}
+
+export function warmupHistoryStore(): void {
+  try {
+    loadKindEntries("illustration")
+    loadKindEntries("manga")
+    loadKindEntries("novel")
+  } catch {
+    // 忽略静默预热错误
+  }
 }
 
 export function loadKindEntries(kind: HistoryContentKind): (IllustrationHistoryEntry | NovelHistoryEntry)[] {

@@ -1,4 +1,4 @@
-import { flushHistory, prepareHistoryStorage } from "./store/history"
+import { flushHistory, prepareHistoryStorage, warmupHistoryStore } from "./store/history"
 import { prepareSettingsStorage } from "./store/settings"
 import { prepareBlocklistStorage } from "./store/blocklist"
 import { flushNovelProgress, prepareNovelProgressStorage } from "./store/novelProgress"
@@ -49,6 +49,9 @@ export async function bootstrapStorage() {
 export function startBackgroundServices() {
   // 后台静默预热小组件数据池
   populateWidgetPool().catch(() => {})
+
+  // 静默预热历史记录内存缓存
+  warmupHistoryStore()
 
   // 启动低频 iCloud 同步调度器 (5s启动延迟 + 15分钟周期)
   if (!stopSyncScheduler) {

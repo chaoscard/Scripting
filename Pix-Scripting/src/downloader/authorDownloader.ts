@@ -23,6 +23,7 @@ import { fetchImageBinaryWithRetry, runConcurrentTasks, yieldToMainThread, yield
 import { exportMangaToEpub, exportNovelToEpub, type NovelChapter } from "./epubExporter"
 import { downloadIllustToAlbum, saveVideoToPixivAlbum } from "./photoAlbum"
 import { DownloadTaskManager } from "./downloadTaskManager"
+import { runWithBackgroundTask } from "./backgroundTaskManager"
 import { publishPreparedFile } from "../store/safeFile"
 import type { PixivIllustration, PixivNovel } from "../types"
 
@@ -259,7 +260,7 @@ export async function downloadAuthorIllustrationsToAlbum(
 }
 
 /**
- * 批量下载画师全量动图至专属相簿（MP4 或 GIF）
+ * 批量下载画师全量动图至专属相簿（MP4 或 GIF，支持断点续传）
  */
 export async function downloadAuthorUgoiraToAlbum(
   authorName: string,

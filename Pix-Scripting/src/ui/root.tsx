@@ -31,10 +31,15 @@ import { getLatestCachedArtworkPath } from "../image/imageLoader"
 import { DreamyFluidBackground } from "./components/DreamyBackground"
 import { DiscoveryView } from "./discovery"
 import { RankingView } from "./ranking"
-import { SearchView } from "./search"
 import { MoreView } from "./more"
 import { LoginView } from "./login"
 import { FollowFeedView } from "./followFeed"
+
+function SearchView(props: any): any {
+  const mod = require("./search")
+  const Comp = mod.SearchView || mod.default
+  return <Comp {...props} />
+}
 import {
   registerTabNavigator,
   setActiveTabKind,
@@ -62,6 +67,7 @@ function LaunchExperienceView() {
       alignment="center"
       frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
       ignoresSafeArea={true}
+      background="#070D1E"
     >
       {/* 1. 背景层：若有缓存插画则展示柔和高斯模糊图，若无则无缝展示梦幻流体光晕 */}
       {bgImage ? (

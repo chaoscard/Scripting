@@ -228,12 +228,12 @@ export function RankingView(props: { onClose: () => void }) {
             <Image
               systemName="calendar"
               font={13}
-              foregroundStyle="#3172EB"
+              foregroundStyle={"systemBlue" as any}
             />
             <Text
               font="subheadline"
               fontWeight="bold"
-              foregroundStyle="#3172EB"
+              foregroundStyle={"systemBlue" as any}
               lineLimit={1}
               fixedSize={{ horizontal: true, vertical: false }}
             >
@@ -258,12 +258,12 @@ export function RankingView(props: { onClose: () => void }) {
             <Image
               systemName="arrow.uturn.backward"
               font={13}
-              foregroundStyle="#3172EB"
+              foregroundStyle={"systemBlue" as any}
             />
             <Text
               font="subheadline"
               fontWeight="bold"
-              foregroundStyle="#3172EB"
+              foregroundStyle={"systemBlue" as any}
               lineLimit={1}
               fixedSize={{ horizontal: true, vertical: false }}
             >
@@ -571,8 +571,9 @@ function rankingToolbar(props: {
     </Menu>,
   ].filter(Boolean)
 
-  return appToolbar(props.onClose, undefined, trailingItems, undefined, {
+  return appToolbar(props.onClose, titleNode, trailingItems, undefined, {
     isCompact,
+    isSplitViewActive: props.isSplitViewActive,
     hidePrincipalOnWide: true,
   })
 }

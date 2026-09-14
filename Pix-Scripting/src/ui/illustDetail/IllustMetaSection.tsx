@@ -1,4 +1,5 @@
 import {
+  Button,
   FlowLayout,
   HStack,
   Image,
@@ -13,6 +14,7 @@ import {
   SeriesEpisodePager,
   TagChip,
 } from "../components"
+import { triggerHaptic } from "../../platform/haptics"
 import { renderDestination } from "../routes"
 
 export interface IllustMetaSectionProps {
@@ -21,6 +23,7 @@ export interface IllustMetaSectionProps {
   resolvedSeriesID: number | null
   resolvedSeriesTitle: string | null
   resolvedEpisodeNumber: number | null
+  onOpenComments?: () => void
 }
 
 export function IllustMetaSection(props: IllustMetaSectionProps) {
@@ -59,12 +62,20 @@ export function IllustMetaSection(props: IllustMetaSectionProps) {
               {formatNumber(illust.total_bookmarks)}
             </Text>
           </HStack>
-          <HStack spacing={3}>
-            <Image systemName="bubble.left" font="footnote" />
-            <Text font="footnote">
-              {formatNumber(illust.total_comments)}
-            </Text>
-          </HStack>
+          <Button
+            buttonStyle="plain"
+            action={() => {
+              triggerHaptic("selection")
+              props.onOpenComments?.()
+            }}
+          >
+            <HStack spacing={3}>
+              <Image systemName="bubble.left" font="footnote" foregroundStyle="systemBlue" />
+              <Text font="footnote">
+                {formatNumber(illust.total_comments)}
+              </Text>
+            </HStack>
+          </Button>
           {pageCount > 1 && (
             <HStack spacing={3}>
               <Image systemName="rectangle.stack" font="footnote" />

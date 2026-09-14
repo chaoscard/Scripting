@@ -25,7 +25,6 @@ import {
   ZStack,
 } from "scripting"
 import { AppNavigationLink, useDualRoute } from "./DualRouteContext"
-import { useIsCurrentTab } from "./routeNavigation"
 import {
   nextIllustrations,
   nextNovels,
@@ -66,10 +65,12 @@ import {
   onSearchHistoryChanged,
   removeSearchHistory,
 } from "../store/searchHistory"
-import { destinationElement } from "./routes"
-import { requestPixivRoute, setActiveTabKind } from "./routeNavigation"
-
-declare const Pasteboard: any
+import {
+  destinationElement,
+  requestPixivRoute,
+  setActiveTabKind,
+  useIsCurrentTab,
+} from "./routeNavigation"
 import { triggerHaptic } from "../platform/haptics"
 import {
   currentBatchSize,
@@ -92,12 +93,6 @@ import type {
   SearchScope,
   SearchSort,
 } from "../types"
-import {
-  categoryFromParams,
-  formatDateToPixivDate,
-  getDefaultAdvancedSearchParams,
-  SearchAdvancedSheet,
-} from "./searchAdvancedSheet"
 import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
 import {
   appToolbar,
@@ -112,6 +107,29 @@ import {
   NovelCard,
   RefreshableScrollView,
 } from "./components"
+
+declare const Pasteboard: any
+
+function SearchAdvancedSheet(props: any): any {
+  const mod = require("./searchAdvancedSheet")
+  const Comp = mod.SearchAdvancedSheet || mod.default
+  return <Comp {...props} />
+}
+
+function getDefaultAdvancedSearchParams(...args: any[]): any {
+  const mod = require("./searchAdvancedSheet")
+  return mod.getDefaultAdvancedSearchParams(...args)
+}
+
+function categoryFromParams(...args: any[]): any {
+  const mod = require("./searchAdvancedSheet")
+  return mod.categoryFromParams(...args)
+}
+
+function formatDateToPixivDate(...args: any[]): any {
+  const mod = require("./searchAdvancedSheet")
+  return mod.formatDateToPixivDate(...args)
+}
 
 type UserItem = PixivUserPreview & { id: number }
 
@@ -1323,7 +1341,7 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
             key={`advanced-sheet-${advancedSheetKey}`}
             currentParams={advancedParams}
             settings={loadSettings()}
-            onApply={(params) => {
+            onApply={(params: any) => {
               setAdvancedParams(params)
               setScope(params.scope)
               setSort(params.sort)
@@ -1470,7 +1488,7 @@ function searchToolbar(props: {
 
   return appToolbar(
     props.onClose,
-    undefined,
+    titleNode,
     <Menu label={trailingMenuLabel}>
       {isClassic && (
         <Picker
@@ -1507,6 +1525,7 @@ function searchToolbar(props: {
     undefined,
     {
       isCompact,
+      isSplitViewActive: props.isSplitViewActive,
       hidePrincipalOnWide: true,
     }
   )

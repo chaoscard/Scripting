@@ -185,6 +185,7 @@ export function IllustDetailView(props: { illustID: number }) {
             resolvedSeriesID={resolvedSeriesID}
             resolvedSeriesTitle={resolvedSeriesTitle}
             resolvedEpisodeNumber={resolvedEpisodeNumber}
+            onOpenComments={() => actions.setShowComments(true)}
           />
 
           {/* 关联推荐作品流 */}

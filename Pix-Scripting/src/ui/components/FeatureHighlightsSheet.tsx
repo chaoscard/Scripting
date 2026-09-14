@@ -26,8 +26,8 @@ const FEATURE_LIST: FeatureItem[] = [
   {
     id: "sync",
     title: "跨端同步",
-    subtitle: "全量设置 · 黑名单 · 历史双向漫游",
-    description: "支持 iCloud 云端同步，本地秒级响应与增量漫游，换机即用，数据安全不丢失。",
+    subtitle: "全量设置 · 黑名单 · 历史漫游 · 我的足迹",
+    description: "支持 iCloud 云端双向增量漫游与离线多维“我的足迹”统计看板，全量设置与黑名单换机即用，数据安全不丢失。",
     symbol: "icloud.fill",
     iconColor: "white",
     iconBg: "systemBlue",

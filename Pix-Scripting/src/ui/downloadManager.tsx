@@ -182,7 +182,7 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
         key: "tasks",
         label: activeTasksCount > 0 ? `任务 (${activeTasksCount})` : "任务列表",
         icon: activeTasksCount > 0 ? "hourglass" : "list.clipboard",
-        color: activeTasksCount > 0 ? "#EE2F49" : "#3172EB",
+        color: activeTasksCount > 0 ? "systemPink" : "systemBlue",
         action: () => {
           try {
             triggerHaptic("selection")
@@ -194,7 +194,7 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
         key: "clean",
         label: cleaning ? "清理中…" : "清理缓存",
         icon: "trash",
-        color: "#3172EB",
+        color: "systemBlue",
         disabled: cleaning,
         action: () => {
           try {
@@ -230,7 +230,7 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
         title: "下载与文件管理说明",
         message: (
           <Text>
-            这里展示的是下载或导出的插画、动图ZIP归档，漫画EPUB、CBZ归档、小说EPUB和创作者归档，可在“文件”APP内查看，默认目录是/Scripting/Pix-Scripting；以图片或者视频格式下载的插画、漫画、动图，请在“照片”APP内查看。
+            这里展示的是下载或导出的插画/动图 ZIP 归档、漫画 EPUB/CBZ 归档、小说 EPUB、特辑 EPUB 画报与创作者归档，可在“文件”APP内（/Scripting/Pix-Scripting）查看；以图片或视频格式下载的插画、漫画、动图与特辑拼接长图，请在“照片”APP内查看。
           </Text>
         ),
         isPresented: showNoticeAlert,
@@ -354,6 +354,19 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
           />
         </NavigationLink>
 
+        <NavigationLink value="downloadDetail:pixivision">
+          <DownloadCategoryRow
+            icon="rectangle.stack.fill"
+            iconColor="#00C7BE"
+            title="特辑"
+            subtitle={
+              overview
+                ? `${overview.pixivisionCount} 个文件 • ${formatBytes(overview.pixivisionSize)}`
+                : "加载中…"
+            }
+          />
+        </NavigationLink>
+
         <NavigationLink value="downloadCreators">
           <DownloadCategoryRow
             icon="person.2.fill"
@@ -373,7 +386,7 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
         header={<Text>全局索引</Text>}
         footer={
           <Text font="footnote" foregroundStyle="secondaryLabel">
-            提示：这里展示的是下载或导出的插画/动图 ZIP 归档、漫画 EPUB/CBZ 归档、小说 EPUB 与创作者归档，可在“文件”APP内（/Scripting/Pix-Scripting）查看；以图片或视频格式下载的插画、漫画、动图，请在“照片”APP内查看。
+            提示：这里展示的是下载或导出的插画/动图 ZIP 归档、漫画 EPUB/CBZ 归档、小说 EPUB、特辑 EPUB 画报与创作者归档，可在“文件”APP内（/Scripting/Pix-Scripting）查看；以图片或视频格式下载的插画、漫画、动图与特辑拼接长图，请在“照片”APP内查看。
           </Text>
         }
       >
@@ -586,20 +599,24 @@ function DownloadTaskCardRow(props: { task: DownloadTaskItem }) {
   let tileBg = "rgba(0, 122, 255, 0.12)"
   let tileFg = "systemBlue"
 
-  if (task.type.includes("novel")) {
-    tileIcon = "book.fill"
-    tileBg = "rgba(48, 176, 199, 0.14)"
+  if (task.type.includes("pixivision")) {
+    tileIcon = "rectangle.stack.fill"
+    tileBg = "rgba(0, 199, 190, 0.14)"
     tileFg = "systemTeal"
+  } else if (task.type.includes("novel")) {
+    tileIcon = "book.fill"
+    tileBg = "rgba(175, 82, 222, 0.14)"
+    tileFg = "systemPurple"
   } else if (task.type.includes("manga")) {
-    tileIcon = "books.vertical.fill"
-    tileBg = "rgba(88, 86, 214, 0.14)"
-    tileFg = "systemIndigo"
+    tileIcon = "photo.on.rectangle.fill"
+    tileBg = "rgba(52, 199, 89, 0.14)"
+    tileFg = "systemGreen"
   } else if (task.type.includes("ugoira")) {
-    tileIcon = "film.stack"
+    tileIcon = "play.circle.fill"
     tileBg = "rgba(255, 149, 0, 0.14)"
     tileFg = "systemOrange"
   } else if (task.type.includes("illust")) {
-    tileIcon = "photo.stack.fill"
+    tileIcon = "photo.fill"
     tileBg = "rgba(0, 122, 255, 0.14)"
     tileFg = "systemBlue"
   }
@@ -868,6 +885,7 @@ export function DownloadDetailListView(props: {
     if (category === "ugoira") return "动图"
     if (category === "manga") return "漫画"
     if (category === "novels") return "小说"
+    if (category === "pixivision") return "特辑"
     return "全部下载文件"
   }, [props.title, creatorFolder, category])
 
@@ -924,10 +942,18 @@ export function DownloadDetailListView(props: {
       if (!confirmed) return
     }
 
-    const { successCount } = await deleteManagedFiles(selectedPaths)
+    // 等待系统确认弹窗退场，避免动画竞态
+    await new Promise<void>((resolve) => {
+      setTimeout(() => resolve(), 200)
+    })
+
+    const targets = [...selectedPaths]
     setSelectedPaths([])
     setIsEditing(false)
-    await loadFileList()
+
+    const { successCount } = await deleteManagedFiles(targets)
+    setFiles((prev) => prev.filter((f) => !targets.includes(f.path)))
+
     if (typeof Dialog !== "undefined" && typeof Dialog.alert === "function") {
       void Dialog.alert({
         title: "删除完成",
@@ -976,6 +1002,11 @@ export function DownloadDetailListView(props: {
         return
       }
     }
+
+    // 关键：延迟 200ms 等待 iOS 原生侧滑/长按菜单动画完全收起归位，避免 Cell 消除动画与空状态切换冲突崩断
+    await new Promise<void>((resolve) => {
+      setTimeout(() => resolve(), 200)
+    })
 
     const ok = await deleteManagedFile(item.path)
     if (ok) {
@@ -1040,6 +1071,7 @@ export function DownloadDetailListView(props: {
     if (category === "ugoira") return "play.circle.fill"
     if (category === "manga") return "photo.on.rectangle.fill"
     if (category === "novels") return "book.fill"
+    if (category === "pixivision") return "rectangle.stack.fill"
     return "folder.fill"
   }, [creatorFolder, category])
 
@@ -1049,6 +1081,7 @@ export function DownloadDetailListView(props: {
     if (category === "ugoira") return "#FF9500"
     if (category === "manga") return "#34C759"
     if (category === "novels") return "#AF52DE"
+    if (category === "pixivision") return "#00C7BE"
     return "secondaryLabel"
   }, [creatorFolder, category])
 
@@ -1094,7 +1127,7 @@ export function DownloadDetailListView(props: {
         key: "sort",
         label: sortInfo.label,
         icon: sortInfo.icon,
-        color: "#3172EB",
+        color: "systemBlue",
         action: () => {
           try {
             triggerHaptic("selection")
@@ -1322,7 +1355,13 @@ function getFileItemVisual(item: ManagedFileItem): { iconName: string; iconColor
     return { iconName: "photo", iconColor: "#0096FA" }
   }
 
-  // 5. 兜底回退：当 category 为 other 或未知时按扩展名推断
+  // 5. 特辑分类：采用统一特辑 symbol 与青湖绿色彩
+  if (category === "pixivision") {
+    return { iconName: "rectangle.stack.fill", iconColor: "#00C7BE" }
+  }
+
+  // 6. 兜底回退：当 category 为 other 或未知时按扩展名推断
+  if (ext === "pdf") return { iconName: "doc.richtext.fill", iconColor: "#0096FA" }
   if (ext === "epub") return { iconName: "book.fill", iconColor: "#AF52DE" }
   if (ext === "cbz") return { iconName: "book.closed.fill", iconColor: "#34C759" }
   if (ext === "zip") return { iconName: "doc.zipper", iconColor: "#FF9500" }
@@ -1548,6 +1587,10 @@ export function DownloadCreatorsListView(props: { onClose?: () => void }) {
       if (!confirmed) return
     }
 
+    await new Promise<void>((resolve) => {
+      setTimeout(() => resolve(), 200)
+    })
+
     let successCount = 0
     for (const c of toDelete) {
       const ok = await deleteCreatorDirectory(c.path)
@@ -1556,7 +1599,7 @@ export function DownloadCreatorsListView(props: { onClose?: () => void }) {
 
     setSelectedIds([])
     setIsEditing(false)
-    await loadCreators(true)
+    setCreators((prev) => prev.filter((c) => !selectedIds.includes(c.id)))
     if (typeof Dialog !== "undefined" && typeof Dialog.alert === "function") {
       void Dialog.alert({
         title: "删除完成",
@@ -1579,6 +1622,10 @@ export function DownloadCreatorsListView(props: { onClose?: () => void }) {
         return
       }
     }
+
+    await new Promise<void>((resolve) => {
+      setTimeout(() => resolve(), 200)
+    })
 
     const ok = await deleteCreatorDirectory(creator.path)
     if (ok) {
@@ -1654,7 +1701,7 @@ export function DownloadCreatorsListView(props: { onClose?: () => void }) {
         key: "sort",
         label: sortInfo.label,
         icon: sortInfo.icon,
-        color: "#3172EB",
+        color: "systemBlue",
         action: () => {
           try {
             triggerHaptic("selection")
@@ -1789,9 +1836,9 @@ export function DownloadCreatorsListView(props: { onClose?: () => void }) {
             padding={{ vertical: 28 }}
             frame={{ maxWidth: "infinity" }}
           >
-            <Image systemName="person.2.slash" font="largeTitle" foregroundStyle="secondaryLabel" />
+            <Image systemName="folder.badge.questionmark" font="largeTitle" foregroundStyle="secondaryLabel" />
             <Text font="subheadline" foregroundStyle="secondaryLabel" multilineTextAlignment="center">
-              {searchQuery ? "未找到匹配的创作者" : "暂无创作者归档"}
+              {searchQuery ? "未找到匹配的创作者" : "当前分类暂无已下载文件"}
             </Text>
           </VStack>
         ) : (

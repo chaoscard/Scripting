@@ -23,6 +23,7 @@ import { session } from "../api/session"
 import { illustrationDetail } from "../api/pixiv"
 import { imageUrlOf, pageThumbUrlOf, cachedFilePath, loadImage } from "../image/imageLoader"
 import { saveImageToPixivAlbum, withAlbumKeepAlive } from "../downloader/photoAlbum"
+import { loadSettings } from "../store/settings"
 import type { PixivIllustration, TextEmbeddedImage } from "../types"
 import {
   calculateLineSpacing,
@@ -408,7 +409,8 @@ function NovelUploadedImageItemView(props: {
       if (!path) return
       const success = await saveImageToPixivAlbum(path)
       if (success) {
-        void Dialog.alert({ title: "已保存", message: "插图已成功保存至系统相簿" })
+        const albumName = loadSettings().downloadPhotoAlbumName || "Pix-Scripting"
+        void Dialog.alert({ title: "已保存", message: `插图已成功保存至专属相簿「${albumName}」` })
       }
     })
   }, [url])
@@ -583,9 +585,10 @@ function NovelPixivImageItemView(props: {
                           if (path) {
                             const success = await saveImageToPixivAlbum(path)
                             if (success) {
+                              const albumName = loadSettings().downloadPhotoAlbumName || "Pix-Scripting"
                               void Dialog.alert({
                                 title: "已保存",
-                                message: "插画原图已成功保存至系统相簿",
+                                message: `插画原图已成功保存至专属相簿「${albumName}」`,
                               })
                             }
                           }
