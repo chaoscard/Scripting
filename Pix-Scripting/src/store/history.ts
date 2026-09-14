@@ -106,6 +106,33 @@ export function getHistoryLimitForKind(kind: HistoryContentKind): number {
   return HISTORY_LIMITS[kind]
 }
 
+let isHistoryDirty = false
+let isDetailDestinationActive = false
+
+export function notifyDetailDestinationRendered(): void {
+  isDetailDestinationActive = true
+}
+
+export function checkAndResetHistoryDirty(): boolean {
+  if (isDetailDestinationActive) {
+    isDetailDestinationActive = false
+    return false
+  }
+  if (isHistoryDirty) {
+    isHistoryDirty = false
+    return true
+  }
+  return false
+}
+
+export function markHistoryDirty(): void {
+  isHistoryDirty = true
+}
+
+export function getHistoryVersion(): number {
+  return 1
+}
+
 const caches: {
   illustration: IllustrationHistoryEntry[] | null
   manga: IllustrationHistoryEntry[] | null
@@ -377,6 +404,7 @@ function commitKind(kind: HistoryContentKind, next: any[], immediate = false): b
 }
 
 function emitChanged(): void {
+  isHistoryDirty = true
   for (const fn of listeners) {
     try {
       fn()

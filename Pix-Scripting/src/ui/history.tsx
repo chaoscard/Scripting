@@ -27,6 +27,7 @@ import {
 } from "./components"
 import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
 import {
+  checkAndResetHistoryDirty,
   clearHistoryKind,
   getHistory,
   onHistoryChanged,
@@ -224,6 +225,11 @@ export function HistoryView() {
       toolbarBackground="clear"
       toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
       background={ambientBackground}
+      onAppear={() => {
+        if (checkAndResetHistoryDirty()) {
+          void refreshHandlerRef.current()
+        }
+      }}
       sheet={{
         isPresented: isAnalyticsPresented,
         onChanged: (val: boolean) => setIsAnalyticsPresented(val),
@@ -444,7 +450,6 @@ function HistoryFeed(props: {
   onRegisterRefresh?: (fn: () => Promise<void>) => void
 }) {
   const { kind, searchQuery = "", onFirstImageUrlChange, onRegisterRefresh } = props
-  const mountTime = useRef(Date.now()).current
 
   // 1. 插画历史流
   const illustPaged = usePagedList<HistoryIllustItem>({
@@ -459,7 +464,7 @@ function HistoryFeed(props: {
       }
     },
     filter: filterHistoryIllusts,
-    deps: ["history", "illustration", searchQuery, mountTime],
+    deps: ["history", "illustration", searchQuery],
     enabled: kind === "illustration",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
@@ -478,7 +483,7 @@ function HistoryFeed(props: {
       }
     },
     filter: filterHistoryIllusts,
-    deps: ["history", "manga", searchQuery, mountTime],
+    deps: ["history", "manga", searchQuery],
     enabled: kind === "manga",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(cardThumbUrlOf)).cancel,
@@ -497,7 +502,7 @@ function HistoryFeed(props: {
       }
     },
     filter: filterHistoryNovels,
-    deps: ["history", "novel", searchQuery, mountTime],
+    deps: ["history", "novel", searchQuery],
     enabled: kind === "novel",
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(novelThumbUrlOf)).cancel,
@@ -506,8 +511,6 @@ function HistoryFeed(props: {
   const illustPagedRef = useLatest(illustPaged)
   const mangaPagedRef = useLatest(mangaPaged)
   const novelPagedRef = useLatest(novelPaged)
-
-  const [historyVersion, setHistoryVersion] = useState(0)
 
   useEffect(() => {
     const handleSettingsChange = () => {

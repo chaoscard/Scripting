@@ -12,6 +12,7 @@ import { RelatedIllustFeedView } from "./relatedIllustFeed"
 import { NovelLibraryView } from "./novelLibrary"
 import { LibraryView } from "./library"
 import { HistoryView } from "./history"
+import { notifyDetailDestinationRendered } from "../store/history"
 import { NotificationViewMoreView, NotificationsView } from "./notifications"
 import { BlockedSettingsView } from "./blockedSettings"
 import { CustomAISettingsView } from "./customAISettings"
@@ -77,6 +78,7 @@ function decodeTag(value: string): string {
 export function renderDestination(rawPage: string) {
   const page = normalizeRoute(rawPage)
   if (page.startsWith("illust:")) {
+    notifyDetailDestinationRendered()
     const id = parseID(page, "illust:")
     if (id != null) {
       seedIllustFromWidgetPool(id)
@@ -96,6 +98,7 @@ export function renderDestination(rawPage: string) {
     if (id != null) return <UserDetailView userID={id} />
   }
   if (page.startsWith("novel:")) {
+    notifyDetailDestinationRendered()
     const id = parseID(page, "novel:")
     if (id != null) return <NovelDetailView key={`novel-${id}`} novelID={id} />
   }
@@ -127,7 +130,7 @@ export function renderDestination(rawPage: string) {
   if (page === "novelBookmarks") return <NovelLibraryView />
   if (page === "library:novel") return <LibraryView initialKind="novel" />
   if (page === "library:illustration" || page === "library:illust" || page === "library") return <LibraryView initialKind="illustration" />
-  if (page === "history") return <HistoryView key={`history-${Date.now()}`} />
+  if (page === "history") return <HistoryView />
   if (page === "historyAnalytics" || page.startsWith("historyAnalytics:")) {
     const scope = page.includes(":") ? page.split(":")[1] : undefined
     return <HistoryAnalyticsView initialScope={scope as any} />
