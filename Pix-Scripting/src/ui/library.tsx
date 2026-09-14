@@ -54,7 +54,7 @@ import {
 } from "./components"
 
 export { BookmarkTagFilterBar as BookmarkTags }
-import { requestPixivRoute } from "./routeNavigation"
+import { requestPixivRoute } from "../store/routeNavigation"
 import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
 import { PixivisionBookmarksContent } from "./pixivisionBookmarks"
 

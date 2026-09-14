@@ -33,7 +33,7 @@ import {
 } from "../store/historyAnalytics"
 import { useLayoutMetrics } from "./hooks"
 import { useDualRoute } from "./DualRouteContext"
-import { requestPixivRoute } from "./routeNavigation"
+import { requestPixivRoute } from "../store/routeNavigation"
 import { triggerHaptic } from "../platform/haptics"
 
 export interface HistoryAnalyticsViewProps {
@@ -919,6 +919,13 @@ export function HistoryAnalyticsView(props: HistoryAnalyticsViewProps) {
   const [timeRange, setTimeRange] = useState<AnalyticsTimeRange>(props.initialTimeRange || "all")
   const metrics = useLayoutMetrics()
   const { isSplitViewActive, openDetailRoute } = useDualRoute()
+
+  // 当外部传入的分类类型（如插画、漫画、小说）变化时，自动联动切换看板类型
+  useEffect(() => {
+    if (props.initialScope) {
+      setScope(props.initialScope)
+    }
+  }, [props.initialScope])
 
   // 计算分析数据
   const data = useMemo(() => {

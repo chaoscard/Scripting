@@ -1,5 +1,5 @@
 import { Device } from "scripting"
-import { requestPixivRoute } from "../routeNavigation"
+import { requestPixivRoute } from "../../store/routeNavigation"
 
 export const CORNER_ICON_SIZE = 26
 

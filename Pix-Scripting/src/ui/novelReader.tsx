@@ -16,7 +16,7 @@ import {
   WebView,
   type Color,
 } from "scripting"
-import { requestPixivRoute } from "./routeNavigation"
+import { requestPixivRoute } from "../store/routeNavigation"
 import { CachedImage, presentExternalURL, routeForDescriptionLink } from "./components"
 import { useLayoutMetrics } from "./hooks"
 import { session } from "../api/session"

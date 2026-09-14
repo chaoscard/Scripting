@@ -19,7 +19,7 @@ import {
   ZStack,
 } from "scripting"
 import { ContainerLayoutContext, useLayoutMetrics } from "./hooks"
-import { normalizeRoute, renderDetailDestination, setDualRouteDispatcher } from "./routeNavigation"
+import { normalizeRoute, renderDetailDestination, setDualRouteDispatcher } from "../store/routeNavigation"
 import { DetailBottomAccessoryHost } from "./bottomAccessory"
 import { loadSettings, onSettingsChanged } from "../store/settings"
 

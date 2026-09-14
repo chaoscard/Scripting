@@ -17,7 +17,7 @@ import {
   IllustFlowFeed,
   RefreshableScrollView,
 } from "./components"
-import { destinationElement } from "./routeNavigation"
+import { destinationElement } from "./destinationElement"
 import { getCachedIllust } from "../store/illustCache"
 
 export function RelatedIllustFeedView(props: { illustID: number }) {

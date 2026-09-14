@@ -575,6 +575,13 @@ export function usePagedList<T extends { id: number | string }>(
     setPendingItems((current) => current.filter((item) => String(item.id) !== idStr))
   }, [])
 
+  const prependItems = useCallback((newItems: T[]) => {
+    if (!newItems || newItems.length === 0) return
+    const filtered = applyFilter(newItems)
+    if (filtered.length === 0) return
+    setItems((current) => mergeUniqueByID(filtered, current))
+  }, [])
+
   useEffect(() => {
     return () => {
       invalidateInactiveWork()
@@ -591,6 +598,7 @@ export function usePagedList<T extends { id: number | string }>(
     refresh,
     reapplyFilter,
     removeItem,
+    prependItems,
     loadMore,
     hasMore: pendingItems.length > 0 || nextURL != null,
     hasFilteredContent,

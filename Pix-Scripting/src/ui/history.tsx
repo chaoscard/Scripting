@@ -27,13 +27,15 @@ import {
 } from "./components"
 import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
 import {
+  checkAndConsumeViewingHistoryDetail,
   checkAndResetHistoryDirty,
   clearHistoryKind,
   getHistory,
+  markHistoryRevisitDirty,
   onHistoryChanged,
+  onHistoryEntryRecorded,
   refreshHistoryFromCloud,
   removeHistoryEntry,
-  resetHistorySessionOrigin,
   type HistoryContentKind,
   type HistoryEntry,
 } from "../store/history"
@@ -51,7 +53,7 @@ import { cardThumbUrlOf, novelThumbUrlOf, prefetch } from "../image/imageLoader"
 import { currentBatchSize, useLatest, usePagedList } from "./hooks"
 import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl } from "./ambient"
 import { useDualRoute } from "./DualRouteContext"
-import { requestPixivRoute } from "./routeNavigation"
+import { getActiveTabKind, onActiveTabChanged, requestPixivRoute, type PixivTabKind } from "../store/routeNavigation"
 import { HistoryAnalyticsView } from "./historyAnalytics"
 import type { PixivIllustration, PixivNovel } from "../types"
 
@@ -184,11 +186,25 @@ export function HistoryView() {
     }
   }, [kind])
 
+  const initialTab = useRef(getActiveTabKind()).current
+  const tabRef = useRef(initialTab)
+
   useEffect(() => {
     return () => {
-      resetHistorySessionOrigin()
+      checkAndConsumeViewingHistoryDetail()
     }
   }, [])
+
+  // 切换 Tab 离开历史页后切回时：若曾有静默回看标脏，执行全量重排刷新
+  useEffect(() => {
+    return onActiveTabChanged((nextTab: PixivTabKind) => {
+      if (nextTab === tabRef.current) {
+        if (checkAndResetHistoryDirty()) {
+          void refreshAllFeeds()
+        }
+      }
+    })
+  }, [refreshAllFeeds])
 
   const handleOpenAnalytics = useCallback(() => {
     triggerHaptic("selection")
@@ -245,6 +261,12 @@ export function HistoryView() {
       toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
       background={ambientBackground}
       onAppear={() => {
+        const fromDetail = checkAndConsumeViewingHistoryDetail()
+        if (fromDetail) {
+          // 从二级详情页返回历史列表：拦截全量刷新，保持老作品原位不动，新推荐置顶
+          return
+        }
+        // 从上一级页面进入 / 退出历史页后重新进入：检测是否有标脏，有则全量重排刷新
         if (checkAndResetHistoryDirty()) {
           void refreshAllFeeds()
         }
@@ -254,6 +276,7 @@ export function HistoryView() {
         onChanged: (val: boolean) => setIsAnalyticsPresented(val),
         content: (
           <HistoryAnalyticsView
+            key={`history-analytics-${kind}`}
             initialScope={kind}
             onDismiss={() => setIsAnalyticsPresented(false)}
             onSelectTag={(tag) => {
@@ -530,6 +553,68 @@ function HistoryFeed(props: {
   const illustPagedRef = useLatest(illustPaged)
   const mangaPagedRef = useLatest(mangaPaged)
   const novelPagedRef = useLatest(novelPaged)
+  const searchQueryRef = useLatest(searchQuery)
+
+  const illustDisplayedIdsRef = useRef<Set<number>>(new Set())
+  const mangaDisplayedIdsRef = useRef<Set<number>>(new Set())
+  const novelDisplayedIdsRef = useRef<Set<number>>(new Set())
+
+  useEffect(() => {
+    illustDisplayedIdsRef.current = new Set(illustPaged.items.map((i) => Number(i.id)))
+  }, [illustPaged.items])
+
+  useEffect(() => {
+    mangaDisplayedIdsRef.current = new Set(mangaPaged.items.map((i) => Number(i.id)))
+  }, [mangaPaged.items])
+
+  useEffect(() => {
+    novelDisplayedIdsRef.current = new Set(novelPaged.items.map((i) => Number(i.id)))
+  }, [novelPaged.items])
+
+  useEffect(() => {
+    return onHistoryEntryRecorded((entry) => {
+      const currentQuery = searchQueryRef.current.trim()
+
+      if (entry.kind === "illust") {
+        const isManga = entry.illustration.type === "manga"
+        const paged = isManga ? mangaPagedRef.current : illustPagedRef.current
+        const displayedSet = isManga ? mangaDisplayedIdsRef.current : illustDisplayedIdsRef.current
+        const illust = entry.illustration
+        cacheIllust(illust)
+
+        if (displayedSet.has(illust.id)) {
+          markHistoryRevisitDirty()
+        } else {
+          const item: HistoryIllustItem = {
+            ...illust,
+            viewedAt: entry.viewedAt,
+          }
+          if (!currentQuery || matchesHistoryQuery(item, currentQuery)) {
+            displayedSet.add(illust.id)
+            paged.prependItems([item])
+          }
+        }
+      } else if (entry.kind === "novel") {
+        const paged = novelPagedRef.current
+        const displayedSet = novelDisplayedIdsRef.current
+        const novel = entry.novel
+        cacheNovel(novel)
+
+        if (displayedSet.has(novel.id)) {
+          markHistoryRevisitDirty()
+        } else {
+          const item: HistoryNovelItem = {
+            ...novel,
+            viewedAt: entry.viewedAt,
+          }
+          if (!currentQuery || matchesHistoryQuery(item, currentQuery)) {
+            displayedSet.add(novel.id)
+            paged.prependItems([item])
+          }
+        }
+      }
+    })
+  }, [])
 
   useEffect(() => {
     const handleSettingsChange = () => {

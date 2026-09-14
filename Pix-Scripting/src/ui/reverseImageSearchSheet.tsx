@@ -33,7 +33,7 @@ import {
 import { cacheIllust } from "../store/illustCache"
 import { CachedImage } from "./components/CachedImage"
 import { EmptyView, ErrorView, LoadingView, presentExternalURL } from "./components"
-import { requestPixivRoute } from "./routeNavigation"
+import { requestPixivRoute } from "../store/routeNavigation"
 
 declare const Photos: any
 import { triggerHaptic } from "../platform/haptics"

@@ -29,7 +29,7 @@ import {
   novelCommentReplies,
 } from "../api/pixiv"
 import { session } from "../api/session"
-import { requestPixivRoute } from "./routeNavigation"
+import { requestPixivRoute } from "../store/routeNavigation"
 import { dedupeByID, mergeUniqueByID } from "./hooks"
 import type { PixivComment } from "../types"
 import {

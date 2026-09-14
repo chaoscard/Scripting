@@ -15,7 +15,7 @@ import {
   TagChip,
 } from "../components"
 import { triggerHaptic } from "../../platform/haptics"
-import { renderDestination } from "../routeNavigation"
+import { renderDestination } from "../../store/routeNavigation"
 
 export interface IllustMetaSectionProps {
   illust: PixivIllustration

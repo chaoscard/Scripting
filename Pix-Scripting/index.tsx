@@ -8,7 +8,7 @@ import {
   startBackgroundServices,
 } from "./src/bootstrap"
 import { triggerResumeSync } from "./src/store/historySync"
-import { requestPixivRoute } from "./src/ui/routeNavigation"
+import { requestPixivRoute } from "./src/store/routeNavigation"
 
 async function main() {
   try {

@@ -15,7 +15,7 @@ import {
   VStack,
   ZStack,
 } from "scripting"
-import { useIsCurrentTab } from "./routeNavigation"
+import { useIsCurrentTab } from "../store/routeNavigation"
 import {
   newIllustrations,
   newNovels,
@@ -35,7 +35,8 @@ import {
   isIllustContentVisible,
   isNovelContentVisible,
 } from "../store/contentFilter"
-import { destinationElement, requestPixivRoute, setActiveTabKind } from "./routeNavigation"
+import { requestPixivRoute, setActiveTabKind } from "../store/routeNavigation"
+import { destinationElement } from "./destinationElement"
 import { useDualRoute } from "./DualRouteContext"
 import {
   DockActionBar,

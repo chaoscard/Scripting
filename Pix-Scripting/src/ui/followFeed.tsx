@@ -15,7 +15,7 @@ import {
   VStack,
   ZStack,
 } from "scripting"
-import { useIsCurrentTab } from "./routeNavigation"
+import { useIsCurrentTab } from "../store/routeNavigation"
 import {
   followingFeed,
   followingNovels,
@@ -38,7 +38,8 @@ import {
 } from "../store/contentFilter"
 import { onWatchlistChanged } from "../store/bookmarkSync"
 import { recordWorkSeriesAssociation } from "../store/seriesCache"
-import { destinationElement, setActiveTabKind } from "./routeNavigation"
+import { setActiveTabKind } from "../store/routeNavigation"
+import { destinationElement } from "./destinationElement"
 import { useDualRoute } from "./DualRouteContext"
 import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
 import { useLatest, usePagedList, currentBatchSize, useLayoutMetrics } from "./hooks"

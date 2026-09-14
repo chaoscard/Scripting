@@ -33,7 +33,7 @@ import {
   saveImageToPixivAlbum,
   withAlbumKeepAlive,
 } from "../downloader"
-import { renderDestination } from "./routeNavigation"
+import { renderDestination } from "../store/routeNavigation"
 import { useAsyncGuard, useLayoutMetrics } from "./hooks"
 import { useExperimentalAmbientPalette } from "./ambient"
 import { IllustGalleryView } from "./IllustGalleryView"
@@ -51,7 +51,7 @@ import {
   TagChip,
 } from "./components"
 import { AvatarImage, CachedImage } from "./components/CachedImage"
-import { requestPixivRoute } from "./routeNavigation"
+import { requestPixivRoute } from "../store/routeNavigation"
 import {
   isPixivisionBookmarked,
   onPixivisionBookmarksChanged,

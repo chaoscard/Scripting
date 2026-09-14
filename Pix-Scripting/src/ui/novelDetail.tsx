@@ -118,7 +118,7 @@ import {
   type NovelReaderSettings,
 } from "../store/novelReaderSettings"
 import { cleanHtmlCaption } from "../api/aiService"
-import { renderDestination, requestPixivRoute } from "./routeNavigation"
+import { renderDestination, requestPixivRoute } from "../store/routeNavigation"
 
 const BLOCKED_BY_BLOCKLIST_MESSAGE = "该小说已被屏蔽（标签或作者在黑名单中）"
 const BLOCKED_BY_RESTRICTION_MESSAGE = "该小说被内容显示设置过滤，暂时无法显示"

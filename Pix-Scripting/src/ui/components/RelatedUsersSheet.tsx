@@ -12,7 +12,7 @@ import {
 import { userRelated } from "../../api/pixiv"
 import { session } from "../../api/session"
 import { loadSettings, onSettingsChanged } from "../../store/settings"
-import { requestPixivRoute } from "../routeNavigation"
+import { requestPixivRoute } from "../../store/routeNavigation"
 import {
   CONNECTION_CARD_HORIZONTAL_PADDING,
   CONNECTION_LIST_HORIZONTAL_PADDING,

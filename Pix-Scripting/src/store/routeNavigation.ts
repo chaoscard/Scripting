@@ -1,4 +1,4 @@
-import { NavigationDestination, useEffect, useState } from "scripting"
+import { useEffect, useState } from "scripting"
 
 // 解析与规范化各类路由格式（支持 URL 编码如 %3A、纯数字 ID、Pixiv 网页链接等）
 export function normalizeRoute(rawRoute: string): string {
@@ -81,16 +81,10 @@ export function renderDetailDestination(route: string): any {
   return activeDetailRouteRenderer ? activeDetailRouteRenderer(route) : null
 }
 
-export const destinationElement = (
-  <NavigationDestination>
-    {(path: string) => renderDestination(path)}
-  </NavigationDestination>
-)
-
 export type PixivRoute = string
 export type PixivTabKind = "discovery" | "ranking" | "following" | "search" | "more"
 
-type PixivRouteNavigator = (route: PixivRoute) => void
+export type PixivRouteNavigator = (route: PixivRoute) => void
 
 let activeTabKind: PixivTabKind = "discovery"
 const activeTabListeners = new Set<(tab: PixivTabKind) => void>()

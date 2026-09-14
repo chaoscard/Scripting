@@ -17,7 +17,7 @@ import {
   presentExternalURL,
   routeForDescriptionLink,
 } from "./formatUtils"
-import { requestPixivRoute } from "../routeNavigation"
+import { requestPixivRoute } from "../../store/routeNavigation"
 export function LinkedDescription(props: {
   html: string
   routeDestination?: (route: string) => any

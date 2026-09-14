@@ -46,7 +46,7 @@ import {
   getActiveTabKind,
   setPixivRouteNavigator,
   type PixivTabKind,
-} from "./routeNavigation"
+} from "../store/routeNavigation"
 import "./routes"
 
 function LaunchExperienceView() {

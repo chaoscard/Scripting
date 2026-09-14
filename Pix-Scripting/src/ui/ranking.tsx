@@ -18,7 +18,7 @@ import {
   ZStack,
 } from "scripting"
 
-import { useIsCurrentTab } from "./routeNavigation"
+import { useIsCurrentTab } from "../store/routeNavigation"
 import { triggerHaptic } from "../platform/haptics"
 import { nextIllustrations, nextNovels, novelRanking, ranking } from "../api/pixiv"
 import { cardThumbUrlOf, novelThumbUrlOf, prefetch } from "../image/imageLoader"
@@ -35,7 +35,8 @@ import {
   isIllustContentVisible,
   isNovelContentVisible,
 } from "../store/contentFilter"
-import { destinationElement, setActiveTabKind } from "./routeNavigation"
+import { setActiveTabKind } from "../store/routeNavigation"
+import { destinationElement } from "./destinationElement"
 import { useDualRoute } from "./DualRouteContext"
 import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
 import { useLatest, usePagedList, currentBatchSize, useLayoutMetrics } from "./hooks"

@@ -13,7 +13,7 @@ import type { PixivIllustration } from "../../types"
 import type { FollowRestrict } from "../../store/userFollow"
 import { cleanHtmlCaption } from "../../api/aiService"
 import { AvatarImage } from "../components/CachedImage"
-import { requestPixivRoute } from "../routeNavigation"
+import { requestPixivRoute } from "../../store/routeNavigation"
 import type { IllustAIMode } from "../aiSheet"
 
 declare const Pasteboard: any

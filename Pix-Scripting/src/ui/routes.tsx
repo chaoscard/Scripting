@@ -42,8 +42,9 @@ import {
 } from "./downloadManager"
 import { seedIllustFromWidgetPool, seedPixivisionFromWidgetPool } from "../store/widgetStore"
 import { seedIllustFromPixivCache } from "../image/imageLoader"
-import { normalizeRoute, setGlobalRouteRenderer, setDetailRouteRenderer } from "./routeNavigation"
-export { normalizeRoute, destinationElement } from "./routeNavigation"
+import { normalizeRoute, setGlobalRouteRenderer, setDetailRouteRenderer } from "../store/routeNavigation"
+export { normalizeRoute } from "../store/routeNavigation"
+export { destinationElement } from "./destinationElement"
 
 // 延迟引用 SettingsView 彻底解耦深层循环依赖
 function SettingsView(props: any) {
@@ -104,14 +105,17 @@ export function renderDestination(rawPage: string) {
   }
   if (page.startsWith("mangaSeries:")) {
     const id = parseID(page, "mangaSeries:")
+    notifyDetailDestinationRendered()
     if (id != null) return <SeriesView kind="manga" seriesID={id} />
   }
   if (page.startsWith("novelSeries:")) {
     const id = parseID(page, "novelSeries:")
+    notifyDetailDestinationRendered()
     if (id != null) return <SeriesView kind="novel" seriesID={id} />
   }
   if (page.startsWith("relatedIllust:")) {
     const id = parseID(page, "relatedIllust:")
+    notifyDetailDestinationRendered()
     if (id != null) return <RelatedIllustFeedView illustID={id} />
   }
   if (page.startsWith("tag:")) {

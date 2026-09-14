@@ -6,7 +6,7 @@ import { flushSearchHistory, prepareSearchHistoryStorage } from "./store/searchH
 import { flushSeriesCache, prepareSeriesCacheStorage } from "./store/seriesCache"
 import { startHistorySyncScheduler, triggerResumeSync } from "./store/historySync"
 import { populateWidgetPool, seedIllustFromWidgetPool, seedPixivisionFromWidgetPool } from "./store/widgetStore"
-import { normalizeRoute } from "./ui/routeNavigation"
+import { normalizeRoute } from "./store/routeNavigation"
 import { abortAllAITasks } from "./api/aiService"
 
 let stopSyncScheduler: (() => void) | null = null

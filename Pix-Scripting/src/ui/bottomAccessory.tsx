@@ -58,7 +58,7 @@ import {
   presentPixivisionDownloadActionSheet,
 } from "../downloader"
 import { imageUrlOf } from "../image/imageLoader"
-import { requestPixivRoute } from "./routeNavigation"
+import { requestPixivRoute } from "../store/routeNavigation"
 import { renderTagContextMenu } from "./components/TagChip"
 import {
   getCustomRankingModesForKind,

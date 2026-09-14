@@ -8,7 +8,7 @@ import {
 } from "scripting"
 import type { PixivIllustration } from "../../types"
 import type { FollowRestrict } from "../../store/userFollow"
-import { requestPixivRoute } from "../routeNavigation"
+import { requestPixivRoute } from "../../store/routeNavigation"
 
 export interface IllustQuickActionButtonProps {
   illust: PixivIllustration | null

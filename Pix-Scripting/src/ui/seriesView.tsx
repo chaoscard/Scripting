@@ -66,7 +66,7 @@ import {
   IllustFlowFeed,
   NovelCard,
 } from "./components"
-import { renderDestination, requestPixivRoute } from "./routeNavigation"
+import { renderDestination, requestPixivRoute } from "../store/routeNavigation"
 import {
   currentBatchSize,
   useLatest,

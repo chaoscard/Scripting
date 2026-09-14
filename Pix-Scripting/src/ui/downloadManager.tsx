@@ -46,14 +46,14 @@ import {
 } from "../downloader/downloadTaskManager"
 import { appToolbar } from "./components"
 import { useLayoutMetrics } from "./hooks"
-import { destinationElement } from "./routeNavigation"
+import { destinationElement } from "./destinationElement"
 import { loadSettings, onSettingsChanged, updateSettings } from "../store/settings"
 import {
   DockActionBar,
   useRegisterBottomAccessory,
   type DockActionItem,
 } from "./bottomAccessory"
-import { requestPixivRoute } from "./routeNavigation"
+import { requestPixivRoute } from "../store/routeNavigation"
 
 declare const Dialog: any
 import { triggerHaptic } from "../platform/haptics"

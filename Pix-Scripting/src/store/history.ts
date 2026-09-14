@@ -107,61 +107,46 @@ export function getHistoryLimitForKind(kind: HistoryContentKind): number {
 }
 
 let isHistoryDirty = false
-let isDetailDestinationActive = false
+let isRevisitDirty = false
 
-interface HistorySessionOrigin {
-  kind: "illust" | "novel"
-  id: number
+const entryRecordedListeners = new Set<(entry: HistoryEntry) => void>()
+
+export function onHistoryEntryRecorded(fn: (entry: HistoryEntry) => void): () => void {
+  entryRecordedListeners.add(fn)
+  return () => {
+    entryRecordedListeners.delete(fn)
+  }
 }
 
-let historySessionOrigin: HistorySessionOrigin | null = null
-let hasDiscoveredNewWorksInSession = false
+let isViewingHistoryDetail = false
 
-export function notifyDetailDestinationRendered(kind?: "illust" | "novel", id?: number): void {
-  isDetailDestinationActive = true
-  if (kind && id) {
-    if (historySessionOrigin === null) {
-      historySessionOrigin = { kind, id }
-      hasDiscoveredNewWorksInSession = false
-    } else if (historySessionOrigin.kind !== kind || historySessionOrigin.id !== id) {
-      hasDiscoveredNewWorksInSession = true
-    }
-  }
+export function notifyDetailDestinationRendered(_kind?: "illust" | "novel", _id?: number): void {
+  isViewingHistoryDetail = true
+}
+
+export function checkAndConsumeViewingHistoryDetail(): boolean {
+  const wasViewing = isViewingHistoryDetail
+  isViewingHistoryDetail = false
+  return wasViewing
 }
 
 export function resetHistorySessionOrigin(): void {
-  historySessionOrigin = null
-  hasDiscoveredNewWorksInSession = false
-  isDetailDestinationActive = false
-}
-
-export function checkAndResetHistoryDirty(): boolean {
-  const hadNewDiscovery = hasDiscoveredNewWorksInSession
-  const wasDetailActive = isDetailDestinationActive
-
-  historySessionOrigin = null
-  hasDiscoveredNewWorksInSession = false
-  isDetailDestinationActive = false
-
-  if (hadNewDiscovery) {
-    isHistoryDirty = false
-    return true
-  }
-
-  if (wasDetailActive) {
-    return false
-  }
-
-  if (isHistoryDirty) {
-    isHistoryDirty = false
-    return true
-  }
-
-  return false
+  isViewingHistoryDetail = false
 }
 
 export function markHistoryDirty(): void {
   isHistoryDirty = true
+}
+
+export function markHistoryRevisitDirty(): void {
+  isRevisitDirty = true
+}
+
+export function checkAndResetHistoryDirty(): boolean {
+  const dirty = isHistoryDirty || isRevisitDirty
+  isHistoryDirty = false
+  isRevisitDirty = false
+  return dirty
 }
 
 export function getHistoryVersion(): number {
@@ -583,33 +568,35 @@ export function historyKindCount(kind: HistoryContentKind): number {
 
 export function recordHistory(illustration: PixivIllustration): void {
   if (!loadSettings().recordHistory) return
-  if (historySessionOrigin !== null) {
-    if (historySessionOrigin.kind !== "illust" || historySessionOrigin.id !== illustration.id) {
-      hasDiscoveredNewWorksInSession = true
-    }
-  }
   const isManga = illustration.type === "manga"
   const kind: HistoryContentKind = isManga ? "manga" : "illustration"
   const list = [...(loadKindEntries(kind) as IllustrationHistoryEntry[])]
   const index = list.findIndex((item) => item.illustration.id === illustration.id)
   if (index >= 0) list.splice(index, 1)
-  list.unshift({ kind: "illust", illustration, viewedAt: Date.now() })
+  const entry: IllustrationHistoryEntry = { kind: "illust", illustration, viewedAt: Date.now() }
+  list.unshift(entry)
   commitKind(kind, list, false)
+  for (const fn of entryRecordedListeners) {
+    try {
+      fn(entry)
+    } catch {}
+  }
 }
 
 export function recordNovelHistory(novel: PixivNovel): void {
   if (!loadSettings().recordHistory) return
-  if (historySessionOrigin !== null) {
-    if (historySessionOrigin.kind !== "novel" || historySessionOrigin.id !== novel.id) {
-      hasDiscoveredNewWorksInSession = true
-    }
-  }
   const kind: HistoryContentKind = "novel"
   const list = [...(loadKindEntries(kind) as NovelHistoryEntry[])]
   const index = list.findIndex((item) => item.novel.id === novel.id)
   if (index >= 0) list.splice(index, 1)
-  list.unshift({ kind: "novel", novel, viewedAt: Date.now() })
+  const entry: NovelHistoryEntry = { kind: "novel", novel, viewedAt: Date.now() }
+  list.unshift(entry)
   commitKind(kind, list, false)
+  for (const fn of entryRecordedListeners) {
+    try {
+      fn(entry)
+    } catch {}
+  }
 }
 
 export function updateHistoryBookmark(id: number, isBookmarked: boolean): void {

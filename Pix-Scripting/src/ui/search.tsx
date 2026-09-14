@@ -66,11 +66,11 @@ import {
   removeSearchHistory,
 } from "../store/searchHistory"
 import {
-  destinationElement,
   requestPixivRoute,
   setActiveTabKind,
   useIsCurrentTab,
-} from "./routeNavigation"
+} from "../store/routeNavigation"
+import { destinationElement } from "./destinationElement"
 import { triggerHaptic } from "../platform/haptics"
 import {
   currentBatchSize,
