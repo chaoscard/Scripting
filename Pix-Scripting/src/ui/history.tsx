@@ -33,6 +33,7 @@ import {
   onHistoryChanged,
   refreshHistoryFromCloud,
   removeHistoryEntry,
+  resetHistorySessionOrigin,
   type HistoryContentKind,
   type HistoryEntry,
 } from "../store/history"
@@ -167,9 +168,27 @@ export function HistoryView() {
     () => getLastActiveAmbientImageUrl()
   )
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
-  const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
+  const refreshHandlersRef = useRef<Map<HistoryKind, () => Promise<void>>>(new Map())
   const [isAnalyticsPresented, setIsAnalyticsPresented] = useState(false)
   const { isSplitViewActive, openDetailRoute } = useDualRoute()
+
+  const refreshAllFeeds = useCallback(async () => {
+    const activeHandler = refreshHandlersRef.current.get(kind)
+    if (activeHandler) {
+      await activeHandler()
+    }
+    for (const [k, handler] of refreshHandlersRef.current.entries()) {
+      if (k !== kind) {
+        void handler()
+      }
+    }
+  }, [kind])
+
+  useEffect(() => {
+    return () => {
+      resetHistorySessionOrigin()
+    }
+  }, [])
 
   const handleOpenAnalytics = useCallback(() => {
     triggerHaptic("selection")
@@ -216,7 +235,7 @@ export function HistoryView() {
 
   function clearCurrentKind() {
     clearHistoryKind(kind)
-    void refreshHandlerRef.current()
+    void refreshAllFeeds()
   }
 
   return (
@@ -227,7 +246,7 @@ export function HistoryView() {
       background={ambientBackground}
       onAppear={() => {
         if (checkAndResetHistoryDirty()) {
-          void refreshHandlerRef.current()
+          void refreshAllFeeds()
         }
       }}
       sheet={{
@@ -277,7 +296,7 @@ export function HistoryView() {
         zIndex={kind === "illustration" ? 1 : 0}
         allowsHitTesting={kind === "illustration"}
       >
-        <RefreshableScrollView refreshable={() => refreshHandlerRef.current()}>
+        <RefreshableScrollView refreshable={() => refreshAllFeeds()}>
           <VStack alignment="leading" spacing={8} frame={{ minHeight: 500, maxWidth: "infinity" }}>
             <HistoryFeed
               kind="illustration"
@@ -286,7 +305,7 @@ export function HistoryView() {
                 if (kind === "illustration") setAmbientImageUrl(url)
               }}
               onRegisterRefresh={(fn) => {
-                if (kind === "illustration") refreshHandlerRef.current = fn
+                refreshHandlersRef.current.set("illustration", fn)
               }}
             />
           </VStack>
@@ -301,7 +320,7 @@ export function HistoryView() {
           zIndex={kind === "manga" ? 1 : 0}
           allowsHitTesting={kind === "manga"}
         >
-          <RefreshableScrollView refreshable={() => refreshHandlerRef.current()}>
+          <RefreshableScrollView refreshable={() => refreshAllFeeds()}>
             <VStack alignment="leading" spacing={8} frame={{ minHeight: 500, maxWidth: "infinity" }}>
               <HistoryFeed
                 kind="manga"
@@ -310,7 +329,7 @@ export function HistoryView() {
                   if (kind === "manga") setAmbientImageUrl(url)
                 }}
                 onRegisterRefresh={(fn) => {
-                  if (kind === "manga") refreshHandlerRef.current = fn
+                  refreshHandlersRef.current.set("manga", fn)
                 }}
               />
             </VStack>
@@ -326,7 +345,7 @@ export function HistoryView() {
           zIndex={kind === "novel" ? 1 : 0}
           allowsHitTesting={kind === "novel"}
         >
-          <RefreshableScrollView refreshable={() => refreshHandlerRef.current()}>
+          <RefreshableScrollView refreshable={() => refreshAllFeeds()}>
             <VStack alignment="leading" spacing={8} frame={{ minHeight: 500, maxWidth: "infinity" }}>
               <HistoryFeed
                 kind="novel"
@@ -335,7 +354,7 @@ export function HistoryView() {
                   if (kind === "novel") setAmbientImageUrl(url)
                 }}
                 onRegisterRefresh={(fn) => {
-                  if (kind === "novel") refreshHandlerRef.current = fn
+                  refreshHandlersRef.current.set("novel", fn)
                 }}
               />
             </VStack>

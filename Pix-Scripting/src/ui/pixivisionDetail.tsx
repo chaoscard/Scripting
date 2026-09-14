@@ -33,7 +33,7 @@ import {
   saveImageToPixivAlbum,
   withAlbumKeepAlive,
 } from "../downloader"
-import { renderDestination } from "./routes"
+import { renderDestination } from "./routeNavigation"
 import { useAsyncGuard, useLayoutMetrics } from "./hooks"
 import { useExperimentalAmbientPalette } from "./ambient"
 import { IllustGalleryView } from "./IllustGalleryView"

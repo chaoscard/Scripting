@@ -69,7 +69,7 @@ export function useNovelExperimentalAmbientPalette(
   }, [])
 
   useEffect(() => {
-    if (!ambientEnabled || !effectiveImageUrl) {
+    if (!effectiveImageUrl) {
       setAmbientPalette(null)
       return
     }
@@ -86,10 +86,10 @@ export function useNovelExperimentalAmbientPalette(
     return () => {
       isActive = false
     }
-  }, [effectiveImageUrl, isDark, ambientEnabled, ambientIntensity, novelAlgorithm])
+  }, [effectiveImageUrl, isDark, ambientIntensity, novelAlgorithm])
 
   const synchronousPalette =
-    ambientEnabled && effectiveImageUrl
+    effectiveImageUrl
       ? getCachedIllustAmbientPalette(effectiveImageUrl, isDark, ambientIntensity)
       : null
   const effectivePalette = ambientPalette ?? synchronousPalette
@@ -118,10 +118,10 @@ export function useNovelExperimentalAmbientPalette(
       : undefined
 
   useEffect(() => {
-    if (active && ambientEnabled && imageUrl && effectivePalette) {
+    if (active && imageUrl) {
       recordActiveAmbientImageUrl(imageUrl)
     }
-  }, [active, ambientEnabled, imageUrl, effectivePalette])
+  }, [active, imageUrl])
 
   return {
     ambientEnabled,

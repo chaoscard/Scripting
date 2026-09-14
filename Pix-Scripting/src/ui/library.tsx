@@ -50,7 +50,10 @@ import {
   IllustFlowFeed,
   NovelCard,
   RefreshableScrollView,
+  BookmarkTagFilterBar,
 } from "./components"
+
+export { BookmarkTagFilterBar as BookmarkTags }
 import { requestPixivRoute } from "./routeNavigation"
 import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
 import { PixivisionBookmarksContent } from "./pixivisionBookmarks"
@@ -268,37 +271,7 @@ function libraryToolbar(props: {
   }
 }
 
-export function BookmarkTags(props: {
-  tags: PixivBookmarkTag[]
-  activeTag: string | null
-  onTagChange: (tag: string | null) => void
-}) {
-  if (props.tags.length === 0) return null
-  return (
-    <ScrollView axes="horizontal">
-      <HStack spacing={8} padding={{ horizontal: 14 }}>
-        {props.activeTag ? (
-          <Button
-            title={`✕ ${props.activeTag}`}
-            buttonStyle="glass"
-            controlSize="small"
-            action={() => props.onTagChange(null)}
-          />
-        ) : null}
-        {props.tags.slice(0, MAX_TAG_CHIPS).map((tag) => (
-          <Button
-            key={tag.name}
-            title={`${tag.name} (${tag.count})`}
-            buttonStyle={props.activeTag === tag.name ? "glassProminent" : "glass"}
-            tint={props.activeTag === tag.name ? "#0096FA" : undefined}
-            controlSize="small"
-            action={() => props.onTagChange(tag.name)}
-          />
-        ))}
-      </HStack>
-    </ScrollView>
-  )
-}
+// 收藏标签筛选已由 components/BookmarkTagFilterBar 统一流式精致排版承载
 
 
 
@@ -430,7 +403,11 @@ function LibraryFeed(props: {
   if (kind === "illustration") {
     return (
       <VStack alignment="leading" spacing={10}>
-        <BookmarkTags tags={illustTags} activeTag={illustActiveTag} onTagChange={setIllustActiveTag} />
+        <BookmarkTagFilterBar
+          tags={illustTags}
+          selectedTag={illustActiveTag}
+          onSelectTag={setIllustActiveTag}
+        />
         {illustPaged.initialLoading ? (
           <LoadingView />
         ) : illustPaged.error && illustPaged.items.length === 0 ? (
@@ -461,7 +438,11 @@ function LibraryFeed(props: {
 
   return (
     <VStack alignment="leading" spacing={10}>
-      <BookmarkTags tags={novelTags} activeTag={novelActiveTag} onTagChange={setNovelActiveTag} />
+      <BookmarkTagFilterBar
+        tags={novelTags}
+        selectedTag={novelActiveTag}
+        onSelectTag={setNovelActiveTag}
+      />
       {novelPaged.initialLoading ? (
         <LoadingView />
       ) : novelPaged.error && novelPaged.items.length === 0 ? (

@@ -35,9 +35,8 @@ import {
   isIllustContentVisible,
   isNovelContentVisible,
 } from "../store/contentFilter"
-import { destinationElement } from "./routes"
+import { destinationElement, setActiveTabKind } from "./routeNavigation"
 import { useDualRoute } from "./DualRouteContext"
-import { setActiveTabKind } from "./routeNavigation"
 import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
 import { useLatest, usePagedList, currentBatchSize, useLayoutMetrics } from "./hooks"
 import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl } from "./ambient"

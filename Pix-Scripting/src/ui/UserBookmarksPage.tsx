@@ -33,7 +33,6 @@ import { useAsyncGuard, useLatest, usePagedList, currentBatchSize } from "./hook
 import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl } from "./ambient"
 import type { PixivBookmarkTag, PixivIllustration, PixivNovel } from "../types"
 import {
-  BookmarkTags,
   filterIllustrationBookmarks,
   filterNovelBookmarks,
 } from "./library"
@@ -45,6 +44,7 @@ import {
   IllustFlowFeed,
   NovelCard,
   RefreshableScrollView,
+  BookmarkTagFilterBar,
 } from "./components"
 import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
 
@@ -301,7 +301,11 @@ function UserBookmarksFeed(props: {
   if (kind === "illustration") {
     return (
       <VStack alignment="leading" spacing={10}>
-        <BookmarkTags tags={tags} activeTag={activeTag} onTagChange={setActiveTag} />
+        <BookmarkTagFilterBar
+          tags={tags}
+          selectedTag={activeTag}
+          onSelectTag={setActiveTag}
+        />
         {illustPaged.initialLoading ? (
           <LoadingView />
         ) : illustPaged.error && illustPaged.items.length === 0 ? (
@@ -329,7 +333,11 @@ function UserBookmarksFeed(props: {
 
   return (
     <VStack alignment="leading" spacing={10}>
-      <BookmarkTags tags={tags} activeTag={activeTag} onTagChange={setActiveTag} />
+      <BookmarkTagFilterBar
+        tags={tags}
+        selectedTag={activeTag}
+        onSelectTag={setActiveTag}
+      />
       {novelPaged.initialLoading ? (
         <LoadingView />
       ) : novelPaged.error && novelPaged.items.length === 0 ? (

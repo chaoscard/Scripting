@@ -184,6 +184,13 @@ export function renderIllustToolbarActions(props: IllustToolbarActionsProps): Vi
           action={() => onOpenAI("vision")}
         />
       </Menu>
+      {Boolean(resolvedSeriesID) && (
+        <Button
+          title="系列"
+          systemImage="books.vertical"
+          action={() => void requestPixivRoute(`mangaSeries:${resolvedSeriesID}`)}
+        />
+      )}
       <Button
         title="分享"
         systemImage="square.and.arrow.up"

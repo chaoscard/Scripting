@@ -12,6 +12,7 @@ import {
   useRef,
   useState,
   VStack,
+  ZStack,
 } from "scripting"
 import {
   downloadEntireMangaSeries,
@@ -65,15 +66,14 @@ import {
   IllustFlowFeed,
   NovelCard,
 } from "./components"
-import { renderDestination } from "./routes"
-import { requestPixivRoute } from "./routeNavigation"
+import { renderDestination, requestPixivRoute } from "./routeNavigation"
 import {
   currentBatchSize,
   useLatest,
   usePagedList,
   useSeriesWatchlist,
 } from "./hooks"
-import { useUserAmbientPalette, getLastActiveAmbientImageUrl } from "./ambient"
+import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl } from "./ambient"
 
 type SeriesKind = "manga" | "novel"
 type SeriesWorkItem = PixivIllustration | PixivNovel
@@ -230,8 +230,8 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
   const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
   const isAppleMusic = pageLayout === "appleMusic"
 
-  const { ambientBackground } = useUserAmbientPalette(
-    coverPreviewUrl || coverUrl || getLastActiveAmbientImageUrl()
+  const { ambientBackground } = useExperimentalAmbientPalette(
+    coverPreviewUrl || coverUrl
   )
 
   // 全量已获取未过滤的原始数据映射池（按自然正序 1..N 存储）
@@ -486,34 +486,6 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
     await paged.refresh()
   }
 
-  if (paged.initialLoading) {
-    return (
-      <ScrollView
-        navigationTitle=""
-        navigationBarTitleDisplayMode="inline"
-        toolbarBackground="clear"
-        toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
-        scrollContentBackground="hidden"
-      >
-        <LoadingView />
-      </ScrollView>
-    )
-  }
-
-  if (paged.error) {
-    return (
-      <ScrollView
-        navigationTitle=""
-        navigationBarTitleDisplayMode="inline"
-        toolbarBackground="clear"
-        toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
-        scrollContentBackground="hidden"
-      >
-        <ErrorView message={paged.error} onRetry={handleRefresh} />
-      </ScrollView>
-    )
-  }
-
   const shareUrl = kind === "novel"
     ? `https://www.pixiv.net/novel/series/${seriesID}`
     : (author?.id
@@ -614,133 +586,160 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
       ]
 
   return (
-    <ScrollView
+    <ZStack
       navigationTitle=""
       navigationBarTitleDisplayMode="inline"
       toolbarBackground="clear"
       toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
-      scrollContentBackground="hidden"
-      ignoresSafeArea={{ edges: ["top", "bottom"] }}
-      background={ambientBackground}
-      refreshable={handleRefresh}
-      toolbar={{
-        topBarTrailing: trailingButtons,
-      }}
+      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
     >
-      <VStack alignment="leading" spacing={0} frame={{ maxWidth: "infinity" }} padding={{ bottom: isAppleMusic ? 70 : 16 }}>
-        {/* 沉浸式顶部背景图与居中悬浮胶囊标题 */}
-        <ImmersiveHeaderBanner url={coverUrl} previewUrl={coverPreviewUrl}>
-          <HStack
+      {/* 1. 底层：第 0 毫秒物理全屏垫底 */}
+      {ambientBackground}
+
+      {/* 2. 顶层：透明滚动视图 */}
+      <ScrollView
+        scrollContentBackground="hidden"
+        toolbarBackground="clear"
+        toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+        ignoresSafeArea={{ edges: ["top", "bottom"] }}
+        refreshable={handleRefresh}
+        toolbar={{
+          topBarTrailing: trailingButtons,
+        }}
+      >
+        {paged.initialLoading ? (
+          <VStack
             alignment="center"
-            padding={{ horizontal: 20, vertical: 9 }}
-            glassEffect={{ type: "capsule", style: "continuous" }}
-            clipShape={{ type: "capsule", style: "continuous" }}
-            shadow={{ color: "#00000028", radius: 10, y: 4 }}
-            offset={{ x: 0, y: 19 }}
+            frame={{ maxWidth: "infinity", minHeight: 400 }}
+            padding={{ top: 120 }}
           >
-            <Text
-              font="headline"
-              fontWeight="bold"
-              multilineTextAlignment="center"
-              lineLimit={2}
-            >
-              {title}
-            </Text>
-          </HStack>
-        </ImmersiveHeaderBanner>
+            <LoadingView />
+          </VStack>
+        ) : paged.error && paged.items.length === 0 ? (
+          <VStack
+            alignment="center"
+            frame={{ maxWidth: "infinity", minHeight: 400 }}
+            padding={{ top: 120 }}
+          >
+            <ErrorView message={paged.error} onRetry={handleRefresh} />
+          </VStack>
+        ) : (
+          <VStack alignment="leading" spacing={0} frame={{ maxWidth: "infinity" }} padding={{ bottom: isAppleMusic ? 70 : 16 }}>
+            {/* 沉浸式顶部背景图与居中悬浮胶囊标题 */}
+            <ImmersiveHeaderBanner url={coverUrl} previewUrl={coverPreviewUrl}>
+              <HStack
+                alignment="center"
+                padding={{ horizontal: 20, vertical: 9 }}
+                glassEffect={{ type: "capsule", style: "continuous" }}
+                clipShape={{ type: "capsule", style: "continuous" }}
+                shadow={{ color: "#00000028", radius: 10, y: 4 }}
+                offset={{ x: 0, y: 19 }}
+              >
+                <Text
+                  font="headline"
+                  fontWeight="bold"
+                  multilineTextAlignment="center"
+                  lineLimit={2}
+                >
+                  {title}
+                </Text>
+              </HStack>
+            </ImmersiveHeaderBanner>
 
-        {/* 系列信息 */}
-        <VStack
-          alignment="center"
-          spacing={6}
-          padding={{ top: 28, horizontal: 16, bottom: 8 }}
-          frame={{ maxWidth: "infinity" }}
-        >
-          {workCount != null ? (
-            <Text
-              font="caption"
-              foregroundStyle="secondaryLabel"
-              multilineTextAlignment="center"
-              frame={{ maxWidth: "infinity", alignment: "center" }}
-            >
-              {`共 ${workCount} 话`}
-            </Text>
-          ) : null}
-
-          {caption.trim() ? (
+            {/* 系列信息 */}
             <VStack
-              alignment="leading"
+              alignment="center"
+              spacing={6}
+              padding={{ top: 28, horizontal: 16, bottom: 8 }}
               frame={{ maxWidth: "infinity" }}
-              padding={{ top: 6 }}
             >
-              <ExpandableIntroduction
-                caption={caption}
-                routeDestination={renderDestination}
-              />
-            </VStack>
-          ) : null}
-        </VStack>
+              {workCount != null ? (
+                <Text
+                  font="caption"
+                  foregroundStyle="secondaryLabel"
+                  multilineTextAlignment="center"
+                  frame={{ maxWidth: "infinity", alignment: "center" }}
+                >
+                  {`共 ${workCount} 话`}
+                </Text>
+              ) : null}
 
-        {/* 章节列表分流 */}
-        {kind === "novel" ? (
-          <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10, top: 4 }}>
-            {paged.items.length === 0 && !paged.initialLoading ? (
-              <EmptyView
-                text={
-                  paged.hasFilteredContent
-                    ? "当前页面部分小说被内容显示设置过滤，暂时无法显示"
-                    : "暂无可显示的小说章节"
-                }
-                systemImage={paged.hasFilteredContent ? "eye.slash" : "book"}
-              />
+              {caption.trim() ? (
+                <VStack
+                  alignment="leading"
+                  frame={{ maxWidth: "infinity" }}
+                  padding={{ top: 6 }}
+                >
+                  <ExpandableIntroduction
+                    caption={caption}
+                    routeDestination={renderDestination}
+                  />
+                </VStack>
+              ) : null}
+            </VStack>
+
+            {/* 章节列表分流 */}
+            {kind === "novel" ? (
+              <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10, top: 4 }}>
+                {paged.items.length === 0 && !paged.initialLoading ? (
+                  <EmptyView
+                    text={
+                      paged.hasFilteredContent
+                        ? "当前页面部分小说被内容显示设置过滤，暂时无法显示"
+                        : "暂无可显示的小说章节"
+                    }
+                    systemImage={paged.hasFilteredContent ? "eye.slash" : "book"}
+                  />
+                ) : (
+                  <>
+                    {(paged.items as PixivNovel[]).map((novel, index) => (
+                      <NovelCard key={novel.id} novel={novel} priority={index} />
+                    ))}
+                    {paged.items.length > 0 ? (
+                      <LoadMoreTrigger
+                        anchor={paged.items[paged.items.length - 1].id}
+                        onLoadMore={paged.loadMore}
+                        hasMore={paged.hasMore}
+                        isLoading={paged.loadingMore}
+                      />
+                    ) : null}
+                  </>
+                )}
+              </LazyVStack>
             ) : (
-              <>
-                {(paged.items as PixivNovel[]).map((novel, index) => (
-                  <NovelCard key={novel.id} novel={novel} priority={index} />
-                ))}
-                {paged.items.length > 0 ? (
-                  <LoadMoreTrigger
-                    anchor={paged.items[paged.items.length - 1].id}
+              <VStack alignment="leading" spacing={8} padding={{ top: 4 }} frame={{ maxWidth: "infinity" }}>
+                {paged.items.length === 0 && !paged.initialLoading ? (
+                  <EmptyView
+                    text={
+                      paged.hasFilteredContent
+                        ? "当前页面部分作品被内容显示设置过滤，暂时无法显示"
+                        : "暂无可显示的漫画章节"
+                    }
+                    systemImage={paged.hasFilteredContent ? "eye.slash" : "photo.on.rectangle"}
+                  />
+                ) : (
+                  <IllustFlowFeed
+                    items={paged.items as PixivIllustration[]}
                     onLoadMore={paged.loadMore}
                     hasMore={paged.hasMore}
                     isLoading={paged.loadingMore}
-                  />
-                ) : null}
-              </>
-            )}
-          </LazyVStack>
-        ) : (
-          <VStack alignment="leading" spacing={8} padding={{ top: 4 }} frame={{ maxWidth: "infinity" }}>
-            {paged.items.length === 0 && !paged.initialLoading ? (
-              <EmptyView
-                text={
-                  paged.hasFilteredContent
-                    ? "当前页面部分作品被内容显示设置过滤，暂时无法显示"
-                    : "暂无可显示的漫画章节"
-                }
-                systemImage={paged.hasFilteredContent ? "eye.slash" : "photo.on.rectangle"}
-              />
-            ) : (
-              <IllustFlowFeed
-                items={paged.items as PixivIllustration[]}
-                onLoadMore={paged.loadMore}
-                hasMore={paged.hasMore}
-                isLoading={paged.loadingMore}
-                cornerBadgeOf={(illust, index) => (
-                  <ImageNumberBadge
-                    number={
-                      illust.episode_number ??
-                      (isAscending
-                        ? index + 1
-                        : (workCount ?? rawMappedItemsRef.current.length) - index)
-                    }
+                    cornerBadgeOf={(illust, index) => (
+                      <ImageNumberBadge
+                        number={
+                          illust.episode_number ??
+                          (isAscending
+                            ? index + 1
+                            : (workCount ?? rawMappedItemsRef.current.length) - index)
+                        }
+                      />
+                    )}
                   />
                 )}
-              />
+              </VStack>
             )}
           </VStack>
         )}
-      </VStack>
-    </ScrollView>
+      </ScrollView>
+    </ZStack>
   )
 }

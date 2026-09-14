@@ -109,19 +109,54 @@ export function getHistoryLimitForKind(kind: HistoryContentKind): number {
 let isHistoryDirty = false
 let isDetailDestinationActive = false
 
-export function notifyDetailDestinationRendered(): void {
+interface HistorySessionOrigin {
+  kind: "illust" | "novel"
+  id: number
+}
+
+let historySessionOrigin: HistorySessionOrigin | null = null
+let hasDiscoveredNewWorksInSession = false
+
+export function notifyDetailDestinationRendered(kind?: "illust" | "novel", id?: number): void {
   isDetailDestinationActive = true
+  if (kind && id) {
+    if (historySessionOrigin === null) {
+      historySessionOrigin = { kind, id }
+      hasDiscoveredNewWorksInSession = false
+    } else if (historySessionOrigin.kind !== kind || historySessionOrigin.id !== id) {
+      hasDiscoveredNewWorksInSession = true
+    }
+  }
+}
+
+export function resetHistorySessionOrigin(): void {
+  historySessionOrigin = null
+  hasDiscoveredNewWorksInSession = false
+  isDetailDestinationActive = false
 }
 
 export function checkAndResetHistoryDirty(): boolean {
-  if (isDetailDestinationActive) {
-    isDetailDestinationActive = false
+  const hadNewDiscovery = hasDiscoveredNewWorksInSession
+  const wasDetailActive = isDetailDestinationActive
+
+  historySessionOrigin = null
+  hasDiscoveredNewWorksInSession = false
+  isDetailDestinationActive = false
+
+  if (hadNewDiscovery) {
+    isHistoryDirty = false
+    return true
+  }
+
+  if (wasDetailActive) {
     return false
   }
+
   if (isHistoryDirty) {
     isHistoryDirty = false
     return true
   }
+
   return false
 }
 
@@ -548,6 +583,11 @@ export function historyKindCount(kind: HistoryContentKind): number {
 
 export function recordHistory(illustration: PixivIllustration): void {
   if (!loadSettings().recordHistory) return
+  if (historySessionOrigin !== null) {
+    if (historySessionOrigin.kind !== "illust" || historySessionOrigin.id !== illustration.id) {
+      hasDiscoveredNewWorksInSession = true
+    }
+  }
   const isManga = illustration.type === "manga"
   const kind: HistoryContentKind = isManga ? "manga" : "illustration"
   const list = [...(loadKindEntries(kind) as IllustrationHistoryEntry[])]
@@ -559,6 +599,11 @@ export function recordHistory(illustration: PixivIllustration): void {
 
 export function recordNovelHistory(novel: PixivNovel): void {
   if (!loadSettings().recordHistory) return
+  if (historySessionOrigin !== null) {
+    if (historySessionOrigin.kind !== "novel" || historySessionOrigin.id !== novel.id) {
+      hasDiscoveredNewWorksInSession = true
+    }
+  }
   const kind: HistoryContentKind = "novel"
   const list = [...(loadKindEntries(kind) as NovelHistoryEntry[])]
   const index = list.findIndex((item) => item.novel.id === novel.id)

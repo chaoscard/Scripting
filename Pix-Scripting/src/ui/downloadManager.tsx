@@ -46,7 +46,7 @@ import {
 } from "../downloader/downloadTaskManager"
 import { appToolbar } from "./components"
 import { useLayoutMetrics } from "./hooks"
-import { destinationElement } from "./routes"
+import { destinationElement } from "./routeNavigation"
 import { loadSettings, onSettingsChanged, updateSettings } from "../store/settings"
 import {
   DockActionBar,

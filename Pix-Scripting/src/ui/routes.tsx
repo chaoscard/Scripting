@@ -78,8 +78,8 @@ function decodeTag(value: string): string {
 export function renderDestination(rawPage: string) {
   const page = normalizeRoute(rawPage)
   if (page.startsWith("illust:")) {
-    notifyDetailDestinationRendered()
     const id = parseID(page, "illust:")
+    notifyDetailDestinationRendered("illust", id ?? undefined)
     if (id != null) {
       seedIllustFromWidgetPool(id)
       seedIllustFromPixivCache(id)
@@ -98,8 +98,8 @@ export function renderDestination(rawPage: string) {
     if (id != null) return <UserDetailView userID={id} />
   }
   if (page.startsWith("novel:")) {
-    notifyDetailDestinationRendered()
     const id = parseID(page, "novel:")
+    notifyDetailDestinationRendered("novel", id ?? undefined)
     if (id != null) return <NovelDetailView key={`novel-${id}`} novelID={id} />
   }
   if (page.startsWith("mangaSeries:")) {

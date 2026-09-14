@@ -13,7 +13,7 @@ import {
 import type { PixivUserDetail, PixivWebUserDetail } from "../types"
 import type { UserAmbientPalette } from "../image/colorExtractor"
 import { AvatarImage, CachedImage, ExpandableIntroduction } from "./components"
-import { renderDestination } from "./routes"
+import { renderDestination } from "./routeNavigation"
 
 interface SocialLinkItem {
   id: string

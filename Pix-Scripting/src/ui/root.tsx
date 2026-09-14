@@ -47,6 +47,7 @@ import {
   setPixivRouteNavigator,
   type PixivTabKind,
 } from "./routeNavigation"
+import "./routes"
 
 function LaunchExperienceView() {
   const bgImage = useMemo(() => {

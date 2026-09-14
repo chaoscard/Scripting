@@ -70,7 +70,7 @@ import {
 import { getCachedIllustBookmark } from "../../store/bookmarkSync"
 import { getSeriesByWorkID, recordWorkSeriesAssociation } from "../../store/seriesCache"
 import { useAsyncGuard, useIllustBookmark, useLatest, useOpenBookmarkDetailListener, useOpenRelatedUsersListener } from "../hooks"
-import { renderAmbientBackground, recordActiveAmbientImageUrl } from "../ambient"
+import { renderAmbientBackground, recordActiveAmbientImageUrl, getLastActiveAmbientImageUrl } from "../ambient"
 import type { PixivIllustration } from "../../types"
 import { IllustGalleryView } from "../IllustGalleryView"
 import type { IllustAIMode } from "../aiSheet"
@@ -88,18 +88,24 @@ function getInitialIllustPalette(
   intensity: AmbientIntensity,
   quality: "medium" | "large" | "original"
 ): IllustAmbientPalette | null {
-  if (!illust) return null
-  const candidates = [
-    cardThumbUrlOf(illust),
-    illust.image_urls?.medium,
-    illust.image_urls?.square_medium,
-    illust.image_urls?.large,
-    imageUrlOf(illust, 0, quality),
-  ]
-  for (const u of candidates) {
-    if (!u) continue
-    const pal = getCachedIllustAmbientPalette(u, isDark, intensity)
-    if (pal) return pal
+  if (illust) {
+    const candidates = [
+      cardThumbUrlOf(illust),
+      illust.image_urls?.medium,
+      illust.image_urls?.square_medium,
+      illust.image_urls?.large,
+      imageUrlOf(illust, 0, quality),
+    ]
+    for (const u of candidates) {
+      if (!u) continue
+      const pal = getCachedIllustAmbientPalette(u, isDark, intensity)
+      if (pal) return pal
+    }
+  }
+  const fallbackUrl = getLastActiveAmbientImageUrl()
+  if (fallbackUrl) {
+    const fallbackPal = getCachedIllustAmbientPalette(fallbackUrl, isDark, intensity)
+    if (fallbackPal) return fallbackPal
   }
   return null
 }
@@ -425,17 +431,20 @@ export function useIllustDetailState(illustID: number): {
       return
     }
     const current = illustRef.current
-    if (!current) {
+    const fallbackUrl = getLastActiveAmbientImageUrl()
+    const candidates = [
+      current ? cardThumbUrlOf(current) : null,
+      current?.image_urls?.medium,
+      current?.image_urls?.square_medium,
+      current?.image_urls?.large,
+      current ? imageUrlOf(current, 0, quality) : null,
+      fallbackUrl,
+    ].filter((u): u is string => Boolean(u))
+
+    if (candidates.length === 0) {
       setAmbientPalette(null)
       return
     }
-    const candidates = [
-      cardThumbUrlOf(current),
-      current.image_urls?.medium,
-      current.image_urls?.square_medium,
-      current.image_urls?.large,
-      imageUrlOf(current, 0, quality),
-    ].filter((u): u is string => Boolean(u))
 
     let active = true
     for (const u of candidates) {

@@ -35,9 +35,8 @@ import {
   isIllustContentVisible,
   isNovelContentVisible,
 } from "../store/contentFilter"
-import { destinationElement } from "./routes"
+import { destinationElement, requestPixivRoute, setActiveTabKind } from "./routeNavigation"
 import { useDualRoute } from "./DualRouteContext"
-import { requestPixivRoute, setActiveTabKind } from "./routeNavigation"
 import {
   DockActionBar,
   DockSegmentedBar,
