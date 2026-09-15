@@ -632,7 +632,7 @@ export function SettingsView() {
               <VStack alignment="leading" spacing={2}>
                 <Text>顶栏过渡</Text>
                 <Text font="caption2" foregroundStyle="secondaryLabel">
-                  兼容 iOS 27 改动引入，实际观感以本机为准
+                  {`兼容 ${Device.isiPad ? "iPadOS" : "iOS"} 27 改动引入，以实际观感为准`}
                 </Text>
               </VStack>
             }

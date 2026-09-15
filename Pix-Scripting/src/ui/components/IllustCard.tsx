@@ -120,9 +120,10 @@ export function IllustCard(props: {
   }, [])
 
   const isCompact = compact ?? compactSetting
-  // 流式或Hero卡片只在进入原生可见区后请求图片；骨架尺寸仍由作品元数据提前固定。
-  const [imageVisible, setImageVisible] = useState(!flow && !hero)
-  const [isAppeared, setIsAppeared] = useState(!flow && !hero)
+  const isFirstCard = hero || priority === 0 || Boolean(isSprint)
+  // 流式或Hero普通卡片只在进入原生可见区后请求图片；首图或高优先级冲刺卡片第 0 帧直接就绪发车。
+  const [imageVisible, setImageVisible] = useState(!flow && !hero || isFirstCard)
+  const [isAppeared, setIsAppeared] = useState(!flow && !hero || isFirstCard)
   const isHeroOrFirst = hero || (priority === 0 && (isAppeared || flow))
   const isSprintCard = isSprint ?? isHeroOrFirst
   const rawRatio = illust.width > 0 && illust.height > 0 ? illust.width / illust.height : 0.75

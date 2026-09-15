@@ -10,6 +10,7 @@ import { normalizeRoute } from "./store/routeNavigation"
 import { abortAllAITasks } from "./api/aiService"
 
 let stopSyncScheduler: (() => void) | null = null
+let widgetWarmupTimer: any = null
 
 export function seedIfRoute(route?: string | null) {
   if (!route) return
@@ -47,8 +48,14 @@ export async function bootstrapStorage() {
 }
 
 export function startBackgroundServices() {
-  // 后台静默预热小组件数据池
-  populateWidgetPool().catch(() => {})
+  // 后台错峰预热小组件数据池（延迟 3.5s 避让首屏与首图高优先级网络通道）
+  if (widgetWarmupTimer != null) {
+    clearTimeout(widgetWarmupTimer)
+  }
+  widgetWarmupTimer = setTimeout(() => {
+    widgetWarmupTimer = null
+    populateWidgetPool().catch(() => {})
+  }, 3500)
 
   // 静默预热历史记录内存缓存
   warmupHistoryStore()
@@ -60,6 +67,10 @@ export function startBackgroundServices() {
 }
 
 export function stopBackgroundServices() {
+  if (widgetWarmupTimer != null) {
+    clearTimeout(widgetWarmupTimer)
+    widgetWarmupTimer = null
+  }
   try {
     if (stopSyncScheduler) {
       stopSyncScheduler()

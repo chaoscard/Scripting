@@ -306,7 +306,7 @@ const prefetchQueue: DownloadTask[] = []
 
 let activeSprintTask: DownloadTask | null = null
 let sprintWatchdogTimer: any = null
-const SPRINT_WATCHDOG_TIMEOUT_MS = 400
+const SPRINT_WATCHDOG_TIMEOUT_MS = 1000
 
 function clearSprintLock(): void {
   if (sprintWatchdogTimer != null) {
