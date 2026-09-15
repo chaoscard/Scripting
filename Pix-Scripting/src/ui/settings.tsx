@@ -1800,6 +1800,7 @@ export function SettingsView() {
             />
             <AdvancedNumberRow
               title="启动动画时长"
+              subtitle="基准时长，首图未就绪时自动延长"
               unit="ms"
               value={settings.launchAnimationDuration}
               defaultValue={1500}
@@ -1938,6 +1939,7 @@ function sourceLabel(source?: string): string {
 
 function AdvancedNumberRow(props: {
   title: string
+  subtitle?: string
   unit: string
   value: number
   defaultValue: number
@@ -1946,7 +1948,7 @@ function AdvancedNumberRow(props: {
   allowFloat?: boolean
   onSave: (num: number) => void
 }) {
-  const { title, unit, value, defaultValue, min = 0, max = 30000, allowFloat = false, onSave } = props
+  const { title, subtitle, unit, value, defaultValue, min = 0, max = 30000, allowFloat = false, onSave } = props
   const [text, setText] = useState(String(value ?? defaultValue))
 
   useEffect(() => {
@@ -1977,7 +1979,14 @@ function AdvancedNumberRow(props: {
 
   return (
     <HStack alignment="center" spacing={8} frame={{ maxWidth: "infinity" }}>
-      <Text>{title}</Text>
+      <VStack alignment="leading" spacing={2}>
+        <Text>{title}</Text>
+        {subtitle ? (
+          <Text font="caption2" foregroundStyle="secondaryLabel">
+            {subtitle}
+          </Text>
+        ) : null}
+      </VStack>
       <Spacer />
       <HStack alignment="center" spacing={4}>
         <TextField

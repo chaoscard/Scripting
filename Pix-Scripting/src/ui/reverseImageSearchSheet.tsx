@@ -36,9 +36,9 @@ import { cacheIllust } from "../store/illustCache"
 import { CachedImage } from "./components/CachedImage"
 import { EmptyView, ErrorView, LoadingView, presentExternalURL } from "./components"
 import { requestPixivRoute } from "../store/routeNavigation"
+import { triggerHaptic } from "../platform/haptics"
 
 declare const Photos: any
-import { triggerHaptic } from "../platform/haptics"
 declare const Dialog: any
 declare const Pasteboard: any
 

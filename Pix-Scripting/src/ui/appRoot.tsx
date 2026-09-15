@@ -30,6 +30,7 @@ import {
 } from "./bottomAccessory"
 import { getLatestCachedArtworkPath } from "../image/imageLoader"
 import { DreamyFluidBackground } from "./components/DreamyBackground"
+import { notifyLaunchReady, onLaunchReady } from "./launchCoordinator"
 import { DiscoveryView } from "./discovery"
 import { RankingView } from "./ranking"
 import { MoreView } from "./more"
@@ -156,21 +157,68 @@ export function RootView() {
       return
     }
     let cancelled = false
+    const startTime = Date.now()
     const hasStartupRoute = Boolean(
       Script.queryParameters?.route || Script.widgetParameter
     )
-    const defaultDuration = loadSettings().launchAnimationDuration ?? 1500
-    // 冷启动过渡体验：从小组件/外部直达特定作品时缩短至 100ms，直接展现内容；常规启动保留完整就绪缓冲
-    const duration = hasStartupRoute ? 100 : defaultDuration
-    const timer = setTimeout(() => {
-      if (!cancelled) {
-        hasAppLaunchedOnce = true
-        setIsReady(true)
+    const configuredDuration = loadSettings().launchAnimationDuration ?? 1500
+
+    // 冷启动过渡体验：从小组件/外部直达特定作品时直接展现内容；若用户关闭启动动画（0ms）也直接进入
+    if (hasStartupRoute || configuredDuration <= 0) {
+      hasAppLaunchedOnce = true
+      setIsReady(true)
+      return
+    }
+
+    // 门禁就绪协调状态机（方案 A 精化模型）：
+    // 1. 基准保证展示时长（guaranteedDuration = configuredDuration，保证动画完整与品牌视觉）；
+    // 2. 顺延等待：若基准时长到达时首图尚未就绪，继续保持遮罩，并在首图就绪信号触发瞬间即刻揭幕；
+    // 3. 最大看门狗超时（maxTimeout = guaranteedDuration + 1500ms，弱网与异常保底，绝不卡死）。
+    const guaranteedDuration = configuredDuration
+    const maxTimeout = guaranteedDuration + 1500
+
+    let isImageReady = false
+    let isGuaranteedElapsed = false
+    let baseTimer: any = null
+    let maxTimer: any = null
+
+    const finishLaunch = () => {
+      if (cancelled || hasAppLaunchedOnce) return
+      hasAppLaunchedOnce = true
+      setIsReady(true)
+      if (baseTimer != null) clearTimeout(baseTimer)
+      if (maxTimer != null) clearTimeout(maxTimer)
+    }
+
+    const unregister = onLaunchReady(() => {
+      if (cancelled || hasAppLaunchedOnce) return
+      isImageReady = true
+      if (isGuaranteedElapsed) {
+        // 基准展示时长已满，首图就绪瞬间立即揭幕
+        finishLaunch()
       }
-    }, duration)
+    })
+
+    // 基准时长定时器
+    baseTimer = setTimeout(() => {
+      isGuaranteedElapsed = true
+      if (isImageReady) {
+        // 首图已在基准时间内就绪，准时优雅揭幕
+        finishLaunch()
+      }
+      // 若尚未就绪，继续顺延等待首图信号或 maxTimer 触发
+    }, guaranteedDuration)
+
+    // 最大顺延看门狗保底
+    maxTimer = setTimeout(() => {
+      finishLaunch()
+    }, maxTimeout)
+
     return () => {
       cancelled = true
-      clearTimeout(timer)
+      unregister()
+      if (baseTimer != null) clearTimeout(baseTimer)
+      if (maxTimer != null) clearTimeout(maxTimer)
     }
   }, [])
 

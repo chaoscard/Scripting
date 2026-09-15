@@ -29,9 +29,14 @@ import { requestPixivRoute, setActiveTabKind, useIsCurrentTab } from "../store/r
 import { destinationElement } from "./destinationElement"
 import { DockActionBar, useRegisterBottomAccessory, type DockActionItem } from "./bottomAccessory"
 import { useExperimentalAmbientPalette } from "./ambient"
-import { ReverseImageSearchSheet } from "./reverseImageSearchSheet"
 import { AccountSwitcherSheet } from "./accountSwitcherSheet"
 import { triggerHaptic } from "../platform/haptics"
+
+function ReverseImageSearchSheet(props: { onClose: () => void; initialImage?: any }): any {
+  const mod = require("./reverseImageSearchSheet")
+  const Comp = mod.ReverseImageSearchSheet || mod.default
+  return <Comp {...props} />
+}
 
 function isVirtualNode(v: unknown): v is VirtualNode {
   return !!v && typeof v === "object" && ("render" in v || "isInternal" in v || "props" in v)

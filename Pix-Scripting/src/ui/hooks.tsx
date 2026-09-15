@@ -44,6 +44,7 @@ import {
   onUserFollowChanged,
   type FollowRestrict,
 } from "../store/userFollow"
+import { notifyLaunchReady } from "./launchCoordinator"
 
 // 触底回弹缓冲：由调试设置配置（默认 400ms），确保触底橡皮筋回弹完整展示转圈，随后平滑展开新批次卡片
 export function paginationFeedbackDuration(): number {
@@ -386,6 +387,9 @@ export function usePagedList<T extends { id: number | string }>(
       consumedTailRef.current = null
       notifyBatchPublished(published, pending)
       setHasLoaded(true)
+      if (published.length === 0) {
+        notifyLaunchReady()
+      }
     } catch (err: any) {
       if (
         seq !== seqRef.current ||
@@ -393,6 +397,7 @@ export function usePagedList<T extends { id: number | string }>(
         !enabledRef.current
       ) return
       setError(err?.message ?? "加载失败")
+      notifyLaunchReady()
     } finally {
       if (
         seq === seqRef.current &&

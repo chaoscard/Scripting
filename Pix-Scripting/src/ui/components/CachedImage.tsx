@@ -19,6 +19,7 @@ import {
   onImageCacheChanged,
 } from "../../image/imageLoader"
 import { loadSettings } from "../../store/settings"
+import { notifyLaunchReady } from "../launchCoordinator"
 import { useLatest } from "../hooks"
 function imageFadeDurationSec(): number {
   const ms = loadSettings().imageFadeInDuration ?? 80
@@ -68,8 +69,11 @@ function useCachedImage(
   useEffect(() => {
     if (cachedPath) {
       onLoadedRef.current?.(true)
+      if (isSprint) {
+        notifyLaunchReady()
+      }
     }
-  }, [cachedPath, onLoadedRef])
+  }, [cachedPath, onLoadedRef, isSprint])
 
   useEffect(() => {
     let cancelled = false
@@ -97,6 +101,9 @@ function useCachedImage(
               setLoaded({ url, path: p, revision: cacheRevision })
               setFailed(false)
               onLoadedRef.current?.(true)
+              if (isSprint) {
+                notifyLaunchReady()
+              }
             } else if (!isRetry) {
               // 自动重试一次（对抗预取竞争、取消误杀或瞬时网络抖动）
               retryTimer = setTimeout(() => {
@@ -106,6 +113,9 @@ function useCachedImage(
               setLoaded({ url, path: null, revision: cacheRevision })
               setFailed(true)
               onLoadedRef.current?.(false)
+              if (isSprint) {
+                notifyLaunchReady()
+              }
             }
           }
         })
@@ -119,6 +129,9 @@ function useCachedImage(
               setLoaded({ url, path: null, revision: cacheRevision })
               setFailed(true)
               onLoadedRef.current?.(false)
+              if (isSprint) {
+                notifyLaunchReady()
+              }
             }
           }
         })
