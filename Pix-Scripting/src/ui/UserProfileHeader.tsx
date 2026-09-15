@@ -330,7 +330,12 @@ export function UserProfileHeader(props: {
 
   const avatarSize = 74
   const ringSize = avatarSize + 4
-  const defaultHeaderHeight = Math.round((Device.screen?.width || 393) / 2.4)
+  // 跨端统一头部高度：iPad（含横竖屏与分屏）锁定 250px 宽幅全景高度，
+  // iPhone 基于物理屏宽在 205~230px 区间内自适应（SE 紧凑 / Pro Max 舒展），
+  // 无论用户是否上传背景图，头像与顶栏间距均保持 100% 像素级一致。
+  const headerHeight = Device.isiPad
+    ? 250
+    : Math.min(230, Math.max(205, Math.round((Device.screen?.width || 393) / 1.85)))
 
   return (
     <VStack
@@ -351,13 +356,13 @@ export function UserProfileHeader(props: {
           >
             <CachedImage
               url={profile.background_image_url}
-              useIntrinsicAspectRatio={true}
+              useIntrinsicAspectRatio={false}
               aspectRatioValue={2.4}
               contentMode="fill"
               cornerRadius={{ topLeading: 0, topTrailing: 0, bottomLeading: 8, bottomTrailing: 8 }}
               priority={0}
               isSprint={true}
-              frame={{ maxWidth: "infinity" }}
+              frame={{ maxWidth: "infinity", height: headerHeight }}
             />
             {/* 底部羽化过渡遮罩：让封面图与下方环境底色自然交融 */}
             <VStack
@@ -375,7 +380,7 @@ export function UserProfileHeader(props: {
           </ZStack>
         ) : (
           <VStack
-            frame={{ maxWidth: "infinity", height: defaultHeaderHeight }}
+            frame={{ maxWidth: "infinity", height: headerHeight }}
             background="clear"
           />
         )}

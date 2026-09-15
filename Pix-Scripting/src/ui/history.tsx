@@ -177,6 +177,7 @@ export function HistoryView() {
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
   const refreshHandlersRef = useRef<Map<HistoryKind, () => Promise<void>>>(new Map())
   const [isAnalyticsPresented, setIsAnalyticsPresented] = useState(false)
+  const isSelectingFromAnalyticsRef = useRef(false)
   const { isSplitViewActive, openDetailRoute } = useDualRoute()
   const [showNoticeAlert, setShowNoticeAlert] = useState(false)
   const hasCheckedNoticeRef = useRef(false)
@@ -215,7 +216,11 @@ export function HistoryView() {
   // 切换 Tab 离开历史页后切回时：若曾有静默回看标脏，执行全量重排刷新
   useEffect(() => {
     return onActiveTabChanged((nextTab: PixivTabKind) => {
-      if (nextTab === tabRef.current) {
+      if (nextTab !== tabRef.current) {
+        // 切换到其他 Tab 离开历史页：重置搜索关键词
+        setSearchQuery("")
+      } else {
+        // 切回历史页所属 Tab：若曾有静默回看标脏，执行全量重排刷新
         if (checkAndResetHistoryDirty()) {
           void refreshAllFeeds()
         }
@@ -305,12 +310,18 @@ export function HistoryView() {
         ),
       }}
       onAppear={() => {
+        if (isSelectingFromAnalyticsRef.current) {
+          isSelectingFromAnalyticsRef.current = false
+          return
+        }
         const fromDetail = checkAndConsumeViewingHistoryDetail()
         if (fromDetail) {
           // 从二级详情页返回历史列表：拦截全量刷新，保持老作品原位不动，新推荐置顶
           return
         }
-        // 从上一级页面进入 / 退出历史页后重新进入：检测是否有标脏，有则全量重排刷新
+        // 从上一级页面进入 / 退出历史页后重新进入：清空搜索关键词，恢复全量历史展示
+        setSearchQuery("")
+        // 检测是否有标脏，有则全量重排刷新
         if (checkAndResetHistoryDirty()) {
           void refreshAllFeeds()
         }
@@ -324,10 +335,12 @@ export function HistoryView() {
             initialScope={kind}
             onDismiss={() => setIsAnalyticsPresented(false)}
             onSelectTag={(tag) => {
+              isSelectingFromAnalyticsRef.current = true
               setIsAnalyticsPresented(false)
               setSearchQuery(tag)
             }}
             onSelectCreator={(_cId, cName) => {
+              isSelectingFromAnalyticsRef.current = true
               setIsAnalyticsPresented(false)
               setSearchQuery(cName)
             }}
