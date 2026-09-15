@@ -1,6 +1,6 @@
 import { useEffect } from "scripting"
 import { Script, ZStack } from "scripting"
-import { RootView } from "./src/ui/root"
+import { RootView } from "./src/ui/appRoot"
 import {
   bootstrapStorage,
   startBackgroundServices,

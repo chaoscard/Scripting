@@ -24,6 +24,10 @@ import {
   VStack,
   ZStack,
 } from "scripting"
+import {
+  PAGE_TOOLBAR_BACKGROUND,
+  PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
+} from "./components/pageChrome"
 import { pixivisionDetail } from "../api/pixiv"
 import { cacheIllust, getCachedIllust } from "../store/illustCache"
 import { cachedFilePath, derivePixivThumbUrl, getPixivisionCoverUrl, loadImage } from "../image/imageLoader"
@@ -403,8 +407,8 @@ export function PixivisionDetailView(props: { articleID: number }) {
   if (loading) {
     return (
       <ZStack
-        toolbarBackground="clear"
-        toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+        toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+        toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
       >
         {isVirtualNode(ambientBackground) ? (
           ambientBackground
@@ -414,8 +418,8 @@ export function PixivisionDetailView(props: { articleID: number }) {
         <ScrollView
           navigationTitle=""
           navigationBarTitleDisplayMode="inline"
-          toolbarBackground="clear"
-          toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+          toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+          toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
           scrollContentBackground="hidden"
         >
           <LoadingView />
@@ -427,8 +431,8 @@ export function PixivisionDetailView(props: { articleID: number }) {
   if (error || !detail) {
     return (
       <ZStack
-        toolbarBackground="clear"
-        toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+        toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+        toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
       >
         {isVirtualNode(ambientBackground) ? (
           ambientBackground
@@ -438,8 +442,8 @@ export function PixivisionDetailView(props: { articleID: number }) {
         <ScrollView
           navigationTitle=""
           navigationBarTitleDisplayMode="inline"
-          toolbarBackground="clear"
-          toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+          toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+          toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
           scrollContentBackground="hidden"
         >
           <VStack alignment="center" spacing={14} padding={20} frame={{ maxWidth: "infinity" }}>
@@ -458,8 +462,8 @@ export function PixivisionDetailView(props: { articleID: number }) {
 
   return (
     <ZStack
-      toolbarBackground="clear"
-      toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+      toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+      toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
     >
       {isVirtualNode(ambientBackground) ? (
         ambientBackground
@@ -474,8 +478,8 @@ export function PixivisionDetailView(props: { articleID: number }) {
             navigationTitle=""
             navigationBarTitleDisplayMode="inline"
             scrollContentBackground="hidden"
-            toolbarBackground="clear"
-            toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+            toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+            toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
             toolbar={{
               topBarTrailing: detail.tableOfContents && detail.tableOfContents.length > 0
                 ? [

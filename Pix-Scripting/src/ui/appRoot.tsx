@@ -23,6 +23,7 @@ import { loadSettings, onSettingsChanged, updateSettings } from "../store/settin
 import { ResponsiveContainer } from "./hooks"
 import { SplitViewContainer, useDualRoute } from "./DualRouteContext"
 import { FeatureHighlightsSheet } from "./components/FeatureHighlightsSheet"
+import { topBarScrollEdge } from "./components/pageChrome"
 import {
   CapsuleAccessoryContainer,
   GlobalBottomAccessoryHost,
@@ -189,6 +190,9 @@ export function RootView() {
     }
   }, [isReady, loggedIn])
 
+  // 顶栏过渡：由设置驱动，随设置变更即时生效（上方已订阅 onSettingsChanged）
+  const topBarEdge = topBarScrollEdge(settings.topBarEffect)
+
   const dismiss = Navigation.useDismiss()
 
   if (!loggedIn) {
@@ -197,6 +201,8 @@ export function RootView() {
         frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
         background="clear"
         ignoresSafeArea={true}
+        scrollEdgeEffectStyle={topBarEdge.scrollEdgeEffectStyle}
+        scrollEdgeEffectHidden={topBarEdge.scrollEdgeEffectHidden}
       >
         <ResponsiveContainer>
           <NavigationStack>
@@ -217,6 +223,8 @@ export function RootView() {
       frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
       background="systemBackground"
       ignoresSafeArea={true}
+      scrollEdgeEffectStyle={topBarEdge.scrollEdgeEffectStyle}
+      scrollEdgeEffectHidden={topBarEdge.scrollEdgeEffectHidden}
       sheet={{
         isPresented: showFeatureHighlights,
         onChanged: (val: boolean) => setShowFeatureHighlights(val),

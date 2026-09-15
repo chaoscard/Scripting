@@ -15,6 +15,10 @@ import {
   VStack,
   ZStack,
 } from "scripting"
+import {
+  PAGE_TOOLBAR_BACKGROUND,
+  PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
+} from "./components/pageChrome"
 import { useIsCurrentTab } from "../store/routeNavigation"
 import {
   newIllustrations,
@@ -150,8 +154,8 @@ export function DiscoveryView(props: { onClose: () => void }) {
     <ZStack
       frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
       navigationBarTitleDisplayMode="inline"
-      toolbarBackground="clear"
-      toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+      toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+      toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
       navigationDestination={destinationElement}
       background={ambientBackground}
       toolbar={exploreToolbar({

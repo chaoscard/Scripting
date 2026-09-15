@@ -3,6 +3,10 @@ import {
   VStack,
   ZStack,
 } from "scripting"
+import {
+  PAGE_TOOLBAR_BACKGROUND,
+  PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
+} from "../components/pageChrome"
 import { addBookmark, bookmarkDetail, bookmarkTags } from "../../api/pixiv"
 import { session } from "../../api/session"
 import { updateHistoryBookmark } from "../../store/history"
@@ -53,15 +57,15 @@ export function IllustDetailView(props: { illustID: number }) {
   if (loading && !illust) {
     return (
       <ZStack
-        toolbarBackground="clear"
-        toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+        toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+        toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
       >
         {ambientBackgroundNode}
         <ScrollView
           navigationTitle=""
           navigationBarTitleDisplayMode="inline"
-          toolbarBackground="clear"
-          toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+          toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+          toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
           scrollContentBackground="hidden"
         >
           <LoadingView />
@@ -73,15 +77,15 @@ export function IllustDetailView(props: { illustID: number }) {
   if (error && !illust) {
     return (
       <ZStack
-        toolbarBackground="clear"
-        toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+        toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+        toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
       >
         {ambientBackgroundNode}
         <ScrollView
           navigationTitle=""
           navigationBarTitleDisplayMode="inline"
-          toolbarBackground="clear"
-          toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+          toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+          toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
           scrollContentBackground="hidden"
         >
           <ErrorView message={error} onRetry={() => actions.load(true)} />
@@ -93,15 +97,15 @@ export function IllustDetailView(props: { illustID: number }) {
   if (!illust) {
     return (
       <ZStack
-        toolbarBackground="clear"
-        toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+        toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+        toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
       >
         {ambientBackgroundNode}
         <ScrollView
           navigationTitle=""
           navigationBarTitleDisplayMode="inline"
-          toolbarBackground="clear"
-          toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+          toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+          toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
           scrollContentBackground="hidden"
         >
           <ErrorView message="作品不存在" onRetry={() => actions.load(true)} />
@@ -147,8 +151,8 @@ export function IllustDetailView(props: { illustID: number }) {
   return (
     <ZStack
       alignment={quickActionPos === "leading" ? "bottomLeading" : "bottomTrailing"}
-      toolbarBackground="clear"
-      toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+      toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+      toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
     >
       {/* 1. 独立全屏底层：铺满屏幕（含顶部状态栏与灵动岛背后），实现状态栏追色沉浸 */}
       {ambientBackgroundNode}
@@ -158,8 +162,8 @@ export function IllustDetailView(props: { illustID: number }) {
         navigationTitle=""
         navigationBarTitleDisplayMode="inline"
         ignoresSafeArea={{ edges: "bottom" }}
-        toolbarBackground="clear"
-        toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+        toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+        toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
         scrollContentBackground="hidden"
         toolbar={{
           topBarTrailing: renderIllustToolbarActions(toolbarProps),

@@ -11,6 +11,10 @@ import {
   VStack,
   ZStack,
 } from "scripting"
+import {
+  PAGE_TOOLBAR_BACKGROUND,
+  PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
+} from "./components/pageChrome"
 import { REQUEST_TIMEOUT_SECONDS } from "../config"
 import {
   buildAuthorizationURL,
@@ -151,8 +155,8 @@ export function LoginView(props: {
       alignment="center"
       frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
       ignoresSafeArea={true}
-      toolbarBackground="clear"
-      toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+      toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+      toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
       toolbar={
         props.isModal
           ? {

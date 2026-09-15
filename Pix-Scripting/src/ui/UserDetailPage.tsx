@@ -20,6 +20,10 @@ import {
   ZStack,
 } from "scripting"
 import {
+  PAGE_TOOLBAR_BACKGROUND,
+  PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
+} from "./components/pageChrome"
+import {
   downloadAuthorIllustrationsToAlbum,
   downloadAuthorUgoiraToAlbum,
   exportAuthorIllustrationsToZip,
@@ -652,8 +656,8 @@ export function UserDetailView(props: { userID: number }) {
         <ScrollView
           navigationTitle=""
           navigationBarTitleDisplayMode="inline"
-          toolbarBackground="clear"
-          toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+          toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+          toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
           scrollContentBackground="hidden"
           background={ambientBackground}
         >
@@ -665,8 +669,8 @@ export function UserDetailView(props: { userID: number }) {
       <ScrollView
         navigationTitle="用户主页"
         navigationBarTitleDisplayMode="inline"
-        toolbarBackground="clear"
-        toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+        toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+        toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
         scrollContentBackground="hidden"
         background={ambientBackground}
       >
@@ -679,7 +683,7 @@ export function UserDetailView(props: { userID: number }) {
     <ZStack
       navigationTitle=""
       navigationBarTitleDisplayMode="inline"
-      toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+      toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
       ignoresSafeArea={{ edges: ["top", "bottom"] }}
       toolbar={{
         topBarTrailing: [

@@ -17,6 +17,10 @@ import {
   ZStack,
 } from "scripting"
 import {
+  PAGE_TOOLBAR_BACKGROUND,
+  PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
+} from "./components/pageChrome"
+import {
   bookmarkTags,
   bookmarks,
   nextIllustrations,
@@ -123,8 +127,8 @@ export function LibraryView(props?: { initialKind?: LibraryKind }) {
   return (
     <ZStack
       navigationBarTitleDisplayMode="inline"
-      toolbarBackground="clear"
-      toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+      toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+      toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
       background={ambientBackground}
       toolbar={libraryToolbar({
         kind,

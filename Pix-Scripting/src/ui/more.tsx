@@ -16,6 +16,10 @@ import {
   useState,
   ZStack,
 } from "scripting"
+import {
+  PAGE_TOOLBAR_BACKGROUND,
+  PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
+} from "./components/pageChrome"
 import { AppNavigationLink, useDualRoute } from "./DualRouteContext"
 import { session } from "../api/session"
 import { loadSettings, onSettingsChanged } from "../store/settings"
@@ -113,8 +117,8 @@ export function MoreView(props: { onClose: () => void }) {
   return (
     <ZStack
       navigationBarTitleDisplayMode="inline"
-      toolbarBackground="clear"
-      toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+      toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+      toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
       navigationDestination={destinationElement}
       toolbar={appToolbar(
         props.onClose,

@@ -18,6 +18,10 @@ import {
   type ScrollViewProxy,
 } from "scripting"
 import { loadSettings } from "../../store/settings"
+import {
+  PAGE_TOOLBAR_BACKGROUND,
+  PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
+} from "./pageChrome"
 const REFRESH_TOP_KEY = "__refresh_top"
 
 function isVirtualNode(v: unknown): v is VirtualNode {
@@ -86,12 +90,11 @@ export function RefreshableScrollView(props: {
     }, 120)
   }, [])
 
-  const activeToolbarBackground = props.toolbarBackground ?? "clear"
+  // 顶栏外观统一取自 pageChrome，避免各页面重复字面量
+  const activeToolbarBackground =
+    props.toolbarBackground ?? PAGE_TOOLBAR_BACKGROUND
   const activeToolbarBackgroundVisibility =
-    props.toolbarBackgroundVisibility ?? {
-      visibility: "hidden" as const,
-      bars: ["navigationBar" as const],
-    }
+    props.toolbarBackgroundVisibility ?? PAGE_TOOLBAR_BACKGROUND_VISIBILITY
 
   return (
     <ZStack

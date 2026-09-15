@@ -24,6 +24,10 @@ import {
   VStack,
   ZStack,
 } from "scripting"
+import {
+  PAGE_TOOLBAR_BACKGROUND,
+  PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
+} from "./components/pageChrome"
 import { AppNavigationLink, useDualRoute } from "./DualRouteContext"
 import {
   nextIllustrations,
@@ -1330,8 +1334,8 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
   return (
     <ZStack
       navigationBarTitleDisplayMode="inline"
-      toolbarBackground="clear"
-      toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+      toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+      toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
       navigationDestination={destinationElement}
       sheet={{
         isPresented: isAdvancedSheetOpen,

@@ -17,6 +17,10 @@ import {
   VStack,
   ZStack,
 } from "scripting"
+import {
+  PAGE_TOOLBAR_BACKGROUND,
+  PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
+} from "./components/pageChrome"
 
 import { useIsCurrentTab } from "../store/routeNavigation"
 import { triggerHaptic } from "../platform/haptics"
@@ -294,8 +298,8 @@ export function RankingView(props: { onClose: () => void }) {
   return (
     <ZStack
       navigationBarTitleDisplayMode="inline"
-      toolbarBackground="clear"
-      toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+      toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+      toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
       navigationDestination={destinationElement}
       background={ambientBackground}
       frame={{ maxWidth: "infinity", maxHeight: "infinity" }}

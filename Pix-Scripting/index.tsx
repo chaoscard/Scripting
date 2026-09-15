@@ -1,5 +1,5 @@
 import { Navigation, Script } from "scripting"
-import { RootView } from "./src/ui/root"
+import { RootView } from "./src/ui/appRoot"
 import {
   bootstrapStorage,
   cleanupAppResources,

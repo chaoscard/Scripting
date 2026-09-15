@@ -13,6 +13,11 @@ export type QuickActionButtonAction = "bookmark" | "follow" | "download"
 export type QuickActionButtonPosition = "trailing" | "leading"
 export type PageLayout = "classic" | "appleMusic"
 export const PAGE_LAYOUT_VALUES: ReadonlyArray<PageLayout> = ["appleMusic", "classic"]
+
+/** 顶栏过渡：导航栏与滚动内容交界处的处理方式，详见 ui/components/pageChrome.ts
+ *  存储值 → 设置页显示名：none=透明 / soft=默认 / hard=色调 */
+export type TopBarEffect = "hard" | "soft" | "none"
+export const TOP_BAR_EFFECT_VALUES: ReadonlyArray<TopBarEffect> = ["hard", "soft", "none"]
 export type CloseButtonAction = "minimize" | "exit"
 export type WatchlistSortOrder = "asc" | "desc"
 export type AmbientIntensity = "low" | "medium" | "high"
@@ -113,6 +118,7 @@ export interface AppSettings {
   exemptFilterForPersonal: boolean
   hideNovels: boolean
   pageLayout: PageLayout
+  topBarEffect: TopBarEffect
   splitViewEnabled: boolean
   waterfallColumnsIpadLandscape: WaterfallColumnsIpadLandscape
   waterfallColumnsIpadPortrait: WaterfallColumnsIpadPortrait
@@ -210,6 +216,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   exemptFilterForPersonal: true,
   hideNovels: false,
   pageLayout: "appleMusic",
+  topBarEffect: "soft",
   splitViewEnabled: false,
   waterfallColumnsIpadLandscape: 3,
   waterfallColumnsIpadPortrait: 3,
@@ -644,6 +651,9 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
     pageLayout: isOneOf(stored?.pageLayout, PAGE_LAYOUT_VALUES)
       ? stored.pageLayout
       : DEFAULT_SETTINGS.pageLayout,
+    topBarEffect: isOneOf(stored?.topBarEffect, TOP_BAR_EFFECT_VALUES)
+      ? stored.topBarEffect
+      : DEFAULT_SETTINGS.topBarEffect,
     splitViewEnabled: boolOr(stored?.splitViewEnabled, DEFAULT_SETTINGS.splitViewEnabled),
     waterfallColumnsIpadLandscape: parseWaterfallColumnsIpadLandscape(
       stored?.waterfallColumnsIpadLandscape

@@ -40,6 +40,7 @@ import {
   type LaunchPage,
   type QuickActionButtonAction,
   type QuickActionButtonPosition,
+  type TopBarEffect,
   type WidgetDefaultSource,
 } from "../store/settings"
 import { loadBlocklist, onBlocklistChanged } from "../store/blocklist"
@@ -371,7 +372,7 @@ export function SettingsView() {
               <Spacer />
               {!expanded.content ? (
                 <Text font="footnote" foregroundStyle="tertiaryLabel">
-                  {`R18:${settings.showR18 ? "开" : "关"} · AI:${settings.showAI ? "开" : "关"}`}
+                  {`R18:${settings.showR18 ? "开" : "关"}·AI:${settings.showAI ? "开" : "关"}`}
                 </Text>
               ) : null}
             </HStack>
@@ -423,7 +424,7 @@ export function SettingsView() {
               <Text font="body">屏蔽设置</Text>
               <Spacer />
               <Text font="caption" foregroundStyle="secondaryLabel">
-                标签 {blocklist.blockedTags.length} · 用户 {blocklist.blockedUsers.length}
+                标签 {blocklist.blockedTags.length}·用户 {blocklist.blockedUsers.length}
               </Text>
             </HStack>
           </AppNavigationLink>
@@ -593,13 +594,13 @@ export function SettingsView() {
                   {[
                     settings.pageLayout === "appleMusic" ? "苹果音乐" : "经典样式",
                     Device.isiPad
-                      ? `${settings.splitViewEnabled ? "平行视界 · " : ""}${settings.waterfallColumnsIpadLandscape}横/${settings.waterfallColumnsIpadPortrait}竖`
+                      ? `${settings.splitViewEnabled ? "平行视界·" : ""}${settings.waterfallColumnsIpadLandscape}横/${settings.waterfallColumnsIpadPortrait}竖`
                       : settings.heroFirstFeedCard ? "全宽" : "双列",
                     settings.compactIllustCard ? "简约" : null,
                     settings.ambientImmersion ? "沉浸" : null,
                   ]
                     .filter(Boolean)
-                    .join(" · ")}
+                    .join("·")}
                 </Text>
               ) : null}
             </HStack>
@@ -614,6 +615,24 @@ export function SettingsView() {
           >
             <Text tag="appleMusic">苹果音乐</Text>
             <Text tag="classic">经典样式</Text>
+          </Picker>
+          <Picker
+            label={
+              <VStack alignment="leading" spacing={2}>
+                <Text>顶栏过渡</Text>
+                <Text font="caption2" foregroundStyle="secondaryLabel">
+                  兼容 iOS 27 改动引入，实际观感以本机为准
+                </Text>
+              </VStack>
+            }
+            value={settings.topBarEffect}
+            onChanged={(value: string) =>
+              update({ topBarEffect: value as TopBarEffect })
+            }
+          >
+            <Text tag="none">透明</Text>
+            <Text tag="soft">默认</Text>
+            <Text tag="hard">色调</Text>
           </Picker>
           {Device.isiPad ? (
             <>
@@ -1126,7 +1145,7 @@ export function SettingsView() {
               <Spacer />
               {!expanded.quality ? (
                 <Text font="footnote" foregroundStyle="tertiaryLabel">
-                  {`流:${(Device.isiPad ? settings.feedImageQualityIpad : settings.feedImageQualityIos) === "medium" ? "中等" : "大图"} · 详:${(Device.isiPad ? settings.detailImageQualityIpad : settings.detailImageQualityIos) === "large" ? "大图" : "原图"} · 载:${(Device.isiPad ? settings.downloadImageQualityIpad : settings.downloadImageQualityIos) === "large" ? "大图" : "原图"}`}
+                  {`流:${(Device.isiPad ? settings.feedImageQualityIpad : settings.feedImageQualityIos) === "medium" ? "中等" : "大图"}·详:${(Device.isiPad ? settings.detailImageQualityIpad : settings.detailImageQualityIos) === "large" ? "大图" : "原图"}·载:${(Device.isiPad ? settings.downloadImageQualityIpad : settings.downloadImageQualityIos) === "large" ? "大图" : "原图"}`}
                 </Text>
               ) : null}
             </HStack>
@@ -1197,7 +1216,7 @@ export function SettingsView() {
               <Spacer />
               {!expanded.network ? (
                 <Text font="footnote" foregroundStyle="tertiaryLabel">
-                  {`图片:${settings.imageSourceMode === "pixiv_re" ? "镜像" : settings.imageSourceMode === "custom" ? "自定义" : "官方"} · 网关:${settings.apiGatewayMode === "custom" ? "自定义" : "官方"}`}
+                  {`图片:${settings.imageSourceMode === "pixiv_re" ? "镜像" : settings.imageSourceMode === "custom" ? "自定义" : "官方"}·网关:${settings.apiGatewayMode === "custom" ? "自定义" : "官方"}`}
                 </Text>
               ) : null}
             </HStack>
@@ -1805,9 +1824,9 @@ function formatWidgetSummary(settings: any): string {
   const l = sourceLabel(Device.isiPad ? settings.widgetSourceLargeIpad : settings.widgetSourceLargeIos)
   if (Device.isiPad) {
     const xl = sourceLabel(settings.widgetSourceExtraLargeIpad)
-    return `小:${s} · 中:${m} · 大:${l} · 特大:${xl}`
+    return `小:${s}·中:${m}·大:${l}·特大:${xl}`
   }
-  return `小:${s} · 中:${m} · 大:${l}`
+  return `小:${s}·中:${m}·大:${l}`
 }
 
 function sourceLabel(source?: string): string {

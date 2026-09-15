@@ -17,6 +17,10 @@ import {
   ZStack,
 } from "scripting"
 import {
+  PAGE_TOOLBAR_BACKGROUND,
+  PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
+} from "./components/pageChrome"
+import {
   EmptyView,
   FilteredContentNotice,
   formatDate,
@@ -257,8 +261,8 @@ export function HistoryView() {
   return (
     <ZStack
       navigationBarTitleDisplayMode="inline"
-      toolbarBackground="clear"
-      toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+      toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+      toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
       background={ambientBackground}
       onAppear={() => {
         const fromDetail = checkAndConsumeViewingHistoryDetail()

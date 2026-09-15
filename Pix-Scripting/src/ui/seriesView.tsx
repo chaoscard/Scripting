@@ -15,6 +15,10 @@ import {
   ZStack,
 } from "scripting"
 import {
+  PAGE_TOOLBAR_BACKGROUND,
+  PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
+} from "./components/pageChrome"
+import {
   downloadEntireMangaSeries,
   downloadEntireNovelSeries,
 } from "../downloader"
@@ -589,8 +593,8 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
     <ZStack
       navigationTitle=""
       navigationBarTitleDisplayMode="inline"
-      toolbarBackground="clear"
-      toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+      toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+      toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
       frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
     >
       {/* 1. 底层：第 0 毫秒物理全屏垫底 */}
@@ -599,8 +603,8 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
       {/* 2. 顶层：透明滚动视图 */}
       <ScrollView
         scrollContentBackground="hidden"
-        toolbarBackground="clear"
-        toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
+        toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+        toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
         ignoresSafeArea={{ edges: ["top", "bottom"] }}
         refreshable={handleRefresh}
         toolbar={{
