@@ -252,10 +252,10 @@ export function ConnectionRow(props: {
         )}
         {showFollowControl ? (
           <Button
-            buttonStyle="glass"
+            buttonStyle="plain"
+            glassEffect={appGlass("circle")}
             disabled={followBusy}
             frame={{ width: 38, height: 38 }}
-            clipShape={{ type: "rect", cornerRadius: 19 }}
             contentShape="rect"
             action={toggleFollow}
             contextMenu={{
