@@ -81,6 +81,8 @@ interface SectionExpandedState {
   content: boolean
   ranking: boolean
   appearance: boolean
+  ambientLight: boolean
+  liquidGlass: boolean
   features: boolean
   ai: boolean
   widgets: boolean
@@ -96,6 +98,8 @@ const DEFAULT_EXPANDED_STATE: SectionExpandedState = {
   content: false,
   ranking: false,
   appearance: false,
+  ambientLight: false,
+  liquidGlass: false,
   features: false,
   ai: false,
   widgets: false,
@@ -121,6 +125,7 @@ export function SettingsView() {
   const [widgetRefreshed, setWidgetRefreshed] = useTimedFlag()
   const [, setWebCookieVersion] = useState(0)
   const [experimentalImmersionKey, setExperimentalImmersionKey] = useState(0)
+  const [glassInteractiveKey, setGlassInteractiveKey] = useState(0)
 
   const [expanded, setExpanded] = useState<SectionExpandedState>(DEFAULT_EXPANDED_STATE)
 
@@ -133,6 +138,8 @@ export function SettingsView() {
       content: true,
       ranking: true,
       appearance: true,
+      ambientLight: true,
+      liquidGlass: true,
       features: true,
       ai: true,
       widgets: true,
@@ -150,6 +157,8 @@ export function SettingsView() {
       content: false,
       ranking: false,
       appearance: false,
+      ambientLight: false,
+      liquidGlass: false,
       features: false,
       ai: false,
       widgets: false,
@@ -285,6 +294,8 @@ export function SettingsView() {
     "content",
     "features",
     "appearance",
+    "ambientLight",
+    "liquidGlass",
     "ranking",
     "ai",
     "widgets",
@@ -294,7 +305,6 @@ export function SettingsView() {
     "cache",
     ...(settings.advancedSettingsUnlocked ? (["debug"] as (keyof SectionExpandedState)[]) : []),
   ]
-
   const isAllExpanded = activeKeys.every((key) => expanded[key])
 
   function toggleExpandAll() {
@@ -608,7 +618,6 @@ export function SettingsView() {
                       ? `${settings.splitViewEnabled ? "平行视界·" : ""}${settings.waterfallColumnsIpadLandscape}横/${settings.waterfallColumnsIpadPortrait}竖`
                       : settings.heroFirstFeedCard ? "全宽" : "双列",
                     settings.compactIllustCard ? "简约" : null,
-                    settings.ambientImmersion ? "沉浸" : null,
                   ]
                     .filter(Boolean)
                     .join("·")}
@@ -627,105 +636,25 @@ export function SettingsView() {
             <Text tag="appleMusic">苹果音乐</Text>
             <Text tag="classic">经典样式</Text>
           </Picker>
-          <Picker
-            label={
-              <VStack alignment="leading" spacing={2}>
-                <Text>顶栏过渡</Text>
-                <Text font="caption2" foregroundStyle="secondaryLabel">
-                  {`兼容 ${Device.isiPad ? "iPadOS" : "iOS"} 27 改动引入，以实际观感为准`}
-                </Text>
-              </VStack>
-            }
-            value={settings.topBarEffect}
-            onChanged={(value: string) =>
-              update({ topBarEffect: value as TopBarEffect })
-            }
-          >
-            <Text tag="system">系统</Text>
-            <Text tag="clear">透明</Text>
-            <Text tag="soft">柔和</Text>
-            <Text tag="tinted">色调</Text>
-          </Picker>
-          <Picker
-            label={
-              <VStack alignment="leading" spacing={2}>
-                <Text>玻璃效果</Text>
-                <Text font="caption2" foregroundStyle="secondaryLabel">
-                  仅作用于部分玻璃
-                </Text>
-                <Text font="caption2" foregroundStyle="secondaryLabel">
-                  仅对新打开的页面生效
-                </Text>
-              </VStack>
-            }
-            value={settings.glassStrength}
-            onChanged={(value: string) =>
-              update({ glassStrength: value as GlassStrength })
-            }
-          >
-            <Text tag="system">系统</Text>
-            <Text tag="clear">透明</Text>
-            <Text tag="soft">柔和</Text>
-            <Text tag="tinted">色调</Text>
-          </Picker>
-          {settings.glassStrength === "tinted" ? (
-            <>
-              <ColorPicker
-                supportsOpacity={false}
-                title="色调颜色"
-                value={settings.glassTintColor as Color}
-                onChanged={(color) => update({ glassTintColor: color })}
-              />
-              <Slider
-                min={0}
-                max={100}
-                step={5}
-                value={settings.glassTintStrength}
-                onChanged={(value) => update({ glassTintStrength: Math.round(value) })}
-                label={<Text>着色浓度</Text>}
-                listRowSeparator={{ visibility: "hidden", edges: "bottom" }}
-              />
-              <HStack
-                alignment="center"
-                frame={{ maxWidth: "infinity" }}
-                listRowSeparator={{ visibility: "hidden", edges: "top" }}
-              >
-                <Text>重置为默认色调</Text>
-                <Spacer />
-                <Button
-                  buttonStyle="glass"
-                  controlSize="small"
-                  disabled={
-                    settings.glassTintColor === DEFAULT_GLASS_TINT_COLOR &&
-                    settings.glassTintStrength === DEFAULT_GLASS_TINT_STRENGTH
-                  }
-                  action={() => {
-                    triggerHaptic("light")
-                    update({
-                      glassTintColor: DEFAULT_GLASS_TINT_COLOR,
-                      glassTintStrength: DEFAULT_GLASS_TINT_STRENGTH,
-                    })
-                  }}
-                >
-                  <HStack spacing={4} alignment="center">
-                    <Text font="body">重置</Text>
-                    <Image systemName="arrow.counterclockwise" font="subheadline" fontWeight="semibold" />
-                  </HStack>
-                </Button>
-              </HStack>
-            </>
-          ) : null}
           <Toggle
-            value={settings.glassInteractive}
-            onChanged={(value) => update({ glassInteractive: value })}
+            value={settings.heroFirstFeedCard}
+            onChanged={(value) => update({ heroFirstFeedCard: value })}
           >
             <VStack alignment="leading" spacing={2}>
-              <Text>玻璃交互</Text>
+              <Text>瀑布流首图全宽展示</Text>
               <Text font="caption2" foregroundStyle="secondaryLabel">
-                玻璃支持高亮与弹性形变，渲染开销略高
+                开启后探索与关注列表的首张作品占满整行展示
               </Text>
+            </VStack>
+          </Toggle>
+          <Toggle
+            value={settings.compactIllustCard}
+            onChanged={(value) => update({ compactIllustCard: value })}
+          >
+            <VStack alignment="leading" spacing={2}>
+              <Text>简约图片卡片</Text>
               <Text font="caption2" foregroundStyle="secondaryLabel">
-                「玻璃效果」为「系统」时不生效
+                隐藏卡片底部的作者头像、名称与点赞数
               </Text>
             </VStack>
           </Toggle>
@@ -781,26 +710,51 @@ export function SettingsView() {
               </Picker>
             </>
           ) : null}
-          <Toggle
-            value={settings.heroFirstFeedCard}
-            onChanged={(value) => update({ heroFirstFeedCard: value })}
-          >
-            <VStack alignment="leading" spacing={2}>
-              <Text>瀑布流首图全宽展示</Text>
-              {Device.isiPad ? (
-                <Text font="caption2" foregroundStyle="secondaryLabel">
-                  在平行视界、台前调度或分屏缩窄窗口时生效
+        </DisclosureGroup>
+      </Section>
+
+      {/* 4. 沉浸光感 */}
+      <Section>
+        <DisclosureGroup
+          isExpanded={expanded.ambientLight}
+          onChanged={(v) => setExpandedKey("ambientLight", v)}
+          label={
+            <HStack spacing={10} alignment="center">
+              <Image systemName="sun.max.fill" font="body" foregroundStyle="systemIndigo" frame={{ width: 24, alignment: "center" }} />
+              <Text font="headline">沉浸光感</Text>
+              <Spacer />
+              {!expanded.ambientLight ? (
+                <Text font="footnote" foregroundStyle="tertiaryLabel">
+                  {settings.ambientImmersion
+                    ? [
+                        settings.experimentalImmersion
+                          ? settings.experimentalImmersionAlgorithm === "transcend"
+                            ? "超越"
+                            : settings.experimentalImmersionAlgorithm === "geminiA"
+                              ? "Gemini A"
+                              : "Gemini B"
+                          : settings.ambientAlgorithm === "classic"
+                            ? "经典"
+                            : settings.ambientAlgorithm === "explore"
+                              ? "探索"
+                              : "极致",
+                        settings.ambientIntensity === "low"
+                          ? "低"
+                          : settings.ambientIntensity === "high"
+                            ? "高"
+                            : "中",
+                        settings.novelReaderImmersion ? "小说" : null,
+                      ]
+                        .filter(Boolean)
+                        .join("·")
+                    : "未开启"}
                 </Text>
               ) : null}
-            </VStack>
-          </Toggle>
+            </HStack>
+          }
+        >
           <Toggle
-            title="简约图片卡片"
-            value={settings.compactIllustCard}
-            onChanged={(value) => update({ compactIllustCard: value })}
-          />
-          <Toggle
-            title="沉浸效果"
+            title="沉浸光感"
             value={settings.ambientImmersion}
             onChanged={(value) => {
               if (!value) {
@@ -816,7 +770,7 @@ export function SettingsView() {
           {settings.ambientImmersion ? (
             <>
               <Picker
-                title="沉浸效果强度"
+                title="沉浸光感强度"
                 value={settings.ambientIntensity}
                 onChanged={(value: string) =>
                   update({ ambientIntensity: value as "low" | "medium" | "high" })
@@ -829,10 +783,10 @@ export function SettingsView() {
               <Picker
                 label={
                   <VStack alignment="leading" spacing={2}>
-                    <Text>沉浸效果算法</Text>
+                    <Text>沉浸光感算法</Text>
                     {settings.experimentalImmersion ? (
                       <Text font="caption2" foregroundStyle="secondaryLabel">
-                        当前由实验性沉浸算法接管
+                        当前由实验性沉浸光感算法接管
                       </Text>
                     ) : null}
                   </VStack>
@@ -855,7 +809,7 @@ export function SettingsView() {
               />
               <Toggle
                 key={`experimental-immersion-${experimentalImmersionKey}`}
-                title="实验性沉浸效果"
+                title="实验性沉浸光感"
                 value={settings.experimentalImmersion}
                 onChanged={async (value) => {
                   if (value) {
@@ -888,7 +842,7 @@ export function SettingsView() {
               {settings.experimentalImmersion ? (
                 <>
                   <Picker
-                    title="实验性沉浸算法"
+                    title="实验性沉浸光感算法"
                     value={settings.experimentalImmersionAlgorithm}
                     onChanged={(value: string) =>
                       update({
@@ -928,6 +882,193 @@ export function SettingsView() {
               ) : null}
             </>
           ) : null}
+        </DisclosureGroup>
+      </Section>
+
+      {/* 5. 液态玻璃 */}
+      <Section>
+        <DisclosureGroup
+          isExpanded={expanded.liquidGlass}
+          onChanged={(v) => setExpandedKey("liquidGlass", v)}
+          label={
+            <HStack spacing={10} alignment="center">
+              <Image systemName="drop.fill" font="body" foregroundStyle="systemCyan" frame={{ width: 24, alignment: "center" }} />
+              <Text font="headline">液态玻璃</Text>
+              <Spacer />
+              {!expanded.liquidGlass ? (
+                <Text font="footnote" foregroundStyle="tertiaryLabel">
+                  {[
+                    `顶栏:${
+                      settings.topBarEffect === "soft"
+                        ? "柔和"
+                        : settings.topBarEffect === "clear"
+                          ? "透明"
+                          : settings.topBarEffect === "tinted"
+                            ? "色调"
+                            : "系统"
+                    }`,
+                    `玻璃:${
+                      settings.glassCustomTintEnabled
+                        ? "色调"
+                        : settings.glassStrength === "system"
+                          ? "系统"
+                          : settings.glassStrength === "clear"
+                            ? "透明"
+                            : "柔和"
+                    }`,
+                  ]
+                    .filter(Boolean)
+                    .join("·")}
+                </Text>
+              ) : null}
+            </HStack>
+          }
+        >
+          <Picker
+            label={
+              <VStack alignment="leading" spacing={2}>
+                <Text>顶栏过渡</Text>
+                <Text font="caption2" foregroundStyle="secondaryLabel">
+                  {`兼容 ${Device.isiPad ? "iPadOS" : "iOS"} 27 改动引入，以实际观感为准`}
+                </Text>
+              </VStack>
+            }
+            value={settings.topBarEffect}
+            onChanged={(value: string) =>
+              update({ topBarEffect: value as TopBarEffect })
+            }
+          >
+            <Text tag="system">系统</Text>
+            <Text tag="clear">透明</Text>
+            <Text tag="soft">柔和</Text>
+            <Text tag="tinted">色调</Text>
+          </Picker>
+          <Picker
+            disabled={settings.glassCustomTintEnabled}
+            label={
+              <VStack alignment="leading" spacing={2}>
+                <Text>玻璃效果</Text>
+                <Text font="caption2" foregroundStyle="secondaryLabel">
+                  {settings.glassCustomTintEnabled
+                    ? "已由下方自定义色调接管"
+                    : "仅作用于部分玻璃"}
+                </Text>
+                <Text font="caption2" foregroundStyle="secondaryLabel">
+                  仅对新打开的页面生效
+                </Text>
+              </VStack>
+            }
+            value={
+              settings.glassCustomTintEnabled ? "tinted" : settings.glassStrength
+            }
+            onChanged={(value: string) =>
+              update({ glassStrength: value as GlassStrength })
+            }
+          >
+            {settings.glassCustomTintEnabled ? (
+              <Text tag="tinted">色调</Text>
+            ) : (
+              <>
+                <Text tag="system">系统</Text>
+                <Text tag="clear">透明</Text>
+                <Text tag="soft">柔和</Text>
+              </>
+            )}
+          </Picker>
+          <Toggle
+            value={settings.glassCustomTintEnabled}
+            onChanged={(value) => update({ glassCustomTintEnabled: value })}
+          >
+            <VStack alignment="leading" spacing={2}>
+              <Text>自定义玻璃色调</Text>
+              <Text font="caption2" foregroundStyle="secondaryLabel">
+                为玻璃、底栏、按钮与菜单注入自定义主题色
+              </Text>
+            </VStack>
+          </Toggle>
+          {settings.glassCustomTintEnabled ? (
+            <>
+              <ColorPicker
+                supportsOpacity={false}
+                title="色调颜色"
+                value={settings.glassTintColor as Color}
+                onChanged={(color) => update({ glassTintColor: color })}
+              />
+              <Slider
+                min={0}
+                max={100}
+                step={5}
+                value={settings.glassTintStrength}
+                onChanged={(value) => update({ glassTintStrength: Math.round(value) })}
+                label={<Text>着色浓度</Text>}
+                listRowSeparator={{ visibility: "hidden", edges: "bottom" }}
+              />
+              <HStack
+                alignment="center"
+                frame={{ maxWidth: "infinity" }}
+                listRowSeparator={{ visibility: "hidden", edges: "top" }}
+              >
+                <Text>重置为默认色调</Text>
+                <Spacer />
+                <Button
+                  buttonStyle="glass"
+                  controlSize="small"
+                  disabled={
+                    settings.glassTintColor === DEFAULT_GLASS_TINT_COLOR &&
+                    settings.glassTintStrength === DEFAULT_GLASS_TINT_STRENGTH
+                  }
+                  action={() => {
+                    triggerHaptic("light")
+                    update({
+                      glassTintColor: DEFAULT_GLASS_TINT_COLOR,
+                      glassTintStrength: DEFAULT_GLASS_TINT_STRENGTH,
+                    })
+                  }}
+                >
+                  <HStack spacing={4} alignment="center">
+                    <Text font="body">重置</Text>
+                    <Image systemName="arrow.counterclockwise" font="subheadline" fontWeight="semibold" />
+                  </HStack>
+                </Button>
+              </HStack>
+            </>
+          ) : null}
+          <Toggle
+            key={`glass-interactive-${glassInteractiveKey}`}
+            value={settings.glassInteractive}
+            onChanged={async (value) => {
+              if (value) {
+                let confirmed = false
+                try {
+                  confirmed = await Dialog.confirm({
+                    title: "提示",
+                    message: "玻璃支持高亮与弹性形变，可能会增加渲染开销与电量消耗",
+                    confirmLabel: "确认开启",
+                    cancelLabel: "取消",
+                  })
+                } catch {
+                  confirmed = false
+                }
+                if (confirmed) {
+                  update({ glassInteractive: true })
+                } else {
+                  setGlassInteractiveKey((k) => k + 1)
+                  update({ glassInteractive: false })
+                }
+              } else {
+                update({ glassInteractive: false })
+              }
+            }}
+          >
+            <VStack alignment="leading" spacing={2}>
+              <Text>玻璃交互</Text>
+              {!settings.glassCustomTintEnabled && settings.glassStrength === "system" ? (
+                <Text font="caption2" foregroundStyle="secondaryLabel">
+                  「玻璃效果」为「系统」时不生效
+                </Text>
+              ) : null}
+            </VStack>
+          </Toggle>
         </DisclosureGroup>
       </Section>
 

@@ -393,7 +393,7 @@ function MainTabView(props: {
 
   const isAppleMusic = settings.pageLayout === "appleMusic"
   const tabTint =
-    settings.glassStrength === "tinted" && settings.glassTintColor
+    settings.glassCustomTintEnabled && settings.glassTintColor
       ? (settings.glassTintColor as Color)
       : undefined
 
