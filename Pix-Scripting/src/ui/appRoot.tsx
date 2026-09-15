@@ -12,6 +12,7 @@ import {
   Text,
   VStack,
   ZStack,
+  type Color,
   useEffect,
   useMemo,
   useObservable,
@@ -391,11 +392,16 @@ function MainTabView(props: {
   }, [selection, discoveryPath, rankingPath, followingPath, searchPath, morePath, initialTab])
 
   const isAppleMusic = settings.pageLayout === "appleMusic"
+  const tabTint =
+    settings.glassStrength === "tinted" && settings.glassTintColor
+      ? (settings.glassTintColor as Color)
+      : undefined
 
   const tabViewProps: any = {
     selection,
     tabBarMinimizeBehavior: "onScrollDown",
     tabViewStyle: "tabBarOnly",
+    tint: tabTint,
   }
 
   if (isAppleMusic) {
