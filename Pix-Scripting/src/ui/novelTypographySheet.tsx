@@ -14,6 +14,7 @@ import {
   useState,
   VStack,
 } from "scripting"
+import { appGlass } from "./components/glass"
 import { isScriptingPro } from "../platform/pro"
 import { triggerHaptic } from "../platform/haptics"
 import {
@@ -153,7 +154,7 @@ export function NovelTypographySheet(props: { onClose?: () => void }) {
 
             <VStack
               spacing={0}
-              glassEffect={{ type: "rect", cornerRadius: 14 }}
+              glassEffect={appGlass({ type: "rect", cornerRadius: 14 })}
               contentShape={{ type: "rect", cornerRadius: 14 }}
               frame={{ maxWidth: "infinity" }}
             >
@@ -237,7 +238,7 @@ export function NovelTypographySheet(props: { onClose?: () => void }) {
 
             <VStack
               spacing={0}
-              glassEffect={{ type: "rect", cornerRadius: 14 }}
+              glassEffect={appGlass({ type: "rect", cornerRadius: 14 })}
               contentShape={{ type: "rect", cornerRadius: 14 }}
               frame={{ maxWidth: "infinity" }}
             >

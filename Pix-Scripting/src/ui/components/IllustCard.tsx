@@ -25,6 +25,7 @@ import { CachedImage, PageCountBadge } from "./CachedImage"
 import { BookmarkButton, BookmarkDetailSheet } from "./BookmarkDetailSheet"
 import { BlockWorkSheet } from "./BlockWorkSheet"
 import { FilteredContentNotice, LoadMoreTrigger } from "./RefreshableScrollView"
+import { appGlass } from "./glass"
 import { CORNER_ICON_SIZE, formatNumber } from "./formatUtils"
 import { useIllustBookmark, useLatest, useLayoutMetrics, useUserFollow } from "../hooks"
 import { isUserFollowed, notifyUserFollowChanged } from "../../store/userFollow"
@@ -301,7 +302,7 @@ export function IllustCard(props: {
         frame={cardFrame}
         onAppear={handleAppear}
         padding={hero ? 6 : 4}
-        glassEffect={{ type: "rect", cornerRadius: hero ? 16 : 14 }}
+        glassEffect={appGlass({ type: "rect", cornerRadius: hero ? 16 : 14 })}
         shadow={
           isSelected
             ? { color: "accentColor", radius: 10, y: 0 }
@@ -478,7 +479,7 @@ export function IllustCard(props: {
             width: hero ? 30 : CORNER_ICON_SIZE,
             height: hero ? 30 : CORNER_ICON_SIZE,
           }}
-          glassEffect="circle"
+          glassEffect={appGlass("circle")}
           contentShape="circle"
           zIndex={1}
           offset={hero ? { x: -5, y: 5 } : { x: -4, y: 4 }}

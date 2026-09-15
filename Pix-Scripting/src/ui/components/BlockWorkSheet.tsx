@@ -9,6 +9,7 @@ import {
   useCallback,
   useState,
 } from "scripting"
+import { appGlass } from "./glass"
 import {
   blockUser,
   isTagBlocked,
@@ -168,7 +169,7 @@ export function BlockWorkSheet(props: {
                     padding={{ horizontal: 14, vertical: 12 }}
                     frame={{ maxWidth: "infinity", alignment: "leading" }}
                     contentShape="rect"
-                    glassEffect={{ type: "rect", cornerRadius: 12 }}
+                    glassEffect={appGlass({ type: "rect", cornerRadius: 12 })}
                     border={
                       blockUserSelected
                         ? { style: "systemRed", width: 1.5 }
@@ -242,7 +243,7 @@ export function BlockWorkSheet(props: {
                           padding={{ horizontal: 14, vertical: 10 }}
                           frame={{ maxWidth: "infinity", alignment: "leading" }}
                           contentShape="rect"
-                          glassEffect={{ type: "rect", cornerRadius: 12 }}
+                          glassEffect={appGlass({ type: "rect", cornerRadius: 12 })}
                           border={
                             isSelected
                               ? { style: "systemRed", width: 1.5 }

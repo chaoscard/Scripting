@@ -17,6 +17,7 @@ import {
   useRef,
   useState,
 } from "scripting"
+import { appGlass } from "./glass"
 import { AppNavigationLink, useDualRoute } from "../DualRouteContext"
 import { CachedImage } from "./CachedImage"
 import { BookmarkButton, BookmarkDetailSheet } from "./BookmarkDetailSheet"
@@ -158,7 +159,7 @@ export function NovelCard(props: {
             padding={10}
             onAppear={handleAppear}
             alignment="top"
-            glassEffect={{ type: "rect", cornerRadius: 14 }}
+            glassEffect={appGlass({ type: "rect", cornerRadius: 14 })}
             shadow={
               isSelected
                 ? { color: "accentColor", radius: 10, y: 0 }
@@ -295,7 +296,7 @@ export function NovelCard(props: {
           buttonStyle="plain"
           action={topTrailingAction.action}
           frame={{ width: CORNER_ICON_SIZE, height: CORNER_ICON_SIZE }}
-          glassEffect="circle"
+          glassEffect={appGlass("circle")}
           contentShape="circle"
           zIndex={1}
           offset={{ x: -4, y: 4 }}

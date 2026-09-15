@@ -30,6 +30,7 @@ import {
   type Color,
   type ScrollViewProxy,
 } from "scripting"
+import { appGlass } from "./components/glass"
 import {
   addNovelBookmark,
   addNovelMarker,
@@ -996,7 +997,7 @@ export function NovelDetailView(props: { novelID: number }) {
           <ZStack
             alignment="center"
             frame={{ width: 46, height: 46 }}
-            glassEffect="circle"
+            glassEffect={appGlass("circle")}
             contentShape="circle"
             shadow={{ color: "#0000002E", radius: 8, y: 2 }}
           >
@@ -1115,7 +1116,7 @@ export function NovelDetailView(props: { novelID: number }) {
                                 <ZStack
                                   alignment="center"
                                   frame={{ width: 36, height: 36 }}
-                                  glassEffect="circle"
+                                  glassEffect={appGlass("circle")}
                                   contentShape="circle"
                                   onTapGesture={() => handlePageChange(currentPage - 1)}
                                 >
@@ -1138,7 +1139,7 @@ export function NovelDetailView(props: { novelID: number }) {
                                   spacing={6}
                                   alignment="center"
                                   padding={{ horizontal: 14, vertical: 8 }}
-                                  glassEffect="capsule"
+                                  glassEffect={appGlass("capsule")}
                                   contentShape="capsule"
                                 >
                                   <Text font="body" fontWeight="bold">
@@ -1175,7 +1176,7 @@ export function NovelDetailView(props: { novelID: number }) {
                               <ZStack
                                 alignment="center"
                                 frame={{ width: 36, height: 36 }}
-                                glassEffect="circle"
+                                glassEffect={appGlass("circle")}
                                 contentShape="circle"
                                 onTapGesture={
                                   !markerBusy
@@ -1197,7 +1198,7 @@ export function NovelDetailView(props: { novelID: number }) {
                                 <ZStack
                                   alignment="center"
                                   frame={{ width: 36, height: 36 }}
-                                  glassEffect="circle"
+                                  glassEffect={appGlass("circle")}
                                   contentShape="circle"
                                   onTapGesture={() => handlePageChange(currentPage + 1)}
                                 >
@@ -1493,7 +1494,7 @@ export function NovelDetailView(props: { novelID: number }) {
                 alignment="leading"
                 spacing={10}
                 padding={{ top: 12, horizontal: 12, bottom: 12 }}
-                glassEffect={{ type: "rect", cornerRadius: 14 }}
+                glassEffect={appGlass({ type: "rect", cornerRadius: 14 })}
                 frame={{ maxWidth: "infinity" }}
                 contentShape="rect"
               >

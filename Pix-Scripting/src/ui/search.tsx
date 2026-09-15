@@ -24,6 +24,7 @@ import {
   VStack,
   ZStack,
 } from "scripting"
+import { appGlass } from "./components/glass"
 import {
   PAGE_TOOLBAR_BACKGROUND,
   PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
@@ -1152,7 +1153,7 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
                   alignment="center"
                   spacing={6}
                   padding={{ horizontal: 12, vertical: 6 }}
-                  glassEffect="capsule"
+                  glassEffect={appGlass("capsule")}
                   contentShape="capsule"
                 >
                   <Image systemName="magnifyingglass" font="caption" foregroundStyle="secondaryLabel" />
@@ -1548,7 +1549,7 @@ function DirectRouteSection(props: {
     <VStack alignment="leading" spacing={8} padding={{ horizontal: 16, top: 4, bottom: 6 }} frame={{ maxWidth: "infinity" }}>
       <VStack
         spacing={0}
-        glassEffect={{ type: "rect", cornerRadius: 12 }}
+        glassEffect={appGlass({ type: "rect", cornerRadius: 12 })}
         clipShape={{ type: "rect", cornerRadius: 12 }}
         frame={{ maxWidth: "infinity" }}
       >
@@ -1578,7 +1579,7 @@ function DirectRouteSection(props: {
                   <ZStack
                     alignment="center"
                     frame={{ width: 32, height: 32 }}
-                    glassEffect="circle"
+                    glassEffect={appGlass("circle")}
                     contentShape="circle"
                   >
                     <Image
@@ -1636,7 +1637,7 @@ function TagSuggestionsSection(props: {
       ) : (
         <VStack
           spacing={0}
-          glassEffect={{ type: "rect", cornerRadius: 12 }}
+          glassEffect={appGlass({ type: "rect", cornerRadius: 12 })}
           clipShape={{ type: "rect", cornerRadius: 12 }}
           frame={{ maxWidth: "infinity" }}
         >
@@ -1815,7 +1816,7 @@ function SearchHistorySection(props: {
       ) : (
         <VStack
           spacing={0}
-          glassEffect={{ type: "rect", cornerRadius: 12 }}
+          glassEffect={appGlass({ type: "rect", cornerRadius: 12 })}
           clipShape={{ type: "rect", cornerRadius: 12 }}
           frame={{ maxWidth: "infinity" }}
         >

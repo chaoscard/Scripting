@@ -18,6 +18,7 @@ import {
   VStack,
   type VirtualNode,
 } from "scripting"
+import { appGlass } from "../components/glass"
 import type { PixivNovel, PixivNovelDetail } from "../../types"
 import {
   cleanHtmlCaption,
@@ -397,7 +398,7 @@ export function NovelAISheet(props: {
       {isMultiPage && mode !== "caption" && (
         <HStack
           padding={{ horizontal: 12, vertical: 8 }}
-          glassEffect="capsule"
+          glassEffect={appGlass("capsule")}
           contentShape="capsule"
           alignment="center"
         >

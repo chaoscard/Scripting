@@ -16,6 +16,7 @@ import {
   WebView,
   type Color,
 } from "scripting"
+import { appGlass } from "./components/glass"
 import { requestPixivRoute } from "../store/routeNavigation"
 import { CachedImage, presentExternalURL, routeForDescriptionLink } from "./components"
 import { useLayoutMetrics } from "./hooks"
@@ -426,7 +427,7 @@ function NovelUploadedImageItemView(props: {
         <HStack
           spacing={8}
           padding={{ horizontal: 14, vertical: 10 }}
-          glassEffect={{ type: "rect", cornerRadius: 10 }}
+          glassEffect={appGlass({ type: "rect", cornerRadius: 10 })}
           alignment="center"
         >
           <Image systemName="photo" foregroundStyle="secondaryLabel" />
@@ -446,7 +447,7 @@ function NovelUploadedImageItemView(props: {
       frame={{ maxWidth: "infinity" }}
     >
       <VStack
-        glassEffect={{ type: "rect", cornerRadius: 14 }}
+        glassEffect={appGlass({ type: "rect", cornerRadius: 14 })}
         clipped={true}
         contextMenu={{
           menuItems: (
@@ -510,7 +511,7 @@ function NovelPixivImageItemView(props: {
         <HStack
           spacing={8}
           padding={{ horizontal: 14, vertical: 10 }}
-          glassEffect={{ type: "rect", cornerRadius: 10 }}
+          glassEffect={appGlass({ type: "rect", cornerRadius: 10 })}
           alignment="center"
         >
           <ProgressView progressViewStyle="circular" controlSize="small" />
@@ -533,7 +534,7 @@ function NovelPixivImageItemView(props: {
           <HStack
             spacing={8}
             padding={{ horizontal: 14, vertical: 10 }}
-            glassEffect={{ type: "rect", cornerRadius: 10 }}
+            glassEffect={appGlass({ type: "rect", cornerRadius: 10 })}
             frame={{ maxWidth: "infinity" }}
             alignment="center"
           >
@@ -605,7 +606,7 @@ function NovelPixivImageItemView(props: {
           alignment="center"
           spacing={8}
           padding={{ horizontal: 12, vertical: 12 }}
-          glassEffect={{ type: "rect", cornerRadius: 14 }}
+          glassEffect={appGlass({ type: "rect", cornerRadius: 14 })}
           frame={{ maxWidth: "infinity" }}
         >
           {previewUrl || highResUrl ? (
@@ -722,7 +723,7 @@ function NovelChunkRenderer(props: {
           <HStack
             spacing={6}
             padding={{ horizontal: 10, vertical: 6 }}
-            glassEffect={{ type: "rect", cornerRadius: 8 }}
+            glassEffect={appGlass({ type: "rect", cornerRadius: 8 })}
           >
             <Text font="subheadline" foregroundStyle="#007AFF">
               📄 跳转至第 {item.page} 页

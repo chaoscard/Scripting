@@ -7,6 +7,7 @@ import {
   useMemo,
   useState,
 } from "scripting"
+import { appGlass } from "./glass"
 import { LinkedDescription } from "./LinkedDescription"
 import { estimateVisualLines, htmlToPlainText } from "./formatUtils"
 export function ExpandableIntroduction(props: {
@@ -44,7 +45,7 @@ export function ExpandableIntroduction(props: {
         alignment="leading"
         spacing={8}
         padding={{ top: 12, horizontal: 12, bottom: exceedsFiveLines ? 10 : 12 }}
-        glassEffect={{ type: "rect", cornerRadius: 14 }}
+        glassEffect={appGlass({ type: "rect", cornerRadius: 14 })}
         frame={{ maxWidth: "infinity" }}
         contentShape="rect"
         onTapGesture={

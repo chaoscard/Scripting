@@ -9,6 +9,7 @@ import {
 import type { PixivIllustration } from "../../types"
 import type { FollowRestrict } from "../../store/userFollow"
 import { requestPixivRoute } from "../../store/routeNavigation"
+import { appGlass } from "../components/glass"
 
 export interface IllustQuickActionButtonProps {
   illust: PixivIllustration | null
@@ -215,7 +216,7 @@ export function IllustQuickActionButton(props: IllustQuickActionButtonProps) {
         <ZStack
           alignment="center"
           frame={{ width: 46, height: 46 }}
-          glassEffect="circle"
+          glassEffect={appGlass("circle")}
           contentShape="circle"
           shadow={{ color: "#0000002E", radius: 8, y: 2 }}
         >

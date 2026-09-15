@@ -1,5 +1,6 @@
 import {
   Button,
+  ColorPicker,
   Device,
   DisclosureGroup,
   Group,
@@ -9,11 +10,13 @@ import {
   NavigationLink,
   Picker,
   Section,
+  Slider,
   Spacer,
   Text,
   TextField,
   Toggle,
   Widget,
+  type Color,
   useEffect,
   useMemo,
   useState,
@@ -32,6 +35,7 @@ import {
 import { clearHistory, historyCount, onHistoryChanged } from "../store/history"
 import { populateWidgetPool, refreshAllWidgets } from "../store/widgetStore"
 import { FeatureHighlightsSheet } from "./components/FeatureHighlightsSheet"
+import { DEFAULT_GLASS_TINT_COLOR, DEFAULT_GLASS_TINT_STRENGTH } from "./components/glass"
 import {
   formatCustomRankingSummary,
   loadSettings,
@@ -41,6 +45,7 @@ import {
   type BaseAmbientAlgorithm,
   type ExperimentalAmbientAlgorithm,
   type GeminiMotionSpeed,
+  type GlassStrength,
   type LaunchPage,
   type QuickActionButtonAction,
   type QuickActionButtonPosition,
@@ -636,10 +641,93 @@ export function SettingsView() {
               update({ topBarEffect: value as TopBarEffect })
             }
           >
-            <Text tag="none">透明</Text>
-            <Text tag="soft">默认</Text>
-            <Text tag="hard">色调</Text>
+            <Text tag="system">系统</Text>
+            <Text tag="clear">透明</Text>
+            <Text tag="soft">柔和</Text>
+            <Text tag="tinted">色调</Text>
           </Picker>
+          <Picker
+            label={
+              <VStack alignment="leading" spacing={2}>
+                <Text>玻璃效果</Text>
+                <Text font="caption2" foregroundStyle="secondaryLabel">
+                  仅作用于部分玻璃
+                </Text>
+                <Text font="caption2" foregroundStyle="secondaryLabel">
+                  仅对新打开的页面生效
+                </Text>
+              </VStack>
+            }
+            value={settings.glassStrength}
+            onChanged={(value: string) =>
+              update({ glassStrength: value as GlassStrength })
+            }
+          >
+            <Text tag="system">系统</Text>
+            <Text tag="clear">透明</Text>
+            <Text tag="soft">柔和</Text>
+            <Text tag="tinted">色调</Text>
+          </Picker>
+          {settings.glassStrength === "tinted" ? (
+            <>
+              <ColorPicker
+                supportsOpacity={false}
+                title="色调颜色"
+                value={settings.glassTintColor as Color}
+                onChanged={(color) => update({ glassTintColor: color })}
+              />
+              <Slider
+                min={0}
+                max={100}
+                step={5}
+                value={settings.glassTintStrength}
+                onChanged={(value) => update({ glassTintStrength: Math.round(value) })}
+                label={<Text>着色浓度</Text>}
+                listRowSeparator={{ visibility: "hidden", edges: "bottom" }}
+              />
+              <HStack
+                alignment="center"
+                frame={{ maxWidth: "infinity" }}
+                listRowSeparator={{ visibility: "hidden", edges: "top" }}
+              >
+                <Text>重置为默认色调</Text>
+                <Spacer />
+                <Button
+                  buttonStyle="glass"
+                  controlSize="small"
+                  disabled={
+                    settings.glassTintColor === DEFAULT_GLASS_TINT_COLOR &&
+                    settings.glassTintStrength === DEFAULT_GLASS_TINT_STRENGTH
+                  }
+                  action={() => {
+                    triggerHaptic("light")
+                    update({
+                      glassTintColor: DEFAULT_GLASS_TINT_COLOR,
+                      glassTintStrength: DEFAULT_GLASS_TINT_STRENGTH,
+                    })
+                  }}
+                >
+                  <HStack spacing={4} alignment="center">
+                    <Text font="body">重置</Text>
+                    <Image systemName="arrow.counterclockwise" font="subheadline" fontWeight="semibold" />
+                  </HStack>
+                </Button>
+              </HStack>
+            </>
+          ) : null}
+          {settings.glassStrength !== "system" ? (
+            <Toggle
+              value={settings.glassInteractive}
+              onChanged={(value) => update({ glassInteractive: value })}
+            >
+              <VStack alignment="leading" spacing={2}>
+                <Text>玻璃交互</Text>
+                <Text font="caption2" foregroundStyle="secondaryLabel">
+                  玻璃支持高亮与弹性形变，渲染开销略高
+                </Text>
+              </VStack>
+            </Toggle>
+          ) : null}
           {Device.isiPad ? (
             <>
               <Toggle

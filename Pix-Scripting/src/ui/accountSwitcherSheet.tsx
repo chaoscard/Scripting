@@ -15,6 +15,7 @@ import {
   VStack,
   ZStack,
 } from "scripting"
+import { appGlass } from "./components/glass"
 import { session } from "../api/session"
 import type { StoredAccountProfile } from "../api/auth"
 import { AvatarImage } from "./components/CachedImage"
@@ -144,7 +145,7 @@ export function AccountSwitcherSheet(props: {
 
             <VStack
               spacing={0}
-              glassEffect={{ type: "rect", cornerRadius: 14 }}
+              glassEffect={appGlass({ type: "rect", cornerRadius: 14 })}
               clipShape={{ type: "rect", cornerRadius: 14 }}
               frame={{ maxWidth: "infinity" }}
             >
@@ -229,7 +230,7 @@ export function AccountSwitcherSheet(props: {
                             alignment="center"
                             spacing={4}
                             padding={{ horizontal: 8, vertical: 4 }}
-                            glassEffect="capsule"
+                            glassEffect={appGlass("capsule")}
                             contentShape="capsule"
                           >
                             <Image systemName="checkmark.circle.fill" font="caption" foregroundStyle="#34C759" />
@@ -255,7 +256,7 @@ export function AccountSwitcherSheet(props: {
           {/* 2. 操作功能列表 */}
           <VStack
             spacing={0}
-            glassEffect={{ type: "rect", cornerRadius: 14 }}
+            glassEffect={appGlass({ type: "rect", cornerRadius: 14 })}
             clipShape={{ type: "rect", cornerRadius: 14 }}
             frame={{ maxWidth: "infinity" }}
           >

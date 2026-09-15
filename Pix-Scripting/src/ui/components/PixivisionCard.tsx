@@ -12,6 +12,7 @@ import {
   useMemo,
   useState,
 } from "scripting"
+import { appGlass } from "./glass"
 import { AppNavigationLink, useDualRoute } from "../DualRouteContext"
 import { CachedImage } from "./CachedImage"
 import { TagChip } from "./TagChip"
@@ -71,7 +72,7 @@ export function PixivisionCard(props: {
         frame={cardFrame}
         onAppear={handleAppear}
         padding={6}
-        glassEffect={{ type: "rect", cornerRadius: 16 }}
+        glassEffect={appGlass({ type: "rect", cornerRadius: 16 })}
         shadow={
           isSelected
             ? { color: "accentColor", radius: 10, y: 0 }

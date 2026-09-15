@@ -17,6 +17,7 @@ import {
   useState,
   type VirtualNode,
 } from "scripting"
+import { appGlass } from "../components/glass"
 import { isAIAvailable } from "../../api/aiService"
 import { isScriptingPro } from "../../platform/pro"
 import { ErrorView } from "../components"
@@ -100,7 +101,7 @@ export function OriginalCaptionCollapsible(props: {
       {showOriginal && (
         <VStack
           padding={12}
-          glassEffect={{ type: "rect", cornerRadius: 12 }}
+          glassEffect={appGlass({ type: "rect", cornerRadius: 12 })}
           contentShape={{ type: "rect", cornerRadius: 12 }}
           frame={{ maxWidth: "infinity" }}
           alignment="leading"

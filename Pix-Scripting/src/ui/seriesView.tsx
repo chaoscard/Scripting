@@ -14,6 +14,7 @@ import {
   VStack,
   ZStack,
 } from "scripting"
+import { appGlass } from "./components/glass"
 import {
   PAGE_TOOLBAR_BACKGROUND,
   PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
@@ -634,7 +635,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
               <HStack
                 alignment="center"
                 padding={{ horizontal: 20, vertical: 9 }}
-                glassEffect={{ type: "capsule", style: "continuous" }}
+                glassEffect={appGlass({ type: "capsule", style: "continuous" })}
                 clipShape={{ type: "capsule", style: "continuous" }}
                 shadow={{ color: "#00000028", radius: 10, y: 4 }}
                 offset={{ x: 0, y: 19 }}

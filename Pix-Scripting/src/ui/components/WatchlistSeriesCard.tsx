@@ -12,6 +12,7 @@ import {
   ZStack,
   useState,
 } from "scripting"
+import { appGlass } from "./glass"
 import { AppNavigationLink, useDualRoute } from "../DualRouteContext"
 import { AvatarImage, CachedImage } from "./CachedImage"
 import { formatNumber } from "./formatUtils"
@@ -109,7 +110,7 @@ export function WatchlistSeriesCard(props: {
         alignment="leading"
         spacing={4}
         padding={14}
-        glassEffect={{ type: "rect", cornerRadius: 14 }}
+        glassEffect={appGlass({ type: "rect", cornerRadius: 14 })}
         shadow={{ color: "#0000000F", radius: 18, y: 8 }}
         frame={{ maxWidth: "infinity" }}
       >
@@ -150,7 +151,7 @@ export function WatchlistSeriesCard(props: {
           padding={10}
           onAppear={onAppear}
           alignment="top"
-          glassEffect={{ type: "rect", cornerRadius: 14 }}
+          glassEffect={appGlass({ type: "rect", cornerRadius: 14 })}
           shadow={
             isSelected
               ? { color: "accentColor", radius: 10, y: 0 }
@@ -228,7 +229,7 @@ export function WatchlistSeriesCard(props: {
         <ZStack
           alignment="center"
           frame={{ width: 34, height: 34 }}
-          glassEffect="circle"
+          glassEffect={appGlass("circle")}
           contentShape="circle"
           offset={{ x: -8, y: -8 }}
           zIndex={2}

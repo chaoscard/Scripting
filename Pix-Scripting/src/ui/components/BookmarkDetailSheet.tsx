@@ -20,6 +20,7 @@ import {
   useRef,
   useState,
 } from "scripting"
+import { appGlass } from "./glass"
 import {
   addBookmark,
   addNovelBookmark,
@@ -244,7 +245,7 @@ export function BookmarkDetailSheet(props: {
                             spacing={8}
                             alignment="center"
                             padding={{ horizontal: 14, vertical: 6 }}
-                            glassEffect="capsule"
+                            glassEffect={appGlass("capsule")}
                             glassEffectTransition="materialize"
                             frame={{ maxWidth: "infinity" }}
                           >
@@ -299,7 +300,7 @@ export function BookmarkDetailSheet(props: {
                 spacing={10}
                 alignment="center"
                 padding={{ horizontal: 12, vertical: 10 }}
-                glassEffect={{ type: "rect", cornerRadius: 14 }}
+                glassEffect={appGlass({ type: "rect", cornerRadius: 14 })}
                 frame={{ maxWidth: "infinity" }}
               >
                 <Image
@@ -407,7 +408,7 @@ export function BookmarkButton(props: {
         }}
         buttonStyle="plain"
         frame={{ width: size, height: size }}
-        glassEffect="circle"
+        glassEffect={appGlass("circle")}
         contentShape="circle"
         disabled={props.disabled || longPressLocked}
         simultaneousGesture={

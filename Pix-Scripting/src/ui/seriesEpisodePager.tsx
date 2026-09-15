@@ -8,6 +8,7 @@ import {
   useState,
   ZStack,
 } from "scripting"
+import { appGlass } from "./components/glass"
 import {
   fetchSeriesNav,
   getCachedSeriesNav,
@@ -236,7 +237,7 @@ export function SeriesEpisodePager(props: {
           <ZStack
             alignment="center"
             frame={{ width: 44, height: 44 }}
-            glassEffect="circle"
+            glassEffect={appGlass("circle")}
             contentShape="circle"
             shadow={{ color: "#0000000D", radius: 8, y: 2 }}
           >
@@ -260,7 +261,7 @@ export function SeriesEpisodePager(props: {
           alignment="center"
           spacing={6}
           padding={{ horizontal: 16, vertical: 11 }}
-          glassEffect="capsule"
+          glassEffect={appGlass("capsule")}
           contentShape="capsule"
           shadow={{ color: "#0000000D", radius: 8, y: 2 }}
         >
@@ -289,7 +290,7 @@ export function SeriesEpisodePager(props: {
           <ZStack
             alignment="center"
             frame={{ width: 44, height: 44 }}
-            glassEffect="circle"
+            glassEffect={appGlass("circle")}
             contentShape="circle"
             shadow={{ color: "#0000000D", radius: 8, y: 2 }}
           >

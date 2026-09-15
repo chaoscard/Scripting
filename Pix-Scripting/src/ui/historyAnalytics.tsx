@@ -23,6 +23,7 @@ import {
   VStack,
   ZStack,
 } from "scripting"
+import { appGlass } from "./components/glass"
 import {
   computeHistoryAnalytics,
   type AnalyticsScopeKind,
@@ -108,7 +109,7 @@ function OverviewMetricsCard(props: {
       alignment="leading"
       spacing={14}
       padding={16}
-      glassEffect={{ type: "rect", cornerRadius: 16 }}
+      glassEffect={appGlass({ type: "rect", cornerRadius: 16 })}
       frame={{ maxWidth: "infinity", alignment: "leading" }}
     >
       <HStack alignment="center" spacing={6}>
@@ -212,7 +213,7 @@ function HourlyDistributionSection(props: {
       alignment="leading"
       spacing={14}
       padding={16}
-      glassEffect={{ type: "rect", cornerRadius: 16 }}
+      glassEffect={appGlass({ type: "rect", cornerRadius: 16 })}
       frame={{ maxWidth: "infinity", alignment: "leading" }}
     >
       <VStack alignment="leading" spacing={4} frame={{ maxWidth: "infinity", alignment: "leading" }}>
@@ -316,7 +317,7 @@ function ActivityHeatmapSection(props: {
       alignment="leading"
       spacing={14}
       padding={16}
-      glassEffect={{ type: "rect", cornerRadius: 16 }}
+      glassEffect={appGlass({ type: "rect", cornerRadius: 16 })}
       frame={{ maxWidth: "infinity", alignment: "leading" }}
     >
       <HStack alignment="center" spacing={6}>
@@ -396,7 +397,7 @@ function TopTagsSection(props: {
       alignment="leading"
       spacing={14}
       padding={16}
-      glassEffect={{ type: "rect", cornerRadius: 16 }}
+      glassEffect={appGlass({ type: "rect", cornerRadius: 16 })}
       frame={{ maxWidth: "infinity", alignment: "leading" }}
     >
       <HStack alignment="center" spacing={6}>
@@ -526,7 +527,7 @@ function TopCreatorsSection(props: {
       alignment="leading"
       spacing={14}
       padding={16}
-      glassEffect={{ type: "rect", cornerRadius: 16 }}
+      glassEffect={appGlass({ type: "rect", cornerRadius: 16 })}
       frame={{ maxWidth: "infinity", alignment: "leading" }}
     >
       <HStack alignment="center" spacing={6}>
@@ -773,7 +774,7 @@ function FormatAndAspectSection(props: {
       alignment="leading"
       spacing={14}
       padding={16}
-      glassEffect={{ type: "rect", cornerRadius: 16 }}
+      glassEffect={appGlass({ type: "rect", cornerRadius: 16 })}
       frame={{ maxWidth: "infinity", alignment: "leading" }}
     >
       <HStack alignment="center" spacing={6}>
@@ -875,7 +876,7 @@ function NovelMilestoneSection(props: {
       alignment="leading"
       spacing={10}
       padding={16}
-      glassEffect={{ type: "rect", cornerRadius: 16 }}
+      glassEffect={appGlass({ type: "rect", cornerRadius: 16 })}
       frame={{ maxWidth: "infinity", alignment: "leading" }}
     >
       <HStack alignment="center" spacing={6}>

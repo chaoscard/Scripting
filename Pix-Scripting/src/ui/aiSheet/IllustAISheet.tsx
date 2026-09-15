@@ -24,6 +24,7 @@ import {
   type Color,
   type VirtualNode,
 } from "scripting"
+import { appGlass } from "../components/glass"
 import type { PixivIllustration } from "../../types"
 import {
   cleanHtmlCaption,
@@ -1000,7 +1001,7 @@ export function IllustAISheet(props: {
                     <VStack
                       spacing={8}
                       padding={{ horizontal: 16, vertical: 10 }}
-                      glassEffect={{ type: "rect", cornerRadius: 14 }}
+                      glassEffect={appGlass({ type: "rect", cornerRadius: 14 })}
                       contentShape={{ type: "rect", cornerRadius: 14 }}
                       frame={{ maxWidth: "infinity" }}
                     >

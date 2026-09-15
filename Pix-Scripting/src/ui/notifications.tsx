@@ -13,6 +13,7 @@ import {
   useMemo,
   useState,
 } from "scripting"
+import { appGlass } from "./components/glass"
 import {
   notificationViewMore,
   notifications,
@@ -242,7 +243,7 @@ function NotificationRow(props: {
       spacing={10}
       alignment="top"
       padding={10}
-      glassEffect={{ type: "rect", cornerRadius: 14 }}
+      glassEffect={appGlass({ type: "rect", cornerRadius: 14 })}
       shadow={{ color: "#0000000F", radius: 18, y: 8 }}
       frame={{ maxWidth: "infinity", alignment: "leading" }}
     >

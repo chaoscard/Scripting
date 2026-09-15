@@ -15,9 +15,31 @@ export type PageLayout = "classic" | "appleMusic"
 export const PAGE_LAYOUT_VALUES: ReadonlyArray<PageLayout> = ["appleMusic", "classic"]
 
 /** 顶栏过渡：导航栏与滚动内容交界处的处理方式，详见 ui/components/pageChrome.ts
- *  存储值 → 设置页显示名：none=透明 / soft=默认 / hard=色调 */
-export type TopBarEffect = "hard" | "soft" | "none"
-export const TOP_BAR_EFFECT_VALUES: ReadonlyArray<TopBarEffect> = ["hard", "soft", "none"]
+ *  与设置项「玻璃效果」**共用同一套强度轴命名**：system=系统 / clear=透明 / soft=柔和 / tinted=色调
+ *  实际映射：system→automatic、clear→关闭边缘效果、soft→soft、tinted→hard
+ *  ⚠️ 这里的 soft 就是系统 scrollEdgeEffectStyle 的 soft；而「玻璃效果」那边的 soft 映射到的是
+ *     UIGlass.regular() —— **同名不同源，别当成同一个常量**（详见 ui/components/glass.ts）。 */
+export type TopBarEffect = "system" | "clear" | "soft" | "tinted"
+export const TOP_BAR_EFFECT_VALUES: ReadonlyArray<TopBarEffect> = [
+  "system",
+  "clear",
+  "soft",
+  "tinted",
+]
+
+/** 玻璃强度：App 自绘玻璃（glassEffect）的材质档位，详见 ui/components/glass.ts
+ *  存储值 → 设置页显示名：system=系统 / clear=透明 / soft=柔和 / tinted=色调
+ *  实际映射：system→不注入材质（跟随系统）、clear→UIGlass.clear()、soft→UIGlass.regular()、
+ *           tinted→UIGlass.regular().tint(用户色 × 浓度)
+ *  ⚠️ soft 只是我们对「柔和」这一档的键名，系统素材 API 其实叫 regular；
+ *     「顶栏过渡」那边的 soft 才是系统的 soft。同名不同源，别当成同一个常量。 */
+export type GlassStrength = "system" | "clear" | "soft" | "tinted"
+export const GLASS_STRENGTH_VALUES: ReadonlyArray<GlassStrength> = [
+  "system",
+  "clear",
+  "soft",
+  "tinted",
+]
 export type CloseButtonAction = "minimize" | "exit"
 export type WatchlistSortOrder = "asc" | "desc"
 export type AmbientIntensity = "low" | "medium" | "high"
@@ -119,6 +141,10 @@ export interface AppSettings {
   hideNovels: boolean
   pageLayout: PageLayout
   topBarEffect: TopBarEffect
+  glassStrength: GlassStrength
+  glassTintColor: string
+  glassTintStrength: number
+  glassInteractive: boolean
   splitViewEnabled: boolean
   waterfallColumnsIpadLandscape: WaterfallColumnsIpadLandscape
   waterfallColumnsIpadPortrait: WaterfallColumnsIpadPortrait
@@ -217,6 +243,10 @@ const DEFAULT_SETTINGS: AppSettings = {
   hideNovels: false,
   pageLayout: "appleMusic",
   topBarEffect: "soft",
+  glassStrength: "system",
+  glassTintColor: "#8e8e93",
+  glassTintStrength: 35,
+  glassInteractive: false,
   splitViewEnabled: false,
   waterfallColumnsIpadLandscape: 3,
   waterfallColumnsIpadPortrait: 3,
@@ -424,6 +454,12 @@ export async function prepareSettingsStorage(): Promise<void> {
 
 function isOneOf<T extends string>(value: unknown, values: readonly T[]): value is T {
   return typeof value === "string" && values.includes(value as T)
+}
+
+function clampPercent(value: unknown, fallback: number): number {
+  const num = typeof value === "number" && Number.isFinite(value) ? value : Number.NaN
+  if (!Number.isFinite(num)) return fallback
+  return Math.round(Math.min(100, Math.max(0, num)))
 }
 
 function boolOr(value: unknown, fallback: boolean): boolean {
@@ -654,6 +690,15 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
     topBarEffect: isOneOf(stored?.topBarEffect, TOP_BAR_EFFECT_VALUES)
       ? stored.topBarEffect
       : DEFAULT_SETTINGS.topBarEffect,
+    glassStrength: isOneOf(stored?.glassStrength, GLASS_STRENGTH_VALUES)
+      ? stored.glassStrength
+      : DEFAULT_SETTINGS.glassStrength,
+    glassTintColor:
+      typeof stored?.glassTintColor === "string" && stored.glassTintColor.trim().length > 0
+        ? stored.glassTintColor
+        : DEFAULT_SETTINGS.glassTintColor,
+    glassTintStrength: clampPercent(stored?.glassTintStrength, DEFAULT_SETTINGS.glassTintStrength),
+    glassInteractive: boolOr(stored?.glassInteractive, DEFAULT_SETTINGS.glassInteractive),
     splitViewEnabled: boolOr(stored?.splitViewEnabled, DEFAULT_SETTINGS.splitViewEnabled),
     waterfallColumnsIpadLandscape: parseWaterfallColumnsIpadLandscape(
       stored?.waterfallColumnsIpadLandscape

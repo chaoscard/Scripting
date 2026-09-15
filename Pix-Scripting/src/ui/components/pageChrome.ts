@@ -28,11 +28,16 @@ import type { TopBarEffect } from "../../store/settings"
  * 保持无材质，顶部观感只能靠滚动边缘效果（想要更浓的雾只能页面层自绘）。
  *
  * 【设置项】
- * 「我的 → 设置 → 外观布局 → 顶栏过渡」，选项命名对齐 iOS 系统液态玻璃的强度轴：
- *   透明（none） / 默认（soft） / 色调（hard）
- * 默认取 soft：iOS 26 上等于系统原生观感；iOS 27 上 A 段（可读性最要紧的那段）同样是
- * 奶白磨砂，只丢 B 段，属可接受的取舍。
- * 存储值是 TopBarEffect（none | soft | hard），映射见 ui/settings.tsx。
+ * 「我的 → 设置 → 外观布局 → 顶栏过渡」，与设置项「玻璃效果」**共用同一套强度轴命名**：
+ *   系统（system）/ 透明（clear）/ 柔和（soft）/ 色调（tinted）
+ * 实际映射：system→automatic、clear→关闭边缘效果、soft→soft、tinted→hard。
+ * ⚠️ 这里的 soft 就是系统 scrollEdgeEffectStyle 的 soft；「玻璃效果」那边的 soft 映射到的是
+ *   UIGlass.regular()（**同名不同源**，别当成同一个常量）。
+ * 默认取 soft：iOS 26 上等于系统原生观感；iOS 27 上 A 段（可读性最要紧的那段）
+ * 同样是奶白磨砂，只丢 B 段，属可接受的取舍。
+ * ⚠️ 「系统」档 = automatic，在 iOS 27 上就是当初那句「B 段没有过渡」的默认行为，
+ *   特意保留给“完全交还系统裁量”的用户。
+ * 存储值是 TopBarEffect（system | clear | soft | tinted）。非法/陈旧取值会在归一化时直接回退默认值。
  *
  * ⚠️ 下面两个常量是一组，改动前请先读完上面这段。
  */
@@ -53,20 +58,27 @@ export const PAGE_TOOLBAR_BACKGROUND_VISIBILITY: CommonViewProps["toolbarBackgro
  * 只作用于 top 边：写成 all 会波及层级内所有滚动视图的四条边（例如横向标签行、
  * 嵌套 List 的左右两侧），副作用面过大。
  */
+/** 设置项键名 → 系统 scrollEdgeEffectStyle 取值（「透明」不走本表，见下方分支） */
+const TOP_BAR_STYLE_MAP = {
+  system: "automatic",
+  soft: "soft",
+  tinted: "hard",
+} as const
 export function topBarScrollEdge(effect: TopBarEffect): {
   scrollEdgeEffectStyle: CommonViewProps["scrollEdgeEffectStyle"]
   scrollEdgeEffectHidden: CommonViewProps["scrollEdgeEffectHidden"]
 } {
-  if (effect === "none") {
+  if (effect === "clear") {
     // 「透明」：显式关闭顶部滚动边缘效果 —— A / B 两段都没有雾
     return {
       scrollEdgeEffectStyle: undefined,
       scrollEdgeEffectHidden: { edges: "top", hidden: true },
     }
   }
-  // 「默认」/「色调」：交给对应系统样式；注意 soft 在 iOS 27 上只作用于 A 段
+  // 「系统」→ automatic（交还系统裁量）/「柔和」→ soft /「色调」→ hard
+  // 注意 soft 在 iOS 27 上只作用于 A 段（状态栏），B 段（App 标题栏）无过渡
   return {
-    scrollEdgeEffectStyle: { style: effect, edges: "top" },
+    scrollEdgeEffectStyle: { style: TOP_BAR_STYLE_MAP[effect], edges: "top" },
     scrollEdgeEffectHidden: undefined,
   }
 }

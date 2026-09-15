@@ -19,6 +19,7 @@ import {
   useState,
   VStack,
 } from "scripting"
+import { appGlass } from "./components/glass"
 import {
   comments,
   nextComments,
@@ -502,7 +503,7 @@ function CommentInputBar(props: {
           spacing={6}
           alignment="center"
           padding={{ horizontal: 12, vertical: 6 }}
-          glassEffect="capsule"
+          glassEffect={appGlass("capsule")}
           frame={{ maxWidth: "infinity", alignment: "leading" }}
         >
           <Image
@@ -547,7 +548,7 @@ function CommentInputBar(props: {
         <HStack
           alignment="center"
           padding={{ horizontal: 12, vertical: 6 }}
-          glassEffect="capsule"
+          glassEffect={appGlass("capsule")}
           frame={{ maxWidth: "infinity" }}
         >
           <TextField
@@ -614,7 +615,7 @@ function CommentCard(props: {
       alignment="leading"
       spacing={6}
       padding={10}
-      glassEffect={{ type: "rect", cornerRadius: 12 }}
+      glassEffect={appGlass({ type: "rect", cornerRadius: 12 })}
       frame={{ maxWidth: "infinity" }}
     >
       <HStack
@@ -752,7 +753,7 @@ function SubCommentRow(props: {
       alignment="leading"
       spacing={4}
       padding={8}
-      glassEffect={{ type: "rect", cornerRadius: 8 }}
+      glassEffect={appGlass({ type: "rect", cornerRadius: 8 })}
       frame={{ maxWidth: "infinity", alignment: "leading" }}
     >
       <HStack
@@ -938,7 +939,7 @@ function EmotePickerPanel(props: {
     <VStack
       spacing={8}
       padding={8}
-      glassEffect={{ type: "rect", cornerRadius: 14 }}
+      glassEffect={appGlass({ type: "rect", cornerRadius: 14 })}
       glassEffectTransition="materialize"
       transition={Transition.move("bottom").combined(Transition.opacity())}
       frame={{ maxWidth: "infinity", height: 220 }}

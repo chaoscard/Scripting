@@ -10,6 +10,7 @@ import {
   useColorScheme,
   useMemo,
 } from "scripting"
+import { appGlass } from "./components/glass"
 import type { PixivUserDetail, PixivWebUserDetail } from "../types"
 import type { UserAmbientPalette } from "../image/colorExtractor"
 import { AvatarImage, CachedImage, ExpandableIntroduction } from "./components"
@@ -196,7 +197,7 @@ function UserSocialBar(props: { socials: SocialLinkItem[] }) {
           <ZStack
             alignment="center"
             frame={{ width: 30, height: 30 }}
-            glassEffect="circle"
+            glassEffect={appGlass("circle")}
           >
             <Image
               systemName={item.systemImage}
@@ -412,7 +413,7 @@ export function UserProfileHeader(props: {
             alignment="center"
             spacing={6}
             padding={{ horizontal: 16, vertical: 6 }}
-            glassEffect="capsule"
+            glassEffect={appGlass("capsule")}
           >
             <Text font="headline" fontWeight="bold">
               {user.name}
@@ -445,7 +446,7 @@ export function UserProfileHeader(props: {
               alignment="leading"
               spacing={8}
               padding={12}
-              glassEffect={{ type: "rect", cornerRadius: 14 }}
+              glassEffect={appGlass({ type: "rect", cornerRadius: 14 })}
               frame={{ maxWidth: "infinity" }}
             >
               {aboutFields.map(([label, value]) => (

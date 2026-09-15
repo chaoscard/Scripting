@@ -15,6 +15,7 @@ import {
   VStack,
   ZStack,
 } from "scripting"
+import { appGlass } from "./components/glass"
 import {
   isPixivisionBookmarked,
   loadPixivisionBookmarks,
@@ -133,7 +134,7 @@ function PixivisionBookmarkCard(props: {
         spacing={6}
         frame={cardFrame}
         padding={6}
-        glassEffect={{ type: "rect", cornerRadius: 16 }}
+        glassEffect={appGlass({ type: "rect", cornerRadius: 16 })}
         shadow={{ color: "#0000000F", radius: 20, y: 10 }}
         contextMenu={{
           menuItems: (
@@ -181,7 +182,7 @@ function PixivisionBookmarkCard(props: {
               <HStack
                 spacing={4}
                 padding={{ horizontal: 8, vertical: 3 }}
-                glassEffect="capsule"
+                glassEffect={appGlass("capsule")}
                 contentShape="capsule"
               >
                 <Text font="caption2" fontWeight="semibold" foregroundStyle="#0096FA">

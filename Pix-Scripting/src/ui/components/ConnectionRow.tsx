@@ -14,6 +14,7 @@ import {
   VStack,
   ZStack,
 } from "scripting"
+import { appGlass, appGlassFlag } from "./glass"
 import { AppNavigationLink } from "../DualRouteContext"
 import { session } from "../../api/session"
 import { followUser, unfollowUser } from "../../api/pixiv"
@@ -170,7 +171,7 @@ export function ConnectionRow(props: {
       alignment="leading"
       spacing={8}
       padding={10}
-      glassEffect={{ type: "rect", cornerRadius: 8 }}
+      glassEffect={appGlass({ type: "rect", cornerRadius: 8 })}
       glassEffectTransition="materialize"
       frame={{ maxWidth: "infinity" }}
     >
@@ -191,7 +192,7 @@ export function ConnectionRow(props: {
               <ZStack frame={{ width: 38, height: 38 }}>
                 <Circle
                   fill="rgba(255, 255, 255, 0.16)"
-                  glassEffect={true}
+                  glassEffect={appGlassFlag()}
                   frame={{ width: 38, height: 38 }}
                 />
                 <AvatarImage
@@ -227,7 +228,7 @@ export function ConnectionRow(props: {
               <ZStack frame={{ width: 38, height: 38 }}>
                 <Circle
                   fill="rgba(255, 255, 255, 0.16)"
-                  glassEffect={true}
+                  glassEffect={appGlassFlag()}
                   frame={{ width: 38, height: 38 }}
                 />
                 <AvatarImage

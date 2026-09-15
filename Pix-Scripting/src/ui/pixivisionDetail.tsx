@@ -24,6 +24,7 @@ import {
   VStack,
   ZStack,
 } from "scripting"
+import { appGlass } from "./components/glass"
 import {
   PAGE_TOOLBAR_BACKGROUND,
   PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
@@ -684,7 +685,7 @@ export function PixivisionDetailView(props: { articleID: number }) {
                     alignment="leading"
                     spacing={10}
                     padding={12}
-                    glassEffect={{ type: "rect", cornerRadius: 14 }}
+                    glassEffect={appGlass({ type: "rect", cornerRadius: 14 })}
                     frame={{ maxWidth: "infinity" }}
                   >
                     <HStack
@@ -814,7 +815,7 @@ export function PixivisionDetailView(props: { articleID: number }) {
                           <HStack
                             spacing={10}
                             padding={12}
-                            glassEffect={{ type: "rect", cornerRadius: 12 }}
+                            glassEffect={appGlass({ type: "rect", cornerRadius: 12 })}
                             frame={{ maxWidth: "infinity", alignment: "leading" }}
                           >
                             <VStack
@@ -848,7 +849,7 @@ export function PixivisionDetailView(props: { articleID: number }) {
                             alignment="leading"
                             spacing={6}
                             padding={12}
-                            glassEffect={{ type: "rect", cornerRadius: 12 }}
+                            glassEffect={appGlass({ type: "rect", cornerRadius: 12 })}
                             frame={{ maxWidth: "infinity" }}
                           >
                             <HStack spacing={6} alignment="center">
@@ -877,7 +878,7 @@ export function PixivisionDetailView(props: { articleID: number }) {
                             alignment="leading"
                             spacing={10}
                             padding={14}
-                            glassEffect={{ type: "rect", cornerRadius: 14 }}
+                            glassEffect={appGlass({ type: "rect", cornerRadius: 14 })}
                             frame={{ maxWidth: "infinity" }}
                           >
                             <HStack
@@ -1064,7 +1065,7 @@ export function PixivisionDetailView(props: { articleID: number }) {
                             spacing={0}
                             frame={cardFrame}
                             padding={6}
-                            glassEffect={{ type: "rect", cornerRadius: 16 }}
+                            glassEffect={appGlass({ type: "rect", cornerRadius: 16 })}
                             shadow={{ color: "#0000000F", radius: 20, y: 10 }}
                           >
                             <ZStack alignment="bottomTrailing" frame={cardFrame}>
@@ -1164,7 +1165,7 @@ export function PixivisionDetailView(props: { articleID: number }) {
                           <HStack
                             spacing={10}
                             padding={14}
-                            glassEffect={{ type: "rect", cornerRadius: 12 }}
+                            glassEffect={appGlass({ type: "rect", cornerRadius: 12 })}
                             alignment="center"
                           >
                             <Image
@@ -1284,7 +1285,7 @@ export function PixivisionDetailView(props: { articleID: number }) {
                     alignment="center"
                     spacing={12}
                     padding={16}
-                    glassEffect={{ type: "rect", cornerRadius: 14 }}
+                    glassEffect={appGlass({ type: "rect", cornerRadius: 14 })}
                     frame={{ maxWidth: "infinity" }}
                   >
                     <Image systemName="newspaper" font="largeTitle" foregroundStyle="#0096FA" />
