@@ -74,6 +74,16 @@ export interface AspectAndFormatDistribution {
     ai: number
     nonAi: number
   }
+  /**
+   * 漫画篇幅分档（按作品总页数 page_count 划分）
+   * 仅「仅漫画」作用域的第二栏环形图使用，其它作用域不使用但保持同构输出
+   */
+  mangaPageBuckets: {
+    single: number // 1 页
+    short: number // 2 ~ 10 页
+    medium: number // 11 ~ 30 页
+    long: number // 31 页及以上
+  }
 }
 
 export interface NovelMilestone {
@@ -81,6 +91,11 @@ export interface NovelMilestone {
   averageWords: number
   comparisonText: string
   readingTimeMinutes: number
+  /** 小说专属 AI 分布（只统计小说，与全局 aiDistribution 口径不同） */
+  aiDistribution: {
+    ai: number
+    nonAi: number
+  }
 }
 
 export interface HistoryAnalyticsResult {
@@ -144,23 +159,38 @@ function determinePersona(peakHour: number, nightShare: number): string {
 
 function buildNovelComparison(totalWords: number): string {
   if (totalWords <= 0) return ""
-  if (totalWords < 50000) {
-    return `已阅读 ${(totalWords / 10000).toFixed(1)} 万字，相当于读完了 1 本短篇小说集`
-  } else if (totalWords < 200000) {
-    return `已阅读 ${(totalWords / 10000).toFixed(1)} 万字，相当于读完了 1 本《小王子》或中篇名著`
-  } else if (totalWords < 500000) {
-    return `已阅读 ${(totalWords / 10000).toFixed(1)} 万字，相当于精读了 1 部长篇悬疑/科幻巨作`
-  } else if (totalWords < 1000000) {
-    return `已阅读 ${(totalWords / 10000).toFixed(1)} 万字，相当于通读了一整部《红楼梦》（全书约 73 万字）`
-  } else {
-    const bookCount = (totalWords / 730000).toFixed(1)
-    return `已阅读 ${(totalWords / 10000).toFixed(1)} 万字，相当于读完了 ${bookCount} 部《红楼梦》或一部超长连载神作`
-  }
+
+  // 统一句式「相当于读完 N 部××」，只用通用体量分类，不点名任何具体作品
+  const tiers = [
+    { limit: 10 * 10000, unit: 10000, label: "短篇小说" },
+    { limit: 50 * 10000, unit: 8 * 10000, label: "中篇小说" },
+    { limit: 200 * 10000, unit: 25 * 10000, label: "长篇小说" },
+    { limit: Number.POSITIVE_INFINITY, unit: 100 * 10000, label: "超长连载作品" },
+  ]
+  const tier = tiers.find((t) => totalWords < t.limit) ?? tiers[tiers.length - 1]
+  const volumes = totalWords / tier.unit
+  // N ≥ 10 取整，否则保留 1 位小数；整数值不带 .0
+  const display =
+    volumes >= 10 ? String(Math.round(volumes)) : volumes.toFixed(1).replace(/\.0$/, "")
+
+  return `相当于读完 ${display} 部${tier.label}`
 }
 
 // 缓存管理
 let memoizedResult: HistoryAnalyticsResult | null = null
 let memoizedCacheKey = ""
+
+/** 热力图窗口周数：下限 20 周（与旧版观感一致），上限 53 周（近一年） */
+export const HEATMAP_WEEKS_MIN = 20
+export const HEATMAP_WEEKS_MAX = 53
+export const HEATMAP_WEEKS_DEFAULT = 20
+
+export interface HistoryAnalyticsOptions {
+  /** 热力图窗口周数（视图按容器真实宽度自适应推导，超出范围会被收敛到 20 ~ 53） */
+  heatmapWeeks?: number
+  /** 强制绕过指纹缓存 */
+  forceRefresh?: boolean
+}
 
 /**
  * 核心分析计算引擎：单次遍历多数据源并快速聚合
@@ -168,18 +198,25 @@ let memoizedCacheKey = ""
 export function computeHistoryAnalytics(
   scope: AnalyticsScopeKind = "all",
   timeRange: AnalyticsTimeRange = "all",
-  forceRefresh = false
+  options: HistoryAnalyticsOptions = {}
 ): HistoryAnalyticsResult {
+  // 热力图窗口周数：视图层按容器真实宽度推导后传入，此处再做一次收敛
+  const heatmapWeeksCount = Math.max(
+    HEATMAP_WEEKS_MIN,
+    Math.min(HEATMAP_WEEKS_MAX, Math.round(options.heatmapWeeks ?? HEATMAP_WEEKS_DEFAULT))
+  )
   const illustList = (scope === "all" || scope === "illustration") ? (getHistory("illustration") as IllustrationHistoryEntry[]) : []
   const mangaList = (scope === "all" || scope === "manga") ? (getHistory("manga") as IllustrationHistoryEntry[]) : []
   const novelList = (scope === "all" || scope === "novel") ? (getHistory("novel") as NovelHistoryEntry[]) : []
 
   // 生成轻量快照指纹作为缓存 Key
-  const cacheKey = `${scope}_${timeRange}_${illustList.length}_${mangaList.length}_${novelList.length}_${
-    illustList[0]?.viewedAt ?? 0
-  }_${mangaList[0]?.viewedAt ?? 0}_${novelList[0]?.viewedAt ?? 0}`
+  const cacheKey = `${scope}_${timeRange}_${heatmapWeeksCount}_${illustList.length}_${mangaList.length}_${
+    novelList.length
+  }_${illustList[0]?.viewedAt ?? 0}_${mangaList[0]?.viewedAt ?? 0}_${
+    novelList[0]?.viewedAt ?? 0
+  }`
 
-  if (!forceRefresh && memoizedResult && memoizedCacheKey === cacheKey) {
+  if (!options.forceRefresh && memoizedResult && memoizedCacheKey === cacheKey) {
     return memoizedResult
   }
 
@@ -210,7 +247,21 @@ export function computeHistoryAnalytics(
     novel: 0,
   }
 
+  // 漫画篇幅分档（仅「仅漫画」作用域的第二栏环形图使用）
+  const mangaPageBuckets = {
+    single: 0,
+    short: 0,
+    medium: 0,
+    long: 0,
+  }
+
   const aiCounts = {
+    ai: 0,
+    nonAi: 0,
+  }
+
+  // 小说专属 AI 分布（仅用于「小说阅读里程碑」卡片的 AI 率环形图）
+  const novelAiCounts = {
     ai: 0,
     nonAi: 0,
   }
@@ -284,6 +335,19 @@ export function computeHistoryAnalytics(
       mediaTypeCounts.multiIllust++
     } else {
       mediaTypeCounts.singleIllust++
+    }
+
+    // 漫画篇幅分档：单页 / 短篇 / 中篇 / 长篇
+    if (isManga) {
+      if (pageCount <= 1) {
+        mangaPageBuckets.single++
+      } else if (pageCount <= 10) {
+        mangaPageBuckets.short++
+      } else if (pageCount <= 30) {
+        mangaPageBuckets.medium++
+      } else {
+        mangaPageBuckets.long++
+      }
     }
 
     // 构图比例
@@ -375,8 +439,10 @@ export function computeHistoryAnalytics(
     // AI 判定 (novel_ai_type: 2 代表 AI 生成作品)
     if (nov.novel_ai_type === 2) {
       aiCounts.ai++
+      novelAiCounts.ai++
     } else {
       aiCounts.nonAi++
+      novelAiCounts.nonAi++
     }
   }
 
@@ -463,24 +529,19 @@ export function computeHistoryAnalytics(
     }
   }
 
-  // 5. 生成热力图数据（近 20 周 / 140 天网格，自然撑满卡片宽度，每周从周一开始）
-  const heatmapWeeksCount = 20
-  const heatmapDaysTotal = heatmapWeeksCount * 7
-  const today = new Date()
+  // 5. 生成热力图数据（窗口周数由视图按容器真实宽度自适应推导，列数恒等于周数）
   const heatmapDays: HeatmapDay[] = []
+  const today = new Date()
 
-  // 找到 (heatmapWeeksCount - 1) 周前的起始日期（对齐到周一）
-  const startDayOffset = heatmapDaysTotal - 1
-  const startDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() - startDayOffset)
-  // 向前回退到最近的周一 (0=周日回退6天, 1=周一回退0天...)
-  const mondayOffset = (startDay.getDay() + 6) % 7
-  startDay.setDate(startDay.getDate() - mondayOffset)
-
-  // 结束日期：对齐到当前周的周日，保证最后一列整齐对齐 7 天（周一至周日）
+  // 起始日：本周周一回退 (heatmapWeeksCount - 1) 周，保证首列是完整的周一~周日
   const todayMondayIdx = (today.getDay() + 6) % 7
-  const daysToSunday = 6 - todayMondayIdx
-  const endDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() + daysToSunday)
-  const totalHeatmapSlots = Math.ceil((endDate.getTime() - startDay.getTime()) / (86400 * 1000)) + 1
+  const startDay = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate() - todayMondayIdx - (heatmapWeeksCount - 1) * 7
+  )
+  // 末列补齐到本周周日，总天数恒等于 周数 × 7
+  const totalHeatmapSlots = heatmapWeeksCount * 7
 
   const p75 = maxDailyCount > 0 ? Math.max(1, Math.round(maxDailyCount * 0.75)) : 10
   const p50 = maxDailyCount > 0 ? Math.max(1, Math.round(maxDailyCount * 0.5)) : 5
@@ -580,6 +641,7 @@ export function computeHistoryAnalytics(
       averageWords: avg,
       comparisonText: buildNovelComparison(novelWordCount),
       readingTimeMinutes: Math.round(novelWordCount / 500), // 按 Pixiv 官方 500 字/分钟速读基准换算
+      aiDistribution: { ...novelAiCounts },
     }
   }
 
@@ -607,6 +669,7 @@ export function computeHistoryAnalytics(
       aspectRatio: aspectCounts,
       mediaType: mediaTypeCounts,
       aiDistribution: aiCounts,
+      mangaPageBuckets,
     },
     novelMilestone,
   }

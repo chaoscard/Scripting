@@ -27,13 +27,15 @@ import { appGlass } from "./components/glass"
 import { sheetTopBar } from "./components/pageChrome"
 import {
   computeHistoryAnalytics,
+  HEATMAP_WEEKS_MAX,
+  HEATMAP_WEEKS_MIN,
   type AnalyticsScopeKind,
   type AnalyticsTimeRange,
   type HistoryAnalyticsResult,
   type TopCreatorItem,
   type TopTagItem,
 } from "../store/historyAnalytics"
-import { useLayoutMetrics } from "./hooks"
+import { ResponsiveContainer, useLayoutMetrics } from "./hooks"
 import { useDualRoute } from "./DualRouteContext"
 import { requestPixivRoute } from "../store/routeNavigation"
 import { triggerHaptic } from "../platform/haptics"
@@ -289,13 +291,63 @@ function HourlyDistributionSection(props: {
 }
 
 /**
+ * 热力图排版常量（三级兜底：弹性周数 → 格子放大 → 整体居中）
+ */
+const HEATMAP_CELL_MIN = 12 // 基准格子边长（与旧版观感一致）
+const HEATMAP_CELL_MAX = 16 // 宽屏兜底放大上限，避免格子过大失衡
+const HEATMAP_CELL_GAP = 3.5
+/** 卡片可用内宽 = 容器宽度 − 页面 padding 16×2 − 卡片 padding 16×2 */
+const HEATMAP_CARD_H_PADDING = 64
+
+/**
+ * 按卡片真实内宽推导热力图排版
+ * 1) 固定 12pt 基准格子，先由宽度决定周数（20 ~ 53 周，53 周 ≈ 近一年）
+ * 2) 周数封顶后仍有富余，则把格子放大到最多 16pt 补满
+ * 3) 仍补不满（超宽窗口）则整体居中；宽度不足时保持 12pt 并保留横向滚动
+ */
+export function resolveHeatmapLayout(innerWidth: number, actualWeeks?: number) {
+  const usable = Math.max(0, innerWidth)
+  const weeksFromWidth = Math.floor(
+    (usable + HEATMAP_CELL_GAP) / (HEATMAP_CELL_MIN + HEATMAP_CELL_GAP)
+  )
+  const weeks = Math.max(
+    HEATMAP_WEEKS_MIN,
+    Math.min(HEATMAP_WEEKS_MAX, weeksFromWidth)
+  )
+  const targetWeeks = actualWeeks && actualWeeks > 0 ? actualWeeks : weeks
+  const exactCell = (usable - (targetWeeks - 1) * HEATMAP_CELL_GAP) / targetWeeks
+  const cell =
+    Math.round(
+      Math.max(HEATMAP_CELL_MIN, Math.min(HEATMAP_CELL_MAX, exactCell)) * 100
+    ) / 100
+  const contentWidth = targetWeeks * cell + (targetWeeks - 1) * HEATMAP_CELL_GAP
+  const needsScroll = contentWidth > usable + 0.5
+
+  return {
+    /** 供数据层使用的目标周数 */
+    weeks,
+    /** 实际渲染的格子边长（正方形） */
+    cell,
+    /** 网格实际内容宽度 */
+    contentWidth,
+    /** 内容溢出容器：保留横向滚动 */
+    needsScroll,
+    /** 内容无法铺满容器：整体居中 */
+    centered: !needsScroll && contentWidth < usable - 0.5,
+  }
+}
+
+/**
  * 活跃热力日历矩阵 (原生毛玻璃卡片与 GitHub 官方真实渐变色阶体系)
  */
 function ActivityHeatmapSection(props: {
   heatmap: HistoryAnalyticsResult["heatmap"]
   activeDays: number
+  availableWidth: number
 }) {
-  const { weeks, startDateStr, endDateStr } = props.heatmap
+  const { weeks: weekList, startDateStr, endDateStr } = props.heatmap
+  const layout = resolveHeatmapLayout(props.availableWidth, weekList.length)
+  const cellRadius = Math.max(2.5, Math.round(layout.cell * 0.2 * 10) / 10)
 
   const getCellFill = (level: number) => {
     switch (level) {
@@ -312,6 +364,23 @@ function ActivityHeatmapSection(props: {
         return "quaternarySystemFill" as any
     }
   }
+
+  const grid = (
+    <HStack spacing={HEATMAP_CELL_GAP} padding={{ top: 4, bottom: 4 }}>
+      {weekList.map((week, wIdx) => (
+        <VStack key={`week-${wIdx}`} spacing={HEATMAP_CELL_GAP}>
+          {week.days.map((day, dIdx) => (
+            <RoundedRectangle
+              key={`day-${wIdx}-${dIdx}`}
+              cornerRadius={cellRadius}
+              fill={getCellFill(day.level)}
+              frame={{ width: layout.cell, height: layout.cell }}
+            />
+          ))}
+        </VStack>
+      ))}
+    </HStack>
+  )
 
   return (
     <VStack
@@ -332,27 +401,18 @@ function ActivityHeatmapSection(props: {
         </Text>
         <Spacer />
         <Text font="footnote" foregroundStyle="secondaryLabel">
-          近 {weeks.length} 周 · {props.activeDays} 活跃天
+          近 {weekList.length} 周 · {props.activeDays} 活跃天
         </Text>
       </HStack>
 
-      {/* 热力网格 */}
-      <ScrollView axes="horizontal">
-        <HStack spacing={3.5} padding={{ top: 4, bottom: 4 }}>
-          {weeks.map((week, wIdx) => (
-            <VStack key={`week-${wIdx}`} spacing={3.5}>
-              {week.days.map((day, dIdx) => (
-                <RoundedRectangle
-                  key={`day-${wIdx}-${dIdx}`}
-                  cornerRadius={2.5}
-                  fill={getCellFill(day.level)}
-                  frame={{ width: 12, height: 12 }}
-                />
-              ))}
-            </VStack>
-          ))}
-        </HStack>
-      </ScrollView>
+      {/* 热力网格：宽度自适应（溢出滚动 / 铺满居中 两级兜底） */}
+      {layout.needsScroll ? (
+        <ScrollView axes="horizontal">{grid}</ScrollView>
+      ) : (
+        <VStack spacing={0} frame={{ maxWidth: "infinity", alignment: "center" }}>
+          {grid}
+        </VStack>
+      )}
 
       {/* 图例与时间区间 */}
       <HStack alignment="center" spacing={6} frame={{ maxWidth: "infinity" }}>
@@ -749,26 +809,144 @@ function DonutLegendItem(props: {
 }
 
 /**
- * 美学构图与形态仪表盘 (原生三环饼图 Bento 卡片)
+ * 最大余数法整数百分比分配：保证同一栏内各分类合计恰好 100%
+ */
+function allocatePercentages(values: number[]): number[] {
+  const total = values.reduce((acc, v) => acc + (v > 0 ? v : 0), 0)
+  if (total <= 0) return values.map(() => 0)
+
+  const exact = values.map((v) => ((v > 0 ? v : 0) / total) * 100)
+  const floors = exact.map((v) => Math.floor(v))
+  const result = floors.slice()
+
+  // 余数从大到小依次补 1，保证总和回到 100
+  let remaining = 100 - floors.reduce((acc, v) => acc + v, 0)
+  const order = exact
+    .map((v, index) => ({ index, fraction: v - Math.floor(v) }))
+    .sort((a, b) => b.fraction - a.fraction)
+  let cursor = 0
+  while (remaining > 0 && cursor < order.length) {
+    result[order[cursor].index] += 1
+    remaining -= 1
+    cursor += 1
+  }
+
+  return result
+}
+
+/**
+ * 环形图栏目分类项
+ */
+interface DonutColumnSlice {
+  label: string
+  value: number
+  color: string
+}
+
+/**
+ * 环形图栏目：同一栏内「切片集合 ≡ 图例集合 ≡ 百分比分母」
+ */
+interface DonutColumn {
+  key: string
+  title: string
+  slices: DonutColumnSlice[]
+}
+
+/**
+ * 按作用域构建「美学构图与形态」栏目
+ * 不变量：同一栏的分母即本栏各分类值之和，且值为 0 的分类一律不显示，
+ * 因此只要该栏有数据，图例百分比必然合计 100%。
+ */
+function buildDonutColumns(
+  scope: AnalyticsScopeKind,
+  distribution: HistoryAnalyticsResult["aspectAndFormat"]
+): DonutColumn[] {
+  const { aspectRatio, mediaType, aiDistribution, mangaPageBuckets } = distribution
+
+  // ① 长宽比画像（仅美术作品；小说无尺寸维度）
+  const aspectColumn: DonutColumn = {
+    key: "aspect",
+    title: "长宽比画像",
+    slices: [
+      { label: "常规竖屏", value: aspectRatio.tall, color: "#AF52DE" },
+      { label: "超高壁纸", value: aspectRatio.ultraTall, color: "#5856D6" },
+      { label: "电脑横屏", value: aspectRatio.wide, color: "#30B0C7" },
+      { label: "方形", value: aspectRatio.square, color: "#8E8E93" },
+    ],
+  }
+
+  // ② 美术形态：插画 / 全部口径为「画集与动图」（美术口径，不含小说）
+  const mediaColumn: DonutColumn = {
+    key: "media",
+    title: "画集与动图",
+    slices: [
+      { label: "单图插画", value: mediaType.singleIllust, color: "#007AFF" },
+      { label: "多图画集", value: mediaType.multiIllust, color: "#FF9500" },
+      { label: "动图作品", value: mediaType.ugoira, color: "#00C7BE" },
+      { label: "漫画", value: mediaType.manga, color: "#5856D6" },
+    ],
+  }
+
+  // ② 仅漫画：篇幅分布（按作品总页数分档）
+  const mangaPageColumn: DonutColumn = {
+    key: "mangaPages",
+    title: "篇幅分布",
+    slices: [
+      { label: "单页", value: mangaPageBuckets.single, color: "#007AFF" },
+      { label: "短篇", value: mangaPageBuckets.short, color: "#FF9500" },
+      { label: "中篇", value: mangaPageBuckets.medium, color: "#00C7BE" },
+      { label: "长篇", value: mangaPageBuckets.long, color: "#5856D6" },
+    ],
+  }
+
+  // ③ 创作类型：分母含小说（AI 属性对小说同样成立）
+  const aiColumn: DonutColumn = {
+    key: "ai",
+    title: "创作类型",
+    slices: [
+      { label: "原创作者", value: aiDistribution.nonAi, color: "#34C759" },
+      { label: "AI 生成", value: aiDistribution.ai, color: "#8E8E93" },
+    ],
+  }
+
+  switch (scope) {
+    case "illustration":
+      return [aspectColumn, mediaColumn, aiColumn]
+    case "manga":
+      return [aspectColumn, mangaPageColumn, aiColumn]
+    case "novel":
+      // 小说不存在美术维度，整张卡片隐藏
+      return []
+    case "all":
+    default:
+      return [aspectColumn, mediaColumn, aiColumn]
+  }
+}
+
+/**
+ * 美学构图与形态仪表盘 (原生环形切片 Bento 卡片，严格按作用域分栏)
  */
 function FormatAndAspectSection(props: {
   distribution: HistoryAnalyticsResult["aspectAndFormat"]
+  scope: AnalyticsScopeKind
 }) {
-  const { aspectRatio, mediaType, aiDistribution } = props.distribution
-  const visualArtworkCount =
-    mediaType.singleIllust + mediaType.multiIllust + mediaType.ugoira + mediaType.manga
-  const totalAspect = aspectRatio.ultraTall + aspectRatio.tall + aspectRatio.square + aspectRatio.wide
+  const columns = useMemo(() => {
+    return buildDonutColumns(props.scope, props.distribution)
+      .map((column) => {
+        const activeSlices = column.slices.filter((s) => s.value > 0)
+        return {
+          ...column,
+          activeSlices,
+          percentages: allocatePercentages(activeSlices.map((s) => s.value)),
+        }
+      })
+      .filter((column) => column.activeSlices.length > 0)
+  }, [props.scope, props.distribution])
 
-  // 纯小说浏览或无美术作品记录时隐藏美学构图卡片
-  if (visualArtworkCount <= 0 && totalAspect <= 0) {
+  // 仅小说无任何美术维度；无有效分类时同样隐藏整卡
+  if (props.scope === "novel" || columns.length === 0) {
     return null
   }
-
-  const totalMedia =
-    mediaType.singleIllust + mediaType.multiIllust + mediaType.ugoira + mediaType.manga + mediaType.novel
-  const totalAi = aiDistribution.ai + aiDistribution.nonAi
-
-  const calcPct = (cnt: number, total: number) => (total > 0 ? Math.round((cnt / total) * 100) : 0)
 
   return (
     <VStack
@@ -789,64 +967,36 @@ function FormatAndAspectSection(props: {
         </Text>
       </HStack>
 
-      {/* 3 列并排环形图仪表盘 */}
+      {/* 栏目数量随作用域变化（仅小说为 0 栏并隐藏整卡） */}
       <HStack spacing={12} alignment="top" frame={{ maxWidth: "infinity" }}>
-        {/* 第 1 列：长宽比画像 */}
-        <VStack alignment="center" spacing={8} frame={{ maxWidth: "infinity" }}>
-          <DonutChart
-            slices={[
-              { value: aspectRatio.tall, color: "#AF52DE" },
-              { value: aspectRatio.ultraTall, color: "#5856D6" },
-              { value: aspectRatio.wide, color: "#30B0C7" },
-              { value: aspectRatio.square, color: "#8E8E93" },
-            ]}
-          />
-          <Text font="caption" fontWeight="bold">
-            长宽比画像
-          </Text>
-          <VStack spacing={3} frame={{ maxWidth: "infinity" }}>
-            <DonutLegendItem color="#AF52DE" label="常规竖屏" pct={calcPct(aspectRatio.tall, totalAspect)} />
-            <DonutLegendItem color="#5856D6" label="超高壁纸" pct={calcPct(aspectRatio.ultraTall, totalAspect)} />
-            <DonutLegendItem color="#30B0C7" label="电脑横屏" pct={calcPct(aspectRatio.wide, totalAspect)} />
+        {columns.map((column) => (
+          <VStack
+            key={column.key}
+            alignment="center"
+            spacing={8}
+            frame={{ maxWidth: "infinity" }}
+          >
+            <DonutChart
+              slices={column.activeSlices.map((s) => ({
+                value: s.value,
+                color: s.color,
+              }))}
+            />
+            <Text font="caption" fontWeight="bold">
+              {column.title}
+            </Text>
+            <VStack spacing={3} frame={{ maxWidth: "infinity" }}>
+              {column.activeSlices.map((s, idx) => (
+                <DonutLegendItem
+                  key={s.label}
+                  color={s.color}
+                  label={s.label}
+                  pct={column.percentages[idx]}
+                />
+              ))}
+            </VStack>
           </VStack>
-        </VStack>
-
-        {/* 第 2 列：画集与动图 */}
-        <VStack alignment="center" spacing={8} frame={{ maxWidth: "infinity" }}>
-          <DonutChart
-            slices={[
-              { value: mediaType.singleIllust, color: "#007AFF" },
-              { value: mediaType.multiIllust, color: "#FF9500" },
-              { value: mediaType.ugoira, color: "#00C7BE" },
-              { value: mediaType.manga + mediaType.novel, color: "#5856D6" },
-            ]}
-          />
-          <Text font="caption" fontWeight="bold">
-            画集与动图
-          </Text>
-          <VStack spacing={3} frame={{ maxWidth: "infinity" }}>
-            <DonutLegendItem color="#007AFF" label="单图插画" pct={calcPct(mediaType.singleIllust, totalMedia)} />
-            <DonutLegendItem color="#FF9500" label="多图画集" pct={calcPct(mediaType.multiIllust, totalMedia)} />
-            <DonutLegendItem color="#00C7BE" label="动图作品" pct={calcPct(mediaType.ugoira, totalMedia)} />
-          </VStack>
-        </VStack>
-
-        {/* 第 3 列：创作类型 */}
-        <VStack alignment="center" spacing={8} frame={{ maxWidth: "infinity" }}>
-          <DonutChart
-            slices={[
-              { value: aiDistribution.nonAi, color: "#34C759" },
-              { value: aiDistribution.ai, color: "#8E8E93" },
-            ]}
-          />
-          <Text font="caption" fontWeight="bold">
-            创作类型
-          </Text>
-          <VStack spacing={3} frame={{ maxWidth: "infinity" }}>
-            <DonutLegendItem color="#34C759" label="原创绘师" pct={calcPct(aiDistribution.nonAi, totalAi)} />
-            <DonutLegendItem color="#8E8E93" label="AI 生成" pct={calcPct(aiDistribution.ai, totalAi)} />
-          </VStack>
-        </VStack>
+        ))}
       </HStack>
     </VStack>
   )
@@ -859,7 +1009,8 @@ function NovelMilestoneSection(props: {
   milestone: HistoryAnalyticsResult["novelMilestone"]
 }) {
   if (!props.milestone || props.milestone.totalWords <= 0) return null
-  const { totalWords, averageWords, comparisonText, readingTimeMinutes } = props.milestone
+  const { totalWords, averageWords, comparisonText, readingTimeMinutes, aiDistribution } =
+    props.milestone
 
   const formatReadingTime = (minutes: number) => {
     if (minutes < 60) {
@@ -871,6 +1022,15 @@ function NovelMilestoneSection(props: {
     }
     return `${Math.round(minutes / 60)} 小时`
   }
+
+  // AI 率（小说专属口径）：复刻美学卡片的环形图与图例
+  // 右栏保持自然宽度且右对齐 —— 左栏占剩余宽度（保证「累计阅读约…」正常换行），
+  // 环靠右与百分比对齐，图例行不用 Spacer 撑开，标签与百分比紧邻
+  const aiSlices = [
+    { label: "原创作者", value: aiDistribution.nonAi, color: "#34C759" },
+    { label: "AI 生成", value: aiDistribution.ai, color: "#8E8E93" },
+  ].filter((s) => s.value > 0)
+  const aiPercentages = allocatePercentages(aiSlices.map((s) => s.value))
 
   return (
     <VStack
@@ -891,24 +1051,56 @@ function NovelMilestoneSection(props: {
         </Text>
       </HStack>
 
-      <HStack alignment="lastTextBaseline" spacing={4}>
-        <Text font="title" fontWeight="heavy" foregroundStyle={"systemIndigo" as any}>
-          {(totalWords / 10000).toFixed(1)}
-        </Text>
-        <Text font="subheadline" fontWeight="semibold" foregroundStyle="secondaryLabel">
-          万字
-        </Text>
-        <Spacer />
-        <Text font="footnote" foregroundStyle="secondaryLabel">
-          累计阅读约 {formatReadingTime(readingTimeMinutes)} (篇均 {averageWords} 字)
-        </Text>
-      </HStack>
+      {/* 左栏：累计字数与阅读量；右栏：AI 率环形图与紧邻图例 */}
+      <HStack alignment="top" spacing={16} frame={{ maxWidth: "infinity" }}>
+        <VStack
+          alignment="leading"
+          spacing={4}
+          frame={{ maxWidth: "infinity", alignment: "leading" }}
+        >
+          <HStack alignment="lastTextBaseline" spacing={4}>
+            <Text font="title" fontWeight="heavy" foregroundStyle={"systemIndigo" as any}>
+              {(totalWords / 10000).toFixed(1)}
+            </Text>
+            <Text font="subheadline" fontWeight="semibold" foregroundStyle="secondaryLabel">
+              万字
+            </Text>
+          </HStack>
+          <Text font="footnote" foregroundStyle="secondaryLabel">
+            累计阅读约 {formatReadingTime(readingTimeMinutes)} · 篇均 {averageWords} 字
+          </Text>
+          {comparisonText ? (
+            <Text font="callout" foregroundStyle="secondaryLabel">
+              {comparisonText}
+            </Text>
+          ) : null}
+        </VStack>
 
-      {comparisonText ? (
-        <Text font="subheadline" foregroundStyle="secondaryLabel">
-          {comparisonText}
-        </Text>
-      ) : null}
+        {aiSlices.length > 0 ? (
+          /* 外栏居中：环水平居中对齐到图例行（含圆点与百分比的整行）的正上方 */
+          <VStack alignment="center" spacing={6}>
+            <DonutChart
+              slices={aiSlices.map((s) => ({ value: s.value, color: s.color }))}
+            />
+            <Text font="caption" fontWeight="bold">
+              创作类型
+            </Text>
+            <VStack spacing={3} alignment="leading">
+              {aiSlices.map((s, idx) => (
+                <HStack key={s.label} spacing={3} alignment="center">
+                  <Circle frame={{ width: 5, height: 5 }} fill={s.color as any} />
+                  <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={1}>
+                    {s.label}
+                  </Text>
+                  <Text font="caption2" fontWeight="semibold" lineLimit={1}>
+                    {aiPercentages[idx]}%
+                  </Text>
+                </HStack>
+              ))}
+            </VStack>
+          </VStack>
+        ) : null}
+      </HStack>
     </VStack>
   )
 }
@@ -919,7 +1111,6 @@ function NovelMilestoneSection(props: {
 export function HistoryAnalyticsView(props: HistoryAnalyticsViewProps) {
   const [scope, setScope] = useState<AnalyticsScopeKind>(props.initialScope || "all")
   const [timeRange, setTimeRange] = useState<AnalyticsTimeRange>(props.initialTimeRange || "all")
-  const metrics = useLayoutMetrics()
   const { isSplitViewActive, openDetailRoute } = useDualRoute()
 
   // 当外部传入的分类类型（如插画、漫画、小说）变化时，自动联动切换看板类型
@@ -928,11 +1119,6 @@ export function HistoryAnalyticsView(props: HistoryAnalyticsViewProps) {
       setScope(props.initialScope)
     }
   }, [props.initialScope])
-
-  // 计算分析数据
-  const data = useMemo(() => {
-    return computeHistoryAnalytics(scope, timeRange)
-  }, [scope, timeRange])
 
   const handleOpenUserDetail = useCallback(
     (userId: number) => {
@@ -951,8 +1137,6 @@ export function HistoryAnalyticsView(props: HistoryAnalyticsViewProps) {
     },
     [props.onOpenUserDetail, props.onDismiss]
   )
-
-  const isWide = metrics.width >= 620
 
   return (
     <NavigationStack
@@ -1020,69 +1204,111 @@ export function HistoryAnalyticsView(props: HistoryAnalyticsViewProps) {
           ),
         }}
       >
-        {/* 滚动看板内容区：标准 ScrollView + presentationContentInteraction="scrolls" */}
-        <ScrollView
-          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-          presentationContentInteraction="scrolls"
-        >
-          <VStack
-            spacing={12}
-            padding={{ horizontal: 16, top: 12, bottom: 32 }}
-            frame={{ maxWidth: "infinity" }}
-          >
-            {/* 1. 核心概览指标 (共用单一毛玻璃背景卡片) */}
-            <OverviewMetricsCard summary={data.summary} isWide={isWide} />
-
-            {/* 2. 小说专属阅读里程碑（若有） */}
-            {data.novelMilestone && data.novelMilestone.totalWords > 0 ? (
-              <NovelMilestoneSection milestone={data.novelMilestone} />
-            ) : null}
-
-            {/* 3. 24 小时活跃时段分布 */}
-            <HourlyDistributionSection
-              hourly={data.hourly}
-              totalViews={data.summary.totalViews}
-            />
-
-            {/* 4. 活跃热力日历矩阵 */}
-            <ActivityHeatmapSection
-              heatmap={data.heatmap}
-              activeDays={data.summary.activeDays}
-            />
-
-            {/* 5. 题材偏好与创作者榜单 (大屏并排，小屏单列) */}
-            {isWide ? (
-              <HStack alignment="top" spacing={16} frame={{ maxWidth: "infinity" }}>
-                <TopTagsSection
-                  tags={data.topTags}
-                  onSelectTag={props.onSelectTag}
-                />
-                <TopCreatorsSection
-                  creators={data.topCreators}
-                  onSelectCreator={props.onSelectCreator}
-                  onOpenUserDetail={handleOpenUserDetail}
-                />
-              </HStack>
-            ) : (
-              <VStack spacing={16} frame={{ maxWidth: "infinity" }}>
-                <TopTagsSection
-                  tags={data.topTags}
-                  onSelectTag={props.onSelectTag}
-                />
-                <TopCreatorsSection
-                  creators={data.topCreators}
-                  onSelectCreator={props.onSelectCreator}
-                  onOpenUserDetail={handleOpenUserDetail}
-                />
-              </VStack>
-            )}
-
-            {/* 6. 美学构图与创作形态 */}
-            <FormatAndAspectSection distribution={data.aspectAndFormat} />
-          </VStack>
-        </ScrollView>
+        {/* 滚动看板内容区：由内层 HistoryAnalyticsBoard 渲染，
+            经 ResponsiveContainer 将 sheet 真实内容宽度注入上下文 */}
+        <ResponsiveContainer>
+          <HistoryAnalyticsBoard
+            scope={scope}
+            timeRange={timeRange}
+            onSelectTag={props.onSelectTag}
+            onSelectCreator={props.onSelectCreator}
+            onOpenUserDetail={handleOpenUserDetail}
+          />
+        </ResponsiveContainer>
       </VStack>
     </NavigationStack>
+  )
+}
+
+/**
+ * 看板内容区（位于 ResponsiveContainer 内部）
+ * 因为调用 useLayoutMetrics()，所以必须作为容器测量组件的子节点，
+ * 这样在 iPad form sheet / 分屏 / 台前调度下拿到的是本容器真实宽度而非窗口宽度
+ */
+function HistoryAnalyticsBoard(props: {
+  scope: AnalyticsScopeKind
+  timeRange: AnalyticsTimeRange
+  onSelectTag?: (tag: string) => void
+  onSelectCreator?: (creatorId: number, creatorName: string) => void
+  onOpenUserDetail: (userId: number) => void
+}) {
+  const metrics = useLayoutMetrics()
+
+  // 热力图排版：卡片真实内宽（容器宽 − 页面 padding − 卡片 padding）→ 目标周数
+  const heatmapAvailableWidth = Math.max(0, metrics.width - HEATMAP_CARD_H_PADDING)
+  const heatmapLayout = useMemo(
+    () => resolveHeatmapLayout(heatmapAvailableWidth),
+    [heatmapAvailableWidth]
+  )
+
+  // 计算分析数据（热力图窗口周数随容器宽度变化，需一并纳入指纹缓存）
+  const data = useMemo(() => {
+    return computeHistoryAnalytics(props.scope, props.timeRange, {
+      heatmapWeeks: heatmapLayout.weeks,
+    })
+  }, [props.scope, props.timeRange, heatmapLayout.weeks])
+
+  const isWide = metrics.width >= 620
+
+  return (
+    <ScrollView
+      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+      presentationContentInteraction="scrolls"
+    >
+      <VStack
+        spacing={12}
+        padding={{ horizontal: 16, top: 12, bottom: 32 }}
+        frame={{ maxWidth: "infinity" }}
+      >
+        {/* 1. 核心概览指标 (共用单一毛玻璃背景卡片) */}
+        <OverviewMetricsCard summary={data.summary} isWide={isWide} />
+
+        {/* 2. 小说专属阅读里程碑（若有） */}
+        {data.novelMilestone && data.novelMilestone.totalWords > 0 ? (
+          <NovelMilestoneSection milestone={data.novelMilestone} />
+        ) : null}
+
+        {/* 3. 24 小时活跃时段分布 */}
+        <HourlyDistributionSection
+          hourly={data.hourly}
+          totalViews={data.summary.totalViews}
+        />
+
+        {/* 4. 活跃热力日历矩阵（窗口周数与格子尺寸随容器宽度自适应） */}
+        <ActivityHeatmapSection
+          heatmap={data.heatmap}
+          activeDays={data.summary.activeDays}
+          availableWidth={heatmapAvailableWidth}
+        />
+
+        {/* 5. 题材偏好与创作者榜单 (大屏并排，小屏单列) */}
+        {isWide ? (
+          <HStack alignment="top" spacing={16} frame={{ maxWidth: "infinity" }}>
+            <TopTagsSection tags={data.topTags} onSelectTag={props.onSelectTag} />
+            <TopCreatorsSection
+              creators={data.topCreators}
+              onSelectCreator={props.onSelectCreator}
+              onOpenUserDetail={props.onOpenUserDetail}
+            />
+          </HStack>
+        ) : (
+          <VStack spacing={16} frame={{ maxWidth: "infinity" }}>
+            <TopTagsSection tags={data.topTags} onSelectTag={props.onSelectTag} />
+            <TopCreatorsSection
+              creators={data.topCreators}
+              onSelectCreator={props.onSelectCreator}
+              onOpenUserDetail={props.onOpenUserDetail}
+            />
+          </VStack>
+        )}
+
+        {/* 6. 美学构图与创作形态（严格按作用域分栏，仅小说隐藏整卡） */}
+        <FormatAndAspectSection
+          distribution={data.aspectAndFormat}
+          scope={props.scope}
+        />
+      </VStack>
+    </ScrollView>
   )
 }
 
