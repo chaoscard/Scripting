@@ -18,6 +18,7 @@ import {
   type VirtualNode,
 } from "scripting"
 import { appGlass } from "../components/glass"
+import { sheetTopBar } from "../components/pageChrome"
 import { isAIAvailable } from "../../api/aiService"
 import { isScriptingPro } from "../../platform/pro"
 import { ErrorView } from "../components"
@@ -192,6 +193,7 @@ export function AISheetScaffold(props: {
       presentationDragIndicator="visible"
     >
       <ScrollView
+        {...sheetTopBar()}
         navigationTitle={title}
         navigationBarTitleDisplayMode="inline"
         toolbar={{

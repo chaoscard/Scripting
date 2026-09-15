@@ -10,6 +10,7 @@ import {
   type Color,
 } from "scripting"
 import { triggerHaptic } from "../../platform/haptics"
+import { sheetTopBar } from "./pageChrome"
 
 interface FeatureItem {
   id: string
@@ -27,7 +28,7 @@ const FEATURE_LIST: FeatureItem[] = [
     id: "sync",
     title: "跨端同步",
     subtitle: "全量设置 · 黑名单 · 历史漫游 · 我的足迹",
-    description: "支持 iCloud 云端双向增量漫游与离线多维“我的足迹”统计看板，全量设置与黑名单换机即用，数据安全不丢失。",
+    description: "支持 iCloud 云端双向增量漫游与离线多维「我的足迹」统计看板，全量设置与黑名单换机即用，数据安全不丢失。",
     symbol: "icloud.fill",
     iconColor: "white",
     iconBg: "systemBlue",
@@ -103,6 +104,7 @@ export function FeatureHighlightsSheet(props: { onClose: () => void }) {
       <VStack
         spacing={0}
         frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+        {...sheetTopBar()}
         navigationTitle="特色功能"
         navigationBarTitleDisplayMode="inline"
         toolbar={{

@@ -22,6 +22,7 @@ import {
   type AppSettings,
   type RankingOptionDef,
 } from "../store/settings"
+import { sheetTopBar } from "./components/pageChrome"
 
 export interface AdvancedRankingParams {
   category: "illustration" | "manga" | "novel"
@@ -188,6 +189,7 @@ export function RankingAdvancedSheet(props: {
   return (
     <NavigationStack>
       <List
+        {...sheetTopBar()}
         navigationTitle="历史排行榜"
         navigationBarTitleDisplayMode="inline"
         toolbar={{

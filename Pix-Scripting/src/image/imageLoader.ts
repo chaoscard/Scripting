@@ -803,7 +803,7 @@ export function novelThumbUrlOf(i: {
 
 // 标准 IllustCard 裁切源：必须优先完整比例图片。
 // square_medium 可能已被 Pixiv 服务端从顶部预裁切，无法在本地恢复画面中央。
-// 依据设置的 feedImageQuality（中等/大图）选择分辨率。在“中等”模式下，极窄竖图仍优先 large 保持清晰度。
+// 依据设置的 feedImageQuality（中等/大图）选择分辨率。在「中等」模式下，极窄竖图仍优先 large 保持清晰度。
 export function cardThumbUrlOf(
   i: {
     width?: number
@@ -953,7 +953,7 @@ export function upgradeHighQualityCoverUrl(
 
 /**
  * 跨页面同规格大图复用与缓存穿透机制：
- * 当从特辑等外部信息流进入详情页且要求“大图画质”时，检查本地是否已存在该作品的大图级别缓存（如特辑大图）。
+ * 当从特辑等外部信息流进入详情页且要求「大图画质」时，检查本地是否已存在该作品的大图级别缓存（如特辑大图）。
  * 若已存在，将其直接链接/复用给详情页目标大图 URL，避免同规格图片因 URL 细微差异产生二次网络下载与闪屏。
  */
 export function seedIllustDetailFromCache(

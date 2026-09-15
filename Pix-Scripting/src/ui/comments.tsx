@@ -20,6 +20,7 @@ import {
   VStack,
 } from "scripting"
 import { appGlass } from "./components/glass"
+import { sheetTopBar } from "./components/pageChrome"
 import {
   comments,
   nextComments,
@@ -365,6 +366,7 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number; onCl
         alignment="leading"
         spacing={0}
         frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+        {...sheetTopBar()}
         navigationTitle={`评论${items.length > 0 ? ` (${items.length})` : ""}`}
         navigationBarTitleDisplayMode="inline"
         toolbar={{

@@ -437,7 +437,7 @@ export function UserDetailView(props: { userID: number }) {
       } else {
         const confirmed = await Dialog.confirm({
           title: "确认打包全部插画？",
-          message: `将拉取用户「${detail.user.name}」全部静态插画原图并打包为 ZIP 归档，多页插画将归入独立子文件夹，请在“文件”App 或“下载与文件管理”中查看。`,
+          message: `将拉取用户「${detail.user.name}」全部静态插画原图并打包为 ZIP 归档，多页插画将归入独立子文件夹，请在「文件」App 或「下载与文件管理」中查看。`,
           confirmLabel: "开始下载",
           cancelLabel: "取消",
         })
@@ -455,7 +455,7 @@ export function UserDetailView(props: { userID: number }) {
           if (zipPath) {
             void Dialog.alert({
               title: "打包完成",
-              message: "插画全集 ZIP 归档已保存，请在“下载与文件管理”或“文件”App 查看。",
+              message: "插画全集 ZIP 归档已保存，请在「下载与文件管理」或「文件」App 查看。",
             })
           } else {
             void Dialog.alert({ title: "打包失败", message: "生成插画 ZIP 归档包失败" })
@@ -530,7 +530,7 @@ export function UserDetailView(props: { userID: number }) {
           const result = await exportAuthorUgoiraToFiles(detail.user.name, userID, ugoiras, (msg) => setDownloadStatusText(msg))
           void Dialog.alert({
             title: "导出完成",
-            message: `已成功将 ${result.successCount} 部动图导出至 Ugoira 文件夹，请在“下载与文件管理”中查看。`,
+            message: `已成功将 ${result.successCount} 部动图导出至 Ugoira 文件夹，请在「下载与文件管理」中查看。`,
           })
         } catch (e: any) {
           void Dialog.alert({ title: "导出失败", message: e?.message ?? "导出动图时发生错误" })
@@ -558,7 +558,7 @@ export function UserDetailView(props: { userID: number }) {
           const result = await exportAuthorUgoiraZipToFiles(detail.user.name, userID, ugoiras, (msg) => setDownloadStatusText(msg))
           void Dialog.alert({
             title: "导出完成",
-            message: `已成功将 ${result.successCount} 部动图原始 ZIP 帧包导出至画师 Ugoira 文件夹，请在“下载与文件管理”中查看。`,
+            message: `已成功将 ${result.successCount} 部动图原始 ZIP 帧包导出至画师 Ugoira 文件夹，请在「下载与文件管理」中查看。`,
           })
         } catch (e: any) {
           void Dialog.alert({ title: "导出失败", message: e?.message ?? "导出动图帧包时发生错误" })
@@ -582,7 +582,7 @@ export function UserDetailView(props: { userID: number }) {
 
       const confirmed = await Dialog.confirm({
         title: "确认下载全部漫画？",
-        message: `将拉取用户「${detail.user.name}」全部漫画（共 ${totalManga} 部），连载系列将自动合并为全集卷，短篇将独立导出为单本，格式为 ${formatLabel}，请在“文件”App 查看。`,
+        message: `将拉取用户「${detail.user.name}」全部漫画（共 ${totalManga} 部），连载系列将自动合并为全集卷，短篇将独立导出为单本，格式为 ${formatLabel}，请在「文件」App 查看。`,
         confirmLabel: "开始下载",
         cancelLabel: "取消",
       })
@@ -598,7 +598,7 @@ export function UserDetailView(props: { userID: number }) {
         const res = await exportAuthorManga(detail.user.name, userID, mangaList, format, (msg) => setDownloadStatusText(msg))
         void Dialog.alert({
           title: "导出完成",
-          message: `已成功导出 ${res.totalExported} 本漫画文件，请在“文件”App 查看。`,
+          message: `已成功导出 ${res.totalExported} 本漫画文件，请在「文件」App 查看。`,
         })
       } catch (e: any) {
         void Dialog.alert({ title: "导出失败", message: e?.message ?? "导出漫画时发生错误" })
@@ -609,7 +609,7 @@ export function UserDetailView(props: { userID: number }) {
     } else if (selectedCatKey === "novel") {
       const confirmed = await Dialog.confirm({
         title: "确认下载全部小说？",
-        message: `将拉取用户「${detail.user.name}」全部小说（共 ${totalNovels} 部），连载系列将自动合并为多章节整本电子书，短篇将独立导出为单本，请在“文件”App 查看。`,
+        message: `将拉取用户「${detail.user.name}」全部小说（共 ${totalNovels} 部），连载系列将自动合并为多章节整本电子书，短篇将独立导出为单本，请在「文件」App 查看。`,
         confirmLabel: "开始下载",
         cancelLabel: "取消",
       })
@@ -625,7 +625,7 @@ export function UserDetailView(props: { userID: number }) {
         const res = await exportAuthorNovels(detail.user.name, userID, novelList, (msg) => setDownloadStatusText(msg))
         void Dialog.alert({
           title: "导出完成",
-          message: `已成功导出 ${res.totalExported} 本 EPUB 电子书，请在“文件”App 查看。`,
+          message: `已成功导出 ${res.totalExported} 本 EPUB 电子书，请在「文件」App 查看。`,
         })
       } catch (e: any) {
         void Dialog.alert({ title: "导出失败", message: e?.message ?? "导出小说时发生错误" })

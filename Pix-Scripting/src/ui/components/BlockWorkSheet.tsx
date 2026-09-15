@@ -10,6 +10,7 @@ import {
   useState,
 } from "scripting"
 import { appGlass } from "./glass"
+import { sheetTopBar } from "./pageChrome"
 import {
   blockUser,
   isTagBlocked,
@@ -116,6 +117,7 @@ export function BlockWorkSheet(props: {
         alignment="leading"
         spacing={0}
         frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+        {...sheetTopBar()}
         navigationTitle="屏蔽设置"
         navigationBarTitleDisplayMode="inline"
         toolbar={{

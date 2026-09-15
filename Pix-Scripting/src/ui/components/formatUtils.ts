@@ -111,11 +111,11 @@ export function formatTextWithBreakOpportunities(text: string, isUrl = false): s
   if (!text) return ""
   const noBreakBefore = new Set([
     "，", "。", "、", "！", "？", "：", "；",
-    "）", "”", "’", "》", "】", "…", "—", "～", "·",
+    "）", "”", "’", "》", "】", "」", "…", "—", "～", "·",
     ",", ".", "!", "?", ":", ";", ")", "\"", "'", "]", ">", "}"
   ])
   const noBreakAfter = new Set([
-    "“", "‘", "（", "《", "【", "(", "[", "{", "<"
+    "“", "‘", "（", "《", "【", "「", "(", "[", "{", "<"
   ])
 
   // 按完整的 Unicode Code Point 切分字符（避免拆散 Emoji 等 4 字节代理对）
@@ -361,7 +361,7 @@ export function estimateVisualLines(text: string): number {
       const code = para.charCodeAt(i)
       const ch = para[i]
       if (code > 255) {
-        // 全角标点符号（，。、！？：；“”‘’（）…）占宽稍窄于正方汉字（约 0.8 CJK）
+        // 全角标点符号（，。、！？：；“”‘’（）…）「」占宽稍窄于正方汉字（约 0.8 CJK）
         if (
           ch === "，" ||
           ch === "。" ||
@@ -376,6 +376,8 @@ export function estimateVisualLines(text: string): number {
           ch === "’" ||
           ch === "（" ||
           ch === "）" ||
+          ch === "「" ||
+          ch === "」" ||
           ch === "…"
         ) {
           visualWeight += 0.8

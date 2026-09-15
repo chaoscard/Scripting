@@ -15,7 +15,7 @@ import { loadSettings } from "../../store/settings"
  * 把「材质」那一半收敛到设置项「玻璃效果」的四档（存储值见 store/settings.ts）：
  *   system  —— 原样返回（不注入材质）＝ 改造前的行为，也是默认档、随时可退回；
  *   clear   —— UIGlass.clear()
- *   soft    —— UIGlass.regular()（系统 API 叫 regular，观感即“柔和”）
+ *   soft    —— UIGlass.regular()（系统 API 叫 regular，观感即「柔和」）
  *   tinted  —— UIGlass.regular().tint(用户选的颜色 × 用户定的浓度)
  *
  * ⚠️ 选了非 system 档，这些自绘玻璃就**不再跟随系统滑块**（我们显式指定了材质）。
@@ -25,9 +25,9 @@ import { loadSettings } from "../../store/settings"
  *   按钮、系统菜单、Sheet 栏）没有强度接口，永远跟随系统 —— 属于已确认的例外。
  *
  * ⚠️ `interactive(...)` 开关（由设置项「玻璃交互」驱动，**默认关**）：
- *   - 开 = 可交互玻璃 —— 玻璃本身支持点击高亮与弹性形变（观感更“活”，渲染开销更高）；
+ *   - 开 = 可交互玻璃 —— 玻璃本身支持点击高亮与弹性形变（观感更「活」，渲染开销更高）；
  *   - 关 = 静态玻璃 —— 与改造前一致。
- *   注意：它管的是“玻璃材质是否可交互”，与按钮自己的按压反馈无关；且「系统」档不走本模块、
+ *   注意：它管的是「玻璃材质是否可交互」，与按钮自己的按压反馈无关；且「系统」档不走本模块、
  *   没有可附着的 UIGlass（想在系统档挂交互就必须先交出材质，也就不再跟随系统滑块了，
  *   二者在 API 层互斥），故该开关**仅在「玻璃效果」非系统档时显示**（设置页条件渲染）。
  *   Apple 文档称 interactive 默认 true，但真机构造出的实测为静态，因此**两个方向都显式声明**。
@@ -49,28 +49,32 @@ export const DEFAULT_GLASS_TINT_STRENGTH = 35
 let cachedGlassKey: string | null = null
 let cachedGlass: UIGlass | null = null
 
-/** 当前设置解析出的玻璃材质；「系统」档返回 null（表示不注入） */
-function currentGlass(): UIGlass | null {
+/** 当前设置解析出的玻璃材质；「系统」档返回 null（表示不注入）。
+ *  ignoreTint=true 时「色调」档退化为柔和（UIGlass.regular()），**不叠加用户色**。 */
+function currentGlass(ignoreTint: boolean = false): UIGlass | null {
   const settings = loadSettings()
   const strength = settings.glassStrength
   if (strength === "system") return null
 
   const interactive = settings.glassInteractive === true
+  // 「色调」档在 ignoreTint 下不当色调用：材质仍是 regular，只是不 tint
+  const tinted = strength === "tinted" && !ignoreTint
+  const base = strength === "tinted" ? "regular" : strength
   const key =
-    (strength === "tinted"
+    (tinted
       ? `tinted|${settings.glassTintColor}|${settings.glassTintStrength}`
-      : strength) + (interactive ? "|interactive" : "|static")
+      : base) + (interactive ? "|interactive" : "|static")
   if (key === cachedGlassKey && cachedGlass) return cachedGlass
 
   let glass: UIGlass
   if (strength === "clear") {
     glass = UIGlass.clear()
-  } else if (strength === "soft") {
-    glass = UIGlass.regular()
-  } else {
+  } else if (tinted) {
     glass = UIGlass
       .regular()
       .tint(tintRGBA(settings.glassTintColor, settings.glassTintStrength))
+  } else {
+    glass = UIGlass.regular()
   }
 
   glass = glass.interactive(interactive)
@@ -89,6 +93,16 @@ export function appGlass(shape: Shape): GlassEffectValue {
 /** 布尔形态：原写法 `glassEffect={true}` 的等价入口 */
 export function appGlassFlag(fallback: boolean = true): GlassEffectValue {
   return currentGlass() ?? fallback
+}
+
+/**
+ * 形状形态（**不叠色调**）：与 appGlass 相同，唯一差别是「色调」档退化为柔和（regular，无用户色）。
+ * 专供苹果音乐样式的底部配件栏 —— 那条栏在单栏由系统绘制（不受本设置控制）、在双栏由 App 自绘，
+ * 若只有一半被染色会很怪（用户 2026-09-15 定：这条栏不渲染色调）。
+ */
+export function appGlassNoTint(shape: Shape): GlassEffectValue {
+  const glass = currentGlass(true)
+  return glass ? { glass, shape } : shape
 }
 
 /** 「颜色 + 浓度(%)」合成带 alpha 的 rgba 字符串（注意不能带空格，Color 模板字面量类型不允许） */

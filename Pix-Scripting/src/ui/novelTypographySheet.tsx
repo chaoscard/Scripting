@@ -15,6 +15,7 @@ import {
   VStack,
 } from "scripting"
 import { appGlass } from "./components/glass"
+import { sheetTopBar } from "./components/pageChrome"
 import { isScriptingPro } from "../platform/pro"
 import { triggerHaptic } from "../platform/haptics"
 import {
@@ -104,6 +105,7 @@ export function NovelTypographySheet(props: { onClose?: () => void }) {
       presentationDragIndicator="visible"
     >
       <ScrollView
+        {...sheetTopBar()}
         navigationTitle="版式"
         navigationBarTitleDisplayMode="inline"
         toolbar={{

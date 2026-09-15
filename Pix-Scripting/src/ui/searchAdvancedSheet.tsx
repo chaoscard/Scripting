@@ -16,6 +16,7 @@ import {
   useState,
 } from "scripting"
 import { session } from "../api/session"
+import { sheetTopBar } from "./components/pageChrome"
 import type {
   AdvancedSearchParams,
   BookmarkThreshold,
@@ -284,6 +285,7 @@ export function SearchAdvancedSheet(props: {
   return (
     <NavigationStack>
       <List
+        {...sheetTopBar()}
         navigationTitle="高级搜索"
         navigationBarTitleDisplayMode="inline"
         toolbar={{

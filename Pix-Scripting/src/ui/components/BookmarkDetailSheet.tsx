@@ -21,6 +21,7 @@ import {
   useState,
 } from "scripting"
 import { appGlass } from "./glass"
+import { sheetTopBar } from "./pageChrome"
 import {
   addBookmark,
   addNovelBookmark,
@@ -187,6 +188,7 @@ export function BookmarkDetailSheet(props: {
         alignment="leading"
         spacing={0}
         frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+        {...sheetTopBar()}
         navigationTitle="收藏"
         navigationBarTitleDisplayMode="inline"
         toolbar={{

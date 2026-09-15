@@ -1,5 +1,5 @@
 import type { CommonViewProps } from "scripting"
-import type { TopBarEffect } from "../../store/settings"
+import { loadSettings, type TopBarEffect } from "../../store/settings"
 
 /**
  * 页面顶部（导航栏）通用外观 —— 集中一处，全库只此一份，调观感只改这里。
@@ -36,7 +36,7 @@ import type { TopBarEffect } from "../../store/settings"
  * 默认取 soft：iOS 26 上等于系统原生观感；iOS 27 上 A 段（可读性最要紧的那段）
  * 同样是奶白磨砂，只丢 B 段，属可接受的取舍。
  * ⚠️ 「系统」档 = automatic，在 iOS 27 上就是当初那句「B 段没有过渡」的默认行为，
- *   特意保留给“完全交还系统裁量”的用户。
+ *   特意保留给「完全交还系统裁量」的用户。
  * 存储值是 TopBarEffect（system | clear | soft | tinted）。非法/陈旧取值会在归一化时直接回退默认值。
  *
  * ⚠️ 下面两个常量是一组，改动前请先读完上面这段。
@@ -80,5 +80,42 @@ export function topBarScrollEdge(effect: TopBarEffect): {
   return {
     scrollEdgeEffectStyle: { style: TOP_BAR_STYLE_MAP[effect], edges: "top" },
     scrollEdgeEffectHidden: undefined,
+  }
+}
+
+/**
+ * 半模态 Sheet 顶部：与整页**完全同口径** —— 栏 clear + hidden（内容穿栏）+ 由「顶栏过渡」
+ * 设置驱动的滚动边缘效果。
+ *
+ * 【为什么 sheet 必须显式挂】
+ * 整页靠 appRoot 那一处全局挂载；sheet 是独立的呈现层，全局值到不了（iOS 27 实测：sheet 顶部
+ * 保持系统默认、不跟随设置档位，于是出现「全页一套、sheet 另一套」）。因此每个 sheet 根都要挂。
+ *
+ * 【为什么不需要实时生效机制】
+ * 「玻璃效果」那种实时生效做不到，是因为已有页面不会重建；而 sheet 每次打开都是全新挂载，
+ * 调用时读一次设置即可 —— 天然就是「下次打开即新档位」。
+ *
+ * 用法：`<VStack navigationTitle=... toolbar=... {...sheetTopBar()}>`
+ * 挂在**声明 navigationTitle / toolbar 的那个节点**上（与整页 45 处一致）。
+ *
+ * 【已知限制：sheet 上四档实际只有两态（已接受，别再试）】
+ * iOS 27 的 `soft` 只剩状态栏段（A 段）有雾，而 sheet **没有 A 段**（它顶部就是自己的圆角边），
+ * 于是 soft 在 sheet 里与 hidden 完全等价 ⇒ 「系统 / 色调」都表现为 hard，「柔和 / 透明」都表现为
+ * 全透明。这是 iOS 26→27 的系统行为，不是映射写错（iOS 26 上 soft 在 B 段也有雾，四档能区分）。
+ *
+ * 已试并**否决**的补救（2026-09-15 真机）：让「柔和」档不设 clear+hidden、改用系统栏自身材质
+ * 当那层雾 —— 真机上**毫无变化**（sheet 栏本来就没画可见材质），已回退。⇒ 想让 sheet 的
+ * 「柔和」也有雾，只剩「页面层自绘」一条路，成本高，暂不做。
+ */
+export function sheetTopBar(): {
+  toolbarBackground: CommonViewProps["toolbarBackground"]
+  toolbarBackgroundVisibility: CommonViewProps["toolbarBackgroundVisibility"]
+  scrollEdgeEffectStyle: CommonViewProps["scrollEdgeEffectStyle"]
+  scrollEdgeEffectHidden: CommonViewProps["scrollEdgeEffectHidden"]
+} {
+  return {
+    toolbarBackground: PAGE_TOOLBAR_BACKGROUND,
+    toolbarBackgroundVisibility: PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
+    ...topBarScrollEdge(loadSettings().topBarEffect),
   }
 }

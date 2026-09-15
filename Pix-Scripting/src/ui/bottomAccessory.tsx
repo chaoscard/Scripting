@@ -12,7 +12,7 @@ import {
   useState,
 } from "scripting"
 import { session } from "../api/session"
-import { appGlass } from "./components/glass"
+import { appGlassNoTint } from "./components/glass"
 import {
   addBookmark,
   illustrationDetail,
@@ -1627,7 +1627,7 @@ export function FloatingGlassCapsuleContainer(props: {
         alignment="center"
         frame={{ maxWidth: props.maxWidth ?? 520 }}
         padding={{ horizontal: 16, vertical: 8 }}
-        glassEffect={appGlass("capsule")}
+        glassEffect={appGlassNoTint("capsule")}
         contentShape="capsule"
         shadow={{ color: "#0000002E", radius: 10, y: 3 }}
       >

@@ -16,6 +16,7 @@ import {
   ZStack,
 } from "scripting"
 import { appGlass } from "./components/glass"
+import { sheetTopBar } from "./components/pageChrome"
 import { session } from "../api/session"
 import type { StoredAccountProfile } from "../api/auth"
 import { AvatarImage } from "./components/CachedImage"
@@ -85,6 +86,7 @@ export function AccountSwitcherSheet(props: {
   if (isAddingAccount) {
     return (
       <NavigationStack
+        {...sheetTopBar()}
         presentationDetents={["large"]}
         presentationDragIndicator="visible"
       >
@@ -107,6 +109,7 @@ export function AccountSwitcherSheet(props: {
       presentationDragIndicator="visible"
     >
       <ScrollView
+        {...sheetTopBar()}
         navigationTitle="账号管理"
         navigationBarTitleDisplayMode="inline"
         toolbar={{

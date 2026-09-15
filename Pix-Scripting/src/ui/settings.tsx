@@ -715,19 +715,20 @@ export function SettingsView() {
               </HStack>
             </>
           ) : null}
-          {settings.glassStrength !== "system" ? (
-            <Toggle
-              value={settings.glassInteractive}
-              onChanged={(value) => update({ glassInteractive: value })}
-            >
-              <VStack alignment="leading" spacing={2}>
-                <Text>玻璃交互</Text>
-                <Text font="caption2" foregroundStyle="secondaryLabel">
-                  玻璃支持高亮与弹性形变，渲染开销略高
-                </Text>
-              </VStack>
-            </Toggle>
-          ) : null}
+          <Toggle
+            value={settings.glassInteractive}
+            onChanged={(value) => update({ glassInteractive: value })}
+          >
+            <VStack alignment="leading" spacing={2}>
+              <Text>玻璃交互</Text>
+              <Text font="caption2" foregroundStyle="secondaryLabel">
+                玻璃支持高亮与弹性形变，渲染开销略高
+              </Text>
+              <Text font="caption2" foregroundStyle="secondaryLabel">
+                「玻璃效果」为「系统」时不生效
+              </Text>
+            </VStack>
+          </Toggle>
           {Device.isiPad ? (
             <>
               <Toggle
@@ -1078,7 +1079,7 @@ export function SettingsView() {
         footer={
           expanded.widgets ? (
             <Text>
-              您可在上方按不同尺寸选择默认内容源；若在桌面长按小组件选择“编辑小组件”，亦可在“参数”栏输入关键词进行单个小组件个性化覆盖（支持输入：日榜、周榜、月榜、关注、推荐、特辑）。
+              您可在上方按不同尺寸选择默认内容源；若在桌面长按小组件选择「编辑小组件」，亦可在「参数」栏输入关键词进行单个小组件个性化覆盖（支持输入：日榜、周榜、月榜、关注、推荐、特辑）。
             </Text>
           ) : undefined
         }
@@ -1383,10 +1384,10 @@ export function SettingsView() {
           expanded.download ? (
             <Text>
               {settings.downloadStorageMode === "icloud"
-                ? `iCloud 存储模式下，图片默认保存在${settings.downloadPhotoAlbumName || "Pix-Scripting"}相簿中，请在“照片”App查看；文件默认保存在 /Scripting/Pix-Scripting 目录中，可在各设备间同步，请在“文件”App 查看。`
+                ? `iCloud 存储模式下，图片默认保存在${settings.downloadPhotoAlbumName || "Pix-Scripting"}相簿中，请在「照片」App查看；文件默认保存在 /Scripting/Pix-Scripting 目录中，可在各设备间同步，请在「文件」App 查看。`
                 : settings.downloadCustomDirectoryPath
-                ? `图片默认保存在${settings.downloadPhotoAlbumName || "Pix-Scripting"}相簿中，请在“照片”App查看；文件保存在 ${settings.downloadCustomDirectoryPath} 目录中，请在“文件”App 查看。`
-                : `图片默认保存在${settings.downloadPhotoAlbumName || "Pix-Scripting"}相簿中，请在“照片”App查看；文件默认保存在 /Scripting/Pix-Scripting 目录中，请在“文件”App 查看。`}
+                ? `图片默认保存在${settings.downloadPhotoAlbumName || "Pix-Scripting"}相簿中，请在「照片」App查看；文件保存在 ${settings.downloadCustomDirectoryPath} 目录中，请在「文件」App 查看。`
+                : `图片默认保存在${settings.downloadPhotoAlbumName || "Pix-Scripting"}相簿中，请在「照片」App查看；文件默认保存在 /Scripting/Pix-Scripting 目录中，请在「文件」App 查看。`}
             </Text>
           ) : undefined
         }

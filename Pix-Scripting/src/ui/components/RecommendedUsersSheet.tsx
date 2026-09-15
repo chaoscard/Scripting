@@ -22,6 +22,7 @@ import {
 } from "./ConnectionRow"
 import { EmptyView, ErrorView, LoadingView } from "./StatusViews"
 import { LoadMoreTrigger } from "./RefreshableScrollView"
+import { sheetTopBar } from "./pageChrome"
 import { prefetch } from "../../image/imageLoader"
 import { currentBatchSize, usePagedList } from "../hooks"
 import type { PixivPage, PixivUserPreview } from "../../types"
@@ -72,6 +73,7 @@ export function RecommendedUsersSheet(props: {
       presentationDragIndicator="visible"
     >
       <VStack
+        {...sheetTopBar()}
         navigationTitle="推荐创作者"
         navigationBarTitleDisplayMode="inline"
         toolbar={{

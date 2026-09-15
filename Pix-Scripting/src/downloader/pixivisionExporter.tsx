@@ -1519,7 +1519,7 @@ export async function presentPixivisionDownloadActionSheet(
 
           void Dialog.alert({
             title: "导出完成",
-            message: `特辑 EPUB 电子画报已成功存入${fileLocationDesc}，您可在「下载与文件管理」或“文件”App 中查阅，并随时导入“图书”App 翻阅或分享。`,
+            message: `特辑 EPUB 电子画报已成功存入${fileLocationDesc}，您可在「下载与文件管理」或「文件」App 中查阅，并随时导入「图书」App 翻阅或分享。`,
           })
         }
       } else {

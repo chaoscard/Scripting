@@ -21,6 +21,7 @@ import {
   ZStack,
 } from "scripting"
 import { appGlass } from "./components/glass"
+import { sheetTopBar } from "./components/pageChrome"
 import { searchImageBySauceNAO, type SauceNAOMatch } from "../api/sauceNao"
 import {
   getSauceNaoApiKeys,
@@ -184,6 +185,7 @@ export function ReverseImageSearchSheet(props: {
         />
       ) : (
         <ScrollView
+          {...sheetTopBar()}
           navigationTitle={quota.keyCount > 0 ? `SauceNAO 搜图 (${quota.used}/${quota.total})` : "SauceNAO 搜图"}
           navigationBarTitleDisplayMode="inline"
           toolbar={{
@@ -551,6 +553,7 @@ function SauceNAOConfigView(props: {
 
   return (
     <List
+      {...sheetTopBar()}
       navigationTitle={keys.length > 0 ? `密钥配置 (${quota.used}/${quota.total})` : "SauceNAO 密钥配置"}
       navigationBarTitleDisplayMode="inline"
       listSectionSpacing="compact"

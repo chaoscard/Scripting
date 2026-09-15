@@ -24,6 +24,7 @@ import {
   ZStack,
 } from "scripting"
 import { appGlass } from "./components/glass"
+import { sheetTopBar } from "./components/pageChrome"
 import {
   computeHistoryAnalytics,
   type AnalyticsScopeKind,
@@ -962,6 +963,7 @@ export function HistoryAnalyticsView(props: HistoryAnalyticsViewProps) {
         alignment="leading"
         spacing={0}
         frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+        {...sheetTopBar()}
         navigationTitle="我的足迹"
         navigationBarTitleDisplayMode="inline"
         toolbar={{

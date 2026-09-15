@@ -511,7 +511,7 @@ export async function streamSummarizeNovel(
       "### 📌 核心剧情大纲\n(用200-300字简练概括主线起因、发展与核心冲突/结局)\n\n" +
       "### 👥 登场角色与关系\n- **角色名**：身份背景及与主角的关系\n\n" +
       "### 🏷️ 风格标签与看点\n- (提炼出3-5个核心看点，如：纯爱发糖 / 胃痛胃药 / IF线展开 / 战斗爽快)\n\n" +
-      "### ⚠️ 阅读提示与预警\n- (如有虐心、致郁、雷点或特殊癖好请明确标注，若无则注明“全年龄温馨向/无明显雷点”)\n\n" +
+      "### ⚠️ 阅读提示与预警\n- (如有虐心、致郁、雷点或特殊癖好请明确标注，若无则注明「全年龄温馨向/无明显雷点」)\n\n" +
       "注意：直接输出Markdown内容，语言生动精练，不要添加额外的问候语。"
 
   return executeUniversalAI({
@@ -722,7 +722,7 @@ export async function streamVisionTranslateImage(
     const profile = loadCustomAIProfile()
     const routedGeneral = resolveGeneralAIConfigRoute(profile.general)
     if (!routedGeneral.supportsVision) {
-      throw new Error("当前通用模型未启用视觉识别，请选择支持图片输入的模型并打开“支持视觉识别”")
+      throw new Error("当前通用模型未启用视觉识别，请选择支持图片输入的模型并打开「支持视觉识别」")
     }
   }
 

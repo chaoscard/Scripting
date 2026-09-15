@@ -236,7 +236,7 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
         title: "下载与文件管理说明",
         message: (
           <Text>
-            这里展示的是下载或导出的插画/动图 ZIP 归档、漫画 EPUB/CBZ 归档、小说 EPUB、特辑 EPUB 画报与创作者归档，可在“文件”APP内（/Scripting/Pix-Scripting）查看；以图片或视频格式下载的插画、漫画、动图与特辑拼接长图，请在“照片”APP内查看。
+            这里展示的是下载或导出的插画/动图 ZIP 归档、漫画 EPUB/CBZ 归档、小说 EPUB、特辑 EPUB 画报与创作者归档，可在「文件」APP内（/Scripting/Pix-Scripting）查看；以图片或视频格式下载的插画、漫画、动图与特辑拼接长图，请在「照片」APP内查看。
           </Text>
         ),
         isPresented: showNoticeAlert,
@@ -392,7 +392,7 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
         header={<Text>全局索引</Text>}
         footer={
           <Text font="footnote" foregroundStyle="secondaryLabel">
-            提示：这里展示的是下载或导出的插画/动图 ZIP 归档、漫画 EPUB/CBZ 归档、小说 EPUB、特辑 EPUB 画报与创作者归档，可在“文件”APP内（/Scripting/Pix-Scripting）查看；以图片或视频格式下载的插画、漫画、动图与特辑拼接长图，请在“照片”APP内查看。
+            提示：这里展示的是下载或导出的插画/动图 ZIP 归档、漫画 EPUB/CBZ 归档、小说 EPUB、特辑 EPUB 画报与创作者归档，可在「文件」APP内（/Scripting/Pix-Scripting）查看；以图片或视频格式下载的插画、漫画、动图与特辑拼接长图，请在「照片」APP内查看。
           </Text>
         }
       >

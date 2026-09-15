@@ -20,6 +20,7 @@ import {
   ConnectionRow,
 } from "./ConnectionRow"
 import { EmptyView, ErrorView, LoadingView } from "./StatusViews"
+import { sheetTopBar } from "./pageChrome"
 import type { PixivUserPreview } from "../../types"
 
 export function RelatedUsersSheet(props: {
@@ -77,6 +78,7 @@ export function RelatedUsersSheet(props: {
       presentationDragIndicator="visible"
     >
       <VStack
+        {...sheetTopBar()}
         navigationTitle={seedUserName ? `相似于 ${seedUserName}` : "相似创作者"}
         navigationBarTitleDisplayMode="inline"
         toolbar={{

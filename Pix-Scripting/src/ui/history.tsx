@@ -748,7 +748,7 @@ function IllustHistoryContent(props: {
     if (isSearching) {
       return (
         <EmptyView
-          text={`未找到与 “${searchQuery.trim()}” 相关的${kind === "manga" ? "漫画" : "插画"}浏览记录`}
+          text={`未找到与 「${searchQuery.trim()}」 相关的${kind === "manga" ? "漫画" : "插画"}浏览记录`}
           systemImage="magnifyingglass"
         />
       )
@@ -795,7 +795,7 @@ function NovelHistoryContent(props: {
     if (isSearching) {
       return (
         <EmptyView
-          text={`未找到与 “${searchQuery.trim()}” 相关的小说浏览记录`}
+          text={`未找到与 「${searchQuery.trim()}」 相关的小说浏览记录`}
           systemImage="magnifyingglass"
         />
       )

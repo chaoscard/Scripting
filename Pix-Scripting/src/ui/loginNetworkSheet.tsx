@@ -19,6 +19,7 @@ import {
   type AppSettings,
 } from "../store/settings"
 import { triggerHaptic } from "../platform/haptics"
+import { sheetTopBar } from "./components/pageChrome"
 
 export function LoginNetworkSheet(props: { onClose: () => void }) {
   const [settings, setSettings] = useState<AppSettings>(() => loadSettings())
@@ -45,6 +46,7 @@ export function LoginNetworkSheet(props: { onClose: () => void }) {
   return (
     <NavigationStack>
       <List
+        {...sheetTopBar()}
         navigationTitle="网络连接"
         navigationBarTitleDisplayMode="inline"
         toolbar={{
@@ -110,7 +112,7 @@ export function LoginNetworkSheet(props: { onClose: () => void }) {
           header={<Text>API 网关</Text>}
           footer={
             <Text>
-              供自定义反代节点使用。留空自动静默回退官方地址。若因配置错误导致无法登录，可随时点击右上角“重置”一键恢复。
+              供自定义反代节点使用。留空自动静默回退官方地址。若因配置错误导致无法登录，可随时点击右上角「重置」一键恢复。
             </Text>
           }
         >
