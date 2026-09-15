@@ -204,6 +204,7 @@ export interface AppSettings {
   mockFreeUser: boolean
   hasSeenFeatureHighlights: boolean
   dismissDownloadManagerNotice: boolean
+  dismissHistoryNotice: boolean
   customRankingEnabled: boolean
   customRankingIllustModes: string[]
   customRankingMangaModes: string[]
@@ -307,6 +308,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   mockFreeUser: false,
   hasSeenFeatureHighlights: false,
   dismissDownloadManagerNotice: false,
+  dismissHistoryNotice: false,
   customRankingEnabled: false,
   customRankingIllustModes: ["day", "week", "month"],
   customRankingMangaModes: ["day_manga", "week_manga", "month_manga"],
@@ -838,6 +840,10 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
     dismissDownloadManagerNotice: boolOr(
       stored?.dismissDownloadManagerNotice,
       DEFAULT_SETTINGS.dismissDownloadManagerNotice
+    ),
+    dismissHistoryNotice: boolOr(
+      stored?.dismissHistoryNotice,
+      DEFAULT_SETTINGS.dismissHistoryNotice
     ),
     customRankingEnabled: boolOr(stored?.customRankingEnabled, DEFAULT_SETTINGS.customRankingEnabled),
     customRankingIllustModes: parseStringArray(stored?.customRankingIllustModes, DEFAULT_SETTINGS.customRankingIllustModes),

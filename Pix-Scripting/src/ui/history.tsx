@@ -46,6 +46,7 @@ import {
 import {
   loadSettings,
   onSettingsChanged,
+  updateSettings,
 } from "../store/settings"
 import {
   isIllustContentVisible,
@@ -177,6 +178,18 @@ export function HistoryView() {
   const refreshHandlersRef = useRef<Map<HistoryKind, () => Promise<void>>>(new Map())
   const [isAnalyticsPresented, setIsAnalyticsPresented] = useState(false)
   const { isSplitViewActive, openDetailRoute } = useDualRoute()
+  const [showNoticeAlert, setShowNoticeAlert] = useState(false)
+  const hasCheckedNoticeRef = useRef(false)
+
+  useEffect(() => {
+    if (!hasCheckedNoticeRef.current) {
+      hasCheckedNoticeRef.current = true
+      const settings = loadSettings()
+      if (!settings.dismissHistoryNotice) {
+        setShowNoticeAlert(true)
+      }
+    }
+  }, [])
 
   const refreshAllFeeds = useCallback(async () => {
     const activeHandler = refreshHandlersRef.current.get(kind)
@@ -264,6 +277,33 @@ export function HistoryView() {
       toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
       toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
       background={ambientBackground}
+      alert={{
+        title: "浏览记录说明",
+        message: (
+          <Text>
+            轻轻下拉可以展开搜索框，快速检索作品、作者或标签；点击右上角图表标志可以查看「我的足迹」统计分析看板。
+          </Text>
+        ),
+        isPresented: showNoticeAlert,
+        onChanged: (val: boolean) => setShowNoticeAlert(val),
+        actions: (
+          <Group>
+            <Button
+              title="永久关闭"
+              action={() => {
+                updateSettings({ dismissHistoryNotice: true })
+                setShowNoticeAlert(false)
+              }}
+            />
+            <Button
+              title="本次关闭"
+              action={() => {
+                setShowNoticeAlert(false)
+              }}
+            />
+          </Group>
+        ),
+      }}
       onAppear={() => {
         const fromDetail = checkAndConsumeViewingHistoryDetail()
         if (fromDetail) {
