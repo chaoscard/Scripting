@@ -20,6 +20,10 @@ import {
   useState,
 } from "scripting"
 import {
+  PAGE_TOOLBAR_BACKGROUND,
+  PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
+} from "./components/pageChrome"
+import {
   addDownloadFilesChangeListener,
   cleanTempCache,
   deleteCreatorDirectory,
@@ -217,6 +221,8 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
     <List
       navigationTitle="下载与文件管理"
       navigationBarTitleDisplayMode="inline"
+      toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+      toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
       navigationDestination={destinationElement}
       onAppear={() => {
         void loadOverviewData(false)
@@ -522,6 +528,8 @@ export function DownloadTasksView(props: { onClose?: () => void }) {
     <List
       navigationTitle="下载任务"
       navigationBarTitleDisplayMode="inline"
+      toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+      toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
       onAppear={loadTasks}
       refreshable={async () => {
         loadTasks()
@@ -1161,6 +1169,8 @@ export function DownloadDetailListView(props: {
     <List
       navigationTitle={pageTitle}
       navigationBarTitleDisplayMode="inline"
+      toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+      toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
       onAppear={() => {
         void loadFileList(false)
       }}
@@ -1729,6 +1739,8 @@ export function DownloadCreatorsListView(props: { onClose?: () => void }) {
     <List
       navigationTitle="创作者归档"
       navigationBarTitleDisplayMode="inline"
+      toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+      toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
       navigationDestination={destinationElement}
       onAppear={() => {
         void loadCreators(false)

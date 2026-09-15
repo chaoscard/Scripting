@@ -683,6 +683,7 @@ export function UserDetailView(props: { userID: number }) {
     <ZStack
       navigationTitle=""
       navigationBarTitleDisplayMode="inline"
+      toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
       toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
       ignoresSafeArea={{ edges: ["top", "bottom"] }}
       toolbar={{

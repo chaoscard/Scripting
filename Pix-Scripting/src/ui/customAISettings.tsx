@@ -33,6 +33,10 @@ import {
   type ImageGenAIProtocol,
 } from "../store/customAI"
 import {
+  PAGE_TOOLBAR_BACKGROUND,
+  PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
+} from "./components/pageChrome"
+import {
   loadSettings,
   onSettingsChanged,
   type AppSettings,
@@ -542,6 +546,8 @@ export function CustomAISettingsView() {
     <List
       navigationTitle="自定义AI模型"
       navigationBarTitleDisplayMode="inline"
+      toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+      toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
       listSectionSpacing="compact"
       toolbar={{
         topBarTrailing: [

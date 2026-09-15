@@ -98,6 +98,8 @@ export function MoreView(props: { onClose: () => void }) {
     return (
       <List
         navigationBarTitleDisplayMode="inline"
+        toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+        toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
         navigationDestination={destinationElement}
         toolbar={appToolbar(props.onClose, "我的", undefined, undefined, {
           isCompact,

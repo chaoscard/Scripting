@@ -21,6 +21,10 @@ import {
 } from "scripting"
 import { AppNavigationLink } from "./DualRouteContext"
 import {
+  PAGE_TOOLBAR_BACKGROUND,
+  PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
+} from "./components/pageChrome"
+import {
   cacheUsageBytes,
   clearCache,
   enforceCacheLimit,
@@ -300,6 +304,8 @@ export function SettingsView() {
   return (
     <List
       navigationBarTitleDisplayMode="inline"
+      toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+      toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
       listSectionSpacing={6}
       sheet={{
         isPresented: showHighlights,

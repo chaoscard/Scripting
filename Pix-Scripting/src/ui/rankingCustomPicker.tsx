@@ -32,6 +32,10 @@ import {
 } from "../store/settings"
 import { useTimedFlag } from "./hooks"
 import {
+  PAGE_TOOLBAR_BACKGROUND,
+  PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
+} from "./components/pageChrome"
+import {
   DockActionBar,
   useRegisterBottomAccessory,
   type DockActionItem,
@@ -229,6 +233,8 @@ export function RankingCustomPickerView(props: { kind: CustomRankingPickerKind }
     <List
       navigationTitle={title}
       navigationBarTitleDisplayMode="inline"
+      toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+      toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
       toolbar={{
         topBarTrailing: [
           <Button

@@ -14,6 +14,10 @@ import {
 import { SCRIPT_VERSION } from "../config"
 import { loadSettings, onSettingsChanged, updateSettings } from "../store/settings"
 import { AvatarImage, presentExternalURL } from "./components"
+import {
+  PAGE_TOOLBAR_BACKGROUND,
+  PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
+} from "./components/pageChrome"
 import { triggerHaptic } from "../platform/haptics"
 
 const GITHUB_AVATAR_URL = "https://avatars.githubusercontent.com/u/16934707?v=4"
@@ -35,6 +39,8 @@ export function AboutView() {
   return (
     <List
       navigationBarTitleDisplayMode="inline"
+      toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+      toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
       toolbar={{
         principal: (
           <Text font="title2" fontWeight="bold">

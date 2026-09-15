@@ -27,6 +27,10 @@ import {
 } from "../store/blocklist"
 import { loadSettings, onSettingsChanged } from "../store/settings"
 import { AvatarImage, EmptyView } from "./components"
+import {
+  PAGE_TOOLBAR_BACKGROUND,
+  PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
+} from "./components/pageChrome"
 import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
 import { triggerHaptic } from "../platform/haptics"
 
@@ -147,7 +151,11 @@ export function BlockedSettingsView() {
         ],
       }}
     >
-      <List frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
+      <List
+        frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+        toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+        toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
+      >
         {scope === "tag" ? (
           blocklist.blockedTags.length === 0 ? (
             <Section>

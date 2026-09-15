@@ -1,4 +1,8 @@
 import { Button, HStack, Image, ProgressView, Spacer, Text, VStack, ZStack } from "scripting"
+import {
+  PAGE_TOOLBAR_BACKGROUND,
+  PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
+} from "./pageChrome"
 
 export function LoadingView() {
   return (
@@ -81,6 +85,8 @@ export function NotFoundRouteView(props?: { rawRoute?: string }) {
       padding={40}
       navigationTitle="页面未找到"
       navigationBarTitleDisplayMode="inline"
+      toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+      toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
     >
       <VStack alignment="center" spacing={16}>
         <Image

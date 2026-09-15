@@ -109,6 +109,10 @@ import {
   TagChip,
 } from "./components"
 import { NovelReaderView, NovelReaderWebView } from "./novelReader"
+import {
+  PAGE_TOOLBAR_BACKGROUND,
+  PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
+} from "./components/pageChrome"
 import { CommentsSheet } from "./comments"
 import { NovelAISheet, type NovelAIMode } from "./aiSheet"
 import { NovelTypographySheet } from "./novelTypographySheet"
@@ -861,6 +865,8 @@ export function NovelDetailView(props: { novelID: number }) {
         <ScrollView
           navigationTitle=""
           navigationBarTitleDisplayMode="inline"
+          toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+          toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
           scrollContentBackground="hidden"
         >
           <LoadingView />
@@ -879,6 +885,8 @@ export function NovelDetailView(props: { novelID: number }) {
         <ScrollView
           navigationTitle=""
           navigationBarTitleDisplayMode="inline"
+          toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+          toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
           scrollContentBackground="hidden"
         >
           <ErrorView message={error ?? "小说不存在"} onRetry={load} />
@@ -1005,7 +1013,11 @@ export function NovelDetailView(props: { novelID: number }) {
   }
 
   return (
-    <ZStack alignment={quickActionPos === "leading" ? "bottomLeading" : "bottomTrailing"}>
+    <ZStack
+      alignment={quickActionPos === "leading" ? "bottomLeading" : "bottomTrailing"}
+      toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+      toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
+    >
       {isVirtualNode(ambientBackground) ? (
         ambientBackground
       ) : (
