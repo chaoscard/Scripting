@@ -292,8 +292,7 @@ export function RootView() {
 /**
  * 外壳选择器
  *
- * · iPad（含 Mac 上的 iOS App）+ 开启分栏 + 窗口达到 SPLIT_SHELL_MIN_WIDTH → 三栏外壳
- *   （窗口再缩也不会立刻换外壳，而是交给系统折叠栏位，避免重建导航栈丢滚动位置）
+ * · iPad（含 Mac 上的 iOS App）+ 开启平行视界 + 窗口达到 SPLIT_SHELL_MIN_WIDTH → 平行视界双栏外壳（SplitShell：左栏主流 + 右栏详情）
  * · 其余（iPhone / 窗口过窄 / 用户关闭开关）→ 原有 TabView 外壳，行为完全不变
  *
  * 两个外壳互斥挂载，因此 useTabNavigation 的注册不会重复。

@@ -210,14 +210,6 @@ export function DetailEmptyPlaceholder() {
           <Text font="title3" fontWeight="bold" foregroundStyle="label">
             选择作品开始浏览
           </Text>
-          <Text
-            font="subheadline"
-            foregroundStyle="secondaryLabel"
-            multilineTextAlignment="center"
-            frame={{ maxWidth: 320 }}
-          >
-            在中栏选择插画、小说或特辑，在此处沉浸查看超清大图与详细内容
-          </Text>
         </VStack>
       </VStack>
     </ZStack>

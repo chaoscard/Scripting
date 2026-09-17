@@ -26,12 +26,12 @@ import { FollowFeedView } from "./followFeed"
 import { MoreView } from "./more"
 
 /**
- * 五个 Tab 的**内容真源** —— TabView 外壳与 iPad 分栏外壳共用同一份定义。
+ * 五个 Tab 的**内容真源** —— 单栏外壳与 iPad 平行视界双栏外壳共用同一份定义。
  *
  * 为什么要有这个文件：
- * 分栏外壳（splitShell）需要一个「侧边栏条目列表」，TabView 外壳需要五个 <Tab>。
- * 两者背后必须是**同一个 Tab 集合、同一套标题与图标、同一个根视图**，否则一旦新增/改名
- * 就会出现「侧边栏有、Tab 栏没有」这类不一致。
+ * 单栏外壳（TabViewShell）与平行视界外壳（SplitShell）背后的主浏览流均基于 MainTabView。
+ * 两者背后必须是**同一个 Tab 集合、同一套标题与图标、同一个根视图**，
+ * 且搜索 Tab 固定位于最末位声明 role="search" 支持 iOS 26 智能滚动收缩胶囊。
  * ⇒ 任何 Tab 的新增 / 改名 / 换图标 / 换根视图，只改这里的 TAB_CONTENT_DEFS。
  */
 

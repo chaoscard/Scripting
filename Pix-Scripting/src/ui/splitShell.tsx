@@ -26,7 +26,7 @@ import {
 import { loadSettings, onSettingsChanged } from "../store/settings"
 
 /**
- * 启用 iPad 分栏外壳的最小窗口宽度。
+ * 启用 iPad 平行视界双栏外壳的最小窗口宽度。
  */
 export const SPLIT_SHELL_MIN_WIDTH = 640
 
