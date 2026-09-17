@@ -82,7 +82,7 @@ function TabSidebar(props: { selection: Observable<string | null> }) {
   return (
     <List
       selection={props.selection}
-      navigationTitle="Pix-Scripting"
+      navigationTitle=""
       navigationSplitViewColumnWidth={{ min: 190, ideal: 220, max: 280 }}
     >
       {TAB_CONTENT_DEFS.map((def) => (

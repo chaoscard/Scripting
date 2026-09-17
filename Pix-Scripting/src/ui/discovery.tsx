@@ -157,9 +157,15 @@ export function DiscoveryView(props: { onClose: () => void }) {
     isAppleMusic
   )
 
+  const isClassic = pageLayout === "classic"
+  const kindLabel = kind === "illustration" ? "插画" : kind === "manga" ? "漫画" : "小说"
+  const baseTitle = mode === "recommended" ? "推荐" : mode === "latest" ? "最新" : "特辑"
+  const navTitle = mode === "pixivision" ? "特辑" : (isClassic ? `${baseTitle} · ${kindLabel}` : baseTitle)
+
   return (
     <ZStack
       frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+      navigationTitle={navTitle}
       navigationBarTitleDisplayMode="inline"
       toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
       toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}

@@ -543,8 +543,9 @@ export function IllustFlowFeed(props: {
   )
   const heroCardWidth = useMemo(() => calculateHeroCardWidth(containerWidth), [containerWidth])
 
-  // 首图大卡片：紧凑窗口（iPhone 或 iPad 台前调度收缩窗口）且用户开启首图大卡设置时激活
-  const isHeroActive = (!isiPad || isCompact) && Boolean(props.enableHeroFirst && props.items.length > 0)
+  // 首图大卡片：仅在 2 列形态（iPhone 或极窄窗口）且用户开启首图大卡设置时激活；
+  // 3 列及以上（中等大小 / 宽屏）自动保持均等多列网格，首图不跨行。
+  const isHeroActive = columnCount <= 2 && Boolean(props.enableHeroFirst && props.items.length > 0)
   const heroItem = isHeroActive ? props.items[0] : null
   const waterfallItems = isHeroActive ? props.items.slice(1) : props.items
   const startIndex = isHeroActive ? 1 : 0

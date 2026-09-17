@@ -880,13 +880,13 @@ export function useNovelMarker(
 /**
  * 紧凑布局上限阈值。
  *
- * 设为 560pt（对齐 iPadOS 18+ 原生将 TabBar 从底部升至顶栏中央的真实临界宽度）：
- * · < 560pt：极窄窗/iPhone 态，TabBar 留在底部，顶栏居中显示页面主标题，右侧折叠为单图标，首图全宽；
- * · ≥ 560pt：iPadOS 顶栏 Tab 态，系统将 TabBar 自动升至顶栏中央，页面主标题自动隐藏让位给系统 TabBar，右侧展开为文字菜单，避免双层重叠。
+ * 设为 500pt（对齐 iPadOS 18+ 原生将 TabBar 从底部升至顶栏中央的真实临界宽度）：
+ * · < 500pt：极窄窗 / iPhone 紧凑态，TabBar 在底部，顶栏居中显示大标题，右侧折叠为单图标，首图全宽；
+ * · ≥ 500pt：iPadOS 顶栏 Tab 态（含中等 3 列窗与全屏），系统将 TabBar 自动升至顶栏中央，页面主标题自动隐藏，右侧展开为文字菜单，彻底消除双层标题重叠。
  */
-export const COMPACT_LAYOUT_MAX_WIDTH = 560
-/** 宽版布局阈值（与足迹看板等保持一致） */
-export const WIDE_LAYOUT_MIN_WIDTH = 620
+export const COMPACT_LAYOUT_MAX_WIDTH = 500
+/** 宽版布局阈值 */
+export const WIDE_LAYOUT_MIN_WIDTH = 500
 
 export interface LayoutMetrics {
   width: number

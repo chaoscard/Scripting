@@ -102,6 +102,7 @@ export function MoreView(props: { onClose: () => void }) {
   if (!user) {
     return (
       <List
+        navigationTitle="我的"
         navigationBarTitleDisplayMode="inline"
         toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
         toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
@@ -123,6 +124,7 @@ export function MoreView(props: { onClose: () => void }) {
 
   return (
     <ZStack
+      navigationTitle="我的"
       navigationBarTitleDisplayMode="inline"
       toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
       toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}

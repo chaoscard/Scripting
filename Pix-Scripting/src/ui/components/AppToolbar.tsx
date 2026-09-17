@@ -63,23 +63,7 @@ export function appToolbar(
   options?: AppToolbarOptions
 ) {
   const isHomeScreen = Script.env === "home_screen"
-  const isPad = Device.isiPad
-  const isCompact = options?.isCompact ?? (!isPad)
   const isSplit = options?.isSplitViewActive ?? false
-  /**
-   * 自绘标题是否隐藏。
-   *
-   * · 紧凑形态（isCompact === true，如 iPhone / iPad 台前调度窄窗 / iPad 窄分屏）：
-   *   右侧菜单折叠为单图标，居中主标题一律显示（不隐藏）。
-   * · 分栏外壳（isSplit === true）：
-   *   中栏与各栏具有独立的身份，标题一律显示（不隐藏）。
-   * · 宽屏单栏（!isCompact && !isSplit）：
-   *   仅在页面显式声明 hidePrincipalOnWide === true 时才隐藏（避免与右侧展开的长文字标签重复）。
-   */
-  const shouldHidePrincipal =
-    !isSplit &&
-    !isCompact &&
-    options?.hidePrincipalOnWide === true
 
   let leadingButton: any = (
     <Button
@@ -105,23 +89,14 @@ export function appToolbar(
         ? trailing
         : [trailing]
       : undefined,
-    principal: shouldHidePrincipal
-      ? undefined
-      : principal
-        ? Array.isArray(principal)
-          ? principal
-          : [principal]
-        : title
-          ? Array.isArray(title)
-            ? title
-            : typeof title === "string"
-              ? [
-                  <Text font={isCompact ? "title2" : "headline"} fontWeight="bold">
-                    {title}
-                  </Text>,
-                ]
-              : [title]
-          : undefined,
+    // 仅当显式传入自定义 principal 视图时才挂载；
+    // 页面标题统一由根容器上的 navigationTitle 属性由系统原生接管，
+    // 自动在「TabBar在底部时居中显示 / TabBar升至顶栏时自动隐藏」，实现 0 阈值硬编码。
+    principal: principal
+      ? Array.isArray(principal)
+        ? principal
+        : [principal]
+      : undefined,
   }
 }
 

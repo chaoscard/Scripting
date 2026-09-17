@@ -351,7 +351,7 @@ function MainTabView(props: {
   const tabViewProps: any = {
     selection,
     tabBarMinimizeBehavior: "onScrollDown",
-    tabViewStyle: "tabBarOnly",
+    tabViewStyle: "sidebarAdaptable",
     tint: tabTint,
   }
 

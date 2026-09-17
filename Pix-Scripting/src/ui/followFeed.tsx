@@ -153,9 +153,33 @@ export function FollowFeedView(props: {
     isAppleMusic
   )
 
+  const modeLabel =
+    mode === "following"
+      ? scope === "private"
+        ? "私密关注"
+        : "公开关注"
+      : mode === "watchlist"
+        ? "追更列表"
+        : "好友动态"
+  const isClassic = !isAppleMusic
+  const currentKindLabel =
+    mode === "watchlist"
+      ? watchKind === "manga"
+        ? "漫画"
+        : "小说"
+      : mode === "following"
+        ? followingKind === "illust"
+          ? "插画·漫画"
+          : "小说"
+        : friendKind === "illust"
+          ? "插画·漫画"
+          : "小说"
+  const navTitle = isClassic ? `${modeLabel} · ${currentKindLabel}` : modeLabel
+
   return (
     <ZStack
       frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+      navigationTitle={navTitle}
       navigationBarTitleDisplayMode="inline"
       toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
       toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}

@@ -1332,8 +1332,11 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
     )
   }
 
+  const navTitle = submitted.trim() ? submitted.trim() : "搜索"
+
   return (
     <ZStack
+      navigationTitle={navTitle}
       navigationBarTitleDisplayMode="inline"
       toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
       toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}

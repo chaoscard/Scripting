@@ -301,8 +301,25 @@ export function RankingView(props: { onClose: () => void }) {
     isAppleMusic
   )
 
+  const baseTitle =
+    kind === "illustration"
+      ? "插画"
+      : kind === "manga"
+        ? "漫画"
+        : kind === "novel"
+          ? "小说"
+          : "历史"
+  const currentModeObj = (activeModes ?? []).find((m) => m.value === selectedMode)
+  const modeTitle = currentModeObj?.title ?? ""
+  const isClassic = !isAppleMusic
+  const navTitle =
+    isClassic && kind !== "advanced" && modeTitle
+      ? `${baseTitle} · ${modeTitle}`
+      : baseTitle
+
   return (
     <ZStack
+      navigationTitle={navTitle}
       navigationBarTitleDisplayMode="inline"
       toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
       toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
