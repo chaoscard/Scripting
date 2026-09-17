@@ -7,6 +7,7 @@ import {
   PAGE_TOOLBAR_BACKGROUND,
   PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
 } from "../components/pageChrome"
+import { useDualRoute } from "../DualRouteContext"
 import { addBookmark, bookmarkDetail, bookmarkTags } from "../../api/pixiv"
 import { session } from "../../api/session"
 import { updateHistoryBookmark } from "../../store/history"
@@ -22,6 +23,8 @@ import { IllustRelatedSection } from "./IllustRelatedSection"
 
 export function IllustDetailView(props: { illustID: number }) {
   const { state, actions } = useIllustDetailState(props.illustID)
+  // 分栏外壳的右栏：作品标题交给导航栏（中栏 / iPhone 保持空标题，维持原样）
+  const { isDetailPane } = useDualRoute()
   const {
     illust,
     loading,
@@ -159,7 +162,7 @@ export function IllustDetailView(props: { illustID: number }) {
 
       {/* 2. 滚动内容层：受顶部安全区保护，插画图片与主要内容从安全区下方正常排版，绝不被灵动岛遮挡 */}
       <ScrollView
-        navigationTitle=""
+        navigationTitle={isDetailPane ? current.title : ""}
         navigationBarTitleDisplayMode="inline"
         ignoresSafeArea={{ edges: "bottom" }}
         toolbarBackground={PAGE_TOOLBAR_BACKGROUND}

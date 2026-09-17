@@ -11,6 +11,7 @@ import {
   onSettingsChanged,
   type AmbientIntensity,
 } from "../../store/settings"
+import { useLayoutMetrics } from "../hooks"
 
 export interface GeminiAmbientBackgroundProps {
   /**
@@ -211,6 +212,21 @@ export function GeminiAmbientBackground(props: GeminiAmbientBackgroundProps) {
   const swingRightXSec = (swingBaseMs * 1.15) / 1000
   const swingRightYSec = (swingBaseMs * 0.88) / 1000
 
+  /**
+   * 光斑几何**比例化**（2026-09-17）：
+   * 原来所有尺寸/位移/模糊都是“按手机画布调出来的绝对 pt 值”，
+   * 于是画布一变宽（iPad 全屏、右栏拉宽）光斑就只占中间一小块、四周空掉。
+   * 现在一律按画布换算：横向东西随宽度、纵向东西随高度，基准 = 手机竖屏 390×844。
+   * ⇒ 在 iPhone 上比值恒为 1，观感与改前完全一致；画布变大时自动铺开并放大。
+   */
+  const { width: canvasWidth, height: canvasHeight } = useLayoutMetrics()
+  const relX = canvasWidth > 0 ? canvasWidth / 390 : 1
+  const relY = canvasHeight > 0 ? canvasHeight / 844 : 1
+  /** 横向尺寸相对化 */
+  const px = (value: number) => Math.round(value * relX)
+  /** 纵向尺寸相对化 */
+  const py = (value: number) => Math.round(value * relY)
+
   const centerOffsetY = custom ? settings.geminiCenterOffsetY : -200
   const wingOffsetX = custom ? settings.geminiWingOffsetX : 95
   const swingDist = custom ? settings.geminiSwingDistance : speed === "calm" ? 35 : 40
@@ -318,17 +334,17 @@ export function GeminiAmbientBackground(props: GeminiAmbientBackgroundProps) {
           startPoint: "topLeading",
           endPoint: "bottomTrailing",
         }}
-        frame={{ width: 280, height: 260 }}
+        frame={{ width: px(280), height: py(260) }}
         clockHandRotationEffect={rotLeftSec > 0 ? (rotLeftSec as any) : undefined}
         scaleEffect={{ x: 2.1, y: 1.8 }}
-        offset={{ x: -wingOffsetX, y: centerOffsetY - 10 }}
-        blur={{ radius: blurRadius, opaque: false }}
+        offset={{ x: -px(wingOffsetX), y: py(centerOffsetY) - px(10) }}
+        blur={{ radius: px(blurRadius), opaque: false }}
         opacity={intensityAlpha}
         swingAnimation={
           swingDist > 0
             ? {
-                x: { duration: swingLeftXSec, distance: swingDist },
-                y: { duration: swingLeftYSec, distance: Math.round(swingDist * 0.75) },
+                x: { duration: swingLeftXSec, distance: px(swingDist) },
+                y: { duration: swingLeftYSec, distance: py(Math.round(swingDist * 0.75)) },
               }
             : undefined
         }
@@ -341,17 +357,17 @@ export function GeminiAmbientBackground(props: GeminiAmbientBackgroundProps) {
           startPoint: "topTrailing",
           endPoint: "bottomLeading",
         }}
-        frame={{ width: 290, height: 270 }}
+        frame={{ width: px(290), height: py(270) }}
         clockHandRotationEffect={rotRightSec > 0 ? (rotRightSec as any) : undefined}
         scaleEffect={{ x: 2.1, y: 1.8 }}
-        offset={{ x: wingOffsetX, y: centerOffsetY + 10 }}
-        blur={{ radius: Math.round(blurRadius * 1.08), opaque: false }}
+        offset={{ x: px(wingOffsetX), y: py(centerOffsetY) + px(10) }}
+        blur={{ radius: px(Math.round(blurRadius * 1.08)), opaque: false }}
         opacity={intensityAlpha * 0.95}
         swingAnimation={
           swingDist > 0
             ? {
-                x: { duration: swingRightXSec, distance: -Math.round(swingDist * 1.1) },
-                y: { duration: swingRightYSec, distance: Math.round(swingDist * 0.7) },
+                x: { duration: swingRightXSec, distance: -px(Math.round(swingDist * 1.1)) },
+                y: { duration: swingRightYSec, distance: py(Math.round(swingDist * 0.7)) },
               }
             : undefined
         }

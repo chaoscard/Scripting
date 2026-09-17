@@ -80,13 +80,16 @@ export function PixivisionCard(props: {
         }
         overlay={
           isSelected ? (
+            // 分栏下的选中指示器。环用 maxWidth/maxHeight: infinity 撑满「卡片外层」，
+            // **不能**复用 cardFrame（那是内容层宽度 = targetCardWidth），否则会被卡片 padding 内缩。
+            // 写法与 NovelCard / WatchlistSeriesCard 保持一致。
             <RoundedRectangle
               cornerRadius={16}
               stroke={{
                 shapeStyle: "accentColor",
                 strokeStyle: { lineWidth: 2.5 },
               }}
-              frame={cardFrame}
+              frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
             />
           ) : undefined
         }

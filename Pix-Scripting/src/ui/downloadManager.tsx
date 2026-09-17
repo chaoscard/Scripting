@@ -23,6 +23,7 @@ import {
   PAGE_TOOLBAR_BACKGROUND,
   PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
 } from "./components/pageChrome"
+import { useDualRoute } from "./DualRouteContext"
 import {
   addDownloadFilesChangeListener,
   cleanTempCache,
@@ -68,6 +69,8 @@ import { triggerHaptic } from "../platform/haptics"
 
 export function DownloadManagerView(props: { onClose?: () => void }) {
   const { isCompact } = useLayoutMetrics()
+  // 分栏外壳：本页固定落在右栏 → 显示标题、不渲染顶栏 ×（栏首是内胆的返回箭头）
+  const { isSplitViewActive, isDetailPane } = useDualRoute()
   const [overview, setOverview] = useState<StorageOverview | null>(null)
   const [cleaning, setCleaning] = useState(false)
   const [activeTasksCount, setActiveTasksCount] = useState(0)
@@ -261,7 +264,7 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
       }}
       toolbar={
         props.onClose
-          ? appToolbar(props.onClose, "下载与文件管理", topTrailingControls[0], undefined, { isCompact })
+          ? appToolbar(props.onClose, "下载与文件管理", topTrailingControls[0], undefined, { isCompact, isSplitViewActive, isDetailPane })
           : { topBarTrailing: topTrailingControls }
       }
     >
@@ -445,6 +448,8 @@ function DownloadCategoryRow(props: {
 
 export function DownloadTasksView(props: { onClose?: () => void }) {
   const { isCompact } = useLayoutMetrics()
+  // 分栏外壳：本页固定落在右栏 → 显示标题、不渲染顶栏 ×（栏首是内胆的返回箭头）
+  const { isSplitViewActive, isDetailPane } = useDualRoute()
   const [tasks, setTasks] = useState<DownloadTaskItem[]>([])
 
   const loadTasks = useCallback(() => {
@@ -536,7 +541,7 @@ export function DownloadTasksView(props: { onClose?: () => void }) {
       }}
       toolbar={
         props.onClose
-          ? appToolbar(props.onClose, "下载任务", menuToolbar, undefined, { isCompact })
+          ? appToolbar(props.onClose, "下载任务", menuToolbar, undefined, { isCompact, isSplitViewActive, isDetailPane })
           : { topBarTrailing: [menuToolbar] }
       }
     >

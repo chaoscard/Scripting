@@ -14,6 +14,7 @@ import type { FollowRestrict } from "../../store/userFollow"
 import { cleanHtmlCaption } from "../../api/aiService"
 import { AvatarImage } from "../components/CachedImage"
 import { requestPixivRoute } from "../../store/routeNavigation"
+import { AppNavigationLink } from "../DualRouteContext"
 import type { IllustAIMode } from "../aiSheet"
 
 declare const Pasteboard: any
@@ -319,12 +320,12 @@ export function renderIllustToolbarActions(props: IllustToolbarActionsProps): Vi
     ...(Device.isiPad && !isAppleMusic
       ? []
       : [
-          <NavigationLink value={`user:${illust.user?.id ?? 0}`}>
+          <AppNavigationLink value={`user:${illust.user?.id ?? 0}`}>
             <AvatarImage
               url={illust.user?.profile_image_urls?.medium ?? null}
               size={28}
             />
-          </NavigationLink>,
+          </AppNavigationLink>,
         ]),
   ]
 }

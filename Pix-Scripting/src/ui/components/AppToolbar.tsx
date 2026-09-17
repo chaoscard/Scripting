@@ -24,7 +24,35 @@ export function FullScreenToggleButton() {
 export interface AppToolbarOptions {
   isCompact?: boolean
   hidePrincipalOnWide?: boolean
+  /** 是否处于 iPad 分栏外壳（由调用方从 useDualRoute() 取得） */
   isSplitViewActive?: boolean
+  /**
+   * 是否渲染在**右栏详情内胆**里（由调用方从 useDualRoute() 取得）。
+   * 右栏栏首是内胆自绘的返回箭头（DetailPaneRouteView），不再重复放关闭按钮。
+   */
+  isDetailPane?: boolean
+}
+
+/**
+ * 关闭 / 最小化应用 —— 顶栏 × 的唯一行为与设置出口。
+ *
+ * 位置约定（2026-09-17 定稿）：分栏外壳下**只在中间栏顶栏**渲染 ×；
+ * 右栏用返回箭头（isDetailPane），侧边栏不再放关闭入口。
+ *
+ * ⚠️ 不要把它写成 hook，也不要让 appToolbar 变成 hook 消费者：
+ *    appToolbar 存在「按条件调用」的调用点（如 downloadManager 的三元表达式），
+ *    在它内部读 context 会让 hook 数量随分支变化。
+ */
+export function performAppClose(dismiss: () => void) {
+  abortAllAITasks()
+  if (loadSettings().closeButtonAction === "exit") {
+    try {
+      dismiss()
+    } catch {}
+    Script.exit()
+  } else {
+    Script.minimize()
+  }
 }
 
 export function appToolbar(
@@ -38,36 +66,40 @@ export function appToolbar(
   const isPad = Device.isiPad
   const isCompact = options?.isCompact ?? (!isPad)
   const isSplit = options?.isSplitViewActive ?? false
+  /**
+   * 自绘标题是否隐藏。
+   *
+   * · 紧凑形态（isCompact === true，如 iPhone / iPad 台前调度窄窗 / iPad 窄分屏）：
+   *   右侧菜单折叠为单图标，居中主标题一律显示（不隐藏）。
+   * · 分栏外壳（isSplit === true）：
+   *   中栏与各栏具有独立的身份，标题一律显示（不隐藏）。
+   * · 宽屏单栏（!isCompact && !isSplit）：
+   *   仅在页面显式声明 hidePrincipalOnWide === true 时才隐藏（避免与右侧展开的长文字标签重复）。
+   */
   const shouldHidePrincipal =
-    (isPad && options?.hidePrincipalOnWide !== false) ||
-    (!isCompact && options?.hidePrincipalOnWide === true) ||
-    isSplit
+    !isSplit &&
+    !isCompact &&
+    options?.hidePrincipalOnWide === true
 
-  let leadingButton = (
+  let leadingButton: any = (
     <Button
       key="app-toolbar-close"
       title="关闭"
       systemImage="xmark"
-      action={() => {
-        abortAllAITasks()
-        if (loadSettings().closeButtonAction === "exit") {
-          try {
-            dismiss()
-          } catch {}
-          Script.exit()
-        } else {
-          Script.minimize()
-        }
-      }}
+      action={() => performAppClose(dismiss)}
     />
   )
 
   if (isHomeScreen) {
     leadingButton = <FullScreenToggleButton key="app-toolbar-fullscreen-toggle-host" />
+  } else if (isSplit && options?.isDetailPane) {
+    // 分栏外壳的**右栏**：栏首已经是内胆自绘的返回箭头，不再重复放 ×。
+    //（中栏：isDetailPane 为 false → 保留顶栏 ×，这是分栏下唯一的关闭入口。）
+    leadingButton = undefined
   }
 
   return {
-    topBarLeading: [leadingButton],
+    topBarLeading: leadingButton ? [leadingButton] : undefined,
     topBarTrailing: trailing
       ? Array.isArray(trailing)
         ? trailing

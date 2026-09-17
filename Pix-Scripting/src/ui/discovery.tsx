@@ -87,7 +87,14 @@ export function DiscoveryView(props: { onClose: () => void }) {
     () => getLastActiveAmbientImageUrl()
   )
   const isTabActive = useIsCurrentTab("discovery")
-  const { isCompact } = useLayoutMetrics()
+
+  // 兜底激活：根视图的 onAppear 在部分外壳（如 TabView 内的 Tab）下不可靠，
+  // 若当前已选中本 Tab 就直接激活，避免信息流永远不发起加载 → 整页空白。
+  useEffect(() => {
+    if (isTabActive) setActivated(true)
+  }, [isTabActive])
+  const layout = useLayoutMetrics()
+  const { isCompact } = layout
   const { isSplitViewActive } = useDualRoute()
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl, isTabActive)
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
@@ -573,7 +580,8 @@ function exploreToolbar(props: {
   onKindChange: (kind: FeedKind) => void
   onClose: () => void
 }) {
-  const isCompact = props.isCompact ?? (!Device.isiPad)
+  const layoutMetrics = useLayoutMetrics()
+  const isCompact = props.isCompact ?? layoutMetrics.isCompact
   const isClassic = !props.isAppleMusic
   const kindLabel =
     props.kind === "illustration" ? "插画" : props.kind === "manga" ? "漫画" : "小说"

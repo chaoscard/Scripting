@@ -27,6 +27,7 @@ import {
 } from "../store/blocklist"
 import { loadSettings, onSettingsChanged } from "../store/settings"
 import { AvatarImage, EmptyView } from "./components"
+import { AppNavigationLink } from "./DualRouteContext"
 import {
   PAGE_TOOLBAR_BACKGROUND,
   PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
@@ -240,7 +241,7 @@ function BlockedUserRow(props: { user: BlockedUser; onRemove: () => void }) {
         ],
       }}
     >
-      <NavigationLink value={`user:${user.id}`} frame={{ maxWidth: "infinity" }}>
+      <AppNavigationLink value={`user:${user.id}`} frame={{ maxWidth: "infinity" }}>
         <HStack spacing={8} alignment="center">
           <AvatarImage url={user.avatarURL ?? null} size={24} />
           <VStack alignment="leading" spacing={1}>
@@ -252,7 +253,7 @@ function BlockedUserRow(props: { user: BlockedUser; onRemove: () => void }) {
             </Text>
           </VStack>
         </HStack>
-      </NavigationLink>
+      </AppNavigationLink>
     </HStack>
   )
 }

@@ -21,4 +21,6 @@ export {
 export {
   recordActiveAmbientImageUrl,
   getLastActiveAmbientImageUrl,
+  subscribeActiveAmbientImageUrl,
+  useLastActiveAmbientImageUrl,
 } from "./tracker"

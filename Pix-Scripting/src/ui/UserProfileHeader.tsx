@@ -345,45 +345,52 @@ export function UserProfileHeader(props: {
     >
       {/* 沉浸式顶部背景图与居中悬浮头像 */}
       <ZStack alignment="bottom" frame={{ maxWidth: "infinity" }}>
-        {profile.background_image_url ? (
-          <ZStack
-            alignment="bottom"
-            frame={{ maxWidth: "infinity" }}
-            clipShape={{
-              type: "rect",
-              cornerRadii: { topLeading: 0, topTrailing: 0, bottomLeading: 8, bottomTrailing: 8 },
-            }}
-          >
-            <CachedImage
-              url={profile.background_image_url}
-              useIntrinsicAspectRatio={false}
-              aspectRatioValue={2.4}
-              contentMode="fill"
-              cornerRadius={{ topLeading: 0, topTrailing: 0, bottomLeading: 8, bottomTrailing: 8 }}
-              priority={0}
-              isSprint={true}
-              frame={{ maxWidth: "infinity", height: headerHeight }}
-            />
-            {/* 底部羽化过渡遮罩：让封面图与下方环境底色自然交融 */}
-            <VStack
-              frame={{ maxWidth: "infinity", height: 70 }}
-              background={{
-                colors: [
-                  "rgba(0, 0, 0, 0)",
-                  isDark ? "rgba(0, 0, 0, 0.35)" : "rgba(255, 255, 255, 0.45)",
-                  isDark ? "rgba(0, 0, 0, 0.85)" : "rgba(255, 255, 255, 0.90)",
-                ],
-                startPoint: "top",
-                endPoint: "bottom",
-              }}
-            />
-          </ZStack>
-        ) : (
-          <VStack
-            frame={{ maxWidth: "infinity", height: headerHeight }}
-            background="clear"
-          />
-        )}
+        {/* 头部外框：**高度只由它决定**，且它自身不带任何比例。
+            封面图改走 overlay 绘制 —— CachedImage 内部带 aspectRatio，
+            只要它还参与尺寸协商，外框的真实高度就会被顶成「栏宽 ÷ 2.4」，
+            头像 Y 于是随栏宽漂移、有图 / 无图两路也对不上（即 1.1.40 引入的头像位置问题）。
+            作为 overlay 绘制后它只负责「画」，裁剪交给外框的 clipped；
+            有图 / 无图共用同一个外框 ⇒ 头像 Y 天然一致。 */}
+        <ZStack
+          alignment="bottom"
+          frame={{ maxWidth: "infinity", height: headerHeight }}
+          clipShape={{
+            type: "rect",
+            cornerRadii: { topLeading: 0, topTrailing: 0, bottomLeading: 8, bottomTrailing: 8 },
+          }}
+          clipped={true}
+          overlay={
+            <ZStack alignment="bottom" frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
+              {profile.background_image_url ? (
+                <CachedImage
+                  url={profile.background_image_url}
+                  useIntrinsicAspectRatio={false}
+                  aspectRatioValue={2.4}
+                  contentMode="fill"
+                  cornerRadius={0}
+                  priority={0}
+                  isSprint={true}
+                  frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+                />
+              ) : null}
+              {profile.background_image_url ? (
+                /* 底部羽化过渡遮罩：让封面图与下方环境底色自然交融（无图时不画，保持原有观感） */
+                <VStack
+                  frame={{ maxWidth: "infinity", height: 70 }}
+                  background={{
+                    colors: [
+                      "rgba(0, 0, 0, 0)",
+                      isDark ? "rgba(0, 0, 0, 0.35)" : "rgba(255, 255, 255, 0.45)",
+                      isDark ? "rgba(0, 0, 0, 0.85)" : "rgba(255, 255, 255, 0.90)",
+                    ],
+                    startPoint: "top",
+                    endPoint: "bottom",
+                  }}
+                />
+              ) : null}
+            </ZStack>
+          }
+        />
 
         {/* 居中头像：垂直中心线对齐背景图底边 */}
         <ZStack

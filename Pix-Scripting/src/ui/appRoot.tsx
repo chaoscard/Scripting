@@ -21,8 +21,9 @@ import {
 } from "scripting"
 import { session } from "../api/session"
 import { loadSettings, onSettingsChanged, updateSettings } from "../store/settings"
-import { ResponsiveContainer } from "./hooks"
-import { SplitViewContainer, useDualRoute } from "./DualRouteContext"
+import { ResponsiveContainer, useLayoutMetrics } from "./hooks"
+import { SPLIT_SHELL_MIN_WIDTH, SplitShell } from "./splitShell"
+import { SplitViewContainer } from "./DualRouteContext"
 import { FeatureHighlightsSheet } from "./components/FeatureHighlightsSheet"
 import { topBarScrollEdge } from "./components/pageChrome"
 import {
@@ -32,24 +33,11 @@ import {
 import { getLatestCachedArtworkPath } from "../image/imageLoader"
 import { DreamyFluidBackground } from "./components/DreamyBackground"
 import { notifyLaunchReady, onLaunchReady } from "./launchCoordinator"
-import { DiscoveryView } from "./discovery"
-import { RankingView } from "./ranking"
-import { MoreView } from "./more"
 import { LoginView } from "./login"
-import { FollowFeedView } from "./followFeed"
-
-function SearchView(props: any): any {
-  const mod = require("./search")
-  const Comp = mod.SearchView || mod.default
-  return <Comp {...props} />
-}
 import {
-  registerTabNavigator,
-  setActiveTabKind,
-  getActiveTabKind,
-  setPixivRouteNavigator,
-  type PixivTabKind,
-} from "../store/routeNavigation"
+  TAB_CONTENT_DEFS,
+  useTabNavigation,
+} from "./tabShellShared"
 import "./routes"
 
 function LaunchExperienceView() {
@@ -289,9 +277,7 @@ export function RootView() {
     >
       {/* 底层：主界面在第 0 毫秒即挂载并全力在后台请求数据与预载图片 */}
       <ResponsiveContainer>
-        <SplitViewContainer splitViewEnabled={settings.splitViewEnabled}>
-          <MainTabView onClose={dismiss} />
-        </SplitViewContainer>
+        <ShellSwitcher splitViewEnabled={settings.splitViewEnabled} onClose={dismiss} />
       </ResponsiveContainer>
 
       {/* 顶层：启动动画遮罩，根据调试设置自定义时长（默认 1500ms）平滑过渡 */}
@@ -302,94 +288,59 @@ export function RootView() {
   )
 }
 
+/**
+ * 外壳选择器
+ *
+ * · iPad（含 Mac 上的 iOS App）+ 开启分栏 + 窗口达到 SPLIT_SHELL_MIN_WIDTH → 三栏外壳
+ *   （窗口再缩也不会立刻换外壳，而是交给系统折叠栏位，避免重建导航栈丢滚动位置）
+ * · 其余（iPhone / 窗口过窄 / 用户关闭开关）→ 原有 TabView 外壳，行为完全不变
+ *
+ * 两个外壳互斥挂载，因此 useTabNavigation 的注册不会重复。
+ */
+function ShellSwitcher(props: { onClose: () => void; splitViewEnabled: boolean }) {
+  const metrics = useLayoutMetrics()
+  const isLargeScreen = Device.isiPad || (Device as any).isiOSAppOnMac
+  const useSplitShell =
+    Boolean(isLargeScreen) &&
+    props.splitViewEnabled !== false &&
+    metrics.width >= SPLIT_SHELL_MIN_WIDTH
+
+  return useSplitShell ? (
+    <SplitShell onClose={props.onClose} />
+  ) : (
+    <TabViewShell onClose={props.onClose} width={metrics.width} height={metrics.height} />
+  )
+}
+
+/**
+ * TabView 外壳容器
+ *
+ * 刻意**复用旧实现 `SplitViewContainer`**（传 splitViewEnabled=false）：
+ * 未开启分栏时它就是「单栏 + 显式尺寸撑满 + 提供 DualRouteContext」那套早已验证过的行为，
+ * 一行不改地保留下来，避免重写包裹层时静默丢掉上下文或尺寸。
+ */
+function TabViewShell(props: { onClose: () => void; width: number; height: number }) {
+  return (
+    <SplitViewContainer splitViewEnabled={false}>
+      <MainTabView onClose={props.onClose} />
+    </SplitViewContainer>
+  )
+}
+
 function MainTabView(props: {
   onClose: () => void
 }) {
   const [settings, setSettings] = useState(() => loadSettings())
   const initialTab = useRef(settings.launchPage).current
   const selection = useObservable<string>(initialTab)
-  const discoveryPath = useObservable<string[]>([])
-  const rankingPath = useObservable<string[]>([])
-  const followingPath = useObservable<string[]>([])
-  const searchPath = useObservable<string[]>([])
-  const morePath = useObservable<string[]>([])
+  // 五个 Tab 的导航栈与全局路由分发：与分栏外壳共用同一套基础设施
+  const paths = useTabNavigation(selection)
 
   useEffect(() => {
     return onSettingsChanged(() => {
       setSettings(loadSettings())
     })
   }, [])
-
-  useEffect(() => {
-    setActiveTabKind(selection.value as PixivTabKind)
-    return selection.subscribe
-      ? selection.subscribe(() => {
-          setActiveTabKind(selection.value as PixivTabKind)
-        })
-      : undefined
-  }, [selection])
-
-  useEffect(() => {
-    const unregisterDiscovery = registerTabNavigator("discovery", (route) => {
-      const cur = discoveryPath.value
-      if (cur.length > 0 && cur[cur.length - 1] === route) return
-      discoveryPath.setValue([...cur, route])
-    })
-    const unregisterRanking = registerTabNavigator("ranking", (route) => {
-      const cur = rankingPath.value
-      if (cur.length > 0 && cur[cur.length - 1] === route) return
-      rankingPath.setValue([...cur, route])
-    })
-    const unregisterFollowing = registerTabNavigator("following", (route) => {
-      const cur = followingPath.value
-      if (cur.length > 0 && cur[cur.length - 1] === route) return
-      followingPath.setValue([...cur, route])
-    })
-    const unregisterSearch = registerTabNavigator("search", (route) => {
-      const cur = searchPath.value
-      if (cur.length > 0 && cur[cur.length - 1] === route) return
-      searchPath.setValue([...cur, route])
-    })
-    const unregisterMore = registerTabNavigator("more", (route) => {
-      const cur = morePath.value
-      if (cur.length > 0 && cur[cur.length - 1] === route) return
-      morePath.setValue([...cur, route])
-    })
-
-    const unregisterGlobal = setPixivRouteNavigator((route: string) => {
-      const activeTab = getActiveTabKind() || (selection.value as PixivTabKind) || initialTab || "discovery"
-      if (activeTab === "ranking") {
-        const cur = rankingPath.value
-        if (cur.length > 0 && cur[cur.length - 1] === route) return
-        rankingPath.setValue([...cur, route])
-      } else if (activeTab === "following") {
-        const cur = followingPath.value
-        if (cur.length > 0 && cur[cur.length - 1] === route) return
-        followingPath.setValue([...cur, route])
-      } else if (activeTab === "search") {
-        const cur = searchPath.value
-        if (cur.length > 0 && cur[cur.length - 1] === route) return
-        searchPath.setValue([...cur, route])
-      } else if (activeTab === "more") {
-        const cur = morePath.value
-        if (cur.length > 0 && cur[cur.length - 1] === route) return
-        morePath.setValue([...cur, route])
-      } else {
-        const cur = discoveryPath.value
-        if (cur.length > 0 && cur[cur.length - 1] === route) return
-        discoveryPath.setValue([...cur, route])
-      }
-    })
-
-    return () => {
-      unregisterDiscovery()
-      unregisterRanking()
-      unregisterFollowing()
-      unregisterSearch()
-      unregisterMore()
-      unregisterGlobal()
-    }
-  }, [selection, discoveryPath, rankingPath, followingPath, searchPath, morePath, initialTab])
 
   const isAppleMusic = settings.pageLayout === "appleMusic"
   const tabTint =
@@ -407,43 +358,60 @@ function MainTabView(props: {
   if (isAppleMusic) {
     tabViewProps.tabViewBottomAccessory = (
       <CapsuleAccessoryContainer>
-        <GlobalBottomAccessoryHost
-          selection={selection}
-          discoveryPath={discoveryPath}
-          rankingPath={rankingPath}
-          followingPath={followingPath}
-          searchPath={searchPath}
-          morePath={morePath}
-        />
+        <GlobalBottomAccessoryHost selection={selection} {...paths} />
       </CapsuleAccessoryContainer>
     )
   }
 
+  // 取 Tab 定义（仍以 TAB_CONTENT_DEFS 为唯一真源）
+  const def = (id: string) =>
+    TAB_CONTENT_DEFS.find((item) => item.id === id) ?? TAB_CONTENT_DEFS[0]
+  const discovery = def("discovery")
+  const ranking = def("ranking")
+  const following = def("following")
+  const search = def("search")
+  const more = def("more")
+
+  // ⚠️ <Tab> 必须作为 <TabView> 的**显式直接子节点**书写（不能用 .map 生成数组，
+  //    真机桥接对数组中 Tab 的识别不可靠，会导致整个外壳空白）
   return (
     <TabView {...tabViewProps}>
-      <Tab title="探索" systemImage="photo.on.rectangle.angled" value="discovery">
-        <NavigationStack path={discoveryPath}>
-          <DiscoveryView onClose={props.onClose} />
+      <Tab
+        title={discovery.title}
+        systemImage={discovery.systemImage}
+        value={discovery.id}
+      >
+        <NavigationStack path={paths.discoveryPath}>
+          {discovery.renderRoot({ onClose: props.onClose })}
         </NavigationStack>
       </Tab>
-      <Tab title="排行" systemImage="trophy" value="ranking">
-        <NavigationStack path={rankingPath}>
-          <RankingView onClose={props.onClose} />
+      <Tab title={ranking.title} systemImage={ranking.systemImage} value={ranking.id}>
+        <NavigationStack path={paths.rankingPath}>
+          {ranking.renderRoot({ onClose: props.onClose })}
         </NavigationStack>
       </Tab>
-      <Tab title="关注" systemImage="person.2.fill" value="following">
-        <NavigationStack path={followingPath}>
-          <FollowFeedView onClose={props.onClose} />
+      <Tab
+        title={following.title}
+        systemImage={following.systemImage}
+        value={following.id}
+      >
+        <NavigationStack path={paths.followingPath}>
+          {following.renderRoot({ onClose: props.onClose })}
         </NavigationStack>
       </Tab>
-      <Tab title="搜索" systemImage="magnifyingglass" value="search" role="search">
-        <NavigationStack path={searchPath}>
-          <SearchView onClose={props.onClose} />
+      <Tab
+        title={search.title}
+        systemImage={search.systemImage}
+        value={search.id}
+        role="search"
+      >
+        <NavigationStack path={paths.searchPath}>
+          {search.renderRoot({ onClose: props.onClose })}
         </NavigationStack>
       </Tab>
-      <Tab title="我的" systemImage="person.crop.circle" value="more">
-        <NavigationStack path={morePath}>
-          <MoreView onClose={props.onClose} />
+      <Tab title={more.title} systemImage={more.systemImage} value={more.id}>
+        <NavigationStack path={paths.morePath}>
+          {more.renderRoot({ onClose: props.onClose })}
         </NavigationStack>
       </Tab>
     </TabView>

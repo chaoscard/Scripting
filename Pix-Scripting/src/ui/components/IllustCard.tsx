@@ -311,13 +311,17 @@ export function IllustCard(props: {
         }
         overlay={
           isSelected ? (
+            // 分栏下的选中指示器（仅 canSplit 时 isSelected 才可能为 true）。
+            // 环必须用 maxWidth/maxHeight: infinity 撑满「卡片外层」，**不能**复用 cardFrame：
+            // cardFrame 是「内容层」宽度（图片那一层用的同一个数值），会让环被卡片 padding 内缩，
+            // 表现为「没框住卡片」。写法与 NovelCard / WatchlistSeriesCard 保持一致。
             <RoundedRectangle
               cornerRadius={hero ? 16 : 14}
               stroke={{
                 shapeStyle: "accentColor",
                 strokeStyle: { lineWidth: 2.5 },
               }}
-              frame={cardFrame}
+              frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
             />
           ) : undefined
         }
@@ -523,22 +527,15 @@ export function IllustFlowFeed(props: {
   ) => any
 }) {
   cacheIllusts(props.items)
-  const { width: containerWidth, isiPad, isLandscape, isCompact } = useLayoutMetrics()
-  const [settings, setSettings] = useState(() => loadSettings())
-
-  useEffect(() => {
-    return onSettingsChanged(() => {
-      setSettings(loadSettings())
-    })
-  }, [])
+  const { width: containerWidth, isiPad, isCompact } = useLayoutMetrics()
 
   const columnCount = useMemo(() => {
-    // 紧凑窗口（iPhone 或 iPad 台前调度收缩窗口 / 分屏 < 560pt）固定锁定为 2 列
-    if (!isiPad || isCompact) return 2
-    return isLandscape
-      ? (settings.waterfallColumnsIpadLandscape ?? 3)
-      : (settings.waterfallColumnsIpadPortrait ?? 3)
-  }, [isiPad, isCompact, isLandscape, settings.waterfallColumnsIpadLandscape, settings.waterfallColumnsIpadPortrait])
+    // 列数完全由**容器实宽**自适应（已移除「横屏 / 竖屏列数」设置项）：
+    // 目标单列宽约 215pt，夹在 2~6 列之间。
+    // iPhone 393pt → 2 列；iPad 分栏内容栏 320pt → 2 列；iPad 1024pt → 5 列；1366pt → 6 列。
+    const raw = Math.round(containerWidth / 215)
+    return Math.max(2, Math.min(6, raw))
+  }, [containerWidth])
 
   const flowCardWidth = useMemo(
     () => calculateFlowCardWidth(containerWidth, columnCount),

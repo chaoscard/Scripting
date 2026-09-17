@@ -92,6 +92,12 @@ export function FollowFeedView(props: {
     () => getLastActiveAmbientImageUrl()
   )
   const isTabActive = useIsCurrentTab("following")
+
+  // 兜底激活：根视图 onAppear 在部分外壳（Tab 内 / 分栏内容栏）下不可靠，
+  // 若当前已选中本 Tab 就直接激活，避免信息流永远不发起加载 → 整页空白。
+  useEffect(() => {
+    if (isTabActive) setActivated(true)
+  }, [isTabActive])
   const { isCompact } = useLayoutMetrics()
   const { isSplitViewActive } = useDualRoute()
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl, isTabActive)
@@ -229,7 +235,8 @@ function followToolbar(props: {
   onKindChange: (kind: string) => void
   onClose: () => void
 }) {
-  const isCompact = props.isCompact ?? (!Device.isiPad)
+  const layoutMetrics = useLayoutMetrics()
+  const isCompact = props.isCompact ?? layoutMetrics.isCompact
   const isClassic = !props.isAppleMusic
   const baseTitle =
     props.mode === "following"

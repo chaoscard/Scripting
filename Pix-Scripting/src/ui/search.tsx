@@ -1452,7 +1452,8 @@ function searchToolbar(props: {
   onSortChange: (sort: SearchSort) => void
   onAdvanced: () => void
 }) {
-  const isCompact = props.isCompact ?? (!Device.isiPad)
+  const layoutMetrics = useLayoutMetrics()
+  const isCompact = props.isCompact ?? layoutMetrics.isCompact
   const isClassic = !props.isAppleMusic
   const scopeLabel =
     props.scope === "illust"

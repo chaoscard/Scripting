@@ -877,17 +877,36 @@ export function useNovelMarker(
   return [markerPage, setMarkerPage]
 }
 
+/**
+ * 紧凑布局上限阈值。
+ *
+ * 设为 560pt（对齐 iPadOS 18+ 原生将 TabBar 从底部升至顶栏中央的真实临界宽度）：
+ * · < 560pt：极窄窗/iPhone 态，TabBar 留在底部，顶栏居中显示页面主标题，右侧折叠为单图标，首图全宽；
+ * · ≥ 560pt：iPadOS 顶栏 Tab 态，系统将 TabBar 自动升至顶栏中央，页面主标题自动隐藏让位给系统 TabBar，右侧展开为文字菜单，避免双层重叠。
+ */
 export const COMPACT_LAYOUT_MAX_WIDTH = 560
+/** 宽版布局阈值（与足迹看板等保持一致） */
+export const WIDE_LAYOUT_MIN_WIDTH = 620
 
 export interface LayoutMetrics {
   width: number
   height: number
   scale: number
+  /** 容器宽 > 容器高（以**真实容器**为准，而非设备方向） */
   isLandscape: boolean
   isPortrait: boolean
   isiPad: boolean
   isiPhone: boolean
+  /** 纯宽度判据：容器宽低于紧凑阈值 */
+  isNarrow: boolean
+  /** 纯机型判据：当前是手机 */
+  isPhone: boolean
+  /** 兼容既有调用：窄 **或** 手机（等价于旧 isCompact 语义） */
   isCompact: boolean
+  /** 容器宽达到宽版布局阈值 */
+  isWide: boolean
+  /** 是否拿到了容器实测宽度（false = 已回落到设备屏宽，尺寸判断不可信） */
+  hasContainerMetrics: boolean
 }
 
 export interface ContainerLayoutContextValue {
@@ -948,17 +967,38 @@ export function useLayoutMetrics(): LayoutMetrics {
     }
   }, [])
 
-  const effectiveWidth =
-    container?.width && container.width > 0 ? container.width : deviceMetrics.width
+  const hasContainerMetrics = !!(container && container.width > 0)
+  const effectiveWidth = hasContainerMetrics
+    ? (container as ContainerLayoutContextValue).width
+    : deviceMetrics.width
   const effectiveHeight =
     container?.height && container.height > 0 ? container.height : deviceMetrics.height
-  const isCompact = effectiveWidth < COMPACT_LAYOUT_MAX_WIDTH || deviceMetrics.isiPhone
+
+  // 三条判据彼此独立，不再互相污染：
+  //   isNarrow  纯宽度（窗口/栏位窄）
+  //   isPhone   纯机型
+  //   isCompact 兼容旧语义 = 窄 或 手机
+  const isNarrow = effectiveWidth < COMPACT_LAYOUT_MAX_WIDTH
+  const isPhone = deviceMetrics.isiPhone
+  const isWide = effectiveWidth >= WIDE_LAYOUT_MIN_WIDTH
+
+  // 方向以容器长宽比为准：台前调度竖长窗、分栏单栏等场景下设备方向会判错
+  const isLandscape =
+    container && container.height > 0
+      ? effectiveWidth > effectiveHeight
+      : deviceMetrics.isLandscape
 
   return {
     ...deviceMetrics,
     width: effectiveWidth,
     height: effectiveHeight,
-    isCompact,
+    isLandscape,
+    isPortrait: !isLandscape,
+    isNarrow,
+    isPhone,
+    isCompact: isNarrow || isPhone,
+    isWide,
+    hasContainerMetrics,
   }
 }
 

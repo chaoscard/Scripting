@@ -61,6 +61,8 @@ import {
   waitForNovelLoadingFeedback,
 } from "./hooks"
 import { useNovelExperimentalAmbientPalette } from "./ambient"
+import { useImmersiveRead } from "./immersiveRead"
+import { useFloatingCapsuleHeight } from "./bottomAccessory"
 import { novelThumbUrlOf, prefetch } from "../image/imageLoader"
 import {
   recordNovelHistory,
@@ -124,6 +126,7 @@ import {
 } from "../store/novelReaderSettings"
 import { cleanHtmlCaption } from "../api/aiService"
 import { renderDestination, requestPixivRoute } from "../store/routeNavigation"
+import { AppNavigationLink, useDualRoute } from "./DualRouteContext"
 
 const BLOCKED_BY_BLOCKLIST_MESSAGE = "该小说已被屏蔽（标签或作者在黑名单中）"
 const BLOCKED_BY_RESTRICTION_MESSAGE = "该小说被内容显示设置过滤，暂时无法显示"
@@ -208,6 +211,17 @@ export function NovelDetailView(props: { novelID: number }) {
   )
   const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
   const isAppleMusic = pageLayout === "appleMusic"
+
+  // 沉浸阅读（仅分栏外壳支持）：经外壳下发的 context 收/放前后两栏
+  const immersiveRead = useImmersiveRead()
+
+  // 分栏外壳的右栏：小说标题交给导航栏（中栏 / iPhone 保持空标题，维持原样）
+  const { isDetailPane } = useDualRoute()
+
+  // 底部自绘覆盖层（苹果音乐浮动胶囊）的**实测**高度；未出现为 0。
+  // 避让值跟随胶囊内容自适应，不写死常量。
+  const capsuleHeight = useFloatingCapsuleHeight()
+  const bottomOverlayInset = isAppleMusic ? capsuleHeight + 24 : 0
 
   const guard = useAsyncGuard()
   const novelRef = useLatest(novel)
@@ -1013,6 +1027,52 @@ export function NovelDetailView(props: { novelID: number }) {
     )
   }
 
+  /**
+   * 沉浸阅读按钮：与快捷操作球**镜像**放置（球在左则它在右），同一视觉规范。
+   * 仅当外壳支持「收栏沉浸」时出现（单栏 / iPhone 下没有更宽可争取，入口隐藏）。
+   */
+  function renderImmersiveReadButton() {
+    if (!immersiveRead.supportsColumnImmersive || !current) return null
+
+    // 与快捷球对侧：球在左则本按钮在右
+    const onTrailing = quickActionPos !== "trailing"
+    // 苹果音乐布局下底部有浮动胶囊，需抬高避让（用实测高度，不写死）
+    const bottomPadding = (totalPages > 1 ? 60 : 24) + bottomOverlayInset
+
+    return (
+      <VStack padding={{ bottom: bottomPadding }} frame={{ maxWidth: "infinity" }}>
+        {/* 用 Spacer 撑满整行来定位（比嵌套 ZStack 对齐可靠：后者会把内容居中） */}
+        <HStack spacing={0} frame={{ maxWidth: "infinity" }} padding={{ horizontal: 30 }}>
+          {onTrailing ? <Spacer /> : null}
+          <Button
+            buttonStyle="plain"
+            action={() => immersiveRead.setImmersive(!immersiveRead.isImmersive)}
+          >
+            <ZStack
+              alignment="center"
+              frame={{ width: 46, height: 46 }}
+              glassEffect={appGlass("circle")}
+              contentShape="circle"
+              shadow={{ color: "#0000002E", radius: 8, y: 2 }}
+            >
+              <Image
+                systemName={
+                  immersiveRead.isImmersive
+                    ? "arrow.down.right.and.arrow.up.left"
+                    : "arrow.up.left.and.arrow.down.right"
+                }
+                font="title2"
+                fontWeight="medium"
+                foregroundStyle="label"
+              />
+            </ZStack>
+          </Button>
+          {onTrailing ? null : <Spacer />}
+        </HStack>
+      </VStack>
+    )
+  }
+
   return (
     <ZStack
       alignment={quickActionPos === "leading" ? "bottomLeading" : "bottomTrailing"}
@@ -1035,7 +1095,7 @@ export function NovelDetailView(props: { novelID: number }) {
                 anchor: "top",
               }}
               ignoresSafeArea={{ edges: "bottom" }}
-              navigationTitle=""
+              navigationTitle={isDetailPane ? current.title : ""}
               navigationBarTitleDisplayMode="inline"
             onAppear={() => {
               isDisappearedRef.current = false
@@ -1107,7 +1167,7 @@ export function NovelDetailView(props: { novelID: number }) {
                 ? {
                     alignment: "bottom",
                     content: (
-                      <VStack padding={{ horizontal: 20, bottom: 12 }} frame={{ maxWidth: "infinity" }}>
+                      <VStack padding={{ horizontal: 20, bottom: 12 + bottomOverlayInset }} frame={{ maxWidth: "infinity" }}>
                         <GlassEffectContainer>
                           <HStack alignment="center" frame={{ maxWidth: "infinity" }}>
                             {/* 左侧区域（固定宽 80，上一页按钮靠左，第一页时隐藏） */}
@@ -1421,12 +1481,12 @@ export function NovelDetailView(props: { novelID: number }) {
           ...(Device.isiPad && !isAppleMusic
             ? []
             : [
-                <NavigationLink value={`user:${current.user.id}`}>
+                <AppNavigationLink value={`user:${current.user.id}`}>
                   <AvatarImage
                     url={current.user.profile_image_urls?.medium ?? null}
                     size={28}
                   />
-                </NavigationLink>,
+                </AppNavigationLink>,
               ]),
         ],
       }}
@@ -1499,7 +1559,7 @@ export function NovelDetailView(props: { novelID: number }) {
                 contentShape="rect"
               >
                 {Boolean(resolvedSeriesID) ? (
-                  <NavigationLink
+                  <AppNavigationLink
                     value={`novelSeries:${resolvedSeriesID}`}
                     frame={{ maxWidth: "infinity" }}
                   >
@@ -1520,7 +1580,7 @@ export function NovelDetailView(props: { novelID: number }) {
                         foregroundStyle="secondaryLabel"
                       />
                     </HStack>
-                  </NavigationLink>
+                  </AppNavigationLink>
                 ) : null}
 
                 {(Boolean(current.series_prev?.id) || Boolean(current.series_next?.id)) &&
@@ -1529,19 +1589,19 @@ export function NovelDetailView(props: { novelID: number }) {
                 ) : null}
 
                 {Boolean(current.series_prev?.id) && current.series_prev ? (
-                  <NavigationLink value={`novel:${current.series_prev.id}`}>
+                  <AppNavigationLink value={`novel:${current.series_prev.id}`}>
                     <Text font="subheadline" foregroundStyle="#007AFF" lineLimit={1}>
                       ← 上一话：{current.series_prev.title || "上一话"}
                     </Text>
-                  </NavigationLink>
+                  </AppNavigationLink>
                 ) : null}
 
                 {Boolean(current.series_next?.id) && current.series_next ? (
-                  <NavigationLink value={`novel:${current.series_next.id}`}>
+                  <AppNavigationLink value={`novel:${current.series_next.id}`}>
                     <Text font="subheadline" foregroundStyle="#007AFF" lineLimit={1}>
                       下一话：{current.series_next.title || "下一话"} →
                     </Text>
-                  </NavigationLink>
+                  </AppNavigationLink>
                 ) : null}
               </VStack>
             </VStack>
@@ -1707,6 +1767,7 @@ export function NovelDetailView(props: { novelID: number }) {
         }}
       </ScrollViewReader>
       {renderQuickActionButton()}
+      {renderImmersiveReadButton()}
     </ZStack>
   )
 }

@@ -615,7 +615,7 @@ export function SettingsView() {
                   {[
                     settings.pageLayout === "appleMusic" ? "苹果音乐" : "经典样式",
                     Device.isiPad
-                      ? `${settings.splitViewEnabled ? "平行视界·" : ""}${settings.waterfallColumnsIpadLandscape}横/${settings.waterfallColumnsIpadPortrait}竖`
+                      ? `${settings.splitViewEnabled ? "分栏" : "单栏"}`
                       : settings.heroFirstFeedCard ? "全宽" : "双列",
                     settings.compactIllustCard ? "简约" : null,
                   ]
@@ -643,7 +643,9 @@ export function SettingsView() {
             <VStack alignment="leading" spacing={2}>
               <Text>瀑布流首图全宽展示</Text>
               <Text font="caption2" foregroundStyle="secondaryLabel">
-                开启后探索与关注列表的首张作品占满整行展示
+                {Device.isiPad
+                  ? "探索与排行首图占满整行；全屏保持多列，仅在分栏、分屏与台前调度窄窗下生效"
+                  : "开启后探索与排行页面的首张作品占满整行展示"}
               </Text>
             </VStack>
           </Toggle>
@@ -651,12 +653,7 @@ export function SettingsView() {
             value={settings.compactIllustCard}
             onChanged={(value) => update({ compactIllustCard: value })}
           >
-            <VStack alignment="leading" spacing={2}>
-              <Text>简约图片卡片</Text>
-              <Text font="caption2" foregroundStyle="secondaryLabel">
-                隐藏卡片底部的作者头像、名称与点赞数
-              </Text>
-            </VStack>
+            <Text>简约图片卡片</Text>
           </Toggle>
           {Device.isiPad ? (
             <>
@@ -665,49 +662,12 @@ export function SettingsView() {
                 onChanged={(value) => update({ splitViewEnabled: value })}
               >
                 <VStack alignment="leading" spacing={2}>
-                  <Text>启用平行视界</Text>
+                  <Text>iPad 分栏布局</Text>
                   <Text font="caption2" foregroundStyle="secondaryLabel">
-                    左右分屏布局，在台前调度或分屏缩窄窗口时自动恢复为单栏
+                    启用原生三栏浏览；在分屏与台前调度下自适应折叠与展开
                   </Text>
                 </VStack>
               </Toggle>
-              <Picker
-                label={
-                  <VStack alignment="leading" spacing={2}>
-                    <Text>横屏图片列数</Text>
-                    <Text font="caption2" foregroundStyle="secondaryLabel">
-                      在开启平行视界、台前调度或分屏缩窄窗口时锁定为 2 列
-                    </Text>
-                  </VStack>
-                }
-                value={String(settings.waterfallColumnsIpadLandscape)}
-                onChanged={(value: string) =>
-                  update({ waterfallColumnsIpadLandscape: Number(value) as 2 | 3 | 4 | 5 })
-                }
-              >
-                <Text tag="2">2 列</Text>
-                <Text tag="3">3 列</Text>
-                <Text tag="4">4 列</Text>
-                <Text tag="5">5 列</Text>
-              </Picker>
-              <Picker
-                label={
-                  <VStack alignment="leading" spacing={2}>
-                    <Text>竖屏图片列数</Text>
-                    <Text font="caption2" foregroundStyle="secondaryLabel">
-                      在台前调度或分屏缩窄窗口时锁定为 2 列
-                    </Text>
-                  </VStack>
-                }
-                value={String(settings.waterfallColumnsIpadPortrait)}
-                onChanged={(value: string) =>
-                  update({ waterfallColumnsIpadPortrait: Number(value) as 2 | 3 | 4 })
-                }
-              >
-                <Text tag="2">2 列</Text>
-                <Text tag="3">3 列</Text>
-                <Text tag="4">4 列</Text>
-              </Picker>
             </>
           ) : null}
         </DisclosureGroup>

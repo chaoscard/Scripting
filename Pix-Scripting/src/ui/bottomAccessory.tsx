@@ -1,9 +1,11 @@
 import {
   Button,
+  GeometryReader,
   Group,
   HStack,
   Image,
   LongPressGesture,
+  Rectangle,
   Spacer,
   Text,
   useCallback,
@@ -100,6 +102,48 @@ function notifyBottomAccessory() {
   }
 }
 
+/* ============================================================================
+ * 底部自绘覆盖层高度（苹果音乐浮动胶囊）
+ *
+ * 为什么不写常量：胶囊是**自绘**的，内部是哪种操作栏（分段栏 / 操作栏 / 信息栏）
+ * 会让高度变化，写死的避让值迟早会对不上。
+ * 因此由胶囊自己测量并上报，页面按实测值避让。
+ * ==========================================================================*/
+let floatingCapsuleHeight = 0
+const floatingCapsuleListeners = new Set<() => void>()
+
+/** 由胶囊自身在布局时上报（变化时才通知，避免无谓重渲染） */
+export function reportFloatingCapsuleHeight(height: number) {
+  if (!Number.isFinite(height) || height <= 0) return
+  if (Math.abs(floatingCapsuleHeight - height) < 1) return
+  floatingCapsuleHeight = height
+  // 延后通知：测量发生在渲染期，直接同步 setState 会触发「渲染中更新其它组件」告警
+  setTimeout(() => {
+    for (const fn of floatingCapsuleListeners) {
+      try {
+        fn()
+      } catch {}
+    }
+  }, 0)
+}
+
+export function getFloatingCapsuleHeight(): number {
+  return floatingCapsuleHeight
+}
+
+/** 订阅胶囊实测高度（未出现时为 0） */
+export function useFloatingCapsuleHeight(): number {
+  const [height, setHeight] = useState(floatingCapsuleHeight)
+  useEffect(() => {
+    const listener = () => setHeight(floatingCapsuleHeight)
+    floatingCapsuleListeners.add(listener)
+    return () => {
+      floatingCapsuleListeners.delete(listener)
+    }
+  }, [])
+  return height
+}
+
 export function registerBottomAccessory(key: string, node: AccessoryNode) {
   if (accessoryRegistry.get(key) === node) return
   accessoryRegistry.set(key, node)
@@ -124,7 +168,21 @@ export function useRegisterBottomAccessory(
       return
     }
     registerBottomAccessory(key, node)
+    /**
+     * 延后补一次通知（2026-09-17 根因修复）。
+     *
+     * 本 effect 属于**页面**，而宿主 GlobalBottomAccessoryHost 是同栏中排在页面之后的
+     * 兄弟节点 —— 它的订阅 effect 晚于这里执行，上面那次 notify 无人接收。
+     * 若该页面的配件节点是 useMemo 稳定的（不会随渲染换新对象），就不会再有第二次 notify，
+     * 宿主便一直停在 renderDefaultRootTabAccessory 的兜底件上：**长得一模一样，
+     * 但 onChanged 是空函数** —— 点上去毫无反应，直到切换页面（selection / path 订阅触发刷新）
+     * 才换成真件。⇒ 现象就是「启动脚本后底栏分段栏点不动，切一次页面就正常」。
+     */
+    const timer = setTimeout(() => {
+      notifyBottomAccessory()
+    }, 0)
     return () => {
+      if (timer != null) clearTimeout(timer)
       unregisterBottomAccessory(key)
     }
   }, [key, node, enabled])
@@ -1630,6 +1688,15 @@ export function FloatingGlassCapsuleContainer(props: {
         glassEffect={appGlassNoTint("capsule")}
         contentShape="capsule"
         shadow={{ color: "#0000002E", radius: 10, y: 3 }}
+        background={
+          // 用背景测量：背景不参与布局尺寸计算，因此不会影响胶囊自身外观
+          <GeometryReader>
+            {(proxy) => {
+              reportFloatingCapsuleHeight(proxy.size.height)
+              return <Rectangle fill="clear" />
+            }}
+          </GeometryReader>
+        }
       >
         {props.children}
       </HStack>

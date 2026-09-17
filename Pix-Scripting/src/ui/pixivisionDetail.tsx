@@ -40,6 +40,7 @@ import {
 } from "../downloader"
 import { renderDestination } from "../store/routeNavigation"
 import { useAsyncGuard, useLayoutMetrics } from "./hooks"
+import { AppNavigationLink, useDualRoute } from "./DualRouteContext"
 import { useExperimentalAmbientPalette } from "./ambient"
 import { IllustGalleryView } from "./IllustGalleryView"
 import type { PixivIllustration, PixivisionArticle, PixivisionArtwork, PixivisionBodyBlock, PixivisionDetail } from "../types"
@@ -77,6 +78,8 @@ function isVirtualNode(v: unknown): v is VirtualNode {
 export function PixivisionDetailView(props: { articleID: number }) {
   const { articleID } = props
   const { width: screenWidth } = useLayoutMetrics()
+  // 分栏外壳的右栏：特辑标题交给导航栏（中栏 / iPhone 保持空标题，维持原样）
+  const { isDetailPane } = useDualRoute()
   const heroCardWidth = Math.floor(screenWidth - FLOW_HORIZONTAL_PADDING * 2)
   const [detail, setDetail] = useState<PixivisionDetail | null>(null)
   const [loading, setLoading] = useState(true)
@@ -476,7 +479,7 @@ export function PixivisionDetailView(props: { articleID: number }) {
           proxyRef.current = proxy
           return (
             <ScrollView
-            navigationTitle=""
+            navigationTitle={isDetailPane && detail ? detail.title : ""}
             navigationBarTitleDisplayMode="inline"
             scrollContentBackground="hidden"
             toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
@@ -1363,7 +1366,7 @@ export function PixivisionDetailView(props: { articleID: number }) {
                         {section.moreRoute ? (
                           <>
                             <Spacer />
-                            <NavigationLink value={section.moreRoute}>
+                            <AppNavigationLink value={section.moreRoute}>
                               <HStack spacing={2} alignment="center">
                                 <Text font="subheadline" foregroundStyle="secondaryLabel">
                                   查看更多
@@ -1374,7 +1377,7 @@ export function PixivisionDetailView(props: { articleID: number }) {
                                   foregroundStyle="tertiaryLabel"
                                 />
                               </HStack>
-                            </NavigationLink>
+                            </AppNavigationLink>
                           </>
                         ) : null}
                       </HStack>
