@@ -4,6 +4,7 @@ import {
   HStack,
   Image,
   List,
+  Menu,
   NavigationLink,
   Rectangle,
   Section,
@@ -11,6 +12,7 @@ import {
   Text,
   VirtualNode,
   VStack,
+  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -20,7 +22,7 @@ import {
   PAGE_TOOLBAR_BACKGROUND,
   PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
 } from "./components/pageChrome"
-import { AppNavigationLink, useDualRoute } from "./DualRouteContext"
+import { AppNavigationLink, isPaneRoute, useDualRoute } from "./DualRouteContext"
 import { session } from "../api/session"
 import { loadSettings, onSettingsChanged } from "../store/settings"
 import { appToolbar, AvatarImage } from "./components"
@@ -48,7 +50,7 @@ export function MoreView(props: { onClose: () => void }) {
   }, [])
 
   const { isCompact } = useLayoutMetrics()
-  const { isSplitViewActive } = useDualRoute()
+  const { isSplitViewActive, openDetailRoute } = useDualRoute()
   const user = session.user
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
   const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
@@ -57,6 +59,62 @@ export function MoreView(props: { onClose: () => void }) {
   const avatarURL = user?.profile_image_urls?.px_170x170 ?? null
   const isTabActive = useIsCurrentTab("more")
   const { ambientBackground } = useExperimentalAmbientPalette(avatarURL, isTabActive)
+
+  const navigateTo = useCallback(
+    (route: string) => {
+      try {
+        triggerHaptic("selection")
+      } catch {}
+      if (isSplitViewActive && isPaneRoute(route)) {
+        openDetailRoute(route)
+      } else {
+        requestPixivRoute(route)
+      }
+    },
+    [isSplitViewActive, openDetailRoute]
+  )
+
+  const trailingAction = useMemo(() => {
+    if (!user) return undefined
+    if (isAppleMusic) {
+      // 苹果音乐样式：右上角为我的头像，点击进入我的用户主页
+      return (
+        <Button
+          key="profile-avatar-btn"
+          buttonStyle="plain"
+          action={() => navigateTo(`user:${user.id}`)}
+        >
+          <AvatarImage url={avatarURL} size={28} />
+        </Button>
+      )
+    }
+
+    // 经典样式：右上角为更多菜单按钮，点开是查看主页、以图搜图、下载与文件管理
+    return (
+      <Menu key="more-menu" label={<Image systemName="ellipsis.circle" />}>
+        <Button
+          title="查看主页"
+          systemImage="person.crop.circle"
+          action={() => navigateTo(`user:${user.id}`)}
+        />
+        <Button
+          title="以图搜图"
+          systemImage="photo.badge.magnifyingglass"
+          action={() => {
+            try {
+              triggerHaptic("selection")
+            } catch {}
+            setActiveSheet("reverseSearch")
+          }}
+        />
+        <Button
+          title="下载与文件管理"
+          systemImage="arrow.down.circle"
+          action={() => navigateTo("downloadManager")}
+        />
+      </Menu>
+    )
+  }, [isAppleMusic, avatarURL, user?.id, navigateTo])
 
   useEffect(() => {
     return onSettingsChanged(() => {
@@ -132,31 +190,7 @@ export function MoreView(props: { onClose: () => void }) {
       toolbar={appToolbar(
         props.onClose,
         "我的",
-        [
-          <Button
-            key="reverse-search"
-            action={() => {
-              try {
-                triggerHaptic("selection")
-              } catch {}
-              setActiveSheet("reverseSearch")
-            }}
-          >
-            <Image systemName="photo.badge.magnifyingglass" />
-          </Button>,
-          <AppNavigationLink
-            key="downloads"
-            value="downloadManager"
-          >
-            <Image systemName="arrow.down.circle" />
-          </AppNavigationLink>,
-          <AppNavigationLink
-            key="profile"
-            value={`user:${user.id}`}
-          >
-            <AvatarImage url={avatarURL} size={28} />
-          </AppNavigationLink>,
-        ],
+        trailingAction,
         undefined,
         {
           isCompact,
@@ -257,6 +291,9 @@ function MoreRow(props: {
   subtitle?: string
   showChevron?: boolean
 }) {
+  const { isSplitViewActive } = useDualRoute()
+  const shouldShowChevron = props.showChevron ?? isSplitViewActive
+
   return (
     <HStack
       spacing={12}
@@ -277,7 +314,7 @@ function MoreRow(props: {
           </Text>
         ) : null}
       </VStack>
-      {props.showChevron ? (
+      {shouldShowChevron ? (
         <>
           <Spacer />
           <Image

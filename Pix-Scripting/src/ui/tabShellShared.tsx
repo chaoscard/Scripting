@@ -1,4 +1,18 @@
-import { useEffect, useObservable } from "scripting"
+import {
+  NavigationStack,
+  Tab,
+  TabView,
+  useEffect,
+  useObservable,
+  useRef,
+  useState,
+  type Color,
+} from "scripting"
+import { loadSettings, onSettingsChanged } from "../store/settings"
+import {
+  CapsuleAccessoryContainer,
+  GlobalBottomAccessoryHost,
+} from "./bottomAccessory"
 import {
   getActiveTabKind,
   registerTabNavigator,
@@ -58,17 +72,17 @@ export const TAB_CONTENT_DEFS: TabContentDef[] = [
     renderRoot: (props) => <FollowFeedView onClose={props.onClose} />,
   },
   {
+    id: "more",
+    title: "我的",
+    systemImage: "person.crop.circle",
+    renderRoot: (props) => <MoreView onClose={props.onClose} />,
+  },
+  {
     id: "search",
     title: "搜索",
     systemImage: "magnifyingglass",
     role: "search",
     renderRoot: (props) => <SearchView onClose={props.onClose} />,
-  },
-  {
-    id: "more",
-    title: "我的",
-    systemImage: "person.crop.circle",
-    renderRoot: (props) => <MoreView onClose={props.onClose} />,
   },
 ]
 
@@ -145,4 +159,101 @@ export function useTabNavigation<T extends string | null>(selection: Observable<
   }, [selection, discoveryPath, rankingPath, followingPath, searchPath, morePath])
 
   return { discoveryPath, rankingPath, followingPath, searchPath, morePath }
+}
+
+/**
+ * 完整的主 TabView 组件 —— 承载 5 个 Tab、路由分发与底部配件。
+ * 供单栏 TabViewShell 与分栏 SplitShell 共同直接复用，杜绝生命周期分裂与双重导航嵌套。
+ */
+export function MainTabView(props: {
+  onClose: () => void
+  tabViewStyle?: "tabBarOnly" | "sidebarAdaptable"
+}) {
+  const [settings, setSettings] = useState(() => loadSettings())
+  const initialTab = useRef(settings.launchPage).current
+  const selection = useObservable<string>(initialTab)
+  // 五个 Tab 的导航栈与全局路由分发：与分栏外壳共用同一套基础设施
+  const paths = useTabNavigation(selection)
+
+  useEffect(() => {
+    return onSettingsChanged(() => {
+      setSettings(loadSettings())
+    })
+  }, [])
+
+  const isAppleMusic = settings.pageLayout === "appleMusic"
+  const tabTint =
+    settings.glassCustomTintEnabled && settings.glassTintColor
+      ? (settings.glassTintColor as Color)
+      : undefined
+
+  const tabViewProps: any = {
+    selection,
+    tabBarMinimizeBehavior: "onScrollDown",
+    tabViewSearchActivation: "automatic",
+    tabViewStyle: props.tabViewStyle ?? "sidebarAdaptable",
+    tint: tabTint,
+  }
+
+  if (isAppleMusic) {
+    tabViewProps.tabViewBottomAccessory = (
+      <CapsuleAccessoryContainer>
+        <GlobalBottomAccessoryHost selection={selection} {...paths} />
+      </CapsuleAccessoryContainer>
+    )
+  }
+
+  // 取 Tab 定义（仍以 TAB_CONTENT_DEFS 为唯一真源）
+  const def = (id: string) =>
+    TAB_CONTENT_DEFS.find((item) => item.id === id) ?? TAB_CONTENT_DEFS[0]
+  const discovery = def("discovery")
+  const ranking = def("ranking")
+  const following = def("following")
+  const search = def("search")
+  const more = def("more")
+
+  // ⚠️ <Tab> 必须作为 <TabView> 的**显式直接子节点**书写（不能用 .map 生成数组，
+  //    真机桥接对数组中 Tab 的识别不可靠，会导致整个外壳空白）
+  return (
+    <TabView {...tabViewProps}>
+      <Tab
+        title={discovery.title}
+        systemImage={discovery.systemImage}
+        value={discovery.id}
+      >
+        <NavigationStack path={paths.discoveryPath}>
+          {discovery.renderRoot({ onClose: props.onClose })}
+        </NavigationStack>
+      </Tab>
+      <Tab title={ranking.title} systemImage={ranking.systemImage} value={ranking.id}>
+        <NavigationStack path={paths.rankingPath}>
+          {ranking.renderRoot({ onClose: props.onClose })}
+        </NavigationStack>
+      </Tab>
+      <Tab
+        title={following.title}
+        systemImage={following.systemImage}
+        value={following.id}
+      >
+        <NavigationStack path={paths.followingPath}>
+          {following.renderRoot({ onClose: props.onClose })}
+        </NavigationStack>
+      </Tab>
+      <Tab title={more.title} systemImage={more.systemImage} value={more.id}>
+        <NavigationStack path={paths.morePath}>
+          {more.renderRoot({ onClose: props.onClose })}
+        </NavigationStack>
+      </Tab>
+      <Tab
+        title={search.title}
+        systemImage={search.systemImage}
+        value={search.id}
+        role="search"
+      >
+        <NavigationStack path={paths.searchPath}>
+          {search.renderRoot({ onClose: props.onClose })}
+        </NavigationStack>
+      </Tab>
+    </TabView>
+  )
 }

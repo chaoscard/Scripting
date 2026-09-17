@@ -36,7 +36,7 @@ export function sharpenFadeDurationSec(): number {
   return Math.max(0, Math.min(0.25, ms / 1000))
 }
 
-function useCachedImage(
+export function useCachedImage(
   url: string | null,
   onLoaded?: (success: boolean) => void,
   priority?: number,

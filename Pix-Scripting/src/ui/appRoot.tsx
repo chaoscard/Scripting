@@ -35,6 +35,7 @@ import { DreamyFluidBackground } from "./components/DreamyBackground"
 import { notifyLaunchReady, onLaunchReady } from "./launchCoordinator"
 import { LoginView } from "./login"
 import {
+  MainTabView,
   TAB_CONTENT_DEFS,
   useTabNavigation,
 } from "./tabShellShared"
@@ -324,96 +325,5 @@ function TabViewShell(props: { onClose: () => void; width: number; height: numbe
     <SplitViewContainer splitViewEnabled={false}>
       <MainTabView onClose={props.onClose} />
     </SplitViewContainer>
-  )
-}
-
-function MainTabView(props: {
-  onClose: () => void
-}) {
-  const [settings, setSettings] = useState(() => loadSettings())
-  const initialTab = useRef(settings.launchPage).current
-  const selection = useObservable<string>(initialTab)
-  // 五个 Tab 的导航栈与全局路由分发：与分栏外壳共用同一套基础设施
-  const paths = useTabNavigation(selection)
-
-  useEffect(() => {
-    return onSettingsChanged(() => {
-      setSettings(loadSettings())
-    })
-  }, [])
-
-  const isAppleMusic = settings.pageLayout === "appleMusic"
-  const tabTint =
-    settings.glassCustomTintEnabled && settings.glassTintColor
-      ? (settings.glassTintColor as Color)
-      : undefined
-
-  const tabViewProps: any = {
-    selection,
-    tabBarMinimizeBehavior: "onScrollDown",
-    tabViewStyle: "sidebarAdaptable",
-    tint: tabTint,
-  }
-
-  if (isAppleMusic) {
-    tabViewProps.tabViewBottomAccessory = (
-      <CapsuleAccessoryContainer>
-        <GlobalBottomAccessoryHost selection={selection} {...paths} />
-      </CapsuleAccessoryContainer>
-    )
-  }
-
-  // 取 Tab 定义（仍以 TAB_CONTENT_DEFS 为唯一真源）
-  const def = (id: string) =>
-    TAB_CONTENT_DEFS.find((item) => item.id === id) ?? TAB_CONTENT_DEFS[0]
-  const discovery = def("discovery")
-  const ranking = def("ranking")
-  const following = def("following")
-  const search = def("search")
-  const more = def("more")
-
-  // ⚠️ <Tab> 必须作为 <TabView> 的**显式直接子节点**书写（不能用 .map 生成数组，
-  //    真机桥接对数组中 Tab 的识别不可靠，会导致整个外壳空白）
-  return (
-    <TabView {...tabViewProps}>
-      <Tab
-        title={discovery.title}
-        systemImage={discovery.systemImage}
-        value={discovery.id}
-      >
-        <NavigationStack path={paths.discoveryPath}>
-          {discovery.renderRoot({ onClose: props.onClose })}
-        </NavigationStack>
-      </Tab>
-      <Tab title={ranking.title} systemImage={ranking.systemImage} value={ranking.id}>
-        <NavigationStack path={paths.rankingPath}>
-          {ranking.renderRoot({ onClose: props.onClose })}
-        </NavigationStack>
-      </Tab>
-      <Tab
-        title={following.title}
-        systemImage={following.systemImage}
-        value={following.id}
-      >
-        <NavigationStack path={paths.followingPath}>
-          {following.renderRoot({ onClose: props.onClose })}
-        </NavigationStack>
-      </Tab>
-      <Tab
-        title={search.title}
-        systemImage={search.systemImage}
-        value={search.id}
-        role="search"
-      >
-        <NavigationStack path={paths.searchPath}>
-          {search.renderRoot({ onClose: props.onClose })}
-        </NavigationStack>
-      </Tab>
-      <Tab title={more.title} systemImage={more.systemImage} value={more.id}>
-        <NavigationStack path={paths.morePath}>
-          {more.renderRoot({ onClose: props.onClose })}
-        </NavigationStack>
-      </Tab>
-    </TabView>
   )
 }

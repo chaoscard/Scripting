@@ -145,6 +145,8 @@ export interface AppSettings {
   glassTintStrength: number
   glassInteractive: boolean
   splitViewEnabled: boolean
+  splitRatioPortrait: number
+  splitRatioLandscape: number
   waterfallColumnsIpadLandscape: WaterfallColumnsIpadLandscape
   waterfallColumnsIpadPortrait: WaterfallColumnsIpadPortrait
   heroFirstFeedCard: boolean
@@ -249,6 +251,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   glassTintStrength: 35,
   glassInteractive: false,
   splitViewEnabled: false,
+  splitRatioPortrait: 45,
+  splitRatioLandscape: 35,
   waterfallColumnsIpadLandscape: 3,
   waterfallColumnsIpadPortrait: 3,
   heroFirstFeedCard: true,
@@ -462,6 +466,12 @@ function clampPercent(value: unknown, fallback: number): number {
   const num = typeof value === "number" && Number.isFinite(value) ? value : Number.NaN
   if (!Number.isFinite(num)) return fallback
   return Math.round(Math.min(100, Math.max(0, num)))
+}
+
+function clampRange(value: unknown, fallback: number, min: number, max: number): number {
+  const num = typeof value === "number" && Number.isFinite(value) ? value : Number.NaN
+  if (!Number.isFinite(num)) return fallback
+  return Math.round(Math.min(max, Math.max(min, num)))
 }
 
 function boolOr(value: unknown, fallback: boolean): boolean {
@@ -706,6 +716,18 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
     glassTintStrength: clampPercent(stored?.glassTintStrength, DEFAULT_SETTINGS.glassTintStrength),
     glassInteractive: boolOr(stored?.glassInteractive, DEFAULT_SETTINGS.glassInteractive),
     splitViewEnabled: boolOr(stored?.splitViewEnabled, DEFAULT_SETTINGS.splitViewEnabled),
+    splitRatioPortrait: clampRange(
+      stored?.splitRatioPortrait,
+      DEFAULT_SETTINGS.splitRatioPortrait,
+      20,
+      70
+    ),
+    splitRatioLandscape: clampRange(
+      stored?.splitRatioLandscape,
+      DEFAULT_SETTINGS.splitRatioLandscape,
+      20,
+      70
+    ),
     waterfallColumnsIpadLandscape: parseWaterfallColumnsIpadLandscape(
       stored?.waterfallColumnsIpadLandscape
     ),

@@ -11,9 +11,10 @@ import {
   useMemo,
 } from "scripting"
 import { appGlass } from "./components/glass"
+import { useLayoutMetrics } from "./hooks"
 import type { PixivUserDetail, PixivWebUserDetail } from "../types"
 import type { UserAmbientPalette } from "../image/colorExtractor"
-import { AvatarImage, CachedImage, ExpandableIntroduction } from "./components"
+import { AvatarImage, CachedImage, ExpandableIntroduction, useCachedImage } from "./components"
 import { renderDestination } from "../store/routeNavigation"
 
 interface SocialLinkItem {
@@ -21,6 +22,42 @@ interface SocialLinkItem {
   name: string
   url: string
   systemImage: string
+}
+
+function UserProfileCoverImage(props: { url: string; width: number; height: number }) {
+  const { path } = useCachedImage(props.url, undefined, 0, true)
+
+  const bottomRadii = {
+    topLeading: 0,
+    topTrailing: 0,
+    bottomLeading: 8,
+    bottomTrailing: 8,
+  }
+
+  return (
+    <ZStack
+      frame={{ width: props.width, height: props.height }}
+      clipShape={{ type: "rect", cornerRadii: bottomRadii }}
+      clipped={true}
+    >
+      {path ? (
+        <Image
+          filePath={path}
+          resizable={true}
+          aspectRatio={{ contentMode: "fill" }}
+          frame={{ width: props.width, height: props.height }}
+          clipShape={{ type: "rect", cornerRadii: bottomRadii }}
+          clipped={true}
+        />
+      ) : (
+        <VStack
+          frame={{ width: props.width, height: props.height }}
+          background="tertiarySystemFill"
+          clipShape={{ type: "rect", cornerRadii: bottomRadii }}
+        />
+      )}
+    </ZStack>
+  )
 }
 
 function extractSocialLinks(
@@ -330,6 +367,7 @@ export function UserProfileHeader(props: {
 
   const avatarSize = 74
   const ringSize = avatarSize + 4
+  const { width: containerWidth } = useLayoutMetrics()
   // 跨端统一头部高度：iPad（含横竖屏与分屏）锁定 250px 宽幅全景高度，
   // iPhone 基于物理屏宽在 205~230px 区间内自适应（SE 紧凑 / Pro Max 舒展），
   // 无论用户是否上传背景图，头像与顶栏间距均保持 100% 像素级一致。
@@ -341,51 +379,28 @@ export function UserProfileHeader(props: {
     <VStack
       alignment="leading"
       spacing={0}
-      frame={{ maxWidth: "infinity" }}
+      frame={{ width: containerWidth }}
     >
-      {/* 沉浸式顶部背景图与居中悬浮头像 */}
-      <ZStack alignment="bottom" frame={{ maxWidth: "infinity" }}>
-        {/* 头部外框：**高度只由它决定**，且它自身不带任何比例。
-            封面图改走 overlay 绘制 —— CachedImage 内部带 aspectRatio，
-            只要它还参与尺寸协商，外框的真实高度就会被顶成「栏宽 ÷ 2.4」，
-            头像 Y 于是随栏宽漂移、有图 / 无图两路也对不上（即 1.1.40 引入的头像位置问题）。
-            作为 overlay 绘制后它只负责「画」，裁剪交给外框的 clipped；
+      {/* 沉浸式顶部背景图与居中悬浮头像：外层尺寸严格锁定为 headerHeight */}
+      <ZStack alignment="bottom" frame={{ width: containerWidth, height: headerHeight }}>
+        {/* 头部外框：**高度只由它决定**，且显式指定为实测宽度 containerWidth 与定高 headerHeight。
+            封面图改走 overlay 绘制，作为 overlay 绘制后它只负责「画」，裁剪交给外框的 clipped；
             有图 / 无图共用同一个外框 ⇒ 头像 Y 天然一致。 */}
         <ZStack
           alignment="bottom"
-          frame={{ maxWidth: "infinity", height: headerHeight }}
+          frame={{ width: containerWidth, height: headerHeight }}
           clipShape={{
             type: "rect",
             cornerRadii: { topLeading: 0, topTrailing: 0, bottomLeading: 8, bottomTrailing: 8 },
           }}
           clipped={true}
           overlay={
-            <ZStack alignment="bottom" frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
+            <ZStack alignment="bottom" frame={{ width: containerWidth, height: headerHeight }}>
               {profile.background_image_url ? (
-                <CachedImage
+                <UserProfileCoverImage
                   url={profile.background_image_url}
-                  useIntrinsicAspectRatio={false}
-                  aspectRatioValue={2.4}
-                  contentMode="fill"
-                  cornerRadius={0}
-                  priority={0}
-                  isSprint={true}
-                  frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-                />
-              ) : null}
-              {profile.background_image_url ? (
-                /* 底部羽化过渡遮罩：让封面图与下方环境底色自然交融（无图时不画，保持原有观感） */
-                <VStack
-                  frame={{ maxWidth: "infinity", height: 70 }}
-                  background={{
-                    colors: [
-                      "rgba(0, 0, 0, 0)",
-                      isDark ? "rgba(0, 0, 0, 0.35)" : "rgba(255, 255, 255, 0.45)",
-                      isDark ? "rgba(0, 0, 0, 0.85)" : "rgba(255, 255, 255, 0.90)",
-                    ],
-                    startPoint: "top",
-                    endPoint: "bottom",
-                  }}
+                  width={containerWidth}
+                  height={headerHeight}
                 />
               ) : null}
             </ZStack>
@@ -414,7 +429,7 @@ export function UserProfileHeader(props: {
         alignment="leading"
         spacing={12}
         padding={{ top: ringSize / 2 + 14, horizontal: 16, bottom: 8 }}
-        frame={{ maxWidth: "infinity" }}
+        frame={{ width: containerWidth }}
       >
         {/* 用户名称：居中毛玻璃胶囊 */}
         <HStack

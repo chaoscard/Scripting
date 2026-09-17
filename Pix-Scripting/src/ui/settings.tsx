@@ -644,8 +644,8 @@ export function SettingsView() {
               <Text>瀑布流首图全宽展示</Text>
               <Text font="caption2" foregroundStyle="secondaryLabel">
                 {Device.isiPad
-                  ? "探索与排行首图占满整行；全屏保持多列，仅在分栏、分屏与台前调度窄窗下生效"
-                  : "开启后探索与排行页面的首张作品占满整行展示"}
+                  ? "探索与排行页面的首张作品占满整行展示；仅在平行视界、分屏应用与台前调度窄窗下生效"
+                  : "探索与排行页面的首张作品占满整行展示"}
               </Text>
             </VStack>
           </Toggle>
@@ -661,13 +661,40 @@ export function SettingsView() {
                 value={settings.splitViewEnabled}
                 onChanged={(value) => update({ splitViewEnabled: value })}
               >
-                <VStack alignment="leading" spacing={2}>
-                  <Text>iPad 分栏布局</Text>
-                  <Text font="caption2" foregroundStyle="secondaryLabel">
-                    启用原生三栏浏览；在分屏与台前调度下自适应折叠与展开
-                  </Text>
-                </VStack>
+                <Text>平行视界</Text>
               </Toggle>
+              {settings.splitViewEnabled ? (
+                <>
+                  <VStack alignment="leading" spacing={6} padding={{ vertical: 4 }}>
+                    <HStack>
+                      <Text>竖屏左栏宽度比例</Text>
+                      <Spacer />
+                      <Text foregroundStyle="secondaryLabel">{`${settings.splitRatioPortrait}%`}</Text>
+                    </HStack>
+                    <Slider
+                      min={25}
+                      max={60}
+                      step={1}
+                      value={settings.splitRatioPortrait}
+                      onChanged={(value) => update({ splitRatioPortrait: Math.round(value) })}
+                    />
+                  </VStack>
+                  <VStack alignment="leading" spacing={6} padding={{ vertical: 4 }}>
+                    <HStack>
+                      <Text>横屏左栏宽度比例</Text>
+                      <Spacer />
+                      <Text foregroundStyle="secondaryLabel">{`${settings.splitRatioLandscape}%`}</Text>
+                    </HStack>
+                    <Slider
+                      min={25}
+                      max={60}
+                      step={1}
+                      value={settings.splitRatioLandscape}
+                      onChanged={(value) => update({ splitRatioLandscape: Math.round(value) })}
+                    />
+                  </VStack>
+                </>
+              ) : null}
             </>
           ) : null}
         </DisclosureGroup>
@@ -954,15 +981,20 @@ export function SettingsView() {
                 value={settings.glassTintColor as Color}
                 onChanged={(color) => update({ glassTintColor: color })}
               />
-              <Slider
-                min={0}
-                max={100}
-                step={5}
-                value={settings.glassTintStrength}
-                onChanged={(value) => update({ glassTintStrength: Math.round(value) })}
-                label={<Text>着色浓度</Text>}
-                listRowSeparator={{ visibility: "hidden", edges: "bottom" }}
-              />
+              <VStack alignment="leading" spacing={6} padding={{ vertical: 4 }}>
+                <HStack>
+                  <Text>着色浓度</Text>
+                  <Spacer />
+                  <Text foregroundStyle="secondaryLabel">{`${settings.glassTintStrength}%`}</Text>
+                </HStack>
+                <Slider
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={settings.glassTintStrength}
+                  onChanged={(value) => update({ glassTintStrength: Math.round(value) })}
+                />
+              </VStack>
               <HStack
                 alignment="center"
                 frame={{ maxWidth: "infinity" }}
