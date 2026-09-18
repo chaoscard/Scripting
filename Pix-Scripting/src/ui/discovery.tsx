@@ -96,6 +96,11 @@ export function DiscoveryView(props: { onClose: () => void }) {
   const layout = useLayoutMetrics()
   const { isCompact } = layout
   const { isSplitViewActive } = useDualRoute()
+  const isFullScreenPad =
+    Device.isiPad &&
+    !isSplitViewActive &&
+    layout.width >= Device.screen.width - 20
+  const shouldHideTitle = isSplitViewActive || isFullScreenPad
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl, isTabActive)
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
@@ -160,7 +165,13 @@ export function DiscoveryView(props: { onClose: () => void }) {
   const isClassic = pageLayout === "classic"
   const kindLabel = kind === "illustration" ? "插画" : kind === "manga" ? "漫画" : "小说"
   const baseTitle = mode === "recommended" ? "推荐" : mode === "latest" ? "最新" : "特辑"
-  const navTitle = mode === "pixivision" ? "特辑" : (isClassic ? `${baseTitle} · ${kindLabel}` : baseTitle)
+  const navTitle = shouldHideTitle
+    ? ""
+    : mode === "pixivision"
+      ? "特辑"
+      : isClassic
+        ? `${baseTitle} · ${kindLabel}`
+        : baseTitle
 
   return (
     <ZStack
@@ -178,6 +189,7 @@ export function DiscoveryView(props: { onClose: () => void }) {
         isAppleMusic,
         isCompact,
         isSplitViewActive,
+        isFullScreenPad,
         onModeChange: setMode,
         onKindChange: setKind,
         onClose: props.onClose,
@@ -582,11 +594,17 @@ function exploreToolbar(props: {
   isAppleMusic?: boolean
   isCompact?: boolean
   isSplitViewActive?: boolean
+  isFullScreenPad?: boolean
   onModeChange: (mode: ExploreMode) => void
   onKindChange: (kind: FeedKind) => void
   onClose: () => void
 }) {
   const layoutMetrics = useLayoutMetrics()
+  const isFullScreenPad =
+    props.isFullScreenPad ??
+    (Device.isiPad &&
+      !props.isSplitViewActive &&
+      layoutMetrics.width >= Device.screen.width - 20)
   const isCompact = props.isCompact ?? layoutMetrics.isCompact
   const isClassic = !props.isAppleMusic
   const kindLabel =
@@ -607,7 +625,7 @@ function exploreToolbar(props: {
     </Text>
   )
 
-  const trailingMenuLabel = !isCompact ? (
+  const trailingMenuLabel = isFullScreenPad ? (
     <HStack alignment="center" spacing={4}>
       <Text font="subheadline" fontWeight="semibold">
         {props.isAppleMusic
@@ -656,9 +674,9 @@ function exploreToolbar(props: {
   )
 
   return appToolbar(props.onClose, titleNode, trailingMenu, undefined, {
-    isCompact,
+    isCompact: !isFullScreenPad,
     isSplitViewActive: props.isSplitViewActive,
-    hidePrincipalOnWide: true,
+    hidePrincipalOnWide: isFullScreenPad,
   })
 }
 

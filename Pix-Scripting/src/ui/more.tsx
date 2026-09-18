@@ -49,8 +49,15 @@ export function MoreView(props: { onClose: () => void }) {
     setActiveTabKind("more")
   }, [])
 
-  const { isCompact } = useLayoutMetrics()
+  const layout = useLayoutMetrics()
+  const { isCompact } = layout
   const { isSplitViewActive, openDetailRoute } = useDualRoute()
+  const isFullScreenPad =
+    Device.isiPad &&
+    !isSplitViewActive &&
+    layout.width >= Device.screen.width - 20
+  const shouldHideTitle = isSplitViewActive || isFullScreenPad
+  const navTitle = shouldHideTitle ? "" : "我的"
   const user = session.user
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
   const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
@@ -160,15 +167,15 @@ export function MoreView(props: { onClose: () => void }) {
   if (!user) {
     return (
       <List
-        navigationTitle="我的"
+        navigationTitle={navTitle}
         navigationBarTitleDisplayMode="inline"
         toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
         toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
         navigationDestination={destinationElement}
         toolbar={appToolbar(props.onClose, "我的", undefined, undefined, {
-          isCompact,
+          isCompact: !isFullScreenPad,
           isSplitViewActive,
-          hidePrincipalOnWide: true,
+          hidePrincipalOnWide: isFullScreenPad,
         })}
       >
         <Section header={<Text>账号</Text>}>
@@ -182,7 +189,7 @@ export function MoreView(props: { onClose: () => void }) {
 
   return (
     <ZStack
-      navigationTitle="我的"
+      navigationTitle={navTitle}
       navigationBarTitleDisplayMode="inline"
       toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
       toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
@@ -193,9 +200,9 @@ export function MoreView(props: { onClose: () => void }) {
         trailingAction,
         undefined,
         {
-          isCompact,
+          isCompact: !isFullScreenPad,
           isSplitViewActive,
-          hidePrincipalOnWide: true,
+          hidePrincipalOnWide: isFullScreenPad,
         }
       )}
     >

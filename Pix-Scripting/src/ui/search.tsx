@@ -1337,7 +1337,8 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
     )
   }
 
-  const navTitle = submitted.trim() ? submitted.trim() : "搜索"
+  const shouldHideTitle = isSplitViewActive || isFullScreenPad
+  const navTitle = shouldHideTitle ? "" : submitted.trim() ? submitted.trim() : "搜索"
 
   return (
     <ZStack
@@ -1414,7 +1415,7 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
       searchable={{
         value: query,
         onChanged: onQueryChanged,
-        placement: isFullScreenPad ? "toolbar" : "navigationBarDrawerAlwaysDisplay",
+        placement: isFullScreenPad ? "toolbar" : "navigationBarDrawer",
         prompt: "输入关键词",
         presented: {
           value: searchPresented,
@@ -1490,7 +1491,8 @@ function searchToolbar(props: {
         ? "热门"
         : "最早"
 
-  const trailingMenuLabel = !isCompact ? (
+  const isFullScreenPad = props.isFullScreenPad ?? false
+  const trailingMenuLabel = isFullScreenPad ? (
     <HStack alignment="center" spacing={4}>
       <Text font="subheadline" fontWeight="semibold">
         {props.isAppleMusic ? sortLabel : scopeLabel}
@@ -1543,9 +1545,9 @@ function searchToolbar(props: {
     </Menu>,
     undefined,
     {
-      isCompact,
+      isCompact: !isFullScreenPad,
       isSplitViewActive: props.isSplitViewActive,
-      hidePrincipalOnWide: props.isFullScreenPad ?? false,
+      hidePrincipalOnWide: isFullScreenPad,
     }
   )
 }

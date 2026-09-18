@@ -252,7 +252,7 @@ export function MainTabView(props: {
         title={search.title}
         systemImage={search.systemImage}
         value={search.id}
-        role={Device.isiPhone ? "search" : undefined}
+        role="search"
       >
         <NavigationStack path={paths.searchPath}>
           {search.renderRoot({ onClose: props.onClose })}

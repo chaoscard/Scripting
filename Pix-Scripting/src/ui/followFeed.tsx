@@ -98,8 +98,14 @@ export function FollowFeedView(props: {
   useEffect(() => {
     if (isTabActive) setActivated(true)
   }, [isTabActive])
-  const { isCompact } = useLayoutMetrics()
+  const layout = useLayoutMetrics()
+  const { isCompact } = layout
   const { isSplitViewActive } = useDualRoute()
+  const isFullScreenPad =
+    Device.isiPad &&
+    !isSplitViewActive &&
+    layout.width >= Device.screen.width - 20
+  const shouldHideTitle = isSplitViewActive || isFullScreenPad
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl, isTabActive)
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
@@ -174,7 +180,11 @@ export function FollowFeedView(props: {
         : friendKind === "illust"
           ? "插画·漫画"
           : "小说"
-  const navTitle = isClassic ? `${modeLabel} · ${currentKindLabel}` : modeLabel
+  const navTitle = shouldHideTitle
+    ? ""
+    : isClassic
+      ? `${modeLabel} · ${currentKindLabel}`
+      : modeLabel
 
   return (
     <ZStack
@@ -195,6 +205,7 @@ export function FollowFeedView(props: {
         isAppleMusic,
         isCompact,
         isSplitViewActive,
+        isFullScreenPad,
         onModeChange: setMode,
         onScopeChange: setScope,
         onKindChange: selectSegmentedKind,
@@ -254,12 +265,18 @@ function followToolbar(props: {
   isAppleMusic?: boolean
   isCompact?: boolean
   isSplitViewActive?: boolean
+  isFullScreenPad?: boolean
   onModeChange: (mode: FollowMode) => void
   onScopeChange: (scope: FollowScope) => void
   onKindChange: (kind: string) => void
   onClose: () => void
 }) {
   const layoutMetrics = useLayoutMetrics()
+  const isFullScreenPad =
+    props.isFullScreenPad ??
+    (Device.isiPad &&
+      !props.isSplitViewActive &&
+      layoutMetrics.width >= Device.screen.width - 20)
   const isCompact = props.isCompact ?? layoutMetrics.isCompact
   const isClassic = !props.isAppleMusic
   const baseTitle =
@@ -290,7 +307,7 @@ function followToolbar(props: {
     </Text>
   )
 
-  const trailingMenuLabel = !isCompact ? (
+  const trailingMenuLabel = isFullScreenPad ? (
     <HStack alignment="center" spacing={4}>
       <Text font="subheadline" fontWeight="semibold">
         {fullTitle}
@@ -362,9 +379,9 @@ function followToolbar(props: {
     </Menu>,
     undefined,
     {
-      isCompact,
+      isCompact: !isFullScreenPad,
       isSplitViewActive: props.isSplitViewActive,
-      hidePrincipalOnWide: true,
+      hidePrincipalOnWide: isFullScreenPad,
     }
   )
 }

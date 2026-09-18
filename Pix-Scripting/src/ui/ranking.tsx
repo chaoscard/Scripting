@@ -122,8 +122,14 @@ export function RankingView(props: { onClose: () => void }) {
   useEffect(() => {
     if (isTabActive) setActivated(true)
   }, [isTabActive])
-  const { isCompact } = useLayoutMetrics()
+  const layout = useLayoutMetrics()
+  const { isCompact } = layout
   const { isSplitViewActive } = useDualRoute()
+  const isFullScreenPad =
+    Device.isiPad &&
+    !isSplitViewActive &&
+    layout.width >= Device.screen.width - 20
+  const shouldHideTitle = isSplitViewActive || isFullScreenPad
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl, isTabActive)
 
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
@@ -312,8 +318,9 @@ export function RankingView(props: { onClose: () => void }) {
   const currentModeObj = (activeModes ?? []).find((m) => m.value === selectedMode)
   const modeTitle = currentModeObj?.title ?? ""
   const isClassic = !isAppleMusic
-  const navTitle =
-    isClassic && kind !== "advanced" && modeTitle
+  const navTitle = shouldHideTitle
+    ? ""
+    : isClassic && kind !== "advanced" && modeTitle
       ? `${baseTitle} · ${modeTitle}`
       : baseTitle
 
@@ -357,6 +364,7 @@ export function RankingView(props: { onClose: () => void }) {
         isAppleMusic,
         isCompact,
         isSplitViewActive,
+        isFullScreenPad,
         onKindChange: handleKindChange,
         onModeChange: handleSelectMode,
         onOpenAdvancedSheet: () => setIsAdvancedSheetOpen(true),
@@ -507,12 +515,18 @@ function rankingToolbar(props: {
   isAppleMusic?: boolean
   isCompact?: boolean
   isSplitViewActive?: boolean
+  isFullScreenPad?: boolean
   onKindChange: (kind: RankingKind) => void
   onModeChange: (mode: string) => void
   onOpenAdvancedSheet: () => void
   onClose: () => void
 }) {
   const layoutMetrics = useLayoutMetrics()
+  const isFullScreenPad =
+    props.isFullScreenPad ??
+    (Device.isiPad &&
+      !props.isSplitViewActive &&
+      layoutMetrics.width >= Device.screen.width - 20)
   const isCompact = props.isCompact ?? layoutMetrics.isCompact
   const isClassic = !props.isAppleMusic
   const baseTitle =
@@ -538,7 +552,7 @@ function rankingToolbar(props: {
     </Text>
   )
 
-  const trailingMenuLabel = !isCompact ? (
+  const trailingMenuLabel = isFullScreenPad ? (
     <HStack alignment="center" spacing={4}>
       <Text font="subheadline" fontWeight="semibold">
         {props.isAppleMusic || props.kind === "advanced" || !modeTitle
@@ -600,9 +614,9 @@ function rankingToolbar(props: {
   ].filter(Boolean)
 
   return appToolbar(props.onClose, titleNode, trailingItems, undefined, {
-    isCompact,
+    isCompact: !isFullScreenPad,
     isSplitViewActive: props.isSplitViewActive,
-    hidePrincipalOnWide: true,
+    hidePrincipalOnWide: isFullScreenPad,
   })
 }
 

@@ -1,4 +1,4 @@
-import { Button, Device, Script, Text } from "scripting"
+import { Button, Device, HStack, Script, Spacer, Text } from "scripting"
 import { loadSettings } from "../../store/settings"
 import { abortAllAITasks } from "../../api/aiService"
 import { useIsFullScreen, toggleFullScreen } from "../fullScreenState"
@@ -70,17 +70,16 @@ export function appToolbar(
   /**
    * 自绘标题是否隐藏。
    *
-   * · 紧凑形态（isCompact === true，如 iPhone / iPad 台前调度窄窗 / iPad 窄分屏）：
-   *   右侧菜单折叠为单图标，居中主标题一律显示（不隐藏）。
-   * · 平行视界双栏外壳（isSplit === true）：
-   *   左主流栏中主标题一律居中显示（不隐藏）。
-   * · 宽屏单栏（!isCompact && !isSplit）：
-   *   仅在页面显式声明 hidePrincipalOnWide === true 时才隐藏（避免与右侧展开的长文字标签重复）。
+   * 1. 平行视界双栏外壳（isSplit === true）：
+   *    - 左主流栏（!options?.isDetailPane）：顶栏已有 Tab 胶囊，一律隐藏中央标题避免两层拥挤；
+   *    - 右栏详情内胆（options?.isDetailPane === true）：无 Tab 胶囊，正常展示页面/详情大标题。
+   * 2. 单栏外壳（!isSplit）：
+   *    - 宽屏全屏单栏（options?.hidePrincipalOnWide === true）：隐藏居中标题；
+   *    - 紧凑单栏 / 台前调度悬浮窗口：绝不隐藏，始终展示饱满居中 22pt 大标题。
    */
-  const shouldHidePrincipal =
-    !isSplit &&
-    !isCompact &&
-    options?.hidePrincipalOnWide === true
+  const shouldHidePrincipal = isSplit
+    ? !options?.isDetailPane
+    : options?.hidePrincipalOnWide === true
 
   let leadingButton: any = (
     <Button
