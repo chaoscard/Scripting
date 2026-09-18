@@ -236,11 +236,13 @@ function DetailPaneRouteView(props: {
   canGoBack: boolean
   onBack: () => void
   onClose: () => void
+  isAppleMusic?: boolean
 }) {
   const content = renderDetailDestination(props.route)
 
   return (
     <ZStack
+      alignment="bottom"
       frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
       toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
       toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
@@ -261,6 +263,11 @@ function DetailPaneRouteView(props: {
       }}
     >
       {content}
+
+      {/* 苹果音乐样式底栏配件（位于 NavigationStack 内部，由系统 Safe Area 管道自动避让抬高） */}
+      {props.isAppleMusic ? (
+        <DetailBottomAccessoryHost route={props.route} />
+      ) : null}
     </ZStack>
   )
 }
@@ -344,16 +351,12 @@ export function DetailPaneContent(props: {
               canGoBack={canGoBack}
               onBack={props.onBack}
               onClose={props.onClose}
+              isAppleMusic={isAppleMusic}
             />
           ) : (
             <DetailEmptyPlaceholder />
           )}
         </NavigationStack>
-
-        {/* 苹果音乐样式底栏配件（仅在有详情时浮动呈现；符合「详情栏胶囊仅有内容时出现」的决策） */}
-        {isAppleMusic && currentRoute ? (
-          <DetailBottomAccessoryHost route={currentRoute} />
-        ) : null}
       </ZStack>
     </DualRouteContext.Provider>
   )

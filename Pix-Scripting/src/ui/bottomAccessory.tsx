@@ -1679,7 +1679,7 @@ export function FloatingGlassCapsuleContainer(props: {
     <HStack
       alignment="center"
       frame={{ maxWidth: "infinity" }}
-      padding={{ horizontal: 20, bottom: 16 }}
+      padding={{ horizontal: 20, bottom: 0 }}
     >
       <HStack
         alignment="center"
