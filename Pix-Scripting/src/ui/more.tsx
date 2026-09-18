@@ -30,7 +30,7 @@ import { useLayoutMetrics } from "./hooks"
 import { requestPixivRoute, setActiveTabKind, useIsCurrentTab } from "../store/routeNavigation"
 import { destinationElement } from "./destinationElement"
 import { DockActionBar, useRegisterBottomAccessory, type DockActionItem } from "./bottomAccessory"
-import { useExperimentalAmbientPalette } from "./ambient"
+import { useExperimentalAmbientPalette, recordActiveAmbientImageUrl } from "./ambient"
 import { AccountSwitcherSheet } from "./accountSwitcherSheet"
 import { triggerHaptic } from "../platform/haptics"
 
@@ -212,6 +212,11 @@ export function MoreView(props: { onClose: () => void }) {
         <Rectangle fill={ambientBackground ?? "clear"} ignoresSafeArea={true} />
       )}
       <List
+        onAppear={() => {
+          if (avatarURL) {
+            recordActiveAmbientImageUrl(avatarURL)
+          }
+        }}
         scrollContentBackground={ambientBackground ? "hidden" : undefined}
         sheet={{
           isPresented: activeSheet !== "none",

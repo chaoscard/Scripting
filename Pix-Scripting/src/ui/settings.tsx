@@ -9,6 +9,7 @@ import {
   List,
   NavigationLink,
   Picker,
+  Rectangle,
   Section,
   Slider,
   Spacer,
@@ -21,7 +22,9 @@ import {
   useMemo,
   useState,
   VStack,
+  ZStack,
 } from "scripting"
+import { useExperimentalAmbientPalette } from "./ambient"
 import { AppNavigationLink } from "./DualRouteContext"
 import {
   PAGE_TOOLBAR_BACKGROUND,
@@ -316,26 +319,17 @@ export function SettingsView() {
     }
   }
 
+  const user = session.user
+  const avatarURL = user?.profile_image_urls?.px_170x170 ?? null
+  const { ambientBackground } = useExperimentalAmbientPalette(avatarURL, true)
+
   return (
-    <List
+    <ZStack
+      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+      navigationTitle="应用设置"
       navigationBarTitleDisplayMode="inline"
       toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
       toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
-      listSectionSpacing={6}
-      sheet={{
-        isPresented: showHighlights,
-        onChanged: (val: boolean) => setShowHighlights(val),
-        content: (
-          <FeatureHighlightsSheet
-            onClose={() => {
-              setShowHighlights(false)
-              if (!settings.hasSeenFeatureHighlights) {
-                update({ hasSeenFeatureHighlights: true })
-              }
-            }}
-          />
-        ),
-      }}
       toolbar={{
         principal: (
           <Text font="title2" fontWeight="bold">
@@ -381,6 +375,29 @@ export function SettingsView() {
         ],
       }}
     >
+      {typeof ambientBackground === "object" && ambientBackground !== null ? (
+        ambientBackground
+      ) : (
+        <Rectangle fill={ambientBackground ?? "clear"} ignoresSafeArea={true} />
+      )}
+      <List
+        scrollContentBackground={ambientBackground ? "hidden" : undefined}
+        listSectionSpacing={6}
+        sheet={{
+          isPresented: showHighlights,
+          onChanged: (val: boolean) => setShowHighlights(val),
+          content: (
+            <FeatureHighlightsSheet
+              onClose={() => {
+                setShowHighlights(false)
+                if (!settings.hasSeenFeatureHighlights) {
+                  update({ hasSeenFeatureHighlights: true })
+                }
+              }}
+            />
+          ),
+        }}
+      >
       {/* 1. 内容显示 */}
       <Section>
         <DisclosureGroup
@@ -2056,6 +2073,7 @@ export function SettingsView() {
         </Section>
       ) : null}
     </List>
+  </ZStack>
   )
 }
 

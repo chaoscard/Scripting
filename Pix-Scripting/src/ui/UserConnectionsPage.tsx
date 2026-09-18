@@ -36,7 +36,7 @@ import {
 } from "./components"
 import { prefetch } from "../image/imageLoader"
 import { currentBatchSize, usePagedList } from "./hooks"
-import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl } from "./ambient"
+import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl, recordActiveAmbientImageUrl } from "./ambient"
 import {
   DockActionBar,
   useRegisterBottomAccessory,
@@ -163,6 +163,9 @@ export function UserConnectionsView(props: {
   useEffect(() => {
     if (paged.initialLoading) return
     setAmbientImageUrl(firstImageUrl)
+    if (firstImageUrl) {
+      recordActiveAmbientImageUrl(firstImageUrl)
+    }
   }, [paged.initialLoading, firstImageUrl])
 
   return (

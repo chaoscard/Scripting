@@ -1709,6 +1709,12 @@ export function FloatingGlassCapsuleContainer(props: {
  */
 export function DetailBottomAccessoryHost(props: { route: string | null }) {
   const { route } = props
+  const [, setTick] = useState(0)
+
+  useEffect(() => {
+    return subscribeBottomAccessory(() => setTick((t) => t + 1))
+  }, [])
+
   if (!route) return null
 
   if (route.startsWith("illust:") || route.startsWith("illustDetail:")) {
@@ -1769,6 +1775,16 @@ export function DetailBottomAccessoryHost(props: { route: string | null }) {
         </FloatingGlassCapsuleContainer>
       )
     }
+  }
+
+  // 6. 优先读取页面动态注册的自绘交互配件（例如 blockedSettings 的分段选择条，或下载管理、设置的操作条）
+  const registeredNode = accessoryRegistry.get(route)
+  if (registeredNode) {
+    return (
+      <FloatingGlassCapsuleContainer>
+        {registeredNode}
+      </FloatingGlassCapsuleContainer>
+    )
   }
 
   const infoNode = renderRouteInfoBar(route)

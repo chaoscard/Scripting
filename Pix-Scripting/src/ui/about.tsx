@@ -3,6 +3,7 @@ import {
   HStack,
   Image,
   List,
+  Rectangle,
   Section,
   Spacer,
   Text,
@@ -19,6 +20,8 @@ import {
   PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
 } from "./components/pageChrome"
 import { triggerHaptic } from "../platform/haptics"
+import { session } from "../api/session"
+import { useExperimentalAmbientPalette } from "./ambient"
 
 const GITHUB_AVATAR_URL = "https://avatars.githubusercontent.com/u/16934707?v=4"
 const HANA_IRO_AVATAR_URL = "https://github.com/youshen2.png?size=128"
@@ -36,8 +39,14 @@ export function AboutView() {
     })
   }, [])
 
+  const user = session.user
+  const avatarURL = user?.profile_image_urls?.px_170x170 ?? null
+  const { ambientBackground } = useExperimentalAmbientPalette(avatarURL, true)
+
   return (
-    <List
+    <ZStack
+      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+      navigationTitle="关于应用"
       navigationBarTitleDisplayMode="inline"
       toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
       toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
@@ -49,6 +58,14 @@ export function AboutView() {
         ),
       }}
     >
+      {typeof ambientBackground === "object" && ambientBackground !== null ? (
+        ambientBackground
+      ) : (
+        <Rectangle fill={ambientBackground ?? "clear"} ignoresSafeArea={true} />
+      )}
+      <List
+        scrollContentBackground={ambientBackground ? "hidden" : undefined}
+      >
       <Section header={<Text>关于</Text>}>
         <InfoRow title="作者" value="chaoscard" />
         <HomeLinkRow />
@@ -104,6 +121,7 @@ export function AboutView() {
         />
       </Section>
     </List>
+  </ZStack>
   )
 }
 

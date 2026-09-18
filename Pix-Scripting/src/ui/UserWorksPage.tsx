@@ -40,7 +40,7 @@ import {
 } from "../store/contentFilter"
 import { isUserFollowed, onUserFollowChanged } from "../store/userFollow"
 import { useAsyncGuard, useLatest, usePagedList, currentBatchSize } from "./hooks"
-import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl } from "./ambient"
+import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl, recordActiveAmbientImageUrl } from "./ambient"
 import type { PixivIllustration, PixivNovel } from "../types"
 import { triggerHaptic } from "../platform/haptics"
 import {
@@ -84,6 +84,12 @@ export function UserWorksView(props: { userID?: number; title?: string }) {
     () => getLastActiveAmbientImageUrl()
   )
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
+
+  useEffect(() => {
+    if (ambientImageUrl) {
+      recordActiveAmbientImageUrl(ambientImageUrl)
+    }
+  }, [ambientImageUrl])
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
   useEffect(() => {

@@ -5,12 +5,14 @@ import {
   HStack,
   Image,
   List,
+  Rectangle,
   Section,
   Spacer,
   Text,
   useEffect,
   useMemo,
   useState,
+  ZStack,
 } from "scripting"
 import {
   ALL_ILLUST_RANKING_OPTIONS,
@@ -41,6 +43,8 @@ import {
   type DockActionItem,
 } from "./bottomAccessory"
 import { triggerHaptic } from "../platform/haptics"
+import { session } from "../api/session"
+import { useExperimentalAmbientPalette } from "./ambient"
 
 export type CustomRankingPickerKind = "illust" | "manga" | "novel"
 
@@ -229,13 +233,24 @@ export function RankingCustomPickerView(props: { kind: CustomRankingPickerKind }
     headerColor = "systemGreen"
   }
 
+  const user = session.user
+  const avatarURL = user?.profile_image_urls?.px_170x170 ?? null
+  const { ambientBackground } = useExperimentalAmbientPalette(avatarURL, true)
+  const pageTitle = `自定义${title}榜单`
+
   return (
-    <List
-      navigationTitle={title}
+    <ZStack
+      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+      navigationTitle={pageTitle}
       navigationBarTitleDisplayMode="inline"
       toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
       toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
       toolbar={{
+        principal: (
+          <Text font="title2" fontWeight="bold">
+            {pageTitle}
+          </Text>
+        ),
         topBarTrailing: [
           <Button
             action={() => {}}
@@ -262,6 +277,14 @@ export function RankingCustomPickerView(props: { kind: CustomRankingPickerKind }
         ],
       }}
     >
+      {typeof ambientBackground === "object" && ambientBackground !== null ? (
+        ambientBackground
+      ) : (
+        <Rectangle fill={ambientBackground ?? "clear"} ignoresSafeArea={true} />
+      )}
+      <List
+        scrollContentBackground={ambientBackground ? "hidden" : undefined}
+      >
       <Section
         header={
           <Text font="footnote" foregroundStyle={headerColor}>
@@ -301,5 +324,6 @@ export function RankingCustomPickerView(props: { kind: CustomRankingPickerKind }
         })}
       </Section>
     </List>
+  </ZStack>
   )
 }

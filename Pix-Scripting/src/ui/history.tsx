@@ -56,7 +56,7 @@ import { cacheIllust } from "../store/illustCache"
 import { cacheNovel } from "../store/novelCache"
 import { cardThumbUrlOf, novelThumbUrlOf, prefetch } from "../image/imageLoader"
 import { currentBatchSize, useLatest, usePagedList } from "./hooks"
-import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl } from "./ambient"
+import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl, recordActiveAmbientImageUrl } from "./ambient"
 import { useDualRoute } from "./DualRouteContext"
 import { getActiveTabKind, onActiveTabChanged, requestPixivRoute, type PixivTabKind } from "../store/routeNavigation"
 import { HistoryAnalyticsView } from "./historyAnalytics"
@@ -175,6 +175,12 @@ export function HistoryView() {
     () => getLastActiveAmbientImageUrl()
   )
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
+
+  useEffect(() => {
+    if (ambientImageUrl) {
+      recordActiveAmbientImageUrl(ambientImageUrl)
+    }
+  }, [ambientImageUrl])
   const refreshHandlersRef = useRef<Map<HistoryKind, () => Promise<void>>>(new Map())
   const [isAnalyticsPresented, setIsAnalyticsPresented] = useState(false)
   const isSelectingFromAnalyticsRef = useRef(false)
@@ -278,6 +284,7 @@ export function HistoryView() {
 
   return (
     <ZStack
+      navigationTitle={isAppleMusic ? "浏览记录" : `浏览记录 · ${historyKindTitle(kind)}`}
       navigationBarTitleDisplayMode="inline"
       toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
       toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
@@ -487,17 +494,21 @@ function historyToolbar(props: {
       </Text>
     ),
     topBarTrailing: props.isAppleMusic ? (
-      [
+      <Menu key="apple-music-history-menu" label={<Image systemName="ellipsis.circle" />}>
+        {props.onOpenAnalytics ? (
+          <Button
+            title="我的足迹"
+            systemImage="chart.xyaxis.line"
+            action={props.onOpenAnalytics}
+          />
+        ) : null}
         <Button
-          key="analytics-button"
-          action={() => props.onOpenAnalytics?.()}
-        >
-          <Image systemName="chart.xyaxis.line" />
-        </Button>,
-        <Button key="clear-button" action={handleClearConfirm}>
-          <Image systemName="trash" foregroundStyle="systemRed" />
-        </Button>,
-      ]
+          title={`清空${kindLabel}记录`}
+          systemImage="trash"
+          role="destructive"
+          action={handleClearConfirm}
+        />
+      </Menu>
     ) : (
       <Menu key="more-menu" label={<Image systemName="ellipsis.circle" />}>
         {props.onOpenAnalytics ? (

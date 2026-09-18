@@ -9,6 +9,7 @@ import {
   Menu,
   NavigationLink,
   Picker,
+  Rectangle,
   Section,
   Text,
   useEffect,
@@ -34,6 +35,8 @@ import {
 } from "./components/pageChrome"
 import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
 import { triggerHaptic } from "../platform/haptics"
+import { session } from "../api/session"
+import { useExperimentalAmbientPalette } from "./ambient"
 
 type BlockedScope = "tag" | "user"
 
@@ -106,14 +109,23 @@ export function BlockedSettingsView() {
   const currentCount =
     scope === "tag" ? blocklist.blockedTags.length : blocklist.blockedUsers.length
 
+  const user = session.user
+  const avatarURL = user?.profile_image_urls?.px_170x170 ?? null
+  const { ambientBackground } = useExperimentalAmbientPalette(avatarURL, true)
+
+  const navTitle = !isAppleMusic ? `屏蔽设置 · ${scope === "tag" ? "标签" : "用户"}` : "屏蔽设置"
+
   return (
-    <VStack
-      spacing={0}
+    <ZStack
+      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+      navigationTitle={navTitle}
       navigationBarTitleDisplayMode="inline"
+      toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
+      toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
       toolbar={{
         principal: (
           <Text font="title2" fontWeight="bold">
-            {!isAppleMusic ? `屏蔽设置 · ${scope === "tag" ? "标签" : "用户"}` : "屏蔽设置"}
+            {navTitle}
           </Text>
         ),
         topBarTrailing: [
@@ -152,8 +164,17 @@ export function BlockedSettingsView() {
         ],
       }}
     >
+      {typeof ambientBackground === "object" && ambientBackground !== null ? (
+        ambientBackground
+      ) : (
+        <Rectangle fill={ambientBackground ?? "clear"} ignoresSafeArea={true} />
+      )}
+      <VStack
+        spacing={0}
+      >
       <List
         frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+        scrollContentBackground={ambientBackground ? "hidden" : undefined}
         toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
         toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
       >
@@ -190,6 +211,7 @@ export function BlockedSettingsView() {
         )}
       </List>
     </VStack>
+  </ZStack>
   )
 }
 

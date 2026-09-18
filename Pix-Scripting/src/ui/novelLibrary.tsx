@@ -16,7 +16,7 @@ import {
 import { isNovelContentVisible } from "../store/contentFilter"
 import { onNovelMarkerChanged } from "../store/bookmarkSync"
 import { useLatest, usePagedList, currentBatchSize } from "./hooks"
-import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl } from "./ambient"
+import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl, recordActiveAmbientImageUrl } from "./ambient"
 import { destinationElement } from "./destinationElement"
 import {
   DockActionBar,
@@ -111,6 +111,7 @@ export function NovelLibraryView() {
     const firstUrl = sortedItems[0] ? novelThumbUrlOf(sortedItems[0].novel) : null
     if (firstUrl) {
       setAmbientImageUrl(firstUrl)
+      recordActiveAmbientImageUrl(firstUrl)
     } else if (!paged.initialLoading && sortedItems.length === 0) {
       setAmbientImageUrl(null)
     }

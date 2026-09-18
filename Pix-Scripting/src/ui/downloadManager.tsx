@@ -7,6 +7,7 @@ import {
   Menu,
   NavigationLink,
   ProgressView,
+  Rectangle,
   Script,
   Section,
   Spacer,
@@ -59,6 +60,23 @@ import {
   type DockActionItem,
 } from "./bottomAccessory"
 import { requestPixivRoute } from "../store/routeNavigation"
+import { session } from "../api/session"
+import { useExperimentalAmbientPalette } from "./ambient"
+
+function useDownloadAmbient() {
+  const user = session.user
+  const avatarURL = user?.profile_image_urls?.px_170x170 ?? null
+  const { ambientBackground } = useExperimentalAmbientPalette(avatarURL, true)
+  return {
+    ambientBackground,
+    backdropNode:
+      typeof ambientBackground === "object" && ambientBackground !== null ? (
+        ambientBackground
+      ) : (
+        <Rectangle fill={ambientBackground ?? "clear"} ignoresSafeArea={true} />
+      ),
+  }
+}
 
 declare const Dialog: any
 import { triggerHaptic } from "../platform/haptics"
@@ -220,22 +238,34 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
     isAppleMusic
   )
 
+  const { ambientBackground, backdropNode } = useDownloadAmbient()
+
   return (
-    <List
+    <ZStack
+      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
       navigationTitle="下载与文件管理"
       navigationBarTitleDisplayMode="inline"
       toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
       toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
       navigationDestination={destinationElement}
-      onAppear={() => {
-        void loadOverviewData(false)
-        updateTasksCount()
-      }}
-      refreshable={async () => {
-        await loadOverviewData(true)
-        updateTasksCount()
-      }}
-      alert={{
+      toolbar={
+        props.onClose
+          ? appToolbar(props.onClose, "下载与文件管理", topTrailingControls[0], undefined, { isCompact, isSplitViewActive, isDetailPane })
+          : { topBarTrailing: topTrailingControls }
+      }
+    >
+      {backdropNode}
+      <List
+        scrollContentBackground={ambientBackground ? "hidden" : undefined}
+        onAppear={() => {
+          void loadOverviewData(false)
+          updateTasksCount()
+        }}
+        refreshable={async () => {
+          await loadOverviewData(true)
+          updateTasksCount()
+        }}
+        alert={{
         title: "下载与文件管理说明",
         message: (
           <Text>
@@ -262,11 +292,6 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
           </Group>
         ),
       }}
-      toolbar={
-        props.onClose
-          ? appToolbar(props.onClose, "下载与文件管理", topTrailingControls[0], undefined, { isCompact, isSplitViewActive, isDetailPane })
-          : { topBarTrailing: topTrailingControls }
-      }
     >
       {/* 存储统计卡片 */}
       <Section header={<Text>存储概况</Text>}>
@@ -413,6 +438,7 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
         </NavigationLink>
       </Section>
     </List>
+  </ZStack>
   )
 }
 
@@ -529,22 +555,29 @@ export function DownloadTasksView(props: { onClose?: () => void }) {
     </Menu>
   )
 
+  const { ambientBackground, backdropNode } = useDownloadAmbient()
+
   return (
-    <List
+    <ZStack
+      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
       navigationTitle="下载任务"
       navigationBarTitleDisplayMode="inline"
       toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
       toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
-      onAppear={loadTasks}
-      refreshable={async () => {
-        loadTasks()
-      }}
       toolbar={
         props.onClose
           ? appToolbar(props.onClose, "下载任务", menuToolbar, undefined, { isCompact, isSplitViewActive, isDetailPane })
           : { topBarTrailing: [menuToolbar] }
       }
     >
+      {backdropNode}
+      <List
+        scrollContentBackground={ambientBackground ? "hidden" : undefined}
+        onAppear={loadTasks}
+        refreshable={async () => {
+          loadTasks()
+        }}
+      >
       {tasks.length === 0 ? (
         <Section>
           <VStack
@@ -595,6 +628,7 @@ export function DownloadTasksView(props: { onClose?: () => void }) {
         </Section>
       ) : null}
     </List>
+  </ZStack>
   )
 }
 
@@ -1170,23 +1204,15 @@ export function DownloadDetailListView(props: {
     isAppleMusic
   )
 
+  const { ambientBackground, backdropNode } = useDownloadAmbient()
+
   return (
-    <List
+    <ZStack
+      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
       navigationTitle={pageTitle}
       navigationBarTitleDisplayMode="inline"
       toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
       toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
-      onAppear={() => {
-        void loadFileList(false)
-      }}
-      refreshable={async () => {
-        await loadFileList(true)
-      }}
-      searchable={{
-        value: searchQuery,
-        onChanged: setSearchQuery,
-        prompt: "搜索文件名、作品 ID 或创作者…",
-      }}
       toolbar={{
         topBarTrailing: isEditing
           ? [
@@ -1248,6 +1274,21 @@ export function DownloadDetailListView(props: {
             ],
       }}
     >
+      {backdropNode}
+      <List
+        scrollContentBackground={ambientBackground ? "hidden" : undefined}
+        onAppear={() => {
+          void loadFileList(false)
+        }}
+        refreshable={async () => {
+          await loadFileList(true)
+        }}
+        searchable={{
+          value: searchQuery,
+          onChanged: setSearchQuery,
+          prompt: "搜索文件名、作品 ID 或创作者…",
+        }}
+      >
       {/* 批量操作控制条（多选模式） */}
       {isEditing ? (
         <Section>
@@ -1328,6 +1369,7 @@ export function DownloadDetailListView(props: {
         )}
       </Section>
     </List>
+  </ZStack>
   )
 }
 
@@ -1740,24 +1782,16 @@ export function DownloadCreatorsListView(props: { onClose?: () => void }) {
     isAppleMusic
   )
 
+  const { ambientBackground, backdropNode } = useDownloadAmbient()
+
   return (
-    <List
+    <ZStack
+      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
       navigationTitle="创作者归档"
       navigationBarTitleDisplayMode="inline"
       toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
       toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
       navigationDestination={destinationElement}
-      onAppear={() => {
-        void loadCreators(false)
-      }}
-      refreshable={async () => {
-        await loadCreators(true)
-      }}
-      searchable={{
-        value: searchQuery,
-        onChanged: setSearchQuery,
-        prompt: "搜索画师或创作者名称…",
-      }}
       toolbar={{
         topBarTrailing: isEditing
           ? [
@@ -1809,6 +1843,21 @@ export function DownloadCreatorsListView(props: { onClose?: () => void }) {
             ],
       }}
     >
+      {backdropNode}
+      <List
+        scrollContentBackground={ambientBackground ? "hidden" : undefined}
+        onAppear={() => {
+          void loadCreators(false)
+        }}
+        refreshable={async () => {
+          await loadCreators(true)
+        }}
+        searchable={{
+          value: searchQuery,
+          onChanged: setSearchQuery,
+          prompt: "搜索画师或创作者名称…",
+        }}
+      >
       {/* 批量操作控制条（多选模式） */}
       {isEditing ? (
         <Section>
@@ -1945,6 +1994,7 @@ export function DownloadCreatorsListView(props: { onClose?: () => void }) {
         )}
       </Section>
     </List>
+  </ZStack>
   )
 }
 

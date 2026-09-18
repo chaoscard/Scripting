@@ -6,6 +6,7 @@ import {
   Label,
   List,
   Picker,
+  Rectangle,
   Section,
   SecureField,
   Spacer,
@@ -15,7 +16,10 @@ import {
   useEffect,
   useMemo,
   useState,
+  ZStack,
 } from "scripting"
+import { session } from "../api/session"
+import { useExperimentalAmbientPalette } from "./ambient"
 import {
   AI_PRESETS,
   deleteCustomAIProfile,
@@ -542,13 +546,17 @@ export function CustomAISettingsView() {
     isAppleMusic
   )
 
+  const user = session.user
+  const avatarURL = user?.profile_image_urls?.px_170x170 ?? null
+  const { ambientBackground } = useExperimentalAmbientPalette(avatarURL, true)
+
   return (
-    <List
+    <ZStack
+      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
       navigationTitle="自定义AI模型"
       navigationBarTitleDisplayMode="inline"
       toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
       toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
-      listSectionSpacing="compact"
       toolbar={{
         topBarTrailing: [
           <Button
@@ -560,6 +568,15 @@ export function CustomAISettingsView() {
         ],
       }}
     >
+      {typeof ambientBackground === "object" && ambientBackground !== null ? (
+        ambientBackground
+      ) : (
+        <Rectangle fill={ambientBackground ?? "clear"} ignoresSafeArea={true} />
+      )}
+      <List
+        scrollContentBackground={ambientBackground ? "hidden" : undefined}
+        listSectionSpacing="compact"
+      >
       {/* 1. 通用模型 */}
       <Section
         header={<Text>通用模型</Text>}
@@ -990,5 +1007,6 @@ export function CustomAISettingsView() {
         ) : null}
       </Section>
     </List>
+  </ZStack>
   )
 }

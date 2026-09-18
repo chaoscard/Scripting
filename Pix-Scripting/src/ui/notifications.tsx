@@ -14,6 +14,7 @@ import {
   useState,
 } from "scripting"
 import { appGlass } from "./components/glass"
+import { AppNavigationLink } from "./DualRouteContext"
 import {
   notificationViewMore,
   notifications,
@@ -21,7 +22,7 @@ import {
   type PixivNotification,
 } from "../api/pixiv"
 import { currentBatchSize, usePagedList } from "./hooks"
-import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl } from "./ambient"
+import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl, recordActiveAmbientImageUrl } from "./ambient"
 import { prefetch } from "../image/imageLoader"
 import { loadSettings, onSettingsChanged } from "../store/settings"
 import {
@@ -100,6 +101,15 @@ function NotificationList(props: {
     onBatchPublished: (_, pendingItems) =>
       prefetch(pendingItems.slice(0, currentBatchSize()).map(notificationThumbUrlOf)).cancel,
   })
+
+  const firstThumb = paged.items.length > 0 ? notificationThumbUrlOf(paged.items[0]) : null
+
+  useEffect(() => {
+    if (firstThumb) {
+      setAmbientImageUrl(firstThumb)
+      recordActiveAmbientImageUrl(firstThumb)
+    }
+  }, [firstThumb])
 
   const [refreshing, setRefreshing] = useState(false)
   const isRefreshing = refreshing || paged.initialLoading
@@ -357,7 +367,7 @@ function NotificationRow(props: {
   )
 
   return target ? (
-    <NavigationLink value={target}>{content}</NavigationLink>
+    <AppNavigationLink value={target}>{content}</AppNavigationLink>
   ) : (
     content
   )

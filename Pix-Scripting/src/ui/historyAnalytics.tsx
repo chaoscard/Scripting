@@ -12,6 +12,7 @@ import {
   NavigationLink,
   NavigationStack,
   Picker,
+  Rectangle,
   RoundedRectangle,
   ScrollView,
   Spacer,
@@ -24,7 +25,13 @@ import {
   ZStack,
 } from "scripting"
 import { appGlass } from "./components/glass"
-import { sheetTopBar } from "./components/pageChrome"
+import {
+  PAGE_TOOLBAR_BACKGROUND,
+  PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
+  sheetTopBar,
+} from "./components/pageChrome"
+import { session } from "../api/session"
+import { useExperimentalAmbientPalette, useLastActiveAmbientImageUrl } from "./ambient"
 import {
   computeHistoryAnalytics,
   HEATMAP_WEEKS_MAX,
@@ -1138,86 +1145,102 @@ export function HistoryAnalyticsView(props: HistoryAnalyticsViewProps) {
     [props.onOpenUserDetail, props.onDismiss]
   )
 
-  return (
-    <NavigationStack
-      presentationDetents={["medium", "large"]}
-      presentationDragIndicator="visible"
-    >
-      <VStack
-        alignment="leading"
-        spacing={0}
-        frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-        {...sheetTopBar()}
-        navigationTitle="我的足迹"
-        navigationBarTitleDisplayMode="inline"
-        toolbar={{
-          topBarLeading: props.onDismiss ? (
-            <Button
-              action={() => {
-                triggerHaptic("light")
-                props.onDismiss!()
+  const user = session.user
+  const avatarURL = user?.profile_image_urls?.px_170x170 ?? null
+  const lastActiveUrl = useLastActiveAmbientImageUrl()
+  const ambientUrl = lastActiveUrl || avatarURL
+  const { ambientBackground } = useExperimentalAmbientPalette(ambientUrl, true)
+
+  const content = (
+    <ZStack
+      frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+      navigationTitle="我的足迹"
+      navigationBarTitleDisplayMode="inline"
+      toolbarBackground={props.onDismiss ? undefined : PAGE_TOOLBAR_BACKGROUND}
+      toolbarBackgroundVisibility={props.onDismiss ? undefined : PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
+      toolbar={{
+        topBarLeading: props.onDismiss ? (
+          <Button
+            action={() => {
+              triggerHaptic("light")
+              props.onDismiss!()
+            }}
+          >
+            <Image systemName="xmark" />
+          </Button>
+        ) : undefined,
+        principal: (
+          <Text font="headline" fontWeight="semibold">
+            我的足迹
+          </Text>
+        ),
+        topBarTrailing: (
+          <Menu
+            label={
+              <Image systemName="line.3.horizontal.decrease" />
+            }
+          >
+            <Picker
+              title="时间范围"
+              value={timeRange}
+              onChanged={(val: string) => {
+                triggerHaptic("selection")
+                setTimeRange(val as AnalyticsTimeRange)
               }}
             >
-              <Image systemName="xmark" />
-            </Button>
-          ) : undefined,
-          principal: (
-            <Text font="headline" fontWeight="semibold">
-              我的足迹
-            </Text>
-          ),
-          topBarTrailing: (
-            <Menu
-              label={
-                <Image systemName="line.3.horizontal.decrease" />
-              }
-            >
-              <Picker
-                title="时间范围"
-                value={timeRange}
-                onChanged={(val: string) => {
-                  triggerHaptic("selection")
-                  setTimeRange(val as AnalyticsTimeRange)
-                }}
-              >
-                <Label tag="all" title="全部时间" systemImage="calendar" />
-                <Label tag="week" title="近一周" systemImage="clock.arrow.circlepath" />
-                <Label tag="month" title="近一月" systemImage="clock" />
-                <Label tag="quarter" title="近一季" systemImage="calendar.badge.clock" />
-                <Label tag="year" title="近一年" systemImage="calendar" />
-              </Picker>
+              <Label tag="all" title="全部时间" systemImage="calendar" />
+              <Label tag="week" title="近一周" systemImage="clock.arrow.circlepath" />
+              <Label tag="month" title="近一月" systemImage="clock" />
+              <Label tag="quarter" title="近一季" systemImage="calendar.badge.clock" />
+              <Label tag="year" title="近一年" systemImage="calendar" />
+            </Picker>
 
-              <Picker
-                title="记录类型"
-                value={scope}
-                onChanged={(val: string) => {
-                  triggerHaptic("selection")
-                  setScope(val as AnalyticsScopeKind)
-                }}
-              >
-                <Label tag="all" title="全部类型" systemImage="square.grid.2x2" />
-                <Label tag="illustration" title="插画" systemImage="photo" />
-                <Label tag="manga" title="漫画" systemImage="photo.on.rectangle" />
-                <Label tag="novel" title="小说" systemImage="book" />
-              </Picker>
-            </Menu>
-          ),
-        }}
-      >
-        {/* 滚动看板内容区：由内层 HistoryAnalyticsBoard 渲染，
-            经 ResponsiveContainer 将 sheet 真实内容宽度注入上下文 */}
-        <ResponsiveContainer>
-          <HistoryAnalyticsBoard
-            scope={scope}
-            timeRange={timeRange}
-            onSelectTag={props.onSelectTag}
-            onSelectCreator={props.onSelectCreator}
-            onOpenUserDetail={handleOpenUserDetail}
-          />
-        </ResponsiveContainer>
-      </VStack>
-    </NavigationStack>
+            <Picker
+              title="记录类型"
+              value={scope}
+              onChanged={(val: string) => {
+                triggerHaptic("selection")
+                setScope(val as AnalyticsScopeKind)
+              }}
+            >
+              <Label tag="all" title="全部类型" systemImage="square.grid.2x2" />
+              <Label tag="illustration" title="插画" systemImage="photo" />
+              <Label tag="manga" title="漫画" systemImage="photo.on.rectangle" />
+              <Label tag="novel" title="小说" systemImage="book" />
+            </Picker>
+          </Menu>
+        ),
+      }}
+    >
+      {typeof ambientBackground === "object" && ambientBackground !== null ? (
+        ambientBackground
+      ) : (
+        <Rectangle fill={ambientBackground ?? "clear"} ignoresSafeArea={true} />
+      )}
+      <ResponsiveContainer>
+        <HistoryAnalyticsBoard
+          scope={scope}
+          timeRange={timeRange}
+          onSelectTag={props.onSelectTag}
+          onSelectCreator={props.onSelectCreator}
+          onOpenUserDetail={handleOpenUserDetail}
+        />
+      </ResponsiveContainer>
+    </ZStack>
   )
+
+  if (props.onDismiss) {
+    return (
+      <NavigationStack
+        presentationDetents={["medium", "large"]}
+        presentationDragIndicator="visible"
+      >
+        {content}
+      </NavigationStack>
+    )
+  }
+
+  return content
 }
 
 /**
@@ -1254,6 +1277,7 @@ function HistoryAnalyticsBoard(props: {
     <ScrollView
       frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
       presentationContentInteraction="scrolls"
+      scrollContentBackground="hidden"
     >
       <VStack
         spacing={12}

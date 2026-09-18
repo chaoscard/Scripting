@@ -30,7 +30,9 @@ import {
   renderDetailDestination,
   requestPixivRoute,
   setDualRouteDispatcher,
+  useIsCurrentTab,
 } from "../store/routeNavigation"
+import { session } from "../api/session"
 import { DetailBottomAccessoryHost } from "./bottomAccessory"
 import { loadSettings, onSettingsChanged } from "../store/settings"
 
@@ -60,6 +62,8 @@ const PANE_ROUTE_PREFIXES = [
   // 工具型页面（带参数的形式）
   "downloadDetail:",
   "downloadCreator:",
+  "rankingCustomPicker:",
+  "historyAnalytics:",
 ] as const
 
 const PANE_ROUTE_EXACT = [
@@ -71,6 +75,7 @@ const PANE_ROUTE_EXACT = [
   "customAISettings",
   "blockedSettings",
   "about",
+  "historyAnalytics",
 ] as const
 
 /** 该路由是否属于右栏（作品与工具区） */
@@ -182,7 +187,9 @@ export function AppNavigationLink(props: {
  * 于是右栏空态与中栏是同一套色调（中栏换图时跟着变），而不是一块死板的系统灰。
  */
 export function DetailEmptyPlaceholder() {
-  const ambientUrl = useLastActiveAmbientImageUrl()
+  const userAvatarUrl = session.user?.profile_image_urls?.px_170x170 ?? null
+  const lastActiveUrl = useLastActiveAmbientImageUrl()
+  const ambientUrl = lastActiveUrl || userAvatarUrl
   const { ambientBackground } = useExperimentalAmbientPalette(ambientUrl, true)
 
   return (
