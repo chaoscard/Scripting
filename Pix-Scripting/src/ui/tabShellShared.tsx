@@ -1,4 +1,5 @@
 import {
+  Device,
   NavigationStack,
   Tab,
   TabView,
@@ -190,7 +191,10 @@ export function MainTabView(props: {
   const tabViewProps: any = {
     selection,
     tabBarMinimizeBehavior: "onScrollDown",
-    tabViewSearchActivation: "automatic",
+    tabViewSearchActivation:
+      (props.tabViewStyle ?? "sidebarAdaptable") === "tabBarOnly"
+        ? undefined
+        : "automatic",
     tabViewStyle: props.tabViewStyle ?? "sidebarAdaptable",
     tint: tabTint,
   }
@@ -248,7 +252,7 @@ export function MainTabView(props: {
         title={search.title}
         systemImage={search.systemImage}
         value={search.id}
-        role="search"
+        role={Device.isiPhone ? "search" : undefined}
       >
         <NavigationStack path={paths.searchPath}>
           {search.renderRoot({ onClose: props.onClose })}

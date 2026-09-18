@@ -479,8 +479,13 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
   const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
   const isAppleMusic = pageLayout === "appleMusic"
-  const { isCompact } = useLayoutMetrics()
+  const layoutMetrics = useLayoutMetrics()
+  const { isCompact } = layoutMetrics
   const { isSplitViewActive } = useDualRoute()
+  const isFullScreenPad =
+    Device.isiPad &&
+    !isSplitViewActive &&
+    layoutMetrics.width >= Device.screen.width - 20
   const [visitedScopes, setVisitedScopes] = useState<Set<SearchScope>>(() => new Set([scope]))
 
   useEffect(() => {
@@ -1384,6 +1389,8 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
         isAppleMusic,
         isCompact,
         isSplitViewActive,
+        isFullScreenPad,
+        submitted,
         onClose: props.onClose,
         onScopeChange: handleScopeChange,
         sort,
@@ -1407,7 +1414,7 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
       searchable={{
         value: query,
         onChanged: onQueryChanged,
-        placement: "toolbar",
+        placement: isFullScreenPad ? "toolbar" : "navigationBarDrawerAlwaysDisplay",
         prompt: "输入关键词",
         presented: {
           value: searchPresented,
@@ -1449,6 +1456,8 @@ function searchToolbar(props: {
   isAppleMusic?: boolean
   isCompact?: boolean
   isSplitViewActive?: boolean
+  isFullScreenPad?: boolean
+  submitted?: string
   onClose: () => void
   onScopeChange: (scope: SearchScope) => void
   sort: SearchSort
@@ -1465,11 +1474,12 @@ function searchToolbar(props: {
         ? "小说"
         : "用户"
 
-  const fullTitle = `搜索 · ${scopeLabel}`
+  const baseTitle = props.submitted?.trim() ? props.submitted.trim() : "搜索"
+  const fullTitle = `${baseTitle} · ${scopeLabel}`
 
   const titleNode = (
     <Text font="title2" fontWeight="bold">
-      {isClassic ? fullTitle : "搜索"}
+      {isClassic ? fullTitle : baseTitle}
     </Text>
   )
 
@@ -1535,7 +1545,7 @@ function searchToolbar(props: {
     {
       isCompact,
       isSplitViewActive: props.isSplitViewActive,
-      hidePrincipalOnWide: true,
+      hidePrincipalOnWide: props.isFullScreenPad ?? false,
     }
   )
 }

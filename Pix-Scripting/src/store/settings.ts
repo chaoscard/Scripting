@@ -144,7 +144,8 @@ export interface AppSettings {
   glassTintColor: string
   glassTintStrength: number
   glassInteractive: boolean
-  splitViewEnabled: boolean
+  splitViewEnabledLandscape: boolean
+  splitViewEnabledPortrait: boolean
   splitRatioPortrait: number
   splitRatioLandscape: number
   waterfallColumnsIpadLandscape: WaterfallColumnsIpadLandscape
@@ -250,7 +251,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   glassTintColor: "#007aff",
   glassTintStrength: 35,
   glassInteractive: false,
-  splitViewEnabled: false,
+  splitViewEnabledLandscape: false,
+  splitViewEnabledPortrait: false,
   splitRatioPortrait: 45,
   splitRatioLandscape: 35,
   waterfallColumnsIpadLandscape: 3,
@@ -715,7 +717,8 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
         : DEFAULT_SETTINGS.glassTintColor,
     glassTintStrength: clampPercent(stored?.glassTintStrength, DEFAULT_SETTINGS.glassTintStrength),
     glassInteractive: boolOr(stored?.glassInteractive, DEFAULT_SETTINGS.glassInteractive),
-    splitViewEnabled: boolOr(stored?.splitViewEnabled, DEFAULT_SETTINGS.splitViewEnabled),
+    splitViewEnabledLandscape: boolOr(stored?.splitViewEnabledLandscape, DEFAULT_SETTINGS.splitViewEnabledLandscape),
+    splitViewEnabledPortrait: boolOr(stored?.splitViewEnabledPortrait, DEFAULT_SETTINGS.splitViewEnabledPortrait),
     splitRatioPortrait: clampRange(
       stored?.splitRatioPortrait,
       DEFAULT_SETTINGS.splitRatioPortrait,

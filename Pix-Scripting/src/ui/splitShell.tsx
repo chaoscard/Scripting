@@ -66,7 +66,7 @@ function DetailColumnBody(props: {
 export function SplitShell(props: { onClose: () => void }) {
   const metrics = useLayoutMetrics()
   const [settings, setSettings] = useState(() => loadSettings())
-  const dual = useDualRouteState(settings.splitViewEnabled !== false, true)
+  const dual = useDualRouteState(true, true)
 
   useEffect(() => {
     return onSettingsChanged(() => {

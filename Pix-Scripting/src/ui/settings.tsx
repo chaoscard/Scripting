@@ -615,7 +615,13 @@ export function SettingsView() {
                   {[
                     settings.pageLayout === "appleMusic" ? "苹果音乐" : "经典样式",
                     Device.isiPad
-                      ? `${settings.splitViewEnabled ? "分栏" : "单栏"}`
+                      ? settings.splitViewEnabledLandscape && settings.splitViewEnabledPortrait
+                        ? "平行视界"
+                        : settings.splitViewEnabledLandscape
+                          ? "横屏分栏"
+                          : settings.splitViewEnabledPortrait
+                            ? "竖屏分栏"
+                            : "单栏"
                       : settings.heroFirstFeedCard ? "全宽" : "双列",
                     settings.compactIllustCard ? "简约" : null,
                   ]
@@ -658,42 +664,48 @@ export function SettingsView() {
           {Device.isiPad ? (
             <>
               <Toggle
-                value={settings.splitViewEnabled}
-                onChanged={(value) => update({ splitViewEnabled: value })}
+                value={settings.splitViewEnabledLandscape}
+                onChanged={(value) => update({ splitViewEnabledLandscape: value })}
               >
-                <Text>平行视界</Text>
+                <Text>横屏平行视界</Text>
               </Toggle>
-              {settings.splitViewEnabled ? (
-                <>
-                  <VStack alignment="leading" spacing={6} padding={{ vertical: 4 }}>
-                    <HStack>
-                      <Text>竖屏左栏宽度比例</Text>
-                      <Spacer />
-                      <Text foregroundStyle="secondaryLabel">{`${settings.splitRatioPortrait}%`}</Text>
-                    </HStack>
-                    <Slider
-                      min={25}
-                      max={60}
-                      step={1}
-                      value={settings.splitRatioPortrait}
-                      onChanged={(value) => update({ splitRatioPortrait: Math.round(value) })}
-                    />
-                  </VStack>
-                  <VStack alignment="leading" spacing={6} padding={{ vertical: 4 }}>
-                    <HStack>
-                      <Text>横屏左栏宽度比例</Text>
-                      <Spacer />
-                      <Text foregroundStyle="secondaryLabel">{`${settings.splitRatioLandscape}%`}</Text>
-                    </HStack>
-                    <Slider
-                      min={25}
-                      max={60}
-                      step={1}
-                      value={settings.splitRatioLandscape}
-                      onChanged={(value) => update({ splitRatioLandscape: Math.round(value) })}
-                    />
-                  </VStack>
-                </>
+              {settings.splitViewEnabledLandscape ? (
+                <VStack alignment="leading" spacing={6} padding={{ vertical: 4 }}>
+                  <HStack>
+                    <Text>横屏左栏宽度比例</Text>
+                    <Spacer />
+                    <Text foregroundStyle="secondaryLabel">{`${settings.splitRatioLandscape}%`}</Text>
+                  </HStack>
+                  <Slider
+                    min={25}
+                    max={60}
+                    step={1}
+                    value={settings.splitRatioLandscape}
+                    onChanged={(value) => update({ splitRatioLandscape: Math.round(value) })}
+                  />
+                </VStack>
+              ) : null}
+              <Toggle
+                value={settings.splitViewEnabledPortrait}
+                onChanged={(value) => update({ splitViewEnabledPortrait: value })}
+              >
+                <Text>竖屏平行视界</Text>
+              </Toggle>
+              {settings.splitViewEnabledPortrait ? (
+                <VStack alignment="leading" spacing={6} padding={{ vertical: 4 }}>
+                  <HStack>
+                    <Text>竖屏左栏宽度比例</Text>
+                    <Spacer />
+                    <Text foregroundStyle="secondaryLabel">{`${settings.splitRatioPortrait}%`}</Text>
+                  </HStack>
+                  <Slider
+                    min={25}
+                    max={60}
+                    step={1}
+                    value={settings.splitRatioPortrait}
+                    onChanged={(value) => update({ splitRatioPortrait: Math.round(value) })}
+                  />
+                </VStack>
               ) : null}
             </>
           ) : null}

@@ -20,7 +20,7 @@ import {
   useState,
 } from "scripting"
 import { session } from "../api/session"
-import { loadSettings, onSettingsChanged, updateSettings } from "../store/settings"
+import { loadSettings, onSettingsChanged, updateSettings, type AppSettings } from "../store/settings"
 import { ResponsiveContainer, useLayoutMetrics } from "./hooks"
 import { SPLIT_SHELL_MIN_WIDTH, SplitShell } from "./splitShell"
 import { SplitViewContainer } from "./DualRouteContext"
@@ -278,7 +278,7 @@ export function RootView() {
     >
       {/* 底层：主界面在第 0 毫秒即挂载并全力在后台请求数据与预载图片 */}
       <ResponsiveContainer>
-        <ShellSwitcher splitViewEnabled={settings.splitViewEnabled} onClose={dismiss} />
+        <ShellSwitcher settings={settings} onClose={dismiss} />
       </ResponsiveContainer>
 
       {/* 顶层：启动动画遮罩，根据调试设置自定义时长（默认 1500ms）平滑过渡 */}
@@ -292,17 +292,21 @@ export function RootView() {
 /**
  * 外壳选择器
  *
- * · iPad（含 Mac 上的 iOS App）+ 开启平行视界 + 窗口达到 SPLIT_SHELL_MIN_WIDTH → 平行视界双栏外壳（SplitShell：左栏主流 + 右栏详情）
- * · 其余（iPhone / 窗口过窄 / 用户关闭开关）→ 原有 TabView 外壳，行为完全不变
+ * · iPad（含 Mac 上的 iOS App）+ 窗口达到 SPLIT_SHELL_MIN_WIDTH + 当前方向开启平行视界（横屏看 splitViewEnabledLandscape，竖屏看 splitViewEnabledPortrait）
+ *   → 平行视界双栏外壳（SplitShell：左栏主流 + 右栏详情）
+ * · 其余（iPhone / 窗口过窄 / 当前方向关闭）→ 原有 TabView 外壳，行为完全不变
  *
  * 两个外壳互斥挂载，因此 useTabNavigation 的注册不会重复。
  */
-function ShellSwitcher(props: { onClose: () => void; splitViewEnabled: boolean }) {
+function ShellSwitcher(props: { onClose: () => void; settings: AppSettings }) {
   const metrics = useLayoutMetrics()
   const isLargeScreen = Device.isiPad || (Device as any).isiOSAppOnMac
+  const isSplitActive = metrics.isLandscape
+    ? props.settings.splitViewEnabledLandscape
+    : props.settings.splitViewEnabledPortrait
   const useSplitShell =
     Boolean(isLargeScreen) &&
-    props.splitViewEnabled !== false &&
+    isSplitActive &&
     metrics.width >= SPLIT_SHELL_MIN_WIDTH
 
   return useSplitShell ? (
