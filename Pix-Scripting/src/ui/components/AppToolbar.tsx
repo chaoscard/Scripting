@@ -36,8 +36,8 @@ export interface AppToolbarOptions {
 /**
  * 关闭 / 最小化应用 —— 顶栏 × 的唯一行为与设置出口。
  *
- * 位置约定（2026-09-17 定稿）：分栏外壳下**只在中间栏顶栏**渲染 ×；
- * 右栏用返回箭头（isDetailPane），侧边栏不再放关闭入口。
+ * 位置约定（2026-09-17 定稿）：分栏外壳下**只在左主流栏顶栏**渲染 ×；
+ * 右栏用返回箭头（isDetailPane），左栏左上角保留关闭入口。
  *
  * ⚠️ 不要把它写成 hook，也不要让 appToolbar 变成 hook 消费者：
  *    appToolbar 存在「按条件调用」的调用点（如 downloadManager 的三元表达式），
@@ -94,7 +94,7 @@ export function appToolbar(
     leadingButton = <FullScreenToggleButton key="app-toolbar-fullscreen-toggle-host" />
   } else if (isSplit && options?.isDetailPane) {
     // 分栏外壳的**右栏**：栏首已经是内胆自绘的返回箭头，不再重复放 ×。
-    //（中栏：isDetailPane 为 false → 保留顶栏 ×，这是分栏下唯一的关闭入口。）
+    //（左栏：isDetailPane 为 false → 保留顶栏 ×，这是分栏下唯一的关闭入口。）
     leadingButton = undefined
   }
 

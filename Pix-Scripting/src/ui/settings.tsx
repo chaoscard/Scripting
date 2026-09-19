@@ -38,6 +38,7 @@ import {
 import { clearHistory, historyCount, onHistoryChanged } from "../store/history"
 import { populateWidgetPool, refreshAllWidgets } from "../store/widgetStore"
 import { FeatureHighlightsSheet } from "./components/FeatureHighlightsSheet"
+import { IpadSplitViewNoticeSheet } from "./components/IpadSplitViewNoticeSheet"
 import { DEFAULT_GLASS_TINT_COLOR, DEFAULT_GLASS_TINT_STRENGTH } from "./components/glass"
 import {
   formatCustomRankingSummary,
@@ -119,7 +120,7 @@ export function SettingsView() {
   const [blocklist, setBlocklist] = useState(loadBlocklist())
   const [aiProfile, setAiProfile] = useState<CustomAIProfile>(() => loadCustomAIProfile())
   const [settingsReset, setSettingsReset] = useTimedFlag()
-  const [showHighlights, setShowHighlights] = useState(false)
+  const [activeSheet, setActiveSheet] = useState<"none" | "highlights" | "splitView">("none")
   const [cacheSize, setCacheSize] = useState<number | null>(null)
   const [cacheCleared, setCacheCleared] = useTimedFlag()
   const [historyTotal, setHistoryTotal] = useState<number>(() => historyCount())
@@ -215,7 +216,7 @@ export function SettingsView() {
     setSettings(next)
     setSettingsReset()
     setExperimentalImmersionKey((k) => k + 1)
-    setShowHighlights(true)
+    setActiveSheet("highlights")
   }
 
   const resetContextMenu = useMemo(() => {
@@ -347,7 +348,7 @@ export function SettingsView() {
           <Button
             action={() => {
               triggerHaptic("light")
-              setShowHighlights(true)
+              setActiveSheet("highlights")
             }}
           >
             <Image systemName="lightbulb" />
@@ -384,18 +385,32 @@ export function SettingsView() {
         scrollContentBackground={ambientBackground ? "hidden" : undefined}
         listSectionSpacing={6}
         sheet={{
-          isPresented: showHighlights,
-          onChanged: (val: boolean) => setShowHighlights(val),
-          content: (
-            <FeatureHighlightsSheet
-              onClose={() => {
-                setShowHighlights(false)
-                if (!settings.hasSeenFeatureHighlights) {
-                  update({ hasSeenFeatureHighlights: true })
-                }
-              }}
-            />
-          ),
+          isPresented: activeSheet !== "none",
+          onChanged: (val: boolean) => {
+            if (!val) setActiveSheet("none")
+          },
+          content:
+            activeSheet === "highlights" ? (
+              <FeatureHighlightsSheet
+                onClose={() => {
+                  setActiveSheet("none")
+                  if (!settings.hasSeenFeatureHighlights) {
+                    update({ hasSeenFeatureHighlights: true })
+                  }
+                }}
+              />
+            ) : activeSheet === "splitView" ? (
+              <IpadSplitViewNoticeSheet
+                onClose={() => {
+                  setActiveSheet("none")
+                  if (!settings.hasSeenIpadSplitViewNotice) {
+                    update({ hasSeenIpadSplitViewNotice: true })
+                  }
+                }}
+              />
+            ) : (
+              <VStack />
+            ),
         }}
       >
       {/* 1. 内容显示 */}
@@ -724,6 +739,19 @@ export function SettingsView() {
                   />
                 </VStack>
               ) : null}
+              <Button
+                action={() => {
+                  triggerHaptic("light")
+                  setActiveSheet("splitView")
+                }}
+              >
+                <HStack spacing={8} alignment="center">
+                  <Image systemName="rectangle.split.2x1" font="subheadline" foregroundStyle="systemBlue" />
+                  <Text font="subheadline">查看平行视界介绍</Text>
+                  <Spacer />
+                  <Image systemName="chevron.right" font="caption2" foregroundStyle="tertiaryLabel" />
+                </HStack>
+              </Button>
             </>
           ) : null}
         </DisclosureGroup>

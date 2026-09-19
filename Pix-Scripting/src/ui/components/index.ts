@@ -22,6 +22,7 @@ export * from "./RecommendedUsersSheet"
 export * from "./TranscendAmbientBackground"
 export * from "./GeminiAmbientBackground"
 export * from "./FeatureHighlightsSheet"
+export * from "./IpadSplitViewNoticeSheet"
 export function SeriesEpisodePager(props: any): any {
   const mod = require("../seriesEpisodePager")
   const Comp = mod.SeriesEpisodePager || mod.default

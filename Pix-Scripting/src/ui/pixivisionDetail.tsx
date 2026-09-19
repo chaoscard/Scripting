@@ -78,7 +78,7 @@ function isVirtualNode(v: unknown): v is VirtualNode {
 export function PixivisionDetailView(props: { articleID: number }) {
   const { articleID } = props
   const { width: screenWidth } = useLayoutMetrics()
-  // 分栏外壳的右栏：特辑标题交给导航栏（中栏 / iPhone 保持空标题，维持原样）
+  // 分栏外壳的右栏：特辑标题交给导航栏（左栏 / iPhone 保持空标题，维持原样）
   const { isDetailPane } = useDualRoute()
   const heroCardWidth = Math.floor(screenWidth - FLOW_HORIZONTAL_PADDING * 2)
   const [detail, setDetail] = useState<PixivisionDetail | null>(null)

@@ -25,6 +25,7 @@ import { ResponsiveContainer, useLayoutMetrics } from "./hooks"
 import { SPLIT_SHELL_MIN_WIDTH, SplitShell } from "./splitShell"
 import { SplitViewContainer } from "./DualRouteContext"
 import { FeatureHighlightsSheet } from "./components/FeatureHighlightsSheet"
+import { IpadSplitViewNoticeSheet } from "./components/IpadSplitViewNoticeSheet"
 import { topBarScrollEdge } from "./components/pageChrome"
 import {
   CapsuleAccessoryContainer,
@@ -121,12 +122,14 @@ function LaunchExperienceView() {
   )
 }
 
+type StartupSheetType = "none" | "highlights" | "splitView"
+
 let hasAppLaunchedOnce = false
 
 export function RootView() {
   const [loggedIn, setLoggedIn] = useState(session.isAuthenticated)
   const [isReady, setIsReady] = useState(() => hasAppLaunchedOnce)
-  const [showFeatureHighlights, setShowFeatureHighlights] = useState(false)
+  const [activeStartupSheet, setActiveStartupSheet] = useState<StartupSheetType>("none")
   const [settings, setSettings] = useState(() => loadSettings())
 
   useEffect(() => {
@@ -220,13 +223,40 @@ export function RootView() {
     if (hasStartupRoute) return
 
     const currentSettings = loadSettings()
+    // 首次启动引导调度决策状态机：
+    // 1. 若未在任何设备看过亮点展示：无论何种设备，优先弹出亮点展示
     if (!currentSettings.hasSeenFeatureHighlights) {
       const timer = setTimeout(() => {
-        setShowFeatureHighlights(true)
+        setActiveStartupSheet("highlights")
+      }, 400)
+      return () => clearTimeout(timer)
+    }
+    // 2. 若已看过亮点展示（如从 iPhone 同步配置的老用户），但当前在 iPad 且未看过平行视界提示：直接弹出平行视界引导
+    if (Device.isiPad && !currentSettings.hasSeenIpadSplitViewNotice) {
+      const timer = setTimeout(() => {
+        setActiveStartupSheet("splitView")
       }, 400)
       return () => clearTimeout(timer)
     }
   }, [isReady, loggedIn])
+
+  const handleCloseHighlights = () => {
+    setActiveStartupSheet("none")
+    updateSettings({ hasSeenFeatureHighlights: true })
+
+    // 若当前为 iPad 且尚未看过平行视界提示，等待前一个 Sheet 收起动画完成后优雅接力拉起
+    const currentSettings = loadSettings()
+    if (Device.isiPad && !currentSettings.hasSeenIpadSplitViewNotice) {
+      setTimeout(() => {
+        setActiveStartupSheet("splitView")
+      }, 450)
+    }
+  }
+
+  const handleCloseSplitView = () => {
+    setActiveStartupSheet("none")
+    updateSettings({ hasSeenIpadSplitViewNotice: true })
+  }
 
   // 顶栏过渡：由设置驱动，随设置变更即时生效（上方已订阅 onSettingsChanged）
   const topBarEdge = topBarScrollEdge(settings.topBarEffect)
@@ -264,16 +294,26 @@ export function RootView() {
       scrollEdgeEffectStyle={topBarEdge.scrollEdgeEffectStyle}
       scrollEdgeEffectHidden={topBarEdge.scrollEdgeEffectHidden}
       sheet={{
-        isPresented: showFeatureHighlights,
-        onChanged: (val: boolean) => setShowFeatureHighlights(val),
-        content: (
-          <FeatureHighlightsSheet
-            onClose={() => {
-              setShowFeatureHighlights(false)
-              updateSettings({ hasSeenFeatureHighlights: true })
-            }}
-          />
-        ),
+        isPresented: activeStartupSheet !== "none",
+        onChanged: (val: boolean) => {
+          if (!val) {
+            if (activeStartupSheet === "highlights") {
+              handleCloseHighlights()
+            } else if (activeStartupSheet === "splitView") {
+              handleCloseSplitView()
+            } else {
+              setActiveStartupSheet("none")
+            }
+          }
+        },
+        content:
+          activeStartupSheet === "highlights" ? (
+            <FeatureHighlightsSheet onClose={handleCloseHighlights} />
+          ) : activeStartupSheet === "splitView" ? (
+            <IpadSplitViewNoticeSheet onClose={handleCloseSplitView} />
+          ) : (
+            <VStack />
+          ),
       }}
     >
       {/* 底层：主界面在第 0 毫秒即挂载并全力在后台请求数据与预载图片 */}

@@ -107,8 +107,15 @@ export function SplitShell(props: { onClose: () => void }) {
           frame={{ width: metrics.width, height: metrics.height }}
           clipped={true}
         >
-          {/* 左栏：完全对齐 iPhone 的主浏览流（顶栏关闭+居中标题+更多菜单，底栏滚动收起小胶囊） */}
-          {!immersive ? (
+          {/* 左栏：完全对齐 iPhone 的主浏览流（沉浸阅读时折叠为 0 宽硬裁剪，两栏常驻保活 0 卸载） */}
+          <VStack
+            key="split-master-pane"
+            alignment="leading"
+            frame={{ width: immersive ? 0 : masterWidth, height: metrics.height }}
+            clipped={true}
+            opacity={immersive ? 0 : 1}
+            allowsHitTesting={!immersive}
+          >
             <ContainerLayoutContext.Provider
               value={{
                 width: masterWidth,
@@ -126,18 +133,19 @@ export function SplitShell(props: { onClose: () => void }) {
                 />
               </VStack>
             </ContainerLayoutContext.Provider>
-          ) : null}
+          </VStack>
 
-          {/* 中间高品质分割线 */}
-          {!immersive ? (
-            <Rectangle
-              fill="separator"
-              frame={{ width: 0.5, height: metrics.height }}
-            />
-          ) : null}
+          {/* 中间高品质分割线（沉浸阅读时折叠为 0 宽透明） */}
+          <Rectangle
+            key="split-divider"
+            fill="separator"
+            frame={{ width: immersive ? 0 : 0.5, height: metrics.height }}
+            opacity={immersive ? 0 : 1}
+          />
 
-          {/* 右栏：详情大屏宿主（沉浸阅读时占满全屏，平时填满右侧） */}
+          {/* 右栏：详情大屏宿主（沉浸阅读时占满全屏，平时填满右侧，绑定稳定 key 消除错位重载） */}
           <ContainerLayoutContext.Provider
+            key="split-detail-pane"
             value={{
               width: immersive ? metrics.width : detailWidth,
               height: metrics.height,

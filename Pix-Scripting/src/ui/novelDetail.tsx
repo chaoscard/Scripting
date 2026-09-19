@@ -215,7 +215,7 @@ export function NovelDetailView(props: { novelID: number }) {
   // 沉浸阅读（仅分栏外壳支持）：经外壳下发的 context 收/放前后两栏
   const immersiveRead = useImmersiveRead()
 
-  // 分栏外壳的右栏：小说标题交给导航栏（中栏 / iPhone 保持空标题，维持原样）
+  // 分栏外壳的右栏：小说标题交给导航栏（左栏 / iPhone 保持空标题，维持原样）
   const { isDetailPane } = useDualRoute()
 
   // 底部自绘覆盖层（苹果音乐浮动胶囊）的**实测**高度；未出现为 0。

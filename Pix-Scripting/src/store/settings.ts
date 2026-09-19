@@ -206,6 +206,7 @@ export interface AppSettings {
   advancedSettingsUnlocked: boolean
   mockFreeUser: boolean
   hasSeenFeatureHighlights: boolean
+  hasSeenIpadSplitViewNotice: boolean
   dismissDownloadManagerNotice: boolean
   dismissHistoryNotice: boolean
   customRankingEnabled: boolean
@@ -251,8 +252,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   glassTintColor: "#007aff",
   glassTintStrength: 35,
   glassInteractive: false,
-  splitViewEnabledLandscape: false,
-  splitViewEnabledPortrait: false,
+  splitViewEnabledLandscape: true,
+  splitViewEnabledPortrait: true,
   splitRatioPortrait: 45,
   splitRatioLandscape: 35,
   waterfallColumnsIpadLandscape: 3,
@@ -313,6 +314,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   advancedSettingsUnlocked: false,
   mockFreeUser: false,
   hasSeenFeatureHighlights: false,
+  hasSeenIpadSplitViewNotice: false,
   dismissDownloadManagerNotice: false,
   dismissHistoryNotice: false,
   customRankingEnabled: false,
@@ -861,6 +863,10 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
     hasSeenFeatureHighlights: boolOr(
       stored?.hasSeenFeatureHighlights,
       DEFAULT_SETTINGS.hasSeenFeatureHighlights
+    ),
+    hasSeenIpadSplitViewNotice: boolOr(
+      stored?.hasSeenIpadSplitViewNotice,
+      DEFAULT_SETTINGS.hasSeenIpadSplitViewNotice
     ),
     dismissDownloadManagerNotice: boolOr(
       stored?.dismissDownloadManagerNotice,

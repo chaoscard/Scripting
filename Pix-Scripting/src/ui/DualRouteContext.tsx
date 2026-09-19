@@ -42,13 +42,13 @@ export const MASTER_PANE_WIDTH = 440
 /**
  * 右栏（作品与工具区）认领的路由白名单。
  *
- * 【设计意图】右栏 = 看内容 / 管工具；中栏 = 逛。
+ * 【设计意图】右栏 = 看内容 / 管工具；左栏 = 逛。
  * 判断标准是「点它之后，我还想不想继续保有左边的列表」：
  *  · 作品详情（插画 / 小说 / 特辑）→ 右栏大屏阅读；
- *  · 工具型页面（下载管理 / 设置 / 关于）→ 右栏，因为它们是「离开浏览语境的操作」，不打断中栏；
+ *  · 工具型页面（下载管理 / 设置 / 关于）→ 右栏，因为它们是「离开浏览语境的操作」，不打断左栏；
  *  · 其余一切（收藏库 / 浏览记录 / 小说书签 / 关注·好友·粉丝 / 作品列表 / 通知 /
- *    系列 / 标签 / 相关作品…）→ 中栏，因为它们本质是「另一种列表」，
- *    放中栏才能形成「列表 → 点作品 → 右栏大屏」的连续动线。
+ *    系列 / 标签 / 相关作品…）→ 左栏，因为它们本质是「另一种列表」，
+ *    放左栏才能形成「列表 → 点作品 → 右栏大屏」的连续动线。
  *
  * ⇒ 以后新增页面时，靠这段判断它该去哪一栏，不必每次重新讨论。
  */
@@ -91,8 +91,8 @@ export interface DualRouteContextValue {
   /**
    * 当前是否位于**分栏外壳的右栏（详情栏）内部**。
    *
-   * 与 isSplitViewActive 的区别：后者在中栏与右栏都是 true，本字段只在右栏为 true。
-   * 用途：右栏内的详情页据此把作品标题写进导航栏（中栏 / iPhone 保持空标题）。
+   * 与 isSplitViewActive 的区别：后者在左栏与右栏都是 true，本字段只在右栏为 true。
+   * 用途：右栏内的详情页据此把作品标题写进导航栏（左栏 / iPhone 保持空标题）。
    */
   isDetailPane: boolean
   activeDetailRoute: string | null
@@ -133,7 +133,7 @@ export function useDualRoute(): DualRouteContextValue {
  * 三种分流：
  *  1. 单栏 / 手机 → 原生 NavigationLink 深度入栈（维持现状）
  *  2. 分栏 + 路由属于右栏 → openDetailRoute（右栏内容；右栏内部会被重定向为「入栈」以保留返回箭头）
- *  3. 分栏 + 其余路由 → requestPixivRoute（全局分发器不认领 → 落到当前 Tab 的导航栈，即中栏）
+ *  3. 分栏 + 其余路由 → requestPixivRoute（全局分发器不认领 → 落到当前 Tab 的导航栈，即左栏）
  */
 export function AppNavigationLink(props: {
   value: string
@@ -155,7 +155,7 @@ export function AppNavigationLink(props: {
           if (paneRoute) {
             openDetailRoute(targetRoute)
           } else {
-            // 不直接 push：交给全局分发器统一裁决（dispatcher 不认领时自动落到中栏栈）
+            // 不直接 push：交给全局分发器统一裁决（dispatcher 不认领时自动落到左栏栈）
             requestPixivRoute(targetRoute)
           }
           props.onTap?.()
@@ -183,8 +183,8 @@ export function AppNavigationLink(props: {
  * 右侧详情栏空状态占位视图 (Telegram / iPadOS 风格)
  *
  * 沉浸色复用：Tracker 里存的是「最近一次在前台生效的环境光封面」，
- * 中栏当前浏览页每换一次首图就会更新它。这里订阅同一份参数并交给同一个渲染器，
- * 于是右栏空态与中栏是同一套色调（中栏换图时跟着变），而不是一块死板的系统灰。
+ * 左栏当前浏览页每换一次首图就会更新它。这里订阅同一份参数并交给同一个渲染器，
+ * 于是右栏空态与左栏是同一套色调（左栏换图时跟着变），而不是一块死板的系统灰。
  */
 export function DetailEmptyPlaceholder() {
   const userAvatarUrl = session.user?.profile_image_urls?.px_170x170 ?? null
@@ -305,7 +305,7 @@ export function DetailPaneContent(props: {
   const [settings, setSettings] = useState(() => loadSettings())
 
   // 右栏内部：把「打开作品」重定向为「入栈」，从而在右栏里继续点相关作品时保留返回箭头；
-  // 中栏的点击走外层上下文，仍是「替换」语义。
+  // 左栏的点击走外层上下文，仍是「替换」语义。
   const parentRoute = useDualRoute()
   const paneRouteValue = useMemo<DualRouteContextValue>(
     () => ({
@@ -482,7 +482,7 @@ export function useDualRouteState(
       return
     }
     return setDualRouteDispatcher((route: string) => {
-      // 只认领右栏路由；其余返回 false → 由路由系统落到「当前 Tab 的导航栈」（中栏）
+      // 只认领右栏路由；其余返回 false → 由路由系统落到「当前 Tab 的导航栈」（左栏）
       if (!isPaneRoute(route)) return false
       pushDetailRoute(route)
       return true
@@ -492,7 +492,7 @@ export function useDualRouteState(
   const value: DualRouteContextValue = useMemo(
     () => ({
       isSplitViewActive: canSplit,
-      // 外壳层（中栏 / 右栏的公共祖先）永远不是「右栏内部」，右栏由 DetailPaneContent 覆写
+      // 外壳层（左栏 / 右栏的公共祖先）永远不是「右栏内部」，右栏由 DetailPaneContent 覆写
       isDetailPane: false,
       activeDetailRoute,
       detailStack,

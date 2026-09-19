@@ -8,7 +8,7 @@ import { createContext, useContext } from "scripting"
  * 也避免 novelDetail → splitShell 的直接依赖（会有循环导入风险）。
  */
 export interface ImmersiveReadContextValue {
-  /** 当前是否处于沉浸（系统已收起侧边栏与中栏，右栏占满） */
+  /** 当前是否处于沉浸（系统已收起左栏，右栏占满） */
   isImmersive: boolean
   /**
    * 是否支持「收栏沉浸」。

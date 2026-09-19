@@ -44,8 +44,8 @@ export function subscribeActiveAmbientImageUrl(listener: () => void): () => void
 /**
  * 读取**实时**的「最近一次生效的环境光封面」。
  *
- * 用途：右栏空态（DetailEmptyPlaceholder）复用中栏当前浏览页的沉浸色 ——
- * 中栏换首图时这里会跟着变，而不是只在挂载那一刻取一次。
+ * 用途：右栏空态（DetailEmptyPlaceholder）复用左栏当前浏览页的沉浸色 ——
+ * 左栏换首图时这里会跟着变，而不是只在挂载那一刻取一次。
  */
 export function useLastActiveAmbientImageUrl(): string | null {
   const [url, setUrl] = useState(() => getLastActiveAmbientImageUrl())

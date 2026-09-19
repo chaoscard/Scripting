@@ -23,7 +23,7 @@ import { IllustRelatedSection } from "./IllustRelatedSection"
 
 export function IllustDetailView(props: { illustID: number }) {
   const { state, actions } = useIllustDetailState(props.illustID)
-  // 分栏外壳的右栏：作品标题交给导航栏（中栏 / iPhone 保持空标题，维持原样）
+  // 分栏外壳的右栏：作品标题交给导航栏（左栏 / iPhone 保持空标题，维持原样）
   const { isDetailPane } = useDualRoute()
   const {
     illust,
