@@ -55,6 +55,7 @@ import {
   useLatest,
   useNovelBookmark,
   useNovelMarker,
+  useLayoutMetrics,
   useOpenBookmarkDetailListener,
   useOpenRelatedUsersListener,
   usePagedList,
@@ -213,7 +214,12 @@ export function NovelDetailView(props: { novelID: number }) {
 
 
   // 分栏外壳的右栏：小说标题交给导航栏（左栏 / iPhone 保持空标题，维持原样）
-  const { isDetailPane } = useDualRoute()
+  const layout = useLayoutMetrics()
+  const { isDetailPane, isSplitViewActive } = useDualRoute()
+  const isFullScreenPad =
+    Device.isiPad &&
+    !isSplitViewActive &&
+    layout.width >= Device.screen.width - 20
 
   // 底部自绘覆盖层（苹果音乐浮动胶囊）的**实测**高度；未出现为 0。
   // 避让值跟随胶囊内容自适应，不写死常量。
@@ -1303,7 +1309,7 @@ export function NovelDetailView(props: { novelID: number }) {
                       </Button>,
                     ]),
                 <Menu label={<Image systemName="ellipsis.circle" />}>
-                  {!isAppleMusic && Device.isiPad ? (
+                  {!isAppleMusic && isFullScreenPad ? (
                     <Button
                       title="主页"
                       systemImage="person.crop.circle"
@@ -1430,7 +1436,7 @@ export function NovelDetailView(props: { novelID: number }) {
               )}
             </Menu>
           </Menu>,
-          ...(Device.isiPad && !isAppleMusic
+          ...(isFullScreenPad && !isAppleMusic
             ? []
             : [
                 <AppNavigationLink value={`user:${current.user.id}`}>

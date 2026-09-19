@@ -22,6 +22,7 @@ declare const Pasteboard: any
 export interface IllustToolbarActionsProps {
   illust: PixivIllustration
   isAppleMusic: boolean
+  isFullScreenPad?: boolean
   bookmarked: boolean
   bookmarkLoading: boolean
   bookmarkLongPressLocked: boolean
@@ -52,6 +53,7 @@ export function renderIllustToolbarActions(props: IllustToolbarActionsProps): Vi
   const {
     illust,
     isAppleMusic,
+    isFullScreenPad = false,
     bookmarked,
     bookmarkLoading,
     bookmarkLongPressLocked,
@@ -148,7 +150,7 @@ export function renderIllustToolbarActions(props: IllustToolbarActionsProps): Vi
           </Button>,
         ]),
     <Menu label={<Image systemName="ellipsis.circle" />}>
-      {!isAppleMusic && Device.isiPad ? (
+      {!isAppleMusic && isFullScreenPad ? (
         <Button
           title="主页"
           systemImage="person.crop.circle"
@@ -317,7 +319,7 @@ export function renderIllustToolbarActions(props: IllustToolbarActionsProps): Vi
         )}
       </Menu>
     </Menu>,
-    ...(Device.isiPad && !isAppleMusic
+    ...(isFullScreenPad && !isAppleMusic
       ? []
       : [
           <AppNavigationLink value={`user:${illust.user?.id ?? 0}`}>

@@ -1,4 +1,5 @@
 import {
+  Device,
   ScrollView,
   VStack,
   ZStack,
@@ -8,6 +9,7 @@ import {
   PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
 } from "../components/pageChrome"
 import { useDualRoute } from "../DualRouteContext"
+import { useLayoutMetrics } from "../hooks"
 import { addBookmark, bookmarkDetail, bookmarkTags } from "../../api/pixiv"
 import { session } from "../../api/session"
 import { updateHistoryBookmark } from "../../store/history"
@@ -24,7 +26,12 @@ import { IllustRelatedSection } from "./IllustRelatedSection"
 export function IllustDetailView(props: { illustID: number }) {
   const { state, actions } = useIllustDetailState(props.illustID)
   // 分栏外壳的右栏：作品标题交给导航栏（左栏 / iPhone 保持空标题，维持原样）
-  const { isDetailPane } = useDualRoute()
+  const layout = useLayoutMetrics()
+  const { isDetailPane, isSplitViewActive } = useDualRoute()
+  const isFullScreenPad =
+    Device.isiPad &&
+    !isSplitViewActive &&
+    layout.width >= Device.screen.width - 20
   const {
     illust,
     loading,
@@ -122,6 +129,7 @@ export function IllustDetailView(props: { illustID: number }) {
   const toolbarProps: IllustToolbarActionsProps = {
     illust: current,
     isAppleMusic,
+    isFullScreenPad,
     bookmarked,
     bookmarkLoading,
     bookmarkLongPressLocked,
