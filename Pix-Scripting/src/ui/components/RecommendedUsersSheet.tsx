@@ -22,7 +22,7 @@ import {
 } from "./ConnectionRow"
 import { EmptyView, ErrorView, LoadingView } from "./StatusViews"
 import { LoadMoreTrigger } from "./RefreshableScrollView"
-import { sheetTopBar } from "./pageChrome"
+import { sheetDetents, sheetTopBar } from "./pageChrome"
 import { prefetch } from "../../image/imageLoader"
 import { currentBatchSize, usePagedList } from "../hooks"
 import type { PixivPage, PixivUserPreview } from "../../types"
@@ -69,7 +69,7 @@ export function RecommendedUsersSheet(props: {
 
   return (
     <NavigationStack
-      presentationDetents={["medium", "large"]}
+      presentationDetents={sheetDetents()}
       presentationDragIndicator="visible"
     >
       <VStack

@@ -15,7 +15,7 @@ import {
   VStack,
 } from "scripting"
 import { appGlass } from "./components/glass"
-import { sheetTopBar } from "./components/pageChrome"
+import { sheetDetents, sheetTopBar } from "./components/pageChrome"
 import { isScriptingPro } from "../platform/pro"
 import { triggerHaptic } from "../platform/haptics"
 import {
@@ -101,7 +101,7 @@ export function NovelTypographySheet(props: { onClose?: () => void }) {
 
   return (
     <NavigationStack
-      presentationDetents={[0.65, "large"]}
+      presentationDetents={sheetDetents([0.65, "large"])}
       presentationDragIndicator="visible"
     >
       <ScrollView

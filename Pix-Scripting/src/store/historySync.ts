@@ -31,7 +31,10 @@ import {
 import {
   flushSearchHistory,
   getFullSearchHistoryStore,
+  MAX_SEARCH_HISTORY_ITEMS,
+  normalizeHistoryEntries,
   replaceSearchHistoryStore,
+  type SearchHistoryEntry,
   type SearchHistoryScope,
   type SearchHistoryStore,
 } from "./searchHistory"
@@ -417,54 +420,69 @@ async function syncSearchHistoryFile(
   await prepareCloudFile(cloudFile)
   const cloudRaw = readCloudJson<any>(cloudFile)
   const cloudUpdated = typeof cloudRaw?.updatedAt === "number" ? cloudRaw.updatedAt : 0
+
+  // 云端原始数据归一化（向下兼容旧纯文本数组与新带时间戳词项）
   const cloudStore: SearchHistoryStore = {
-    illust: Array.isArray(cloudRaw?.illust) ? cloudRaw.illust : [],
-    novel: Array.isArray(cloudRaw?.novel) ? cloudRaw.novel : [],
-    user: Array.isArray(cloudRaw?.user) ? cloudRaw.user : [],
+    illust: normalizeHistoryEntries(cloudRaw?.illust, cloudUpdated),
+    novel: normalizeHistoryEntries(cloudRaw?.novel, cloudUpdated),
+    user: normalizeHistoryEntries(cloudRaw?.user, cloudUpdated),
     updatedAt: cloudUpdated,
   }
 
-  const searchTombstones = state.searchTombstones ?? {}
-  const searchClearBefore = state.searchClearBefore ?? {}
+  // 动态合并最新磁盘状态，防止长同步期间本地产生的新墓碑被遗漏
+  const freshState = loadSyncState(userId)
+  const searchTombstones = {
+    ...(state.searchTombstones ?? {}),
+    ...(freshState.searchTombstones ?? {}),
+  }
+  const searchClearBefore = {
+    ...(state.searchClearBefore ?? {}),
+    ...(freshState.searchClearBefore ?? {}),
+  }
 
-  // 双向增量合并（过滤已删除墓碑与已清空旧条目，保留双端新增搜索词）
-  function mergeScopeList(scope: SearchHistoryScope, localArr: string[], cloudArr: string[]): string[] {
+  // 双向增量合并（基于独立 searchedAt 与单条墓碑/清空水位线精确比对，杜绝僵尸词复活）
+  function mergeScopeEntries(
+    scope: SearchHistoryScope,
+    localEntries: SearchHistoryEntry[],
+    cloudEntries: SearchHistoryEntry[]
+  ): SearchHistoryEntry[] {
     const clearBeforeTs = searchClearBefore[scope] ?? 0
-    const set = new Set<string>()
-    const result: string[] = []
+    const map = new Map<string, SearchHistoryEntry>()
 
-    // 1. 本地条目（过滤处于墓碑中的条目）
-    for (const it of localArr) {
-      const trimmed = typeof it === "string" ? it.trim() : ""
-      if (!trimmed) continue
-      const tombstoneTs = searchTombstones[`${scope}:${trimmed}`] ?? 0
-      if (tombstoneTs > 0) continue
-      if (!set.has(trimmed)) {
-        set.add(trimmed)
-        result.push(trimmed)
+    // 1. 本地条目（过滤处于清空水位线或删除墓碑之前的条目）
+    for (const entry of localEntries) {
+      const query = entry.query.trim()
+      if (!query) continue
+      if (clearBeforeTs > 0 && entry.searchedAt <= clearBeforeTs) continue
+      const tombstoneTs = searchTombstones[`${scope}:${query}`] ?? 0
+      if (tombstoneTs > 0 && entry.searchedAt <= tombstoneTs) continue
+
+      map.set(query, entry)
+    }
+
+    // 2. 云端条目（过滤处于清空水位线或删除墓碑之前的条目，取较新版本）
+    for (const entry of cloudEntries) {
+      const query = entry.query.trim()
+      if (!query) continue
+      if (clearBeforeTs > 0 && entry.searchedAt <= clearBeforeTs) continue
+      const tombstoneTs = searchTombstones[`${scope}:${query}`] ?? 0
+      if (tombstoneTs > 0 && entry.searchedAt <= tombstoneTs) continue
+
+      const existing = map.get(query)
+      if (!existing || entry.searchedAt > existing.searchedAt) {
+        map.set(query, entry)
       }
     }
 
-    // 2. 云端条目（若处于墓碑中，或者云端文件更新时间早于清空时间，则剔除）
-    for (const it of cloudArr) {
-      const trimmed = typeof it === "string" ? it.trim() : ""
-      if (!trimmed) continue
-      const tombstoneTs = searchTombstones[`${scope}:${trimmed}`] ?? 0
-      if (tombstoneTs > 0) continue
-      if (clearBeforeTs > 0 && cloudUpdated <= clearBeforeTs) continue
-
-      if (!set.has(trimmed)) {
-        set.add(trimmed)
-        result.push(trimmed)
-      }
-    }
-    return result
+    return Array.from(map.values())
+      .sort((a, b) => b.searchedAt - a.searchedAt)
+      .slice(0, MAX_SEARCH_HISTORY_ITEMS)
   }
 
   const mergedStore: SearchHistoryStore = {
-    illust: mergeScopeList("illust", localStore.illust, cloudStore.illust),
-    novel: mergeScopeList("novel", localStore.novel, cloudStore.novel),
-    user: mergeScopeList("user", localStore.user, cloudStore.user),
+    illust: mergeScopeEntries("illust", localStore.illust, cloudStore.illust),
+    novel: mergeScopeEntries("novel", localStore.novel, cloudStore.novel),
+    user: mergeScopeEntries("user", localStore.user, cloudStore.user),
     updatedAt: Math.max(localUpdated, cloudUpdated, Date.now()),
   }
 
@@ -518,9 +536,11 @@ export async function syncHistoryNow(userId?: string | number | null): Promise<b
     await syncNovelProgressFile(localDir, cloudDir, userId)
     await syncSearchHistoryFile(localDir, cloudDir, state, userId)
 
-    // 3. 更新同步状态
-    state.lastSyncTime = Date.now()
-    saveSyncState(state, userId)
+    // 3. 更新同步状态：重新从磁盘读取最新状态，防止冲掉同步在途产生的局部修改
+    const latestState = loadSyncState(userId)
+    pruneTombstones(latestState)
+    latestState.lastSyncTime = Date.now()
+    saveSyncState(latestState, userId)
     return true
   } catch (error: any) {
     console.warn("syncHistoryNow error:", error?.message ?? error)

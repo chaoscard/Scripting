@@ -10,12 +10,19 @@ import {
 
 export type SearchHistoryScope = "illust" | "novel" | "user"
 
+export interface SearchHistoryEntry {
+  query: string
+  searchedAt: number
+}
+
 export interface SearchHistoryStore {
-  illust: string[]
-  novel: string[]
-  user: string[]
+  illust: SearchHistoryEntry[]
+  novel: SearchHistoryEntry[]
+  user: SearchHistoryEntry[]
   updatedAt?: number
 }
+
+export const MAX_SEARCH_HISTORY_ITEMS = 100
 
 const SEARCH_HISTORY_FILE_NAME = "search_history.json"
 const DEBOUNCE_DELAY_MS = 1000
@@ -80,6 +87,40 @@ function persistSearchHistory(history: SearchHistoryStore): boolean {
   return true
 }
 
+export function normalizeHistoryEntries(
+  rawList: any,
+  fallbackTime = Date.now()
+): SearchHistoryEntry[] {
+  if (!Array.isArray(rawList)) return []
+  const result: SearchHistoryEntry[] = []
+  const seen = new Set<string>()
+
+  for (let i = 0; i < rawList.length; i++) {
+    const item = rawList[i]
+    let query = ""
+    let searchedAt = fallbackTime - i * 1000
+
+    if (typeof item === "string") {
+      query = item.trim()
+    } else if (item && typeof item === "object") {
+      if (typeof item.query === "string") {
+        query = item.query.trim()
+      }
+      if (typeof item.searchedAt === "number" && !isNaN(item.searchedAt) && item.searchedAt > 0) {
+        searchedAt = item.searchedAt
+      }
+    }
+
+    if (query.length > 0 && !seen.has(query)) {
+      seen.add(query)
+      result.push({ query, searchedAt })
+    }
+  }
+
+  result.sort((a, b) => b.searchedAt - a.searchedAt)
+  return result.slice(0, MAX_SEARCH_HISTORY_ITEMS)
+}
+
 export function getFullSearchHistoryStore(): SearchHistoryStore {
   if (cachedSearchHistory) return cachedSearchHistory
   const path = searchHistoryFilePath()
@@ -90,26 +131,22 @@ export function getFullSearchHistoryStore(): SearchHistoryStore {
       const parsed = JSON.parse(raw)
       if (parsed && typeof parsed === "object") {
         if (Array.isArray(parsed.illust) || Array.isArray(parsed.novel) || Array.isArray(parsed.user)) {
+          const fallback = typeof parsed.updatedAt === "number" ? parsed.updatedAt : Date.now()
           cachedSearchHistory = {
-            illust: Array.isArray(parsed.illust)
-              ? parsed.illust.filter((it: any): it is string => typeof it === "string" && it.trim().length > 0)
-              : [],
-            novel: Array.isArray(parsed.novel)
-              ? parsed.novel.filter((it: any): it is string => typeof it === "string" && it.trim().length > 0)
-              : [],
-            user: Array.isArray(parsed.user)
-              ? parsed.user.filter((it: any): it is string => typeof it === "string" && it.trim().length > 0)
-              : [],
-            updatedAt: typeof parsed.updatedAt === "number" ? parsed.updatedAt : Date.now(),
+            illust: normalizeHistoryEntries(parsed.illust, fallback),
+            novel: normalizeHistoryEntries(parsed.novel, fallback),
+            user: normalizeHistoryEntries(parsed.user, fallback),
+            updatedAt: fallback,
           }
           return cachedSearchHistory
         }
         if (Array.isArray(parsed)) {
+          const fallback = Date.now()
           cachedSearchHistory = {
-            illust: parsed.filter((it: any): it is string => typeof it === "string" && it.trim().length > 0),
+            illust: normalizeHistoryEntries(parsed, fallback),
             novel: [],
             user: [],
-            updatedAt: Date.now(),
+            updatedAt: fallback,
           }
           return cachedSearchHistory
         }
@@ -122,11 +159,12 @@ export function getFullSearchHistoryStore(): SearchHistoryStore {
 }
 
 export function replaceSearchHistoryStore(store: SearchHistoryStore, persist = true): void {
+  const fallback = typeof store.updatedAt === "number" ? store.updatedAt : Date.now()
   cachedSearchHistory = {
-    illust: [...store.illust],
-    novel: [...store.novel],
-    user: [...store.user],
-    updatedAt: typeof store.updatedAt === "number" ? store.updatedAt : Date.now(),
+    illust: normalizeHistoryEntries(store.illust, fallback),
+    novel: normalizeHistoryEntries(store.novel, fallback),
+    user: normalizeHistoryEntries(store.user, fallback),
+    updatedAt: fallback,
   }
   if (persist) {
     flushSearchHistory()
@@ -143,9 +181,13 @@ function emitChanged(): void {
   }
 }
 
-export function getSearchHistory(scope: SearchHistoryScope = "illust"): string[] {
+export function getSearchHistoryEntries(scope: SearchHistoryScope = "illust"): SearchHistoryEntry[] {
   const store = getFullSearchHistoryStore()
   return store[scope] ?? []
+}
+
+export function getSearchHistory(scope: SearchHistoryScope = "illust"): string[] {
+  return getSearchHistoryEntries(scope).map((e) => e.query)
 }
 
 export function addSearchHistory(query: string, scope: SearchHistoryScope = "illust"): string[] {
@@ -156,14 +198,18 @@ export function addSearchHistory(query: string, scope: SearchHistoryScope = "ill
   } catch {}
   const store = getFullSearchHistoryStore()
   const current = store[scope] ?? []
-  const filtered = current.filter((item) => item !== trimmed)
-  const next = [trimmed, ...filtered]
+  const filtered = current.filter((item) => item.query !== trimmed)
+  const now = Date.now()
+  const next: SearchHistoryEntry[] = [{ query: trimmed, searchedAt: now }, ...filtered].slice(
+    0,
+    MAX_SEARCH_HISTORY_ITEMS
+  )
   store[scope] = next
-  store.updatedAt = Date.now()
+  store.updatedAt = now
   scheduleSave()
   emitChanged()
   notifyLocalMutation()
-  return next
+  return next.map((e) => e.query)
 }
 
 export function removeSearchHistory(query: string, scope: SearchHistoryScope = "illust"): string[] {
@@ -175,13 +221,13 @@ export function removeSearchHistory(query: string, scope: SearchHistoryScope = "
   }
   const store = getFullSearchHistoryStore()
   const current = store[scope] ?? []
-  const next = current.filter((item) => item !== trimmed && item !== query)
+  const next = current.filter((item) => item.query !== trimmed && item.query !== query)
   store[scope] = next
   store.updatedAt = Date.now()
   scheduleSave()
   emitChanged()
   notifyLocalMutation()
-  return next
+  return next.map((e) => e.query)
 }
 
 export function clearSearchHistory(scope: SearchHistoryScope = "illust"): void {

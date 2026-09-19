@@ -28,6 +28,7 @@ import { appGlass } from "./components/glass"
 import {
   PAGE_TOOLBAR_BACKGROUND,
   PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
+  sheetDetents,
   sheetTopBar,
 } from "./components/pageChrome"
 import { session } from "../api/session"
@@ -1232,7 +1233,7 @@ export function HistoryAnalyticsView(props: HistoryAnalyticsViewProps) {
   if (props.onDismiss) {
     return (
       <NavigationStack
-        presentationDetents={["medium", "large"]}
+        presentationDetents={sheetDetents()}
         presentationDragIndicator="visible"
       >
         {content}

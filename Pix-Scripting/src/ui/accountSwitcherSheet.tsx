@@ -16,7 +16,7 @@ import {
   ZStack,
 } from "scripting"
 import { appGlass } from "./components/glass"
-import { sheetTopBar } from "./components/pageChrome"
+import { sheetDetents, sheetTopBar } from "./components/pageChrome"
 import { session } from "../api/session"
 import type { StoredAccountProfile } from "../api/auth"
 import { AvatarImage } from "./components/CachedImage"
@@ -105,7 +105,7 @@ export function AccountSwitcherSheet(props: {
 
   return (
     <NavigationStack
-      presentationDetents={["medium", "large"]}
+      presentationDetents={sheetDetents()}
       presentationDragIndicator="visible"
     >
       <ScrollView

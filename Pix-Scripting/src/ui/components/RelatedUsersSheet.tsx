@@ -20,7 +20,7 @@ import {
   ConnectionRow,
 } from "./ConnectionRow"
 import { EmptyView, ErrorView, LoadingView } from "./StatusViews"
-import { sheetTopBar } from "./pageChrome"
+import { sheetDetents, sheetTopBar } from "./pageChrome"
 import type { PixivUserPreview } from "../../types"
 
 export function RelatedUsersSheet(props: {
@@ -74,7 +74,7 @@ export function RelatedUsersSheet(props: {
 
   return (
     <NavigationStack
-      presentationDetents={["medium", "large"]}
+      presentationDetents={sheetDetents()}
       presentationDragIndicator="visible"
     >
       <VStack

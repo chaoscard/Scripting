@@ -1106,7 +1106,7 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
           {/* 2. 搜索激活态且未输入关键词：展示搜索历史记录 */}
           {!isSuggestingActive && (isSearchingMode || searchPresented) && !submitted && !query.trim() ? (
             <SearchHistorySection
-              history={historyItems}
+              history={getSearchHistory(targetScope)}
               onSelect={submitSearch}
               onRemove={(item) => removeSearchHistory(item, targetScope)}
               onClear={() => clearSearchHistory(targetScope)}

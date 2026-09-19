@@ -21,7 +21,7 @@ import {
   ZStack,
 } from "scripting"
 import { appGlass } from "./components/glass"
-import { sheetTopBar } from "./components/pageChrome"
+import { sheetDetents, sheetTopBar } from "./components/pageChrome"
 import { searchImageBySauceNAO, type SauceNAOMatch } from "../api/sauceNao"
 import {
   getSauceNaoApiKeys,
@@ -167,7 +167,7 @@ export function ReverseImageSearchSheet(props: {
 
   return (
     <NavigationStack
-      presentationDetents={["medium", "large"]}
+      presentationDetents={sheetDetents()}
       presentationDragIndicator="visible"
     >
       {showConfig ? (

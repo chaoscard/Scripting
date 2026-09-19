@@ -10,7 +10,7 @@ import {
   useState,
 } from "scripting"
 import { appGlass } from "./glass"
-import { sheetTopBar } from "./pageChrome"
+import { sheetDetents, sheetTopBar } from "./pageChrome"
 import {
   blockUser,
   isTagBlocked,
@@ -110,7 +110,7 @@ export function BlockWorkSheet(props: {
 
   return (
     <NavigationStack
-      presentationDetents={["medium", "large"]}
+      presentationDetents={sheetDetents()}
       presentationDragIndicator="visible"
     >
       <VStack

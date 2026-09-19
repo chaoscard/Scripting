@@ -94,7 +94,7 @@ export function SplitShell(props: { onClose: () => void }) {
 
   // 动态读取横竖屏设置比例：横屏使用 splitRatioLandscape，竖屏使用 splitRatioPortrait
   const ratioPercent = metrics.isLandscape
-    ? (settings.splitRatioLandscape ?? 35)
+    ? (settings.splitRatioLandscape ?? 38)
     : (settings.splitRatioPortrait ?? 45)
   const masterWidth = Math.round(metrics.width * (ratioPercent / 100))
   const detailWidth = Math.max(metrics.width - masterWidth, 0)

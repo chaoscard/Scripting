@@ -20,7 +20,7 @@ import {
   VStack,
 } from "scripting"
 import { appGlass } from "./components/glass"
-import { sheetTopBar } from "./components/pageChrome"
+import { sheetDetents, sheetTopBar } from "./components/pageChrome"
 import {
   comments,
   nextComments,
@@ -359,7 +359,7 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number; onCl
 
   return (
     <NavigationStack
-      presentationDetents={["medium", "large"]}
+      presentationDetents={sheetDetents()}
       presentationDragIndicator="visible"
     >
       <VStack

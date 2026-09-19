@@ -1,4 +1,4 @@
-import type { CommonViewProps } from "scripting"
+import { Device, type CommonViewProps } from "scripting"
 import { loadSettings, type TopBarEffect } from "../../store/settings"
 
 /**
@@ -118,4 +118,15 @@ export function sheetTopBar(): {
     toolbarBackgroundVisibility: PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
     ...topBarScrollEdge(loadSettings().topBarEffect),
   }
+}
+
+/**
+ * 半模态 Sheet 跨端自适应档位策略：
+ * · iPad 上统一直接展开为最大 ["large"]，卡片舒展充裕，彻底杜绝半高矮盒截断信息流；
+ * · iPhone 上保留原本的半拉单手交互（默认 ["medium", "large"]，亦支持传入自定义比例如 [0.65, "large"]）。
+ *
+ * 用法：`<NavigationStack presentationDetents={sheetDetents()} ...>`
+ */
+export function sheetDetents(phoneDetents: any[] = ["medium", "large"]): any[] {
+  return Device.isiPad ? ["large"] : phoneDetents
 }

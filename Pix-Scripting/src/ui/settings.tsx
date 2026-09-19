@@ -219,6 +219,28 @@ export function SettingsView() {
     setActiveSheet("highlights")
   }
 
+  const handleCloseHighlights = () => {
+    setActiveSheet("none")
+    if (!settings.hasSeenFeatureHighlights) {
+      update({ hasSeenFeatureHighlights: true })
+    }
+
+    // 若当前为 iPad 且尚未看过平行视界提示，等待前一个 Sheet 收起动画完成后优雅接力拉起
+    const currentSettings = loadSettings()
+    if (Device.isiPad && !currentSettings.hasSeenIpadSplitViewNotice) {
+      setTimeout(() => {
+        setActiveSheet("splitView")
+      }, 450)
+    }
+  }
+
+  const handleCloseSplitView = () => {
+    setActiveSheet("none")
+    if (!settings.hasSeenIpadSplitViewNotice) {
+      update({ hasSeenIpadSplitViewNotice: true })
+    }
+  }
+
   const resetContextMenu = useMemo(() => {
     return {
       menuItems: (
@@ -387,27 +409,21 @@ export function SettingsView() {
         sheet={{
           isPresented: activeSheet !== "none",
           onChanged: (val: boolean) => {
-            if (!val) setActiveSheet("none")
+            if (!val) {
+              if (activeSheet === "highlights") {
+                handleCloseHighlights()
+              } else if (activeSheet === "splitView") {
+                handleCloseSplitView()
+              } else {
+                setActiveSheet("none")
+              }
+            }
           },
           content:
             activeSheet === "highlights" ? (
-              <FeatureHighlightsSheet
-                onClose={() => {
-                  setActiveSheet("none")
-                  if (!settings.hasSeenFeatureHighlights) {
-                    update({ hasSeenFeatureHighlights: true })
-                  }
-                }}
-              />
+              <FeatureHighlightsSheet onClose={handleCloseHighlights} />
             ) : activeSheet === "splitView" ? (
-              <IpadSplitViewNoticeSheet
-                onClose={() => {
-                  setActiveSheet("none")
-                  if (!settings.hasSeenIpadSplitViewNotice) {
-                    update({ hasSeenIpadSplitViewNotice: true })
-                  }
-                }}
-              />
+              <IpadSplitViewNoticeSheet onClose={handleCloseSplitView} />
             ) : (
               <VStack />
             ),
