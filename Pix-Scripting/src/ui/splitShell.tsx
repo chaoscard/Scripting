@@ -19,10 +19,6 @@ import {
   DualRouteContext,
   useDualRouteState,
 } from "./DualRouteContext"
-import {
-  ImmersiveReadContext,
-  type ImmersiveReadContextValue,
-} from "./immersiveRead"
 import { loadSettings, onSettingsChanged } from "../store/settings"
 
 /**
@@ -74,23 +70,6 @@ export function SplitShell(props: { onClose: () => void }) {
     })
   }, [])
 
-  /* 沉浸阅读支持：收起左栏，让右栏小说阅读占满整屏 */
-  const [immersive, setImmersive] = useState(false)
-  const immersiveValue = useMemo<ImmersiveReadContextValue>(
-    () => ({
-      isImmersive: immersive,
-      supportsColumnImmersive: true,
-      setImmersive: (value: boolean) => setImmersive(value),
-    }),
-    [immersive]
-  )
-
-  // 详情被关闭时自动退出沉浸，恢复双栏
-  useEffect(() => {
-    if (immersive && dual.detailStack.length === 0) {
-      setImmersive(false)
-    }
-  }, [immersive, dual.detailStack.length])
 
   // 动态读取横竖屏设置比例：横屏使用 splitRatioLandscape，竖屏使用 splitRatioPortrait
   const ratioPercent = metrics.isLandscape
@@ -100,67 +79,62 @@ export function SplitShell(props: { onClose: () => void }) {
   const detailWidth = Math.max(metrics.width - masterWidth, 0)
 
   return (
-    <ImmersiveReadContext.Provider value={immersiveValue}>
-      <DualRouteContext.Provider value={dual.value}>
-        <HStack
-          spacing={0}
-          frame={{ width: metrics.width, height: metrics.height }}
+    <DualRouteContext.Provider value={dual.value}>
+      <HStack
+        spacing={0}
+        frame={{ width: metrics.width, height: metrics.height }}
+        clipped={true}
+      >
+        {/* 左栏：完全对齐 iPhone 的主浏览流 */}
+        <VStack
+          key="split-master-pane"
+          alignment="leading"
+          frame={{ width: masterWidth, height: metrics.height }}
           clipped={true}
         >
-          {/* 左栏：完全对齐 iPhone 的主浏览流（沉浸阅读时折叠为 0 宽硬裁剪，两栏常驻保活 0 卸载） */}
-          <VStack
-            key="split-master-pane"
-            alignment="leading"
-            frame={{ width: immersive ? 0 : masterWidth, height: metrics.height }}
-            clipped={true}
-            opacity={immersive ? 0 : 1}
-            allowsHitTesting={!immersive}
-          >
-            <ContainerLayoutContext.Provider
-              value={{
-                width: masterWidth,
-                height: metrics.height,
-              }}
-            >
-              <VStack
-                frame={{ width: masterWidth, height: metrics.height }}
-                background="systemBackground"
-                clipped={true}
-              >
-                <MainTabView
-                  onClose={props.onClose}
-                  tabViewStyle="tabBarOnly"
-                />
-              </VStack>
-            </ContainerLayoutContext.Provider>
-          </VStack>
-
-          {/* 中间高品质分割线（沉浸阅读时折叠为 0 宽透明） */}
-          <Rectangle
-            key="split-divider"
-            fill="separator"
-            frame={{ width: immersive ? 0 : 0.5, height: metrics.height }}
-            opacity={immersive ? 0 : 1}
-          />
-
-          {/* 右栏：详情大屏宿主（沉浸阅读时占满全屏，平时填满右侧，绑定稳定 key 消除错位重载） */}
           <ContainerLayoutContext.Provider
-            key="split-detail-pane"
             value={{
-              width: immersive ? metrics.width : detailWidth,
+              width: masterWidth,
               height: metrics.height,
             }}
           >
-            <ResponsiveContainer>
-              <DetailColumnBody
-                detailStack={dual.detailStack}
-                onBack={dual.popDetailRoute}
-                onClose={dual.closeDetail}
+            <VStack
+              frame={{ width: masterWidth, height: metrics.height }}
+              background="systemBackground"
+              clipped={true}
+            >
+              <MainTabView
+                onClose={props.onClose}
+                tabViewStyle="tabBarOnly"
               />
-            </ResponsiveContainer>
+            </VStack>
           </ContainerLayoutContext.Provider>
-        </HStack>
-      </DualRouteContext.Provider>
-    </ImmersiveReadContext.Provider>
+        </VStack>
+
+        {/* 中间高品质分割线 */}
+        <Rectangle
+          key="split-divider"
+          fill="separator"
+          frame={{ width: 0.5, height: metrics.height }}
+        />
+
+        {/* 右栏：详情大屏宿主 */}
+        <ContainerLayoutContext.Provider
+          key="split-detail-pane"
+          value={{
+            width: detailWidth,
+            height: metrics.height,
+          }}
+        >
+          <ResponsiveContainer>
+            <DetailColumnBody
+              detailStack={dual.detailStack}
+              onBack={dual.popDetailRoute}
+              onClose={dual.closeDetail}
+            />
+          </ResponsiveContainer>
+        </ContainerLayoutContext.Provider>
+      </HStack>
+    </DualRouteContext.Provider>
   )
 }

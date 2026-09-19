@@ -1,6 +1,7 @@
 import {
   Button,
   Device,
+  Divider,
   HStack,
   Image,
   LazyVStack,
@@ -72,6 +73,7 @@ import {
   NovelCard,
 } from "./components"
 import { renderDestination, requestPixivRoute } from "../store/routeNavigation"
+import { useDualRoute } from "./DualRouteContext"
 import {
   currentBatchSize,
   useLatest,
@@ -234,6 +236,8 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
   isAscendingRef.current = isAscending
   const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
   const isAppleMusic = pageLayout === "appleMusic"
+  const { isSplitViewActive, isDetailPane } = useDualRoute()
+  const isSplitMasterPane = isSplitViewActive && !isDetailPane
 
   const { ambientBackground } = useExperimentalAmbientPalette(
     coverPreviewUrl || coverUrl
@@ -521,9 +525,61 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
     </NavigationLink>
   ) : null
 
-  const trailingButtons = isAppleMusic
-    ? [shareButton, ...(authorAvatar ? [authorAvatar] : [])]
-    : [
+  const trailingButtons = isSplitMasterPane
+    ? [
+        <Menu key="series-more-menu" label={<Image systemName="ellipsis.circle" />}>
+          {!isAppleMusic ? (
+            <>
+              <Button
+                title={isWatched ? "已追更" : "追更"}
+                systemImage={isWatched ? "bookmark.fill" : "bookmark"}
+                disabled={watchLoading}
+                action={toggleWatchlist}
+              />
+              <Button
+                title={isAscending ? "切换为倒序" : "切换为正序"}
+                systemImage={isAscending ? "arrow.down" : "arrow.up"}
+                action={() => {
+                  triggerHaptic("selection")
+                  const nextAsc = !isAscending
+                  setIsAscending(nextAsc)
+                  updateSettings({ watchlistSortOrder: nextAsc ? "asc" : "desc" })
+                }}
+              />
+              <Divider />
+            </>
+          ) : null}
+          <Button
+            title="分享"
+            systemImage="square.and.arrow.up"
+            action={() => {
+              triggerHaptic("selection")
+              void ShareSheet.present([shareUrl])
+            }}
+          />
+          {!isAppleMusic ? (
+            <Button
+              title={seriesDownloading ? "下载中…" : "下载"}
+              systemImage={seriesDownloading ? "arrow.down.circle.fill" : "square.and.arrow.down"}
+              foregroundStyle={seriesDownloading ? "systemBlue" : undefined}
+              disabled={seriesDownloading}
+              action={handleExportSeries}
+            />
+          ) : null}
+          {author ? (
+            <Button
+              title={author.name ? `作者：${author.name}` : "主页"}
+              systemImage="person.crop.circle"
+              action={() => {
+                void requestPixivRoute(`user:${author.id}`)
+              }}
+            />
+          ) : null}
+        </Menu>,
+      ]
+    : isAppleMusic
+      ? [shareButton, ...(authorAvatar ? [authorAvatar] : [])]
+      : [
         <Button
           key="series-watch"
           disabled={watchLoading}

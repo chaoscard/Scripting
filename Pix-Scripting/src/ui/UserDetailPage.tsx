@@ -66,6 +66,7 @@ import {
   type FollowRestrict,
 } from "../store/userFollow"
 import { requestPixivRoute } from "../store/routeNavigation"
+import { useDualRoute } from "./DualRouteContext"
 import { useAsyncGuard, useOpenRelatedUsersListener } from "./hooks"
 import { useUserAmbientPalette } from "./ambient"
 import type {
@@ -106,6 +107,8 @@ export function UserDetailView(props: { userID: number }) {
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
   const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
   const isAppleMusic = pageLayout === "appleMusic"
+  const { isSplitViewActive, isDetailPane } = useDualRoute()
+  const isSplitMasterPane = isSplitViewActive && !isDetailPane
   const [emptyKinds, setEmptyKinds] = useState<Partial<Record<UserWorkKind, boolean>>>({})
   const { ambientBackground } = useUserAmbientPalette(
     detail?.profile.background_image_url || detail?.user.profile_image_urls?.medium
@@ -641,9 +644,9 @@ export function UserDetailView(props: { userID: number }) {
   }
 
   const showStandaloneShare =
-    !Device.isiPad && (isOwnProfile || isAppleMusic || availableKinds.length <= 1)
+    !isSplitMasterPane && !Device.isiPad && (isOwnProfile || isAppleMusic || availableKinds.length <= 1)
   const showStandaloneDownload =
-    !Device.isiPad || isAppleMusic || availableKinds.length <= 1
+    !isSplitMasterPane && (!Device.isiPad || isAppleMusic || availableKinds.length <= 1)
 
   const handleShare = () => {
     triggerHaptic("selection")
@@ -688,7 +691,7 @@ export function UserDetailView(props: { userID: number }) {
       ignoresSafeArea={{ edges: ["top", "bottom"] }}
       toolbar={{
         topBarTrailing: [
-          ...(!isOwnProfile ? [
+          ...(!isOwnProfile && !isSplitMasterPane ? [
             <Button
               key="follow-button"
               disabled={followBusy}
@@ -759,7 +762,7 @@ export function UserDetailView(props: { userID: number }) {
                 </Button>,
               ]
             : []),
-          ...(!isAppleMusic && availableKinds.length > 1
+          ...(!isSplitMasterPane && !isAppleMusic && availableKinds.length > 1
             ? [
                 <Menu
                   key="work-type-menu"
@@ -802,6 +805,14 @@ export function UserDetailView(props: { userID: number }) {
               ]
             : []),
           <Menu key="more-menu" label={<Image systemName="ellipsis.circle" />}>
+            {!isOwnProfile && isSplitMasterPane ? (
+              <Button
+                title={followed ? "取消关注" : "关注"}
+                systemImage={followed ? "person.badge.minus" : "person.badge.plus"}
+                disabled={followBusy}
+                action={toggleFollow}
+              />
+            ) : null}
             {!showStandaloneShare ? (
               <Button
                 title="分享"
@@ -819,6 +830,33 @@ export function UserDetailView(props: { userID: number }) {
                   void handleDownloadClick()
                 }}
               />
+            ) : null}
+            {isSplitMasterPane && !isAppleMusic && availableKinds.length > 1 ? (
+              <Menu title="作品类型" systemImage="square.stack.3d.down.right">
+                <Picker
+                  title="作品类型"
+                  value={activeKind}
+                  onChanged={(newK: string) => {
+                    setSelectedTag(null)
+                    setKind(newK as UserWorkKind)
+                  }}
+                >
+                  {availableKinds.map((k) => (
+                    <Label
+                      key={k}
+                      tag={k}
+                      title={k === "illust" ? "插画" : k === "manga" ? "漫画" : "小说"}
+                      systemImage={
+                        k === "illust"
+                          ? "photo"
+                          : k === "manga"
+                            ? "photo.on.rectangle"
+                            : "book"
+                      }
+                    />
+                  ))}
+                </Picker>
+              </Menu>
             ) : null}
             <Button
               title="查看关注"

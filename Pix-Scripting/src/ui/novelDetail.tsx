@@ -61,7 +61,6 @@ import {
   waitForNovelLoadingFeedback,
 } from "./hooks"
 import { useNovelExperimentalAmbientPalette } from "./ambient"
-import { useImmersiveRead } from "./immersiveRead"
 import { useFloatingCapsuleHeight } from "./bottomAccessory"
 import { novelThumbUrlOf, prefetch } from "../image/imageLoader"
 import {
@@ -212,8 +211,6 @@ export function NovelDetailView(props: { novelID: number }) {
   const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
   const isAppleMusic = pageLayout === "appleMusic"
 
-  // 沉浸阅读（仅分栏外壳支持）：经外壳下发的 context 收/放前后两栏
-  const immersiveRead = useImmersiveRead()
 
   // 分栏外壳的右栏：小说标题交给导航栏（左栏 / iPhone 保持空标题，维持原样）
   const { isDetailPane } = useDualRoute()
@@ -1027,51 +1024,6 @@ export function NovelDetailView(props: { novelID: number }) {
     )
   }
 
-  /**
-   * 沉浸阅读按钮：与快捷操作球**镜像**放置（球在左则它在右），同一视觉规范。
-   * 仅当外壳支持「收栏沉浸」时出现（单栏 / iPhone 下没有更宽可争取，入口隐藏）。
-   */
-  function renderImmersiveReadButton() {
-    if (!immersiveRead.supportsColumnImmersive || !current) return null
-
-    // 与快捷球对侧：球在左则本按钮在右
-    const onTrailing = quickActionPos !== "trailing"
-    // 苹果音乐布局下底部有浮动胶囊，需抬高避让（用实测高度，不写死）
-    const bottomPadding = (totalPages > 1 ? 60 : 24) + bottomOverlayInset
-
-    return (
-      <VStack padding={{ bottom: bottomPadding }} frame={{ maxWidth: "infinity" }}>
-        {/* 用 Spacer 撑满整行来定位（比嵌套 ZStack 对齐可靠：后者会把内容居中） */}
-        <HStack spacing={0} frame={{ maxWidth: "infinity" }} padding={{ horizontal: 30 }}>
-          {onTrailing ? <Spacer /> : null}
-          <Button
-            buttonStyle="plain"
-            action={() => immersiveRead.setImmersive(!immersiveRead.isImmersive)}
-          >
-            <ZStack
-              alignment="center"
-              frame={{ width: 46, height: 46 }}
-              glassEffect={appGlass("circle")}
-              contentShape="circle"
-              shadow={{ color: "#0000002E", radius: 8, y: 2 }}
-            >
-              <Image
-                systemName={
-                  immersiveRead.isImmersive
-                    ? "arrow.down.right.and.arrow.up.left"
-                    : "arrow.up.left.and.arrow.down.right"
-                }
-                font="title2"
-                fontWeight="medium"
-                foregroundStyle="label"
-              />
-            </ZStack>
-          </Button>
-          {onTrailing ? null : <Spacer />}
-        </HStack>
-      </VStack>
-    )
-  }
 
   return (
     <ZStack
@@ -1767,7 +1719,6 @@ export function NovelDetailView(props: { novelID: number }) {
         }}
       </ScrollViewReader>
       {renderQuickActionButton()}
-      {renderImmersiveReadButton()}
     </ZStack>
   )
 }
