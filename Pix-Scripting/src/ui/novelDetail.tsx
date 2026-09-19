@@ -257,6 +257,26 @@ export function NovelDetailView(props: { novelID: number }) {
   const hasRestoredScrollRef = useRef(false)
   const isUnmountingRef = useRef(false)
   const isDisappearedRef = useRef(false)
+  const lastDeviceLandscapeRef = useRef(Device.isLandscape)
+  const lastScreenWidthRef = useRef(Device.screen.width)
+  const lastLayoutWidthRef = useRef(layout.width)
+  const isLayoutResizingRef = useRef(false)
+  const isUserDraggingRef = useRef(false)
+  const resizeDebounceTimerRef = useRef<any>(null)
+
+  // 1. Render 阶段同步探测物理转屏与栏宽剧烈突变（不等异步 useEffect，消灭毫秒级真空期）
+  const currentLandscape = Device.isLandscape
+  const currentScreenWidth = Device.screen.width
+  const currentLayoutWidth = layout.width
+
+  const hasOrientationChanged = currentLandscape !== lastDeviceLandscapeRef.current
+  const hasScreenWidthChanged = Math.abs(currentScreenWidth - lastScreenWidthRef.current) > 20
+  const hasLayoutWidthChanged = Math.abs(currentLayoutWidth - lastLayoutWidthRef.current) > 25
+
+  if (hasOrientationChanged || hasScreenWidthChanged || hasLayoutWidthChanged) {
+    isLayoutResizingRef.current = true
+    isRestoringScrollRef.current = true
+  }
 
   const rawSeries = novel?.series ?? (novel as any)?.novel_series
   const rawSeriesObj = Array.isArray(rawSeries) ? rawSeries[0] : rawSeries
@@ -323,6 +343,62 @@ export function NovelDetailView(props: { novelID: number }) {
     },
     [novelID, scrollPos]
   )
+
+  // 监听屏幕旋转与栏宽剧烈变化（尤其是平行视界）：加锁防误报 + 稳定后自动重锚定恢复
+  useEffect(() => {
+    const orientationChanged = Device.isLandscape !== lastDeviceLandscapeRef.current
+    const screenWidthChanged = Math.abs(Device.screen.width - lastScreenWidthRef.current) > 20
+    const layoutWidthChanged = Math.abs(layout.width - lastLayoutWidthRef.current) > 25
+
+    lastDeviceLandscapeRef.current = Device.isLandscape
+    lastScreenWidthRef.current = Device.screen.width
+    lastLayoutWidthRef.current = layout.width
+
+    if (!orientationChanged && !screenWidthChanged && !layoutWidthChanged) {
+      return
+    }
+
+    isLayoutResizingRef.current = true
+    isRestoringScrollRef.current = true
+
+    if (resizeDebounceTimerRef.current) {
+      clearTimeout(resizeDebounceTimerRef.current)
+    }
+
+    resizeDebounceTimerRef.current = setTimeout(() => {
+      if (isDisappearedRef.current || isUnmountingRef.current) return
+
+      // 横排模式下：主动将 ScrollView 精准重新锚定回当前阅读的分块
+      if (readerSettingsRef.current.layoutDirection === "horizontal") {
+        const saved = getNovelProgress(novelID)
+        const target =
+          lastRecordedChunkRef.current ??
+          saved?.chunkId ??
+          (saved?.page && saved.page > 1 ? `page-${saved.page}` : undefined)
+
+        if (
+          target &&
+          target !== "novel-top-anchor" &&
+          target !== "novel-header-content"
+        ) {
+          performScrollRestoration(target, true)
+        } else {
+          isRestoringScrollRef.current = false
+        }
+      }
+
+      // 稍后解开布局重排保护锁
+      setTimeout(() => {
+        isLayoutResizingRef.current = false
+      }, 350)
+    }, 200)
+
+    return () => {
+      if (resizeDebounceTimerRef.current) {
+        clearTimeout(resizeDebounceTimerRef.current)
+      }
+    }
+  }, [layout.width, novelID, performScrollRestoration])
 
   useEffect(() => {
     return onNovelReaderSettingsChanged((updated) => {
@@ -1048,10 +1124,6 @@ export function NovelDetailView(props: { novelID: number }) {
           return (
             <ScrollView
               scrollContentBackground="hidden"
-              scrollPosition={{
-                value: scrollPos,
-                anchor: "top",
-              }}
               ignoresSafeArea={{ edges: "bottom" }}
               navigationTitle={isDetailPane ? current.title : ""}
               navigationBarTitleDisplayMode="inline"
@@ -1079,6 +1151,7 @@ export function NovelDetailView(props: { novelID: number }) {
                 if (
                   isUnmountingRef.current ||
                   isDisappearedRef.current ||
+                  isLayoutResizingRef.current ||
                   loading ||
                   !readerReady ||
                   isRestoringScrollRef.current ||
@@ -1099,12 +1172,35 @@ export function NovelDetailView(props: { novelID: number }) {
                   ids.includes("novel-header-content") || ids.includes("novel-top-anchor")
 
                 if (isHeaderVisible && !visibleChunkId) {
+                  // 保护性门禁：
+                  // 1. 若当前页 > 1，绝不覆写为顶部 undefined；
+                  // 2. 若当前已读到正文分块且用户未主动拖拽（非手势交互），绝不抹杀已记录的 chunk。
+                  if (currentPageRef.current > 1) {
+                    return
+                  }
+                  if (lastRecordedChunkRef.current && !isUserDraggingRef.current) {
+                    return
+                  }
                   lastRecordedChunkRef.current = null
                   recordNovelProgress(novelID, currentPageRef.current, undefined)
                   return
                 }
 
                 if (visibleChunkId) {
+                  // 单调防倒退保护：如果用户已读到后面的正文 chunk（如 chunk-10 以上），
+                  // 而新进入的 visibleChunkId 是最开头的分块（如 chunk-0/chunk-1），且用户未发生主动向上拖拽，
+                  // 坚决判定为尺寸突变排版重流的瞬态露顶，拒绝写入！
+                  const prevChunk = lastRecordedChunkRef.current
+                  if (
+                    prevChunk &&
+                    !isUserDraggingRef.current &&
+                    (visibleChunkId === "chunk-0" || visibleChunkId === "chunk-1") &&
+                    prevChunk !== "chunk-0" &&
+                    prevChunk !== "chunk-1"
+                  ) {
+                    return
+                  }
+
                   lastRecordedChunkRef.current = visibleChunkId
                   recordNovelProgress(novelID, currentPageRef.current, visibleChunkId)
                 }
@@ -1113,11 +1209,17 @@ export function NovelDetailView(props: { novelID: number }) {
             simultaneousGesture={
               DragGesture({ minDistance: 20, coordinateSpace: "global" })
                 .onChanged((e) => {
+                  isUserDraggingRef.current = true
                   if (e.translation.height < -15) {
                     if (pagerVisible) setPagerVisible(false)
                   } else if (e.translation.height > 15) {
                     if (!pagerVisible) setPagerVisible(true)
                   }
+                })
+                .onEnded(() => {
+                  setTimeout(() => {
+                    isUserDraggingRef.current = false
+                  }, 200)
                 })
             }
             overlay={

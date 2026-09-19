@@ -1111,9 +1111,13 @@ ${themeCssVars}
       window.scrollTo(maxScroll, 0);
     }
 
-    function restoreProgress() {
-      if (targetChunkId && targetChunkId !== "novel-top-anchor" && targetChunkId !== "chunk-0") {
-        var el = document.getElementById(targetChunkId);
+    var isRestoringOrResizing = false;
+    var resizeRestoreTimer = null;
+
+    function restoreProgress(customTargetId) {
+      var chunkToFind = customTargetId || targetChunkId;
+      if (chunkToFind && chunkToFind !== "novel-top-anchor" && chunkToFind !== "chunk-0") {
+        var el = document.getElementById(chunkToFind);
         if (el && typeof el.scrollIntoView === "function") {
           try {
             el.scrollIntoView({ inline: "start", block: "start", behavior: "instant" });
@@ -1124,7 +1128,7 @@ ${themeCssVars}
           }
         }
       }
-      if (targetPage && targetPage > 1) {
+      if (targetPage && targetPage > 1 && !customTargetId) {
         var pageEl = document.getElementById("page-" + targetPage);
         if (pageEl && typeof pageEl.scrollIntoView === "function") {
           try {
@@ -1136,26 +1140,48 @@ ${themeCssVars}
           }
         }
       }
-      scrollToNovelStart();
+      if (!customTargetId) {
+        scrollToNovelStart();
+      }
       return false;
     }
 
+    window.restoreToChunk = function(chunkId) {
+      var target = chunkId || targetChunkId;
+      if (!target) return;
+      targetChunkId = target;
+      isRestoringOrResizing = true;
+      if (scrollTimer) clearTimeout(scrollTimer);
+      restoreProgress(target);
+      var attempts = [40, 100, 220, 450];
+      attempts.forEach(function(d) {
+        setTimeout(function() {
+          restoreProgress(target);
+        }, d);
+      });
+      setTimeout(function() {
+        isRestoringOrResizing = false;
+      }, 600);
+    };
+
     if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", restoreProgress);
+      document.addEventListener("DOMContentLoaded", function() { restoreProgress(); });
     } else {
       restoreProgress();
     }
     window.addEventListener("load", function() {
       restoreProgress();
-      setTimeout(restoreProgress, 50);
-      setTimeout(restoreProgress, 150);
-      setTimeout(restoreProgress, 350);
-      setTimeout(restoreProgress, 700);
+      setTimeout(function() { restoreProgress(); }, 50);
+      setTimeout(function() { restoreProgress(); }, 150);
+      setTimeout(function() { restoreProgress(); }, 350);
+      setTimeout(function() { restoreProgress(); }, 700);
     });
-    requestAnimationFrame(restoreProgress);
+    requestAnimationFrame(function() { restoreProgress(); });
 
     var scrollTimer = null;
     function reportProgress() {
+      if (isRestoringOrResizing) return;
+
       // 1. 尝试通过多点采样定位
       var samplePoints = [
         [Math.max(10, window.innerWidth - 40), 100],
@@ -1197,6 +1223,7 @@ ${themeCssVars}
       if (foundEl && foundEl.getAttribute("data-chunk-id")) {
         var chunkId = foundEl.getAttribute("data-chunk-id");
         var pageNum = parseInt(foundEl.getAttribute("data-page") || "1", 10);
+        targetChunkId = chunkId;
         if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.onProgressChange) {
           window.webkit.messageHandlers.onProgressChange.postMessage({
             chunkId: chunkId,
@@ -1209,20 +1236,36 @@ ${themeCssVars}
     var vContainer = document.querySelector(".vertical-container");
     if (vContainer) {
       vContainer.addEventListener("scroll", function() {
+        if (isRestoringOrResizing) return;
         if (scrollTimer) clearTimeout(scrollTimer);
         scrollTimer = setTimeout(reportProgress, 80);
       }, { passive: true });
       vContainer.addEventListener("touchend", function() {
+        if (isRestoringOrResizing) return;
         setTimeout(reportProgress, 20);
       }, { passive: true });
     }
     window.addEventListener("scroll", function() {
+      if (isRestoringOrResizing) return;
       if (scrollTimer) clearTimeout(scrollTimer);
       scrollTimer = setTimeout(reportProgress, 80);
     }, { passive: true });
     window.addEventListener("touchend", function() {
+      if (isRestoringOrResizing) return;
       setTimeout(reportProgress, 20);
     }, { passive: true });
+    window.addEventListener("resize", function() {
+      isRestoringOrResizing = true;
+      if (scrollTimer) clearTimeout(scrollTimer);
+      if (resizeRestoreTimer) clearTimeout(resizeRestoreTimer);
+      resizeRestoreTimer = setTimeout(function() {
+        if (targetChunkId) {
+          window.restoreToChunk(targetChunkId);
+        } else {
+          isRestoringOrResizing = false;
+        }
+      }, 120);
+    });
     document.addEventListener("visibilitychange", function() {
       reportProgress();
     });
@@ -1299,6 +1342,7 @@ function NovelVerticalReaderView(props: {
   onJumpToPageRef.current = onJumpToPage
   const novelIdRef = useRef(novelId)
   novelIdRef.current = novelId
+  const currentChunkIdRef = useRef<string | null>(targetChunkId ?? null)
 
   // 保持稳定的 WebViewController 单例
   const controllerRef = useRef<WebViewController | null>(null)
@@ -1306,6 +1350,18 @@ function NovelVerticalReaderView(props: {
     controllerRef.current = new WebViewController()
   }
   const controller = controllerRef.current
+
+  // 监听容器高度/横竖屏变化：通知 WebKit 重新精准锚定到当前 Chunk ID
+  useEffect(() => {
+    const ctrl = controllerRef.current
+    if (!ctrl) return
+    const chunkId = currentChunkIdRef.current
+    const script = `if (window.restoreToChunk) { window.restoreToChunk(${JSON.stringify(chunkId || null)}); }`
+    const timer = setTimeout(() => {
+      void ctrl.evaluateJavaScript(script).catch(() => {})
+    }, 180)
+    return () => clearTimeout(timer)
+  }, [containerHeight])
 
   // 初始化设置 message handler 并加载 HTML
   useEffect(() => {
@@ -1316,6 +1372,9 @@ function NovelVerticalReaderView(props: {
       if (!data) return
       const page = typeof data.page === "number" ? data.page : 1
       const chunkId = typeof data.chunkId === "string" ? data.chunkId : undefined
+      if (chunkId) {
+        currentChunkIdRef.current = chunkId
+      }
       const id = novelIdRef.current
       if (id) {
         recordNovelProgress(id, page, chunkId)
@@ -1646,7 +1705,7 @@ export function NovelReaderView(props: {
         </HStack>
       ) : null}
 
-      {/* 渲染当前页的内容，每个分块挂载精准 key (SwiftUI .id)，直接作为 scrollTargetLayout 的直接子节点，支持 ScrollViewReader 0ms 精确定位与实时进度感知 */}
+      {/* 渲染当前页的内容，每个分块挂载精准 key (SwiftUI 节点标识符)，直接作为 scrollTargetLayout 的直接子节点，支持 ScrollViewReader 0ms 精确定位与实时进度感知 */}
       {currentBlock.items.map((item) => (
         <VStack
           key={item.id}

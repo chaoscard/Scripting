@@ -345,14 +345,21 @@ export function DetailPaneContent(props: {
       >
         <NavigationStack>
           {currentRoute ? (
-            <DetailPaneRouteView
-              key={currentRoute}
-              route={currentRoute}
-              canGoBack={canGoBack}
-              onBack={props.onBack}
-              onClose={props.onClose}
-              isAppleMusic={isAppleMusic}
-            />
+            <ContainerLayoutContext.Provider
+              value={{
+                width: props.width ?? 0,
+                height: props.height ?? 0,
+              }}
+            >
+              <DetailPaneRouteView
+                key={currentRoute}
+                route={currentRoute}
+                canGoBack={canGoBack}
+                onBack={props.onBack}
+                onClose={props.onClose}
+                isAppleMusic={isAppleMusic}
+              />
+            </ContainerLayoutContext.Provider>
           ) : (
             <DetailEmptyPlaceholder />
           )}
