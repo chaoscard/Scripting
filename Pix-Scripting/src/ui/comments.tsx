@@ -50,6 +50,7 @@ import {
   tokenizeCommentText,
   PixivStampItem,
 } from "./pixivEmotes"
+import { formatNumber } from "./components/formatUtils"
 
 interface ReplyState {
   items: PixivComment[]
@@ -60,8 +61,24 @@ interface ReplyState {
   expanded: boolean
 }
 
-export function CommentsSheet(props: { illustID?: number; novelID?: number; onClose?: () => void }) {
-  const { illustID, novelID } = props
+export function CommentsSheet(props: {
+  illustID?: number
+  novelID?: number
+  totalComments?: number
+  onClose?: () => void
+  onCommentAdded?: () => void
+}) {
+  const { illustID, novelID, onCommentAdded } = props
+  const [commentCount, setCommentCount] = useState<number | null>(
+    props.totalComments ?? null
+  )
+
+  useEffect(() => {
+    if (props.totalComments != null) {
+      setCommentCount(props.totalComments)
+    }
+  }, [props.totalComments])
+
   const [items, setItems] = useState<PixivComment[]>([])
   const [nextURL, setNextURL] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -147,6 +164,8 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number; onCl
         await refreshRepliesFor(targetRootID)
       }
       await load()
+      setCommentCount((prev) => (prev != null ? prev + 1 : 1))
+      onCommentAdded?.()
       return true
     } catch (err: any) {
       setPostError(err?.message ?? "发表失败，请稍后重试")
@@ -154,7 +173,7 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number; onCl
     } finally {
       setPosting(false)
     }
-  }, [illustID, novelID, posting, refreshRepliesFor, replyTarget, load])
+  }, [illustID, novelID, posting, refreshRepliesFor, replyTarget, load, onCommentAdded])
 
   const sendStamp = useCallback(async (stampID: number): Promise<boolean> => {
     if (posting) return false
@@ -173,6 +192,8 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number; onCl
         await refreshRepliesFor(targetRootID)
       }
       await load()
+      setCommentCount((prev) => (prev != null ? prev + 1 : 1))
+      onCommentAdded?.()
       return true
     } catch (err: any) {
       setPostError(err?.message ?? "发送贴图失败，请稍后重试")
@@ -180,7 +201,7 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number; onCl
     } finally {
       setPosting(false)
     }
-  }, [illustID, novelID, posting, refreshRepliesFor, replyTarget, load])
+  }, [illustID, novelID, posting, refreshRepliesFor, replyTarget, load, onCommentAdded])
 
   const loadMore = useCallback(async () => {
     const url = nextURL
@@ -357,6 +378,13 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number; onCl
     })
   }, [])
 
+  const formatTitleCount = (count: number | null): string => {
+    if (count == null || count <= 0) return ""
+    if (count >= 10000) return ` (${formatNumber(count)})`
+    return ` (${count})`
+  }
+  const titleText = `评论${formatTitleCount(commentCount)}`
+
   return (
     <NavigationStack
       presentationDetents={sheetDetents()}
@@ -367,7 +395,7 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number; onCl
         spacing={0}
         frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
         {...sheetTopBar()}
-        navigationTitle={`评论${items.length > 0 ? ` (${items.length})` : ""}`}
+        navigationTitle={titleText}
         navigationBarTitleDisplayMode="inline"
         toolbar={{
           topBarLeading: props.onClose ? (
@@ -377,7 +405,7 @@ export function CommentsSheet(props: { illustID?: number; novelID?: number; onCl
           ) : undefined,
           principal: (
             <Text font="headline" fontWeight="bold">
-              评论 {items.length > 0 ? `(${items.length})` : ""}
+              {titleText}
             </Text>
           ),
         }}

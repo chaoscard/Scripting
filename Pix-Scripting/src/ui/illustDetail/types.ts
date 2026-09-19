@@ -63,4 +63,5 @@ export interface IllustDetailActions {
   setAIMode: (mode: IllustAIMode) => void
   setShowRelatedUsers: (show: boolean) => void
   setBookmarked: (bookmarked: boolean) => void
+  incrementCommentCount: () => void
 }

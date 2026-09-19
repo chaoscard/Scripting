@@ -96,32 +96,62 @@ export function MoreView(props: { onClose: () => void }) {
       )
     }
 
-    // 经典样式：右上角为更多菜单按钮，点开是查看主页、以图搜图、下载与文件管理
-    return (
-      <Menu key="more-menu" label={<Image systemName="ellipsis.circle" />}>
-        <Button
-          title="查看主页"
-          systemImage="person.crop.circle"
-          action={() => navigateTo(`user:${user.id}`)}
-        />
-        <Button
-          title="以图搜图"
-          systemImage="photo.badge.magnifyingglass"
-          action={() => {
-            try {
-              triggerHaptic("selection")
-            } catch {}
-            setActiveSheet("reverseSearch")
-          }}
-        />
-        <Button
-          title="下载与文件管理"
-          systemImage="arrow.down.circle"
-          action={() => navigateTo("downloadManager")}
-        />
-      </Menu>
-    )
-  }, [isAppleMusic, avatarURL, user?.id, navigateTo])
+    // 2. 分栏模式下的经典样式：全部收拢在更多菜单中，避免与顶栏胶囊发生挤压
+    if (isSplitViewActive) {
+      return (
+        <Menu key="more-menu" label={<Image systemName="ellipsis.circle" />}>
+          <Button
+            title="查看主页"
+            systemImage="person.crop.circle"
+            action={() => navigateTo(`user:${user.id}`)}
+          />
+          <Button
+            title="以图搜图"
+            systemImage="photo.badge.magnifyingglass"
+            action={() => {
+              try {
+                triggerHaptic("selection")
+              } catch {}
+              setActiveSheet("reverseSearch")
+            }}
+          />
+          <Button
+            title="下载与文件管理"
+            systemImage="arrow.down.circle"
+            action={() => navigateTo("downloadManager")}
+          />
+        </Menu>
+      )
+    }
+
+    // 3. 经典模式单栏（iPhone 真机 / iPad 台前调度窄窗 / iPad 全屏单栏）：平铺展示以图搜图、下载管理、我的头像
+    return [
+      <Button
+        key="reverse-search-btn"
+        action={() => {
+          try {
+            triggerHaptic("selection")
+          } catch {}
+          setActiveSheet("reverseSearch")
+        }}
+      >
+        <Image systemName="photo.badge.magnifyingglass" />
+      </Button>,
+      <Button
+        key="download-manager-btn"
+        action={() => navigateTo("downloadManager")}
+      >
+        <Image systemName="arrow.down.circle" />
+      </Button>,
+      <Button
+        key="profile-avatar-btn"
+        buttonStyle="plain"
+        action={() => navigateTo(`user:${user.id}`)}
+      >
+        <AvatarImage url={avatarURL} size={28} />
+      </Button>,
+    ]
+  }, [isAppleMusic, isSplitViewActive, avatarURL, user?.id, navigateTo])
 
   useEffect(() => {
     return onSettingsChanged(() => {

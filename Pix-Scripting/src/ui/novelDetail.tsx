@@ -1659,7 +1659,13 @@ export function NovelDetailView(props: { novelID: number }) {
           content: (
             <CommentsSheet
               novelID={current.id}
+              totalComments={current.total_comments}
               onClose={() => setShowComments(false)}
+              onCommentAdded={() => {
+                setNovel((prev) =>
+                  prev ? { ...prev, total_comments: (prev.total_comments ?? 0) + 1 } : prev
+                )
+              }}
             />
           ),
           isPresented: showComments,

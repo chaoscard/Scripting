@@ -216,7 +216,9 @@ export function IllustDetailView(props: { illustID: number }) {
             content: (
               <CommentsSheet
                 illustID={current.id}
+                totalComments={current.total_comments}
                 onClose={() => actions.setShowComments(false)}
+                onCommentAdded={actions.incrementCommentCount}
               />
             ),
             isPresented: showComments,

@@ -808,6 +808,18 @@ export function useIllustDetailState(illustID: number): {
     pageAspect,
   }
 
+  const incrementCommentCount = useCallback(() => {
+    setIllust((prev) => {
+      if (!prev) return prev
+      const updated = {
+        ...prev,
+        total_comments: (prev.total_comments ?? 0) + 1,
+      }
+      illustRef.current = updated
+      return updated
+    })
+  }, [])
+
   const actions: IllustDetailActions = {
     load,
     toggleBookmark,
@@ -830,6 +842,7 @@ export function useIllustDetailState(illustID: number): {
     setAIMode,
     setShowRelatedUsers,
     setBookmarked,
+    incrementCommentCount,
   }
 
   useEffect(() => {

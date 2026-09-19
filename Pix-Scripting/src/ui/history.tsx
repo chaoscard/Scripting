@@ -364,6 +364,7 @@ export function HistoryView() {
         kind,
         hideNovels,
         isAppleMusic,
+        isSplitViewActive,
         onKindChange: setKind,
         onClear: clearCurrentKind,
         onOpenAnalytics: handleOpenAnalytics,
@@ -456,6 +457,7 @@ function historyToolbar(props: {
   kind: HistoryKind
   hideNovels: boolean
   isAppleMusic?: boolean
+  isSplitViewActive?: boolean
   onKindChange: (kind: HistoryKind) => void
   onClear: () => void
   onOpenAnalytics?: () => void
@@ -487,37 +489,111 @@ function historyToolbar(props: {
     }
   }
 
-  return {
-    principal: (
-      <Text font="title2" fontWeight="bold">
-        {isClassic ? `浏览记录 · ${kindLabel}` : "浏览记录"}
-      </Text>
-    ),
-    topBarTrailing: props.isAppleMusic ? (
-      <Menu key="apple-music-history-menu" label={<Image systemName="ellipsis.circle" />}>
-        {props.onOpenAnalytics ? (
+  const trailingActions = (() => {
+    // 1. 分栏双栏模式（isSplitViewActive）：收拢在更多菜单内，避免向左挤压 Tab 胶囊
+    if (props.isSplitViewActive) {
+      if (props.isAppleMusic) {
+        return (
+          <Menu key="apple-music-history-menu" label={<Image systemName="ellipsis.circle" />}>
+            {props.onOpenAnalytics ? (
+              <Button
+                title="我的足迹"
+                systemImage="chart.xyaxis.line"
+                action={props.onOpenAnalytics}
+              />
+            ) : null}
+            <Button
+              title={`清空${kindLabel}记录`}
+              systemImage="trash"
+              role="destructive"
+              action={handleClearConfirm}
+            />
+          </Menu>
+        )
+      }
+      return (
+        <Menu key="more-menu" label={<Image systemName="ellipsis.circle" />}>
+          {props.onOpenAnalytics ? (
+            <Button
+              title="我的足迹"
+              systemImage="chart.xyaxis.line"
+              action={props.onOpenAnalytics}
+            />
+          ) : null}
+          <Picker
+            title="记录类型"
+            value={props.kind}
+            onChanged={(v: string) => props.onKindChange(v as HistoryKind)}
+          >
+            <Label tag="illustration" title="插画" systemImage="photo" />
+            <Label tag="manga" title="漫画" systemImage="photo.on.rectangle" />
+            {!props.hideNovels && (
+              <Label tag="novel" title="小说" systemImage="book" />
+            )}
+          </Picker>
           <Button
-            title="我的足迹"
-            systemImage="chart.xyaxis.line"
-            action={props.onOpenAnalytics}
+            title={`清空${kindLabel}记录`}
+            systemImage="trash"
+            role="destructive"
+            action={handleClearConfirm}
           />
-        ) : null}
+        </Menu>
+      )
+    }
+
+    // 2. 单栏模式（iPhone 真机 / iPad 台前调度窄窗 / iPad 全屏单栏）：平铺展开按钮
+    if (props.isAppleMusic) {
+      // 苹果音乐样式：底栏已有配件切换分类，顶栏平铺「我的足迹」和「清空记录」双按钮
+      const actions: any[] = []
+      if (props.onOpenAnalytics) {
+        actions.push(
+          <Button
+            key="history-analytics-btn"
+            action={props.onOpenAnalytics}
+          >
+            <Image systemName="chart.xyaxis.line" />
+          </Button>
+        )
+      }
+      actions.push(
         <Button
-          title={`清空${kindLabel}记录`}
-          systemImage="trash"
+          key="history-clear-btn"
           role="destructive"
           action={handleClearConfirm}
-        />
-      </Menu>
-    ) : (
-      <Menu key="more-menu" label={<Image systemName="ellipsis.circle" />}>
-        {props.onOpenAnalytics ? (
-          <Button
-            title="我的足迹"
-            systemImage="chart.xyaxis.line"
-            action={props.onOpenAnalytics}
+        >
+          <Image systemName="trash" />
+        </Button>
+      )
+      return actions
+    }
+
+    // 经典样式单栏：平铺展开「我的足迹」+「分类筛选菜单（动态图标）」+「清空记录」三联按钮
+    const actions: any[] = []
+    if (props.onOpenAnalytics) {
+      actions.push(
+        <Button
+          key="history-analytics-btn"
+          action={props.onOpenAnalytics}
+        >
+          <Image systemName="chart.xyaxis.line" />
+        </Button>
+      )
+    }
+    actions.push(
+      <Menu
+        key="history-kind-menu"
+        label={
+          <Image
+            systemName={
+              props.kind === "illustration"
+                ? "photo"
+                : props.kind === "manga"
+                  ? "photo.on.rectangle"
+                  : "book"
+            }
           />
-        ) : null}
+        }
+      >
         <Picker
           title="记录类型"
           value={props.kind}
@@ -529,14 +605,27 @@ function historyToolbar(props: {
             <Label tag="novel" title="小说" systemImage="book" />
           )}
         </Picker>
-        <Button
-          title={`清空${kindLabel}记录`}
-          systemImage="trash"
-          role="destructive"
-          action={handleClearConfirm}
-        />
       </Menu>
+    )
+    actions.push(
+      <Button
+        key="history-clear-btn"
+        role="destructive"
+        action={handleClearConfirm}
+      >
+        <Image systemName="trash" />
+      </Button>
+    )
+    return actions
+  })()
+
+  return {
+    principal: (
+      <Text font="title2" fontWeight="bold">
+        {isClassic ? `浏览记录 · ${kindLabel}` : "浏览记录"}
+      </Text>
     ),
+    topBarTrailing: trailingActions,
   }
 }
 
