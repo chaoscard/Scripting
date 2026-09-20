@@ -1141,13 +1141,15 @@ export function NovelDetailView(props: { novelID: number }) {
     const quickBtn = renderQuickButton()
     const immersiveBtn = renderImmersiveButton()
 
-    const bottomPadding = (totalPages > 1 ? 60 : 24) + bottomOverlayInset
+    const isPagerShown = totalPages > 1 && pagerVisible
+    const bottomPadding = (isPagerShown ? 60 : 24) + bottomOverlayInset
 
     return (
       <HStack
         alignment="center"
         frame={{ maxWidth: "infinity" }}
         padding={{ bottom: bottomPadding, horizontal: 30 }}
+        animation={{ animation: Animation.smooth({ duration: 0.25 }), value: isPagerShown }}
       >
         {/* 左侧区域 */}
         {immersivePos === "leading" ? immersiveBtn : quickBtn}
