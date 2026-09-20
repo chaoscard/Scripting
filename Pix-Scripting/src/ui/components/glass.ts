@@ -33,7 +33,7 @@ type GlassEffectValue = NonNullable<CommonViewProps["glassEffect"]>
 
 /** 色调默认颜色（iOS 底栏默认蓝 #007aff）与默认浓度（%），与 store/settings.ts 的默认值保持一致 */
 export const DEFAULT_GLASS_TINT_COLOR = "#007aff"
-export const DEFAULT_GLASS_TINT_STRENGTH = 35
+export const DEFAULT_GLASS_TINT_STRENGTH = 25
 
 // 按「档位 + 配方 + 交互标志」缓存实例
 let cachedGlassKey: string | null = null

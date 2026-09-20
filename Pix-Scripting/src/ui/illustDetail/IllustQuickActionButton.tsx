@@ -89,7 +89,7 @@ export function IllustQuickActionButton(props: IllustQuickActionButtonProps) {
         ? "person.badge.shield.checkmark"
         : "person.fill.checkmark"
       : "person.badge.plus"
-    iconColor = followed ? "#007AFF" : "label"
+    iconColor = followed ? "tintColor" : "label"
     disabled = followLoading
     action = () => void onToggleFollow()
     contextMenu = {

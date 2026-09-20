@@ -10,6 +10,7 @@ import {
   RoundedRectangle,
   Spacer,
   Text,
+  type Color,
   useCallback,
   useContext,
   useEffect,
@@ -22,6 +23,7 @@ import {
   PAGE_TOOLBAR_BACKGROUND,
   PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
 } from "./components/pageChrome"
+import { appGlass } from "./components/glass"
 import { ContainerLayoutContext, useLayoutMetrics } from "./hooks"
 import { useExperimentalAmbientPalette } from "./ambient/useIllustAmbient"
 import { useLastActiveAmbientImageUrl } from "./ambient/tracker"
@@ -201,12 +203,12 @@ export function DetailEmptyPlaceholder() {
     >
       {ambientBackground}
       <VStack alignment="center" spacing={16} padding={32}>
-        <ZStack alignment="center" frame={{ width: 88, height: 88 }}>
-          <RoundedRectangle
-            fill="tertiarySystemFill"
-            cornerRadius={24}
-            frame={{ width: 88, height: 88 }}
-          />
+        <ZStack
+          alignment="center"
+          frame={{ width: 88, height: 88 }}
+          glassEffect={appGlass({ type: "rect", cornerRadius: 24 })}
+          contentShape={{ type: "rect", cornerRadius: 24 }}
+        >
           <Image
             systemName="photo.on.rectangle.angled"
             font="largeTitle"
@@ -256,7 +258,7 @@ function DetailPaneRouteView(props: {
               systemName="chevron.backward"
               font="body"
               fontWeight="semibold"
-              foregroundStyle="label"
+              foregroundStyle="tintColor"
             />
           </Button>
         ),
@@ -323,6 +325,10 @@ export function DetailPaneContent(props: {
   }, [])
 
   const isAppleMusic = settings.pageLayout === "appleMusic"
+  const detailTint =
+    settings.glassCustomTintEnabled && settings.glassTintColor
+      ? (settings.glassTintColor as Color)
+      : undefined
 
   return (
     <DualRouteContext.Provider value={paneRouteValue}>
@@ -342,8 +348,9 @@ export function DetailPaneContent(props: {
             : { maxWidth: "infinity", maxHeight: "infinity" }
         }
         ignoresSafeArea={props.ignoreSafeArea !== false}
+        tint={detailTint}
       >
-        <NavigationStack>
+        <NavigationStack tint={detailTint}>
           {currentRoute ? (
             <ContainerLayoutContext.Provider
               value={{

@@ -1032,7 +1032,7 @@ export function NovelDetailView(props: { novelID: number }) {
           ? "person.badge.shield.checkmark"
           : "person.fill.checkmark"
         : "person.badge.plus"
-      iconColor = followed ? "#007AFF" : "label"
+      iconColor = followed ? "tintColor" : "label"
       disabled = followLoading
       action = () => void toggleFollow()
       contextMenu = {
@@ -1298,7 +1298,7 @@ export function NovelDetailView(props: { novelID: number }) {
                                     systemName="chevron.left"
                                     font="subheadline"
                                     fontWeight="semibold"
-                                    foregroundStyle="#007AFF"
+                                    foregroundStyle="tintColor"
                                   />
                                 </ZStack>
                               ) : null}
@@ -1364,7 +1364,7 @@ export function NovelDetailView(props: { novelID: number }) {
                                   systemName={markerPage === currentPage ? "book.pages.fill" : "book.pages"}
                                   font="subheadline"
                                   fontWeight="semibold"
-                                  foregroundStyle={markerPage === currentPage ? "#007AFF" : "secondaryLabel"}
+                                  foregroundStyle={markerPage === currentPage ? "tintColor" : "secondaryLabel"}
                                 />
                               </ZStack>
 
@@ -1380,7 +1380,7 @@ export function NovelDetailView(props: { novelID: number }) {
                                     systemName="chevron.right"
                                     font="subheadline"
                                     fontWeight="semibold"
-                                    foregroundStyle="#007AFF"
+                                    foregroundStyle="tintColor"
                                   />
                                 </ZStack>
                               ) : null}
@@ -1689,7 +1689,7 @@ export function NovelDetailView(props: { novelID: number }) {
                       <Text
                         font="subheadline"
                         fontWeight="semibold"
-                        foregroundStyle="#007AFF"
+                        foregroundStyle="tintColor"
                         lineLimit={2}
                       >
                         {resolvedSeriesTitle || "系列详情"}
@@ -1712,7 +1712,7 @@ export function NovelDetailView(props: { novelID: number }) {
 
                 {Boolean(current.series_prev?.id) && current.series_prev ? (
                   <AppNavigationLink value={`novel:${current.series_prev.id}`}>
-                    <Text font="subheadline" foregroundStyle="#007AFF" lineLimit={1}>
+                    <Text font="subheadline" foregroundStyle="tintColor" lineLimit={1}>
                       ← 上一话：{current.series_prev.title || "上一话"}
                     </Text>
                   </AppNavigationLink>
@@ -1720,7 +1720,7 @@ export function NovelDetailView(props: { novelID: number }) {
 
                 {Boolean(current.series_next?.id) && current.series_next ? (
                   <AppNavigationLink value={`novel:${current.series_next.id}`}>
-                    <Text font="subheadline" foregroundStyle="#007AFF" lineLimit={1}>
+                    <Text font="subheadline" foregroundStyle="tintColor" lineLimit={1}>
                       下一话：{current.series_next.title || "下一话"} →
                     </Text>
                   </AppNavigationLink>

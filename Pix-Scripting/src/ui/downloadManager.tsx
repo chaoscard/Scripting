@@ -777,11 +777,11 @@ function DownloadTaskCardRow(props: { task: DownloadTaskItem }) {
             background="rgba(0, 122, 255, 0.12)"
             clipShape="capsule"
           >
-            <Text font="caption2" fontWeight="bold" foregroundStyle="systemBlue">
+            <Text font="caption2" fontWeight="bold" foregroundStyle="tintColor">
               {percentVal}%
             </Text>
             {task.total > 0 ? (
-              <Text font="caption2" foregroundStyle="systemBlue" opacity={0.75}>
+              <Text font="caption2" foregroundStyle="tintColor" opacity={0.75}>
                 {task.current}/{task.total}
               </Text>
             ) : null}
@@ -1460,7 +1460,7 @@ function FileRowItem(props: {
             key="rename"
             title="重命名"
             systemImage="pencil"
-            tint="systemBlue"
+            tint="tintColor"
             action={onRename}
           />,
           <Button

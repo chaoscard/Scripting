@@ -245,7 +245,7 @@ export function SeriesEpisodePager(props: {
               systemName="chevron.left"
               font="body"
               fontWeight="semibold"
-              foregroundStyle="#007AFF"
+              foregroundStyle="tintColor"
             />
           </ZStack>
         </NavigationLink>
@@ -269,12 +269,12 @@ export function SeriesEpisodePager(props: {
             systemName="books.vertical"
             font="subheadline"
             fontWeight="semibold"
-            foregroundStyle="#007AFF"
+            foregroundStyle="tintColor"
           />
           <Text
             font="subheadline"
             fontWeight="semibold"
-            foregroundStyle="#007AFF"
+            foregroundStyle="tintColor"
             lineLimit={1}
           >
             {capsuleText}
@@ -298,7 +298,7 @@ export function SeriesEpisodePager(props: {
               systemName="chevron.right"
               font="body"
               fontWeight="semibold"
-              foregroundStyle="#007AFF"
+              foregroundStyle="tintColor"
             />
           </ZStack>
         </NavigationLink>

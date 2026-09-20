@@ -315,7 +315,7 @@ export function RankingCustomPickerView(props: { kind: CustomRankingPickerKind }
                     systemName="checkmark"
                     font="body"
                     fontWeight="semibold"
-                    foregroundStyle="#007AFF"
+                    foregroundStyle="tintColor"
                   />
                 ) : null}
               </HStack>

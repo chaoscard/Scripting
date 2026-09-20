@@ -235,7 +235,7 @@ function BlockedTagRow(props: { tag: string; onRemove: () => void }) {
         ],
       }}
     >
-      <Image systemName="tag.fill" font="subheadline" foregroundStyle="#007AFF" />
+      <Image systemName="tag.fill" font="subheadline" foregroundStyle="tintColor" />
       <Text font="body" frame={{ maxWidth: "infinity", alignment: "leading" }} lineLimit={1}>
         {tag}
       </Text>

@@ -591,7 +591,7 @@ export function CustomAISettingsView() {
             <HStack spacing={4} alignment="center">
               <Spacer />
               <Button buttonStyle="plain" action={handleOpenApiKeyConsole}>
-                <Text font="caption" foregroundStyle="systemBlue">
+                <Text font="caption" foregroundStyle="tintColor">
                   去官方获取密钥 ↗
                 </Text>
               </Button>

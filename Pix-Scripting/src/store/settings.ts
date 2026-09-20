@@ -247,7 +247,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   glassStrength: "system",
   glassCustomTintEnabled: false,
   glassTintColor: "#007aff",
-  glassTintStrength: 35,
+  glassTintStrength: 25,
   glassInteractive: false,
   splitViewEnabledLandscape: false,
   splitViewEnabledPortrait: false,

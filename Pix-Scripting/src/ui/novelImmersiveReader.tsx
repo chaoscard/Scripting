@@ -25,6 +25,7 @@ import {
   ZStack,
 } from "scripting"
 import { appGlass } from "./components/glass"
+import { useLayoutMetrics } from "./hooks"
 import { presentExternalURL, routeForDescriptionLink } from "./components"
 import { requestPixivRoute } from "../store/routeNavigation"
 import {
@@ -456,14 +457,20 @@ ${THEME_CSS_VARS}
   }
 
   .immersive-content-wrapper {
-    max-width: 780px;
-    margin: 0 auto;
-    padding: 68px 24px 100px 24px;
+    width: 100%;
+    box-sizing: border-box;
+    padding-top: 68px;
+    padding-bottom: 100px;
+    padding-left: max(24px, env(safe-area-inset-left));
+    padding-right: max(24px, env(safe-area-inset-right));
   }
 
   @media (max-width: 480px) {
     .immersive-content-wrapper {
-      padding: 64px 18px 90px 18px;
+      padding-top: 64px;
+      padding-bottom: 90px;
+      padding-left: max(18px, env(safe-area-inset-left));
+      padding-right: max(18px, env(safe-area-inset-right));
     }
   }
 
@@ -1144,7 +1151,11 @@ ${THEME_CSS_VARS}
     width: 100%;
     height: 100%;
     min-height: 100%;
-    padding: 72px 28px 84px 28px;
+    box-sizing: border-box;
+    padding-top: max(48px, env(safe-area-inset-top));
+    padding-bottom: max(60px, env(safe-area-inset-bottom));
+    padding-left: max(24px, env(safe-area-inset-left));
+    padding-right: max(24px, env(safe-area-inset-right));
     overflow-x: auto;
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
@@ -2146,8 +2157,10 @@ export function NovelImmersiveReaderView(props: NovelImmersiveReaderViewProps) {
     }
   }, [chunks, activeImages])
 
-  const topInset = Device.screen.height > 800 ? 50 : 38
-  const bottomInset = Device.screen.height > 800 ? 32 : 16
+  const metrics = useLayoutMetrics()
+  const topInset = metrics.isLandscape ? 24 : (Device.screen.height > 800 ? 50 : 38)
+  const bottomInset = metrics.isLandscape ? 18 : (Device.screen.height > 800 ? 32 : 16)
+  const horizontalInset = metrics.isLandscape ? 32 : 20
 
   return (
     <ZStack frame={{ maxWidth: "infinity", maxHeight: "infinity" }} ignoresSafeArea={true}>
@@ -2165,7 +2178,7 @@ export function NovelImmersiveReaderView(props: NovelImmersiveReaderViewProps) {
       <VStack frame={{ maxWidth: "infinity", maxHeight: "infinity", alignment: "top" }}>
         <HStack
           alignment="center"
-          padding={{ top: topInset, horizontal: 20 }}
+          padding={{ top: topInset, horizontal: horizontalInset }}
           frame={{ maxWidth: "infinity" }}
           opacity={controlsVisible ? 1 : 0}
           animation={{ animation: Animation.smooth({ duration: 0.25 }), value: controlsVisible }}
@@ -2214,7 +2227,7 @@ export function NovelImmersiveReaderView(props: NovelImmersiveReaderViewProps) {
       {totalPages > 1 ? (
         <VStack frame={{ maxWidth: "infinity", maxHeight: "infinity", alignment: "bottom" }}>
           <VStack
-            padding={{ horizontal: 20, bottom: bottomInset }}
+            padding={{ horizontal: horizontalInset, bottom: bottomInset }}
             frame={{ maxWidth: "infinity" }}
             opacity={controlsVisible ? 1 : 0}
             animation={{ animation: Animation.smooth({ duration: 0.25 }), value: controlsVisible }}

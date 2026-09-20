@@ -203,7 +203,7 @@ function HomeLinkRow() {
         action={() => void presentExternalURL("https://github.com/chaoscard/Scripting")}
       >
         <HStack spacing={4}>
-          <Text font="body" foregroundStyle="#007AFF">chaoscard/Scripting</Text>
+          <Text font="body" foregroundStyle="tintColor">chaoscard/Scripting</Text>
           <Image systemName="arrow.up.right" font="footnote" foregroundStyle="tertiaryLabel" />
         </HStack>
       </Button>
