@@ -211,6 +211,9 @@ export function NovelDetailView(props: { novelID: number }) {
   const [quickActionPos, setQuickActionPos] = useState(
     () => loadSettings().quickActionButtonPosition
   )
+  const [immersiveReaderEnabled, setImmersiveReaderEnabled] = useState(
+    () => loadSettings().novelImmersiveReaderEnabled
+  )
   const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
   const isAppleMusic = pageLayout === "appleMusic"
 
@@ -292,7 +295,12 @@ export function NovelDetailView(props: { novelID: number }) {
     novel?.image_urls?.medium ||
     (novel?.series as any)?.cover_image_urls?.medium ||
     null
-  const { ambientBackground } = useNovelExperimentalAmbientPalette(coverUrl)
+  const {
+    ambientBackground,
+    ambientPalette,
+    ambientAlgorithm,
+    ambientEnabled,
+  } = useNovelExperimentalAmbientPalette(coverUrl)
 
   const performScrollRestoration = useCallback(
     (targetChunk?: string, forceDirect = false) => {
@@ -619,6 +627,7 @@ export function NovelDetailView(props: { novelID: number }) {
       setQuickActionEnabled(settings.quickActionButtonEnabled)
       setQuickActionType(settings.quickActionButtonAction)
       setQuickActionPos(settings.quickActionButtonPosition)
+      setImmersiveReaderEnabled(settings.novelImmersiveReaderEnabled)
       setPageLayout(settings.pageLayout)
       const current = novelRef.current
       if (current) {
@@ -1099,7 +1108,7 @@ export function NovelDetailView(props: { novelID: number }) {
   }
 
   function renderImmersiveButton() {
-    if (!current) return null
+    if (!current || !immersiveReaderEnabled) return null
 
     return (
       <Button
@@ -1474,12 +1483,14 @@ export function NovelDetailView(props: { novelID: number }) {
                       action={() => setShowComments(true)}
                     />
                   ) : null}
-                  <Button
-                    title="沉浸阅读"
-                    systemImage="arrow.up.left.and.arrow.down.right"
-                    disabled={!text}
-                    action={() => setShowImmersiveReader(true)}
-                  />
+                  {immersiveReaderEnabled ? (
+                    <Button
+                      title="沉浸阅读"
+                      systemImage="arrow.up.left.and.arrow.down.right"
+                      disabled={!text}
+                      action={() => setShowImmersiveReader(true)}
+                    />
+                  ) : null}
                   <Button
                     title="版式"
                     systemImage="a.square"
@@ -1756,6 +1767,9 @@ export function NovelDetailView(props: { novelID: number }) {
             markerPage={markerPage}
             currentPage={currentPage}
             textEmbeddedImages={textEmbeddedImages}
+            ambientEnabled={ambientEnabled}
+            ambientPalette={ambientPalette}
+            ambientAlgorithm={ambientAlgorithm}
             onJumpToPage={handlePageChange}
             onReady={handleReaderReady}
             onProgressChange={(page, chunkId) => {
@@ -1885,6 +1899,7 @@ export function NovelDetailView(props: { novelID: number }) {
             <NovelImmersiveReaderView
               novelId={current.id}
               title={current.title}
+              coverUrl={coverUrl}
               text={text ?? ""}
               textEmbeddedImages={textEmbeddedImages}
               markerPage={markerPage}
@@ -1921,7 +1936,7 @@ export function NovelDetailView(props: { novelID: number }) {
               }}
             />
           ),
-          isPresented: showImmersiveReader && Boolean(text),
+          isPresented: immersiveReaderEnabled && showImmersiveReader && Boolean(text),
           onChanged: setShowImmersiveReader,
         }}
       />

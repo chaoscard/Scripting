@@ -123,3 +123,63 @@ export function renderAmbientBackground(options: RenderAmbientOptions): any {
     </ZStack>
   )
 }
+
+/**
+ * 统一 WebKit CSS 环境光渐变生成器
+ * 适配 WebView 内部无法直接透出原生 SwiftUI 背景的场景
+ */
+export function generateAmbientBackgroundCss(
+  palette: IllustAmbientPalette | null | undefined,
+  algorithm: AmbientAlgorithm,
+  isDark: boolean
+): string {
+  if (!palette) {
+    return isDark ? "#000000" : "#FAFAFA"
+  }
+
+  if (algorithm === "geminiA" || algorithm === "geminiB") {
+    const primary = palette.ultimateLeadingColor ?? palette.topColor
+    const secondary = palette.ultimatePrismColor ?? palette.exploreAccentColor ?? palette.topColor
+    const tertiary = palette.ultimateMidColor ?? palette.midColor
+    const accent = palette.exploreAccentColor ?? palette.ultimateTrailingColor
+    const bg = palette.ultimateBgColor ?? palette.backgroundColor
+    return `radial-gradient(circle at 18% 18%, ${primary} 0%, transparent 62%),
+            radial-gradient(circle at 82% 22%, ${secondary} 0%, transparent 58%),
+            radial-gradient(circle at 48% 54%, ${tertiary} 0%, transparent 68%),
+            radial-gradient(circle at 76% 82%, ${accent} 0%, transparent 58%),
+            ${bg}`
+  }
+
+  if (algorithm === "transcend") {
+    const lead = palette.ultimateLeadingColor ?? palette.topColor
+    const prism = palette.ultimatePrismColor ?? palette.topColor
+    const trail = palette.ultimateTrailingColor ?? palette.topColor
+    const mid = palette.ultimateMidColor ?? palette.midColor
+    const bg = palette.ultimateBgColor ?? palette.backgroundColor
+    return `radial-gradient(circle at 22% 16%, ${lead} 0%, transparent 60%),
+            radial-gradient(circle at 78% 24%, ${prism} 0%, transparent 55%),
+            radial-gradient(circle at 50% 50%, ${mid} 0%, transparent 65%),
+            radial-gradient(circle at 72% 78%, ${trail} 0%, transparent 60%),
+            ${bg}`
+  }
+
+  if (algorithm === "ultimate") {
+    const lead = palette.ultimateLeadingColor ?? palette.topColor
+    const prism = palette.ultimatePrismColor ?? palette.topColor
+    const trail = palette.ultimateTrailingColor ?? palette.topColor
+    const mid = palette.ultimateMidColor ?? palette.midColor
+    const bg = palette.ultimateBgColor ?? palette.backgroundColor
+    return `linear-gradient(135deg, ${lead} 0%, ${prism} 25%, ${trail} 50%, ${mid} 75%, ${bg} 100%)`
+  }
+
+  if (algorithm === "explore") {
+    const accent = palette.exploreAccentColor ?? palette.topColor
+    const top = palette.exploreTopColor ?? palette.topColor
+    const mid = palette.exploreMidColor ?? palette.midColor
+    const bg = palette.exploreBgColor ?? palette.backgroundColor
+    return `linear-gradient(135deg, ${accent} 0%, ${top} 30%, ${mid} 65%, ${bg} 100%)`
+  }
+
+  // 经典算法 (Classic)
+  return `linear-gradient(180deg, ${palette.topColor} 0%, ${palette.midColor} 38%, ${palette.backgroundColor} 75%, ${palette.backgroundColor} 100%)`
+}

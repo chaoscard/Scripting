@@ -1,5 +1,6 @@
 export {
   renderAmbientBackground,
+  generateAmbientBackgroundCss,
   type RenderAmbientOptions,
 } from "./renderAmbientBackground"
 

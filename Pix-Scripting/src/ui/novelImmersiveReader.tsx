@@ -9,14 +9,17 @@ import {
   Menu,
   NavigationStack,
   ProgressView,
+  Rectangle,
   ScrollView,
   Spacer,
   Text,
   useCallback,
+  useColorScheme,
   useEffect,
   useMemo,
   useRef,
   useState,
+  type VirtualNode,
   VStack,
   WebView,
   ZStack,
@@ -31,6 +34,8 @@ import {
   resolveFontName,
   type NovelReaderSettings,
 } from "../store/novelReaderSettings"
+import type { AmbientAlgorithm } from "../store/settings"
+import type { IllustAmbientPalette } from "../image/colorExtractor"
 import { getNovelProgress, recordNovelProgress } from "../store/novelProgress"
 import { NovelTypographySheet } from "./novelTypographySheet"
 import type { PixivIllustration, PixivNovel, PixivNovelDetail, TextEmbeddedImage } from "../types"
@@ -41,17 +46,34 @@ import {
   parseNovelToChunks,
   type NovelChunkItem,
 } from "./novelReader"
-import { imageUrlOf, loadImage } from "../image/imageLoader"
+import { imageUrlOf, loadImage, novelThumbUrlOf } from "../image/imageLoader"
+import { useNovelExperimentalAmbientPalette, generateAmbientBackgroundCss } from "./ambient"
 import { session } from "../api/session"
 import { illustrationDetail, novelDetail, novelViewerData } from "../api/pixiv"
 import { getCachedNovel, cacheNovel } from "../store/novelCache"
 import { recordNovelHistory } from "../store/history"
 import { useSeriesEpisodeNav, type SeriesEpisodeNavState } from "./seriesEpisodePager"
 
+function isVirtualNode(v: unknown): v is VirtualNode {
+  return !!v && typeof v === "object" && ("render" in v || "isInternal" in v || "props" in v)
+}
+
+function extractNovelCoverUrl(novel: PixivNovelDetail | PixivNovel | null | undefined): string | null {
+  if (!novel) return null
+  return (
+    novel.image_urls?.large ||
+    novel.image_urls?.medium ||
+    (novel as any)?.series?.cover_image_urls?.medium ||
+    novelThumbUrlOf(novel as any) ||
+    null
+  )
+}
+
 export interface NovelImmersiveReaderViewProps {
   novelId: number
   title: string
   text: string
+  coverUrl?: string | null
   textEmbeddedImages?: Record<string, TextEmbeddedImage>
   markerPage?: number | null
   currentPage?: number
@@ -228,13 +250,26 @@ interface BuildHtmlOptions {
     string,
     { dataUrl: string; title?: string; author?: string; illustId?: number }
   >
+  ambientActive?: boolean
+  ambientBgCss?: string
 }
 
 /**
  * 构建沉浸式横向流式排版 HTML 模板
  */
 function buildHorizontalImmersiveHtml(options: BuildHtmlOptions): string {
-  const { chunks, settings, initialChunkId, initialPage, title, seriesNav, imageCache } = options
+  const {
+    chunks,
+    settings,
+    initialChunkId,
+    initialPage,
+    title,
+    seriesNav,
+    imageCache,
+    ambientActive,
+    ambientBgCss: propBgCss,
+  } = options
+  const ambientBgCss = propBgCss || "transparent"
 
   const fontFamily = resolveFontFamily(settings)
   const weightMap: Record<string, string> = {
@@ -385,15 +420,27 @@ ${THEME_CSS_VARS}
     box-sizing: border-box;
     -webkit-touch-callout: default;
   }
+  .ambient-bg-layer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: -9999;
+    pointer-events: none;
+    background: ${ambientBgCss};
+    opacity: ${ambientActive ? 1 : 0};
+    transition: background 0.4s ease, opacity 0.4s ease;
+  }
   html {
-    background: var(--bg-color);
+    background: ${ambientActive ? "transparent !important" : "var(--bg-color)"};
     margin: 0;
     padding: 0;
   }
   body {
     margin: 0;
     padding: 0;
-    background: var(--bg-color);
+    background: ${ambientActive ? "transparent !important" : "var(--bg-color)"};
     color: var(--text-color);
     -webkit-text-size-adjust: 100%;
     -webkit-user-select: text;
@@ -646,6 +693,7 @@ ${THEME_CSS_VARS}
 </style>
 </head>
 <body>
+  <div id="ambient-bg-layer" class="ambient-bg-layer"></div>
   <div class="immersive-content-wrapper">
     <div id="novel-top-anchor" class="novel-chunk" data-page="1" data-chunk-id="novel-top-anchor"></div>
     <h1 class="novel-header-title">${escapeHtml(title)}</h1>
@@ -657,6 +705,22 @@ ${THEME_CSS_VARS}
     var targetChunkId = ${safeInitialChunk};
     var targetPage = ${safeInitialPage};
     var isRestoring = true;
+
+    window.updateAmbientBackground = function(bgCss, enabled) {
+      var layer = document.getElementById("ambient-bg-layer");
+      if (layer) {
+        if (enabled && bgCss) {
+          layer.style.background = bgCss;
+          layer.style.opacity = "1";
+          document.documentElement.style.backgroundColor = "transparent";
+          document.body.style.backgroundColor = "transparent";
+        } else {
+          layer.style.opacity = "0";
+          document.documentElement.style.backgroundColor = "var(--bg-color)";
+          document.body.style.backgroundColor = "var(--bg-color)";
+        }
+      }
+    };
 
     window.applyTypography = function(config) {
       if (!config) return;
@@ -881,7 +945,18 @@ ${THEME_CSS_VARS}
  * 构建沉浸式竖向文库本直书排版 HTML 模板（从右向左翻阅，日式传统文库本排版）
  */
 function buildVerticalImmersiveHtml(options: BuildHtmlOptions): string {
-  const { chunks, settings, initialChunkId, initialPage, title, seriesNav, imageCache } = options
+  const {
+    chunks,
+    settings,
+    initialChunkId,
+    initialPage,
+    title,
+    seriesNav,
+    imageCache,
+    ambientActive,
+    ambientBgCss: propBgCss,
+  } = options
+  const ambientBgCss = propBgCss || "transparent"
 
   const fontFamily = resolveFontFamily(settings)
   const weightMap: Record<string, string> = {
@@ -1040,13 +1115,25 @@ ${THEME_CSS_VARS}
     box-sizing: border-box;
     -webkit-touch-callout: default;
   }
+  .ambient-bg-layer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: -9999;
+    pointer-events: none;
+    background: ${ambientBgCss};
+    opacity: ${ambientActive ? 1 : 0};
+    transition: background 0.4s ease, opacity 0.4s ease;
+  }
   html, body {
     margin: 0;
     padding: 0;
     width: 100%;
     height: 100%;
     overflow: hidden;
-    background: var(--bg-color);
+    background: ${ambientActive ? "transparent !important" : "var(--bg-color)"};
     color: var(--text-color);
     -webkit-text-size-adjust: 100%;
     -webkit-user-select: text;
@@ -1251,8 +1338,8 @@ ${THEME_CSS_VARS}
     -webkit-writing-mode: vertical-rl;
     text-orientation: upright;
     -webkit-text-orientation: upright;
-    font-size: 0.9em;
-    letter-spacing: 0.35em;
+    font-size: 0.95em;
+    letter-spacing: 0.32em;
     color: var(--secondary-text-color);
     white-space: nowrap;
     padding: 0 10px;
@@ -1320,17 +1407,17 @@ ${THEME_CSS_VARS}
     height: 21px;
     object-fit: contain;
     flex-shrink: 0;
-    margin-bottom: 4px;
+    margin-bottom: 5px;
   }
   .nav-series-title-vertical {
     writing-mode: vertical-rl;
     -webkit-writing-mode: vertical-rl;
     text-orientation: upright;
     -webkit-text-orientation: upright;
-    font-size: 1.05em;
+    font-size: 1.08em;
     font-weight: 600;
     line-height: 1.35;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1344,9 +1431,14 @@ ${THEME_CSS_VARS}
     flex-shrink: 0;
     vertical-align: middle;
   }
+  .series-nav-circle-vertical .nav-arrow-symbol {
+    width: 19px;
+    height: 19px;
+  }
 </style>
 </head>
 <body>
+  <div id="ambient-bg-layer" class="ambient-bg-layer"></div>
   <div class="vertical-container">
     <div id="novel-top-anchor" class="novel-chunk" data-page="1" data-chunk-id="novel-top-anchor" style="width: 1px; height: 100%; display: inline-block; visibility: hidden;"></div>
     <div class="vertical-title-section">
@@ -1360,6 +1452,22 @@ ${THEME_CSS_VARS}
     var targetChunkId = ${safeInitialChunk};
     var targetPage = ${safeInitialPage};
     var isRestoring = true;
+
+    window.updateAmbientBackground = function(bgCss, enabled) {
+      var layer = document.getElementById("ambient-bg-layer");
+      if (layer) {
+        if (enabled && bgCss) {
+          layer.style.background = bgCss;
+          layer.style.opacity = "1";
+          document.documentElement.style.backgroundColor = "transparent";
+          document.body.style.backgroundColor = "transparent";
+        } else {
+          layer.style.opacity = "0";
+          document.documentElement.style.backgroundColor = "var(--bg-color)";
+          document.body.style.backgroundColor = "var(--bg-color)";
+        }
+      }
+    };
 
     window.applyTypography = function(config) {
       if (!config) return;
@@ -1601,6 +1709,7 @@ export function NovelImmersiveReaderView(props: NovelImmersiveReaderViewProps) {
     novelId,
     title,
     text,
+    coverUrl,
     textEmbeddedImages,
     markerPage,
     currentPage: propCurrentPage = 1,
@@ -1621,11 +1730,24 @@ export function NovelImmersiveReaderView(props: NovelImmersiveReaderViewProps) {
   const [activeNovelId, setActiveNovelId] = useState(novelId)
   const [activeTitle, setActiveTitle] = useState(title)
   const [activeText, setActiveText] = useState(text)
+  const [activeCoverUrl, setActiveCoverUrl] = useState<string | null | undefined>(coverUrl)
   const [activeImages, setActiveImages] = useState<Record<string, TextEmbeddedImage> | undefined>(
     textEmbeddedImages
   )
   const [switchingEpisode, setSwitchingEpisode] = useState(false)
   const [switchHint, setSwitchHint] = useState<string | null>(null)
+
+  // 接入小说正文同款沉浸光感（设置值与状态跟随“对小说正文页启用”）
+  const {
+    ambientEnabled,
+    ambientBackground,
+    ambientPalette,
+    ambientAlgorithm,
+  } = useNovelExperimentalAmbientPalette(activeCoverUrl)
+  const colorScheme = useColorScheme()
+  const isDark = colorScheme === "dark"
+  const ambientActive = ambientEnabled && (!!ambientBackground || !!ambientPalette)
+  const ambientBgCss = generateAmbientBackgroundCss(ambientPalette, ambientAlgorithm, isDark)
 
   const [settings, setSettings] = useState<NovelReaderSettings>(() => loadNovelReaderSettings())
   const [controlsVisible, setControlsVisible] = useState(true)
@@ -1633,12 +1755,13 @@ export function NovelImmersiveReaderView(props: NovelImmersiveReaderViewProps) {
   const [currentPage, setCurrentPage] = useState(propCurrentPage)
   const [markerBusy, setMarkerBusy] = useState(false)
 
-  // 当父组件 textEmbeddedImages 异步就绪时同步更新
+  // 当父组件 textEmbeddedImages 或 coverUrl 异步就绪时同步更新
   useEffect(() => {
-    if (activeNovelId === novelId && textEmbeddedImages) {
-      setActiveImages(textEmbeddedImages)
+    if (activeNovelId === novelId) {
+      if (textEmbeddedImages) setActiveImages(textEmbeddedImages)
+      if (coverUrl !== undefined) setActiveCoverUrl(coverUrl)
     }
-  }, [novelId, textEmbeddedImages, activeNovelId])
+  }, [novelId, textEmbeddedImages, coverUrl, activeNovelId])
 
   // 监听版式变更（字体、字号、行距、以及横竖排切换）
   useEffect(() => {
@@ -1742,6 +1865,7 @@ export function NovelImmersiveReaderView(props: NovelImmersiveReaderViewProps) {
 
         const newTitle = detail?.title || (direction === "next" ? "下一话" : "上一话")
         const newText = viewer?.text || ""
+        const newCover = extractNovelCoverUrl(detail)
         const newImages =
           viewer?.textEmbeddedImages ??
           (detail as any)?.textEmbeddedImages ??
@@ -1756,6 +1880,7 @@ export function NovelImmersiveReaderView(props: NovelImmersiveReaderViewProps) {
         setActiveNovelId(targetNovelId)
         setActiveTitle(newTitle)
         setActiveText(newText)
+        setActiveCoverUrl(newCover)
         setActiveImages(newImages)
         setImageCache({})
         setCurrentPage(targetPage)
@@ -1893,10 +2018,21 @@ export function NovelImmersiveReaderView(props: NovelImmersiveReaderViewProps) {
       title: activeTitle,
       seriesNav: nav,
       imageCache: imageCacheRef.current,
+      ambientActive,
+      ambientBgCss,
     })
 
     void ctrl.loadHTML(html).catch(() => {})
-  }, [activeNovelId, chunks, activeTitle, settings.layoutDirection])
+  }, [activeNovelId, chunks, activeTitle, settings.layoutDirection, ambientActive])
+
+  // 当环境光色板异步就绪、换章或设置变更时，动态平滑热更新 WebKit 内部画布（0 重载、0 滚动跳变）
+  useEffect(() => {
+    const ctrl = controllerRef.current
+    if (!ctrl) return
+    const bgCss = generateAmbientBackgroundCss(ambientPalette, ambientAlgorithm, isDark)
+    const script = `if (window.updateAmbientBackground) { window.updateAmbientBackground(${JSON.stringify(bgCss)}, ${JSON.stringify(ambientActive)}); }`
+    void ctrl.evaluateJavaScript(script).catch(() => {})
+  }, [ambientPalette, ambientAlgorithm, isDark, ambientActive])
 
   // 当系列导航数据异步就绪时，动态更新 HTML 中的系列翻页器状态
   useEffect(() => {
@@ -2015,6 +2151,13 @@ export function NovelImmersiveReaderView(props: NovelImmersiveReaderViewProps) {
 
   return (
     <ZStack frame={{ maxWidth: "infinity", maxHeight: "infinity" }} ignoresSafeArea={true}>
+      {/* 0. 沉浸式环境光大画布（与小说正文页同款，整屏铺满） */}
+      {isVirtualNode(ambientBackground) ? (
+        ambientBackground
+      ) : (
+        <Rectangle fill={ambientBackground ?? "clear"} ignoresSafeArea={true} />
+      )}
+
       {/* 1. 核心 WebView 纯净渲染引擎（横竖双引擎无缝调度） */}
       <WebView controller={controller} frame={{ maxWidth: "infinity", maxHeight: "infinity" }} />
 

@@ -8,6 +8,7 @@ import {
   Spacer,
   Text,
   useCallback,
+  useColorScheme,
   useEffect,
   useMemo,
   useRef,
@@ -24,8 +25,10 @@ import { session } from "../api/session"
 import { illustrationDetail } from "../api/pixiv"
 import { imageUrlOf, pageThumbUrlOf, cachedFilePath, loadImage } from "../image/imageLoader"
 import { saveImageToPixivAlbum, withAlbumKeepAlive } from "../downloader/photoAlbum"
-import { loadSettings } from "../store/settings"
+import { loadSettings, type AmbientAlgorithm } from "../store/settings"
 import type { PixivIllustration, TextEmbeddedImage } from "../types"
+import type { IllustAmbientPalette } from "../image/colorExtractor"
+import { generateAmbientBackgroundCss } from "./ambient"
 import {
   calculateLineSpacing,
   loadNovelReaderSettings,
@@ -757,7 +760,9 @@ export function buildVerticalHtml(
   imageCache?: Record<
     string,
     { dataUrl: string; title?: string; author?: string; illustId?: number }
-  >
+  >,
+  ambientActive?: boolean,
+  ambientBgCss?: string
 ): string {
   const fontName = resolveFontName(settings.fontId, settings.customFontPostscriptName)
   let fontFamily = "-apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif"
@@ -875,13 +880,25 @@ ${themeCssVars}
     box-sizing: border-box;
     -webkit-touch-callout: default;
   }
+  .ambient-bg-layer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: -9999;
+    pointer-events: none;
+    background: ${ambientBgCss || "transparent"};
+    opacity: ${ambientActive ? 1 : 0};
+    transition: background 0.4s ease, opacity 0.4s ease;
+  }
   html, body {
     margin: 0;
     padding: 0;
     width: 100%;
     height: 100%;
     overflow: hidden;
-    background: var(--bg-color);
+    background: ${ambientActive ? "transparent !important" : "var(--bg-color)"};
     color: var(--text-color);
   }
   .vertical-container {
@@ -1030,6 +1047,7 @@ ${themeCssVars}
 </style>
 </head>
 <body>
+  <div id="ambient-bg-layer" class="ambient-bg-layer"></div>
   <div class="vertical-container">
     <div id="novel-start-anchor" style="width: 1px; height: 100%; display: inline-block; visibility: hidden; margin: 0; padding: 0;"></div>
     ${bodyHtmlParts.join("\n")}
@@ -1037,6 +1055,22 @@ ${themeCssVars}
   <script>
     var targetChunkId = ${safeTargetId};
     var targetPage = ${safeTargetPage};
+
+    window.updateAmbientBackground = function(bgCss, enabled) {
+      var layer = document.getElementById("ambient-bg-layer");
+      if (layer) {
+        if (enabled && bgCss) {
+          layer.style.background = bgCss;
+          layer.style.opacity = "1";
+          document.documentElement.style.backgroundColor = "transparent";
+          document.body.style.backgroundColor = "transparent";
+        } else {
+          layer.style.opacity = "0";
+          document.documentElement.style.backgroundColor = "var(--bg-color)";
+          document.body.style.backgroundColor = "var(--bg-color)";
+        }
+      }
+    };
 
     window.applyTypography = function(config) {
       if (!config) return;
@@ -1286,6 +1320,9 @@ function NovelVerticalReaderView(props: {
   settings: NovelReaderSettings
   targetChunkId?: string | null
   targetPage?: number
+  ambientEnabled?: boolean
+  ambientPalette?: IllustAmbientPalette | null
+  ambientAlgorithm?: AmbientAlgorithm
   onProgressChange?: (page: number, chunkId?: string) => void
   onJumpToPage?: (page: number) => void
 }) {
@@ -1295,6 +1332,9 @@ function NovelVerticalReaderView(props: {
     settings,
     targetChunkId,
     targetPage,
+    ambientEnabled,
+    ambientPalette,
+    ambientAlgorithm,
     onProgressChange,
     onJumpToPage,
   } = props
@@ -1350,6 +1390,15 @@ function NovelVerticalReaderView(props: {
     controllerRef.current = new WebViewController()
   }
   const controller = controllerRef.current
+
+    const colorScheme = useColorScheme()
+  const isDark = colorScheme === "dark"
+  const ambientActive = ambientEnabled && !!ambientPalette
+  const ambientBgCss = generateAmbientBackgroundCss(
+    ambientPalette,
+    ambientAlgorithm ?? "classic",
+    isDark
+  )
 
   // 监听容器高度/横竖屏变化：通知 WebKit 重新精准锚定到当前 Chunk ID
   useEffect(() => {
@@ -1413,7 +1462,9 @@ function NovelVerticalReaderView(props: {
       settings,
       targetChunkId,
       targetPage,
-      imageCacheRef.current
+      imageCacheRef.current,
+      ambientActive,
+      ambientBgCss
     )
 
     void ctrl.loadHTML(html).catch(() => {})
@@ -1425,7 +1476,20 @@ function NovelVerticalReaderView(props: {
         // ignore dispose error
       }
     }
-  }, [novelId, chunks])
+  }, [novelId, chunks, ambientActive])
+
+  // 当环境光色板异步就绪或设置变更时，动态平滑热更新 WebKit 内部画布
+  useEffect(() => {
+    const ctrl = controllerRef.current
+    if (!ctrl) return
+    const bgCss = generateAmbientBackgroundCss(
+      ambientPalette,
+      ambientAlgorithm ?? "classic",
+      isDark
+    )
+    const script = `if (window.updateAmbientBackground) { window.updateAmbientBackground(${JSON.stringify(bgCss)}, ${JSON.stringify(ambientActive)}); }`
+    void ctrl.evaluateJavaScript(script).catch(() => {})
+  }, [ambientPalette, ambientAlgorithm, isDark, ambientActive])
 
   // 实时响应字体、字号、字重、行距变更（0ms 毫秒级即时生效）
   useEffect(() => {
@@ -1558,6 +1622,9 @@ export function NovelReaderView(props: {
   markerPage?: number | null
   currentPage?: number
   textEmbeddedImages?: Record<string, TextEmbeddedImage>
+  ambientEnabled?: boolean
+  ambientPalette?: IllustAmbientPalette | null
+  ambientAlgorithm?: AmbientAlgorithm
   onJumpToPage?: (page: number) => void
   onReady?: (totalPages: number) => void
   onProgressChange?: (page: number, chunkId?: string) => void
@@ -1569,6 +1636,9 @@ export function NovelReaderView(props: {
     textEmbeddedImages,
     markerPage,
     currentPage = 1,
+    ambientEnabled,
+    ambientPalette,
+    ambientAlgorithm,
     onJumpToPage,
     onReady,
     onProgressChange,
@@ -1647,6 +1717,9 @@ export function NovelReaderView(props: {
         settings={settings}
         targetChunkId={targetChunkId}
         targetPage={targetPage}
+        ambientEnabled={ambientEnabled}
+        ambientPalette={ambientPalette}
+        ambientAlgorithm={ambientAlgorithm}
         onProgressChange={(page, chunkId) => {
           onProgressChange?.(page, chunkId)
           if (chunkId) onChunkVisible?.(chunkId)

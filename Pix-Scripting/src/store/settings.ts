@@ -224,6 +224,7 @@ export interface AppSettings {
   quickActionButtonEnabled: boolean
   quickActionButtonAction: QuickActionButtonAction
   quickActionButtonPosition: QuickActionButtonPosition
+  novelImmersiveReaderEnabled: boolean
   imageSourceMode: ImageSourceMode
   customImageBaseUrl: string
   apiGatewayMode: ApiGatewayMode
@@ -345,6 +346,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   quickActionButtonEnabled: true,
   quickActionButtonAction: "bookmark",
   quickActionButtonPosition: "leading",
+  novelImmersiveReaderEnabled: false,
   imageSourceMode: "official",
   customImageBaseUrl: "",
   apiGatewayMode: "official",
@@ -904,6 +906,7 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
     )
       ? stored.quickActionButtonPosition
       : DEFAULT_SETTINGS.quickActionButtonPosition,
+    novelImmersiveReaderEnabled: stored?.novelImmersiveReaderEnabled === true,
     imageSourceMode: isOneOf(stored?.imageSourceMode, IMAGE_SOURCE_MODE_VALUES)
       ? stored.imageSourceMode
       : DEFAULT_SETTINGS.imageSourceMode,
