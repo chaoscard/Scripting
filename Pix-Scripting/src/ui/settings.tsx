@@ -566,7 +566,7 @@ export function SettingsView() {
             <VStack alignment="leading" spacing={2}>
               <Text font="body">小说沉浸式阅读器</Text>
               <Text font="caption" foregroundStyle="secondaryLabel">
-                在小说正文页提供独立真全屏沉浸阅读悬浮入口
+                正文页纯净全屏阅读入口
               </Text>
             </VStack>
           </Toggle>
