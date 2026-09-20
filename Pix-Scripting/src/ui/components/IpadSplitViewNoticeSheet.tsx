@@ -65,14 +65,11 @@ export function IpadSplitViewNoticeSheet(props: { onClose: () => void }) {
     try {
       triggerHaptic("light")
     } catch {}
-    const updates: any = {
+    updateSettings({
       hasSeenIpadSplitViewNotice: true,
-    }
-    if (enableSplit) {
-      updates.splitViewEnabledLandscape = true
-      updates.splitViewEnabledPortrait = true
-    }
-    updateSettings(updates)
+      splitViewEnabledLandscape: enableSplit,
+      splitViewEnabledPortrait: enableSplit,
+    })
     onClose()
   }
 
@@ -179,26 +176,15 @@ export function IpadSplitViewNoticeSheet(props: { onClose: () => void }) {
             {/* 底部操作按钮 */}
             <VStack spacing={10} padding={{ top: 16 }} frame={{ maxWidth: "infinity" }}>
               {isAlreadyEnabled ? (
-                <Button
-                  action={() => handleDismiss(false)}
-                  buttonStyle="borderedProminent"
-                  controlSize="large"
-                  frame={{ maxWidth: "infinity" }}
-                >
-                  <Text font="headline" fontWeight="bold" foregroundStyle="white">
-                    开始探索
-                  </Text>
-                </Button>
-              ) : (
                 <>
                   <Button
-                    action={() => handleDismiss(true)}
+                    action={onClose}
                     buttonStyle="borderedProminent"
                     controlSize="large"
                     frame={{ maxWidth: "infinity" }}
                   >
                     <Text font="headline" fontWeight="bold" foregroundStyle="white">
-                      开启平行视界并开始探索
+                      完成
                     </Text>
                   </Button>
                   <Button
@@ -208,7 +194,30 @@ export function IpadSplitViewNoticeSheet(props: { onClose: () => void }) {
                     frame={{ maxWidth: "infinity" }}
                   >
                     <Text font="subheadline" foregroundStyle="secondaryLabel">
-                      稍后在设置中开启
+                      关闭平行视界（改用单栏）
+                    </Text>
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    action={() => handleDismiss(true)}
+                    buttonStyle="borderedProminent"
+                    controlSize="large"
+                    frame={{ maxWidth: "infinity" }}
+                  >
+                    <Text font="headline" fontWeight="bold" foregroundStyle="white">
+                      开启平行视界
+                    </Text>
+                  </Button>
+                  <Button
+                    action={() => handleDismiss(false)}
+                    buttonStyle="plain"
+                    controlSize="regular"
+                    frame={{ maxWidth: "infinity" }}
+                  >
+                    <Text font="subheadline" foregroundStyle="secondaryLabel">
+                      保持单栏浏览（稍后可在设置中开启）
                     </Text>
                   </Button>
                 </>

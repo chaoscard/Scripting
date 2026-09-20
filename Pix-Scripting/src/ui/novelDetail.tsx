@@ -112,6 +112,7 @@ import {
   TagChip,
 } from "./components"
 import { NovelReaderView, NovelReaderWebView } from "./novelReader"
+import { NovelImmersiveReaderView } from "./novelImmersiveReader"
 import {
   PAGE_TOOLBAR_BACKGROUND,
   PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
@@ -189,6 +190,7 @@ export function NovelDetailView(props: { novelID: number }) {
   const [showComments, setShowComments] = useState(false)
   const [showAISheet, setShowAISheet] = useState(false)
   const [showTypographySheet, setShowTypographySheet] = useState(false)
+  const [showImmersiveReader, setShowImmersiveReader] = useState(false)
   const [readerSettings, setReaderSettings] = useState<NovelReaderSettings>(() => loadNovelReaderSettings())
   const [aiMode, setAIMode] = useState<NovelAIMode>("caption")
   const [markerPage, setMarkerPage] = useNovelMarker(novelID, null)
@@ -995,7 +997,7 @@ export function NovelDetailView(props: { novelID: number }) {
     recordWorkSeriesAssociation(current.id, "novel", resolvedSeriesID, resolvedSeriesTitle, resolvedEpisodeNumber)
   }
 
-  function renderQuickActionButton() {
+  function renderQuickButton() {
     if (isAppleMusic || !quickActionEnabled || !current) return null
 
     let iconName = "heart"
@@ -1070,46 +1072,89 @@ export function NovelDetailView(props: { novelID: number }) {
       }
     }
 
-    const bottomPadding = totalPages > 1 ? 60 : 24
+    return (
+      <Button
+        buttonStyle="plain"
+        disabled={disabled}
+        action={action}
+        contextMenu={contextMenu}
+        simultaneousGesture={gesture}
+      >
+        <ZStack
+          alignment="center"
+          frame={{ width: 46, height: 46 }}
+          glassEffect={appGlass("circle")}
+          contentShape="circle"
+          shadow={{ color: "#0000002E", radius: 8, y: 2 }}
+        >
+          <Image
+            systemName={iconName}
+            font="title2"
+            fontWeight="medium"
+            foregroundStyle={iconColor}
+          />
+        </ZStack>
+      </Button>
+    )
+  }
+
+  function renderImmersiveButton() {
+    if (!current) return null
 
     return (
-      <VStack
-        padding={{
-          bottom: bottomPadding,
-          leading: quickActionPos === "leading" ? 30 : 0,
-          trailing: quickActionPos === "trailing" ? 30 : 0,
-        }}
+      <Button
+        buttonStyle="plain"
+        disabled={!text}
+        action={() => setShowImmersiveReader(true)}
       >
-        <Button
-          buttonStyle="plain"
-          disabled={disabled}
-          action={action}
-          contextMenu={contextMenu}
-          simultaneousGesture={gesture}
+        <ZStack
+          alignment="center"
+          frame={{ width: 46, height: 46 }}
+          glassEffect={appGlass("circle")}
+          contentShape="circle"
+          shadow={{ color: "#0000002E", radius: 8, y: 2 }}
         >
-          <ZStack
-            alignment="center"
-            frame={{ width: 46, height: 46 }}
-            glassEffect={appGlass("circle")}
-            contentShape="circle"
-            shadow={{ color: "#0000002E", radius: 8, y: 2 }}
-          >
-            <Image
-              systemName={iconName}
-              font="title2"
-              fontWeight="medium"
-              foregroundStyle={iconColor}
-            />
-          </ZStack>
-        </Button>
-      </VStack>
+          <Image
+            systemName="arrow.up.left.and.arrow.down.right"
+            font="headline"
+            fontWeight="semibold"
+            foregroundStyle={text ? "label" : "secondaryLabel"}
+          />
+        </ZStack>
+      </Button>
+    )
+  }
+
+  function renderFloatingActionLayer() {
+    if (!current) return null
+
+    const immersivePos = quickActionPos === "leading" ? "trailing" : "leading"
+    const quickBtn = renderQuickButton()
+    const immersiveBtn = renderImmersiveButton()
+
+    const bottomPadding = (totalPages > 1 ? 60 : 24) + bottomOverlayInset
+
+    return (
+      <HStack
+        alignment="center"
+        frame={{ maxWidth: "infinity" }}
+        padding={{ bottom: bottomPadding, horizontal: 30 }}
+      >
+        {/* 左侧区域 */}
+        {immersivePos === "leading" ? immersiveBtn : quickBtn}
+
+        <Spacer />
+
+        {/* 右侧区域 */}
+        {immersivePos === "trailing" ? immersiveBtn : quickBtn}
+      </HStack>
     )
   }
 
 
   return (
     <ZStack
-      alignment={quickActionPos === "leading" ? "bottomLeading" : "bottomTrailing"}
+      alignment="bottom"
       toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
       toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
     >
@@ -1429,6 +1474,12 @@ export function NovelDetailView(props: { novelID: number }) {
                       action={() => setShowComments(true)}
                     />
                   ) : null}
+                  <Button
+                    title="沉浸阅读"
+                    systemImage="arrow.up.left.and.arrow.down.right"
+                    disabled={!text}
+                    action={() => setShowImmersiveReader(true)}
+                  />
                   <Button
                     title="版式"
                     systemImage="a.square"
@@ -1828,11 +1879,57 @@ export function NovelDetailView(props: { novelID: number }) {
           onChanged: setShowRelatedUsers,
         }}
       />
+      <VStack
+        fullScreenCover={{
+          content: (
+            <NovelImmersiveReaderView
+              novelId={current.id}
+              title={current.title}
+              text={text ?? ""}
+              textEmbeddedImages={textEmbeddedImages}
+              markerPage={markerPage}
+              currentPage={currentPage}
+              initialChunkId={lastRecordedChunkRef.current ?? undefined}
+              seriesID={resolvedSeriesID}
+              seriesTitle={resolvedSeriesTitle}
+              seriesPrev={current.series_prev}
+              seriesNext={current.series_next}
+              episodeNumber={resolvedEpisodeNumber}
+              onClose={(lastChunkId, page, finalNovelId) => {
+                setShowImmersiveReader(false)
+                if (finalNovelId && finalNovelId !== current.id) {
+                  requestPixivRoute(`novel:${finalNovelId}`)
+                  return
+                }
+                if (page && page !== currentPageRef.current) {
+                  setCurrentPage(page)
+                }
+                if (lastChunkId) {
+                  lastRecordedChunkRef.current = lastChunkId
+                  performScrollRestoration(lastChunkId, true)
+                }
+              }}
+              onToggleMarker={handleToggleMarker}
+              onJumpToPage={handlePageChange}
+              onNavigateNovel={(nextId) => {
+                setShowImmersiveReader(false)
+                requestPixivRoute(`novel:${nextId}`)
+              }}
+              onNavigateSeries={(seriesId) => {
+                setShowImmersiveReader(false)
+                requestPixivRoute(`novelSeries:${seriesId}`)
+              }}
+            />
+          ),
+          isPresented: showImmersiveReader && Boolean(text),
+          onChanged: setShowImmersiveReader,
+        }}
+      />
     </ScrollView>
           )
         }}
       </ScrollViewReader>
-      {renderQuickActionButton()}
+      {renderFloatingActionLayer()}
     </ZStack>
   )
 }
