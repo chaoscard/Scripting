@@ -1,6 +1,8 @@
 import { flushHistory, prepareHistoryStorage, warmupHistoryStore } from "./store/history"
 import { prepareSettingsStorage } from "./store/settings"
 import { prepareBlocklistStorage } from "./store/blocklist"
+import { prepareNovelReaderStorage } from "./store/novelReaderSettings"
+import { preparePixivisionBookmarksStorage } from "./store/pixivisionBookmarks"
 import { flushNovelProgress, prepareNovelProgressStorage } from "./store/novelProgress"
 import { flushSearchHistory, prepareSearchHistoryStorage } from "./store/searchHistory"
 import { flushSeriesCache, prepareSeriesCacheStorage } from "./store/seriesCache"
@@ -33,6 +35,8 @@ export async function bootstrapStorage() {
     { name: "history", task: prepareHistoryStorage() },
     { name: "settings", task: prepareSettingsStorage() },
     { name: "blocklist", task: prepareBlocklistStorage() },
+    { name: "novelReader", task: prepareNovelReaderStorage() },
+    { name: "pixivisionBookmarks", task: preparePixivisionBookmarksStorage() },
     { name: "novelProgress", task: prepareNovelProgressStorage() },
     { name: "searchHistory", task: prepareSearchHistoryStorage() },
     { name: "seriesCache", task: prepareSeriesCacheStorage() },

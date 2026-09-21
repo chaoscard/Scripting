@@ -1,4 +1,4 @@
-import { pixivNovelReaderDirectory } from "./dataDirectory"
+import { migrateLocalToCloudIfNeeded, pixivNovelReaderDirectory } from "./dataDirectory"
 import { recoverFile, writeTextSafely } from "./safeFile"
 
 export type BuiltinFontId = "system" | "songti" | "kaiti" | "yuanti"
@@ -32,6 +32,24 @@ function getSettingsPath(): string {
   return `${pixivNovelReaderDirectory()}/${SETTINGS_FILE_NAME}`
 }
 
+export async function prepareNovelReaderStorage(): Promise<void> {
+  if (!FileManager.isiCloudEnabled) return
+  const path = getSettingsPath()
+  migrateLocalToCloudIfNeeded(path)
+  if (
+    !FileManager.existsSync(path) ||
+    !FileManager.isFileStoredIniCloud(path) ||
+    FileManager.isiCloudFileDownloaded(path)
+  ) {
+    return
+  }
+  try {
+    await FileManager.downloadFileFromiCloud(path)
+  } catch {
+    // 忽略下载异常
+  }
+}
+
 let cachedSettings: NovelReaderSettings | null = null
 const listeners = new Set<(settings: NovelReaderSettings) => void>()
 
@@ -60,6 +78,7 @@ export function loadNovelReaderSettings(): NovelReaderSettings {
   }
 
   const path = getSettingsPath()
+  migrateLocalToCloudIfNeeded(path)
 
   try {
     recoverFile(path)

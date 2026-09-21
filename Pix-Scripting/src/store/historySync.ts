@@ -187,6 +187,11 @@ function resetMutationTracking(): void {
 // 当本地 5 项记录（插画/漫画/小说历史、小说进度、搜索历史）中任意一项发生变更时触发：
 // 采用「15条阈值立即触发 + 10秒空闲防抖 + 30秒最大等待兜底 + 执行中排队尾随」机制
 export function notifyLocalMutation(): void {
+  // 若未启用 iCloud，历史数据纯本地沙盒秒级落盘，彻底跳过云端同步调度器与定时器开销
+  if (!FileManager.isiCloudEnabled) {
+    return
+  }
+
   pendingMutationCount++
   const now = Date.now()
   if (firstMutationTime === 0) {
@@ -507,6 +512,10 @@ async function syncSearchHistoryFile(
 
 // 统一立即同步入口（用于下拉刷新、多维触发或定时调度）
 export async function syncHistoryNow(userId?: string | number | null): Promise<boolean> {
+  if (!FileManager.isiCloudEnabled) {
+    return false
+  }
+
   // 单飞互斥保护：若当前已经在执行同步，记录排队请求并安全退出，防止在途重入冲突
   if (isSyncing) {
     hasQueuedSync = true
@@ -561,6 +570,10 @@ export async function syncHistoryNow(userId?: string | number | null): Promise<b
 
 // 启动后台低频同步调度器
 export function startHistorySyncScheduler(): () => void {
+  if (!FileManager.isiCloudEnabled) {
+    return () => {}
+  }
+
   isSchedulerRunning = true
 
   if (schedulerTimer) {
@@ -604,6 +617,9 @@ export function startHistorySyncScheduler(): () => void {
 
 // 切回前台时的同步检查：满 30 秒后延迟 2 秒拉取
 export function triggerResumeSync(): void {
+  if (!FileManager.isiCloudEnabled) {
+    return
+  }
   const state = loadSyncState()
   if (Date.now() - state.lastSyncTime >= MIN_RESUME_SYNC_INTERVAL_MS) {
     setTimeout(() => {

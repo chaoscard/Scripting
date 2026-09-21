@@ -1,4 +1,5 @@
 import { session } from "../api/session"
+import { writeTextSafely } from "./safeFile"
 
 const DATA_DIR_NAME = "Pix-Scripting"
 
@@ -98,4 +99,39 @@ export function pixivWidgetDirectory(): string {
 
 export function pixivWidgetPath(...parts: string[]): string {
   return [pixivWidgetDirectory(), ...parts].join("/")
+}
+
+/**
+ * 当开启 iCloud 时，计算某个云端文件在本地 Documents 目录中对应的回退路径。
+ * 若未开启 iCloud 或路径不在云端根目录下，返回 null。
+ */
+export function localFallbackFilePath(cloudPath: string): string | null {
+  if (!FileManager.isiCloudEnabled) return null
+  const cloudPrefix = `${FileManager.iCloudDocumentsDirectory}/${DATA_DIR_NAME}/`
+  if (cloudPath.startsWith(cloudPrefix)) {
+    const rel = cloudPath.slice(cloudPrefix.length)
+    return `${pixivDataDirectory()}/${rel}`
+  }
+  return null
+}
+
+/**
+ * 当开启 iCloud 且云端文件尚未存在时，若本地沙盒 Documents 存在历史遗留文件，
+ * 自动执行一次性静默平滑迁移（写入云端），彻底解决从「不开 iCloud」切换到「开启 iCloud」时的数据孤岛问题。
+ */
+export function migrateLocalToCloudIfNeeded(cloudPath: string): boolean {
+  if (!FileManager.isiCloudEnabled) return false
+  try {
+    if (FileManager.existsSync(cloudPath)) return false
+    const localPath = localFallbackFilePath(cloudPath)
+    if (!localPath || !FileManager.existsSync(localPath)) return false
+    const localContent = FileManager.readAsStringSync(localPath, "utf-8")
+    if (localContent && localContent.trim().length > 0) {
+      writeTextSafely(cloudPath, localContent)
+      return true
+    }
+  } catch (e: any) {
+    console.warn("migrateLocalToCloudIfNeeded error:", e?.message ?? e)
+  }
+  return false
 }

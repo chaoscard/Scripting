@@ -1,5 +1,5 @@
 import type { PixivUser } from "../types"
-import { pixivBlocklistDirectory } from "./dataDirectory"
+import { migrateLocalToCloudIfNeeded, pixivBlocklistDirectory } from "./dataDirectory"
 import { recoverFile, writeTextSafely } from "./safeFile"
 import { session } from "../api/session"
 
@@ -37,6 +37,7 @@ function blocklistFilePath(userId?: string | number | null): string {
 export async function prepareBlocklistStorage(userId?: string | number | null): Promise<void> {
   if (!FileManager.isiCloudEnabled) return
   const path = blocklistFilePath(userId)
+  migrateLocalToCloudIfNeeded(path)
   if (
     !FileManager.existsSync(path) ||
     !FileManager.isFileStoredIniCloud(path) ||
@@ -85,6 +86,7 @@ function persistBlocklist(blocklist: BlocklistData): boolean {
 export function loadBlocklist(): BlocklistData {
   if (cachedBlocklist) return cachedBlocklist
   const path = blocklistFilePath()
+  migrateLocalToCloudIfNeeded(path)
   try {
     recoverFile(path)
     if (FileManager.existsSync(path)) {

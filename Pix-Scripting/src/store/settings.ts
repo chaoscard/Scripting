@@ -1,5 +1,5 @@
 import { Device } from "scripting"
-import { pixivSettingsDirectory } from "./dataDirectory"
+import { migrateLocalToCloudIfNeeded, pixivSettingsDirectory } from "./dataDirectory"
 import { recoverFile, writeTextSafely } from "./safeFile"
 
 export type FeedImageQuality = "medium" | "large"
@@ -429,6 +429,7 @@ function settingsFilePath(): string {
 export async function prepareSettingsStorage(): Promise<void> {
   if (!FileManager.isiCloudEnabled) return
   const path = settingsFilePath()
+  migrateLocalToCloudIfNeeded(path)
   if (
     !FileManager.existsSync(path) ||
     !FileManager.isFileStoredIniCloud(path) ||
@@ -984,6 +985,7 @@ export function loadSettings(): AppSettings {
   if (cachedSettings) return cachedSettings
 
   const path = settingsFilePath()
+  migrateLocalToCloudIfNeeded(path)
   let stored: (Partial<AppSettings> & Record<string, unknown>) | null = null
 
   try {

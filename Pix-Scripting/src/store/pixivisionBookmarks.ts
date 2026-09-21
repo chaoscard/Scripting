@@ -1,4 +1,4 @@
-import { pixivPixivisionBookmarkDirectory } from "./dataDirectory"
+import { migrateLocalToCloudIfNeeded, pixivPixivisionBookmarkDirectory } from "./dataDirectory"
 import { recoverFile, writeTextSafely } from "./safeFile"
 import { session } from "../api/session"
 
@@ -32,6 +32,7 @@ export async function preparePixivisionBookmarksStorage(
 ): Promise<void> {
   if (!FileManager.isiCloudEnabled) return
   const path = bookmarksFilePath(userId)
+  migrateLocalToCloudIfNeeded(path)
   if (
     !FileManager.existsSync(path) ||
     !FileManager.isFileStoredIniCloud(path) ||
@@ -68,6 +69,7 @@ export function loadPixivisionBookmarks(userId?: string | number | null): Pixivi
     return cachedBookmarks
   }
   const path = bookmarksFilePath(userId)
+  migrateLocalToCloudIfNeeded(path)
   recoverFile(path)
   if (!FileManager.existsSync(path)) {
     cachedBookmarks = []

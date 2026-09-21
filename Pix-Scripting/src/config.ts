@@ -1,6 +1,6 @@
 import { Script } from "scripting"
 
-export const SCRIPT_VERSION = Script.metadata?.version ?? "1.2.3"
+export const SCRIPT_VERSION = Script.metadata?.version ?? "1.3.0"
 
 // 默认服务端点地址
 export const DEFAULT_API_BASE_URL = "https://app-api.pixiv.net"
@@ -22,10 +22,10 @@ export const CLIENT_ID = "MOBrBDS8blbauoSck0ZfDbtuzpyT"
 export const CLIENT_SECRET = "lsACyCD94FhDUtGTXi3QzcFE2uU1hqtDaKeqrdwj"
 export const HASH_SALT = "28c1fdd170a5204386cb1313c7077b34f83e4aaf4aa829ce78c231e05b0bae2c"
 
-export const USER_AGENT = "PixivIOSApp/8.8.1 (iOS 26.6.1; iPhone18,1)"
+export const USER_AGENT = "PixivIOSApp/8.9.1 (iOS 27.0; iPhone18,1)"
 export const APP_OS = "ios"
-export const APP_OS_VERSION = "26.6.1"
-export const APP_VERSION = "8.8.1"
+export const APP_OS_VERSION = "27.0"
+export const APP_VERSION = "8.9.1"
 export const ACCEPT_LANGUAGE = "zh-CN,zh-Hans;q=0.9"
 export const APP_ACCEPT_LANGUAGE = "zh-hans"
 
