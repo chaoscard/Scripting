@@ -130,7 +130,7 @@ export function IllustQuickActionButton(props: IllustQuickActionButtonProps) {
       ),
     }
   } else if (quickActionType === "download") {
-    iconName = downloading ? "arrow.down.circle.fill" : "arrow.down.circle"
+    iconName = downloading ? "square.and.arrow.down.fill" : "square.and.arrow.down"
     iconColor = downloading ? "secondaryLabel" : "label"
     disabled = downloading
     action = () => {

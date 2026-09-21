@@ -117,7 +117,7 @@ export function MoreView(props: { onClose: () => void }) {
           />
           <Button
             title="下载与文件管理"
-            systemImage="arrow.down.circle"
+            systemImage="square.and.arrow.down"
             action={() => navigateTo("downloadManager")}
           />
         </Menu>
@@ -141,7 +141,7 @@ export function MoreView(props: { onClose: () => void }) {
         key="download-manager-btn"
         action={() => navigateTo("downloadManager")}
       >
-        <Image systemName="arrow.down.circle" />
+        <Image systemName="square.and.arrow.down" />
       </Button>,
       <Button
         key="profile-avatar-btn"
@@ -177,7 +177,7 @@ export function MoreView(props: { onClose: () => void }) {
       {
         key: "downloadManager",
         label: "下载与文件管理",
-        icon: "arrow.down.circle",
+        icon: "square.and.arrow.down",
         action: () => {
           try {
             triggerHaptic("selection")

@@ -49,7 +49,7 @@ const FEATURE_LIST: FeatureItem[] = [
     title: "下载引擎",
     subtitle: "ZIP · EPUB · CBZ · 创作者专属归档",
     description: "全格式打包与导出，支持创作者全量一键归档，动图转码 MP4/GIF 与灵动岛实时监控。",
-    symbol: "arrow.down.circle.fill",
+    symbol: "square.and.arrow.down.fill",
     iconColor: "white",
     iconBg: "systemOrange",
     badgeColor: "systemOrange",

@@ -779,7 +779,7 @@ export function IllustDetailDockBar(props: { illustID: number }) {
     {
       key: "download",
       label: downloading ? "下载中…" : "下载",
-      icon: downloading ? "arrow.down.circle.fill" : "arrow.down.circle",
+      icon: downloading ? "square.and.arrow.down.fill" : "square.and.arrow.down",
       color: downloading ? "secondaryLabel" : "systemBlue",
       disabled: downloading,
       action: handleDownloadDefault,
@@ -1039,7 +1039,7 @@ export function NovelDetailDockBar(props: { novelID: number }) {
     {
       key: "download",
       label: downloading ? "下载中…" : "下载",
-      icon: downloading ? "arrow.down.circle.fill" : "arrow.down.circle",
+      icon: downloading ? "square.and.arrow.down.fill" : "square.and.arrow.down",
       color: downloading ? "secondaryLabel" : "systemBlue",
       disabled: downloading,
       action: handleDownload,
@@ -1109,6 +1109,8 @@ export function PixivisionDetailDockBar(props: { articleID: number }) {
     })
   }
 
+  const hasArtworks = (detail?.artworks?.length ?? 0) > 0
+
   const items: DockActionItem[] = [
     {
       key: "bookmark",
@@ -1124,13 +1126,23 @@ export function PixivisionDetailDockBar(props: { articleID: number }) {
       color: "systemBlue",
       action: handleShare,
     },
-    {
-      key: "download",
-      label: isDownloading ? (downloadStatus ? (downloadStatus.length > 5 ? "下载中" : downloadStatus) : "下载中") : "下载",
-      icon: isDownloading ? "arrow.down.circle.fill" : "square.and.arrow.down",
-      color: "systemBlue",
-      action: handleDownload,
-    },
+    ...(hasArtworks
+      ? [
+          {
+            key: "download",
+            label: isDownloading
+              ? downloadStatus
+                ? downloadStatus.length > 5
+                  ? "下载中"
+                  : downloadStatus
+                : "下载中"
+              : "下载",
+            icon: isDownloading ? "square.and.arrow.down.fill" : "square.and.arrow.down",
+            color: "systemBlue",
+            action: handleDownload,
+          } as DockActionItem,
+        ]
+      : []),
   ]
 
   return <DockActionBar items={items} />
@@ -1299,7 +1311,7 @@ export function SeriesDetailDockBar(props: {
     {
       key: "download",
       label: seriesDownloading ? "下载中…" : "下载",
-      icon: seriesDownloading ? "arrow.down.circle.fill" : "square.and.arrow.down",
+      icon: seriesDownloading ? "square.and.arrow.down.fill" : "square.and.arrow.down",
       color: seriesDownloading ? "secondaryLabel" : "systemBlue",
       disabled: seriesDownloading,
       action: handleDownloadSeries,
@@ -1403,7 +1415,7 @@ export function renderRouteInfoBar(top: string) {
 
   // 6. 下载与文件管理
   if (top === "downloadManager")
-    return <DockInfoBar icon="arrow.down.circle.fill" title="下载与文件管理" />
+    return <DockInfoBar icon="square.and.arrow.down.fill" title="下载与文件管理" />
   if (top === "downloadTasks")
     return <DockInfoBar icon="hourglass" title="下载任务" />
   if (top === "downloadCreators" || top.startsWith("downloadCreator:")) {
@@ -1547,7 +1559,7 @@ function renderDefaultRootTabAccessory(activeTab: string) {
           {
             key: "downloadManager",
             label: "下载与文件管理",
-            icon: "arrow.down.circle",
+            icon: "square.and.arrow.down",
             action: () => {
               try {
                 triggerHaptic("selection")

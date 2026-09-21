@@ -84,19 +84,19 @@ export function topBarScrollEdge(effect: TopBarEffect): {
 }
 
 /**
- * 半模态 Sheet 顶部：与整页**完全同口径** —— 栏 clear + hidden（内容穿栏）+ 由「顶栏过渡」
- * 设置驱动的滚动边缘效果。
+ * 统一导航栏外观标准配置（全场景通用：整页 / 模态 Sheet / 分栏独立视口）
+ * 栏保持 clear + hidden（内容穿栏沉浸），顶部滚动边缘模糊过渡由用户设置（topBarEffect）驱动。
  *
- * 【为什么 sheet 必须显式挂】
- * 整页靠 appRoot 那一处全局挂载；sheet 是独立的呈现层，全局值到不了（iOS 27 实测：sheet 顶部
- * 保持系统默认、不跟随设置档位，于是出现「全页一套、sheet 另一套」）。因此每个 sheet 根都要挂。
+ * 【为什么 sheet 与分栏独立栈必须显式挂】
+ * 整页靠 appRoot 那一处全局挂载；sheet 与右栏是独立的呈现层，全局值到不了（iOS 27 实测：sheet 顶部
+ * 保持系统默认、不跟随设置档位，于是出现「全页一套、sheet 另一套」）。因此独立呈现栈根节点统一挂载。
  *
  * 【为什么不需要实时生效机制】
  * 「玻璃效果」那种实时生效做不到，是因为已有页面不会重建；而 sheet 每次打开都是全新挂载，
  * 调用时读一次设置即可 —— 天然就是「下次打开即新档位」。
  *
- * 用法：`<VStack navigationTitle=... toolbar=... {...sheetTopBar()}>`
- * 挂在**声明 navigationTitle / toolbar 的那个节点**上（与整页 45 处一致）。
+ * 用法：`<VStack navigationTitle=... toolbar=... {...unifiedTopBar()}>`
+ * 挂在**声明 navigationTitle / toolbar 的那个节点**上。
  *
  * 【已知限制：sheet 上四档实际只有两态（已接受，别再试）】
  * iOS 27 的 `soft` 只剩状态栏段（A 段）有雾，而 sheet **没有 A 段**（它顶部就是自己的圆角边），
@@ -107,7 +107,7 @@ export function topBarScrollEdge(effect: TopBarEffect): {
  * 当那层雾 —— 真机上**毫无变化**（sheet 栏本来就没画可见材质），已回退。⇒ 想让 sheet 的
  * 「柔和」也有雾，只剩「页面层自绘」一条路，成本高，暂不做。
  */
-export function sheetTopBar(): {
+export function unifiedTopBar(): {
   toolbarBackground: CommonViewProps["toolbarBackground"]
   toolbarBackgroundVisibility: CommonViewProps["toolbarBackgroundVisibility"]
   scrollEdgeEffectStyle: CommonViewProps["scrollEdgeEffectStyle"]
@@ -119,6 +119,9 @@ export function sheetTopBar(): {
     ...topBarScrollEdge(loadSettings().topBarEffect),
   }
 }
+
+/** 语义别名：兼容既有 Sheet 挂载点（全项目 16 处） */
+export const sheetTopBar = unifiedTopBar
 
 /**
  * 半模态 Sheet 跨端自适应档位策略：

@@ -642,7 +642,7 @@ function DownloadTaskCardRow(props: { task: DownloadTaskItem }) {
   const isCanceled = task.status === "canceled"
 
   // 根据任务类型分配专属质感色与图标
-  let tileIcon = task.categoryIcon || "arrow.down.circle.fill"
+  let tileIcon = task.categoryIcon || "square.and.arrow.down.fill"
   let tileBg = "rgba(0, 122, 255, 0.12)"
   let tileFg = "systemBlue"
 

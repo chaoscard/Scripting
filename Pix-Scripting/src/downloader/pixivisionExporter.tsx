@@ -1417,8 +1417,15 @@ export async function presentPixivisionDownloadActionSheet(
   } catch {}
 
   const artworkCount = detail.artworks?.length || 0
-  const imageBlocksCount = detail.blocks?.filter((b) => b.type === "image")?.length || 0
-  const totalImages = artworkCount > 0 ? artworkCount : imageBlocksCount
+  if (artworkCount === 0) {
+    if (typeof Dialog !== "undefined" && typeof Dialog.alert === "function") {
+      void Dialog.alert({
+        title: "提示",
+        message: "本篇特辑为非插画特辑或合集目录，暂无内嵌可供批量下载的插画作品。",
+      })
+    }
+    return
+  }
 
   const currentSettings = loadSettings()
   const albumName = currentSettings.downloadPhotoAlbumName || "Pix-Scripting"
@@ -1428,7 +1435,7 @@ export async function presentPixivisionDownloadActionSheet(
       title: "特辑下载与导出",
       message: detail.title,
       actions: [
-        { label: `下载全部插画至相簿 (共 ${totalImages} 张)` },
+        { label: `下载全部插画至相簿 (共 ${artworkCount} 张)` },
         { label: "拼接特辑长图至相簿" },
         { label: "导出特辑 EPUB 画报至文件" },
       ],

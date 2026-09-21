@@ -560,7 +560,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
           {!isAppleMusic ? (
             <Button
               title={seriesDownloading ? "下载中…" : "下载"}
-              systemImage={seriesDownloading ? "arrow.down.circle.fill" : "square.and.arrow.down"}
+              systemImage={seriesDownloading ? "square.and.arrow.down.fill" : "square.and.arrow.down"}
               foregroundStyle={seriesDownloading ? "systemBlue" : undefined}
               disabled={seriesDownloading}
               action={handleExportSeries}
@@ -623,7 +623,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
                 />
                 <Button
                   title="下载"
-                  systemImage={seriesDownloading ? "arrow.down.circle.fill" : "square.and.arrow.down"}
+                  systemImage={seriesDownloading ? "square.and.arrow.down.fill" : "square.and.arrow.down"}
                   foregroundStyle={seriesDownloading ? "systemBlue" : undefined}
                   disabled={seriesDownloading}
                   action={handleExportSeries}
@@ -638,7 +638,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
                 action={handleExportSeries}
               >
                 <Image
-                  systemName={seriesDownloading ? "arrow.down.circle.fill" : "square.and.arrow.down"}
+                  systemName={seriesDownloading ? "square.and.arrow.down.fill" : "square.and.arrow.down"}
                   foregroundStyle={seriesDownloading ? "systemBlue" : undefined}
                 />
               </Button>,

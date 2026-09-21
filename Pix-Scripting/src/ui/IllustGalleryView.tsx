@@ -554,7 +554,7 @@ export function IllustGalleryView(props: {
           ) : undefined,
           topBarTrailing: [
             !isSingle ? (
-              <Menu label={<Image systemName="square.and.arrow.down" />}>
+              <Menu label={<Image systemName={downloading ? "square.and.arrow.down.fill" : "square.and.arrow.down"} />}>
                 <Button
                   title={`保存当前页（第 ${currentPageIndex + 1} 页）`}
                   systemImage="photo"
@@ -573,7 +573,7 @@ export function IllustGalleryView(props: {
                 disabled={downloading}
                 action={() => void handleDownloadSingle(0)}
               >
-                <Image systemName="square.and.arrow.down" />
+                <Image systemName={downloading ? "square.and.arrow.down.fill" : "square.and.arrow.down"} />
               </Button>
             ),
             <Button action={handleShare}>

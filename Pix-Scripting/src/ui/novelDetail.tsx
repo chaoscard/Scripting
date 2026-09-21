@@ -1073,7 +1073,7 @@ export function NovelDetailView(props: { novelID: number }) {
         ),
       }
     } else if (quickActionType === "download") {
-      iconName = downloadingEpub ? "arrow.down.circle.fill" : "arrow.down.circle"
+      iconName = downloadingEpub ? "square.and.arrow.down.fill" : "square.and.arrow.down"
       iconColor = downloadingEpub ? "secondaryLabel" : "label"
       disabled = downloadingEpub
       action = () => {
@@ -1554,7 +1554,7 @@ export function NovelDetailView(props: { novelID: number }) {
             />
             <Button
               title={downloadingEpub ? "下载中…" : "下载"}
-              systemImage="square.and.arrow.down"
+              systemImage={downloadingEpub ? "square.and.arrow.down.fill" : "square.and.arrow.down"}
               disabled={downloadingEpub}
               action={handleDownloadNovelEpub}
             />

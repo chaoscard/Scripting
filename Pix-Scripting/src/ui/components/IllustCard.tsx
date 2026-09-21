@@ -732,7 +732,9 @@ function renderIllustContextMenu(
       ? ugoiraFormat === "gif"
         ? "photo.stack"
         : "film"
-      : "arrow.down.circle"
+      : downloading
+        ? "square.and.arrow.down.fill"
+        : "square.and.arrow.down"
 
   const defaultMenuItems = (
     <Group>

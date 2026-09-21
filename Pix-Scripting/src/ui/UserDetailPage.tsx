@@ -758,7 +758,7 @@ export function UserDetailView(props: { userID: number }) {
                     void handleDownloadClick()
                   }}
                 >
-                  <Image systemName={downloading ? "arrow.down.circle.fill" : "square.and.arrow.down"} />
+                  <Image systemName={downloading ? "square.and.arrow.down.fill" : "square.and.arrow.down"} />
                 </Button>,
               ]
             : []),
@@ -823,7 +823,7 @@ export function UserDetailView(props: { userID: number }) {
             {!showStandaloneDownload ? (
               <Button
                 title={downloading ? (downloadStatusText || "正在下载…") : "批量下载作品"}
-                systemImage={downloading ? "arrow.down.circle.fill" : "square.and.arrow.down"}
+                systemImage={downloading ? "square.and.arrow.down.fill" : "square.and.arrow.down"}
                 disabled={downloading}
                 action={() => {
                   triggerHaptic("light")
@@ -995,7 +995,7 @@ export function UserDetailView(props: { userID: number }) {
                       frame={{ maxWidth: "infinity" }}
                       alignment="center"
                     >
-                      <Image systemName="arrow.down.circle.fill" foregroundStyle="tintColor" />
+                      <Image systemName="square.and.arrow.down.fill" foregroundStyle="tintColor" />
                       <Text
                         font="footnote"
                         foregroundStyle="secondaryLabel"

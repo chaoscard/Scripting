@@ -200,7 +200,7 @@ export function renderIllustToolbarActions(props: IllustToolbarActionsProps): Vi
         action={onShareIllust}
       />
       {illust.type === "ugoira" ? (
-        <Menu title={downloading ? "下载中…" : "下载"} systemImage="square.and.arrow.down">
+        <Menu title={downloading ? "下载中…" : "下载"} systemImage={downloading ? "square.and.arrow.down.fill" : "square.and.arrow.down"}>
           <Button
             title={`下载动图 (${ugoiraExportFormat.toUpperCase()})`}
             systemImage={ugoiraExportFormat === "gif" ? "photo.stack" : "film"}
@@ -215,7 +215,7 @@ export function renderIllustToolbarActions(props: IllustToolbarActionsProps): Vi
           />
         </Menu>
       ) : illust.type === "manga" ? (
-        <Menu title={downloading ? "下载中…" : "下载"} systemImage="square.and.arrow.down">
+        <Menu title={downloading ? "下载中…" : "下载"} systemImage={downloading ? "square.and.arrow.down.fill" : "square.and.arrow.down"}>
           {pageCount > 1 ? (
             <Button
               title="下载全部至相簿"
@@ -253,7 +253,7 @@ export function renderIllustToolbarActions(props: IllustToolbarActionsProps): Vi
           />
         </Menu>
       ) : pageCount > 1 ? (
-        <Menu title={downloading ? "下载中…" : "下载"} systemImage="square.and.arrow.down">
+        <Menu title={downloading ? "下载中…" : "下载"} systemImage={downloading ? "square.and.arrow.down.fill" : "square.and.arrow.down"}>
           <Button
             title="下载全部至相簿"
             systemImage="photo.on.rectangle.angled"
@@ -270,7 +270,7 @@ export function renderIllustToolbarActions(props: IllustToolbarActionsProps): Vi
       ) : (
         <Button
           title={downloading ? "下载中…" : "下载"}
-          systemImage="square.and.arrow.down"
+          systemImage={downloading ? "square.and.arrow.down.fill" : "square.and.arrow.down"}
           disabled={downloading}
           action={onDownloadIllustToAlbum}
         />

@@ -88,6 +88,7 @@ export function PixivisionDetailView(props: { articleID: number }) {
   const [bookmarked, setBookmarked] = useState<boolean>(() => isPixivisionBookmarked(articleID))
   const [downloadStatus, setDownloadStatus] = useState<string | null>(null)
   const isDownloading = downloadStatus != null
+  const hasArtworks = (detail?.artworks?.length ?? 0) > 0
   const guard = useAsyncGuard()
   const proxyRef = useRef<ScrollViewProxy | null>(null)
 
@@ -527,11 +528,13 @@ export function PixivisionDetailView(props: { articleID: number }) {
                       />
                     </Button>,
                     <Menu key="more-menu" label={<Image systemName="ellipsis.circle" />}>
-                      <Button
-                        title={isDownloading ? (downloadStatus || "下载中…") : "下载与导出特辑"}
-                        systemImage={isDownloading ? "arrow.down.circle.fill" : "square.and.arrow.down"}
-                        action={handleDownload}
-                      />
+                      {hasArtworks ? (
+                        <Button
+                          title={isDownloading ? (downloadStatus || "下载中…") : "下载与导出特辑"}
+                          systemImage={isDownloading ? "square.and.arrow.down.fill" : "square.and.arrow.down"}
+                          action={handleDownload}
+                        />
+                      ) : null}
                       <Button
                         title="分享特辑"
                         systemImage="square.and.arrow.up"
@@ -550,7 +553,7 @@ export function PixivisionDetailView(props: { articleID: number }) {
                     </Menu>,
                   ]
                 : [
-                    // 场景 2：无目录，展示 3 个按钮：[收藏] + [分享] + [下载]
+                    // 场景 2：无目录，展示 [收藏] + [分享] (+ 若有插画则展示 [下载])
                     <Button
                       key="bookmark"
                       action={() => {
@@ -579,12 +582,16 @@ export function PixivisionDetailView(props: { articleID: number }) {
                     <Button key="share" action={handleShare}>
                       <Image systemName="square.and.arrow.up" />
                     </Button>,
-                    <Button key="download" action={handleDownload}>
-                      <Image
-                        systemName={isDownloading ? "arrow.down.circle.fill" : "square.and.arrow.down"}
-                        foregroundStyle={isDownloading ? "#0096FA" : undefined}
-                      />
-                    </Button>,
+                    ...(hasArtworks
+                      ? [
+                          <Button key="download" action={handleDownload}>
+                            <Image
+                              systemName={isDownloading ? "square.and.arrow.down.fill" : "square.and.arrow.down"}
+                              foregroundStyle={isDownloading ? "#0096FA" : undefined}
+                            />
+                          </Button>,
+                        ]
+                      : []),
                   ],
             }}
           >

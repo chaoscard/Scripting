@@ -26,10 +26,8 @@ import {
 } from "scripting"
 import { appGlass } from "./components/glass"
 import {
-  PAGE_TOOLBAR_BACKGROUND,
-  PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
   sheetDetents,
-  sheetTopBar,
+  unifiedTopBar,
 } from "./components/pageChrome"
 import { session } from "../api/session"
 import { useExperimentalAmbientPalette, useLastActiveAmbientImageUrl } from "./ambient"
@@ -1157,8 +1155,7 @@ export function HistoryAnalyticsView(props: HistoryAnalyticsViewProps) {
       frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
       navigationTitle="我的足迹"
       navigationBarTitleDisplayMode="inline"
-      toolbarBackground={props.onDismiss ? undefined : PAGE_TOOLBAR_BACKGROUND}
-      toolbarBackgroundVisibility={props.onDismiss ? undefined : PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
+      {...unifiedTopBar()}
       toolbar={{
         topBarLeading: props.onDismiss ? (
           <Button

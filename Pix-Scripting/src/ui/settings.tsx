@@ -1614,7 +1614,7 @@ export function SettingsView() {
           onChanged={(v) => setExpandedKey("download", v)}
           label={
             <HStack spacing={10} alignment="center">
-              <Image systemName="arrow.down.circle.fill" font="body" foregroundStyle="systemCyan" frame={{ width: 24, alignment: "center" }} />
+              <Image systemName="square.and.arrow.down.fill" font="body" foregroundStyle="systemCyan" frame={{ width: 24, alignment: "center" }} />
               <Text font="headline">下载存储</Text>
               <Spacer />
               {!expanded.download ? (
