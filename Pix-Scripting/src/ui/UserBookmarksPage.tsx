@@ -39,7 +39,7 @@ import type { PixivBookmarkTag, PixivIllustration, PixivNovel } from "../types"
 import {
   filterIllustrationBookmarks,
   filterNovelBookmarks,
-} from "./library"
+} from "./LibraryView"
 import {
   EmptyView,
   ErrorView,

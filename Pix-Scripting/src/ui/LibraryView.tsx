@@ -60,7 +60,7 @@ import {
 export { BookmarkTagFilterBar as BookmarkTags }
 import { requestPixivRoute } from "../store/routeNavigation"
 import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
-import { PixivisionBookmarksContent } from "./pixivisionBookmarks"
+import { PixivisionBookmarksContent } from "./PixivisionBookmarks"
 
 type Visibility = "public" | "private"
 type LibraryKind = "illustration" | "novel" | "pixivision"

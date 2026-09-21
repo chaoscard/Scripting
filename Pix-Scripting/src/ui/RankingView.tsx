@@ -63,7 +63,7 @@ import {
   getYesterdayTimestamp,
   RankingAdvancedSheet,
   type AdvancedRankingParams,
-} from "./rankingAdvancedSheet"
+} from "./RankingAdvancedSheet"
 
 type RankingKind = "illustration" | "manga" | "novel" | "advanced"
 

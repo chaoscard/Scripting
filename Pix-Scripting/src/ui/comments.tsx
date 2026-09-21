@@ -49,7 +49,7 @@ import {
   ALL_PIXIV_STAMPS,
   tokenizeCommentText,
   PixivStampItem,
-} from "./pixivEmotes"
+} from "./PixivEmotes"
 import { formatNumber } from "./components/formatUtils"
 
 interface ReplyState {

@@ -38,7 +38,7 @@ import {
 import type { AmbientAlgorithm } from "../store/settings"
 import type { IllustAmbientPalette } from "../image/colorExtractor"
 import { getNovelProgress, recordNovelProgress } from "../store/novelProgress"
-import { NovelTypographySheet } from "./novelTypographySheet"
+import { NovelTypographySheet } from "./NovelTypographySheet"
 import type { PixivIllustration, PixivNovel, PixivNovelDetail, TextEmbeddedImage } from "../types"
 import {
   escapeHtml,
@@ -46,14 +46,14 @@ import {
   groupChunksByPage,
   parseNovelToChunks,
   type NovelChunkItem,
-} from "./novelReader"
+} from "./NovelReader"
 import { imageUrlOf, loadImage, novelThumbUrlOf } from "../image/imageLoader"
 import { useNovelExperimentalAmbientPalette, generateAmbientBackgroundCss } from "./ambient"
 import { session } from "../api/session"
 import { illustrationDetail, novelDetail, novelViewerData } from "../api/pixiv"
 import { getCachedNovel, cacheNovel } from "../store/novelCache"
 import { recordNovelHistory } from "../store/history"
-import { useSeriesEpisodeNav, type SeriesEpisodeNavState } from "./seriesEpisodePager"
+import { useSeriesEpisodeNav, type SeriesEpisodeNavState } from "./SeriesEpisodePager"
 
 function isVirtualNode(v: unknown): v is VirtualNode {
   return !!v && typeof v === "object" && ("render" in v || "isInternal" in v || "props" in v)

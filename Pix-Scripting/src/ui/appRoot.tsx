@@ -22,7 +22,7 @@ import {
 import { session } from "../api/session"
 import { loadSettings, onSettingsChanged, updateSettings, type AppSettings } from "../store/settings"
 import { ResponsiveContainer, useLayoutMetrics } from "./hooks"
-import { SPLIT_SHELL_MIN_WIDTH, SplitShell } from "./splitShell"
+import { SPLIT_SHELL_MIN_WIDTH, SplitShell } from "./SplitShell"
 import { SplitViewContainer } from "./DualRouteContext"
 import { FeatureHighlightsSheet } from "./components/FeatureHighlightsSheet"
 import { IpadSplitViewNoticeSheet } from "./components/IpadSplitViewNoticeSheet"
@@ -33,13 +33,13 @@ import {
 } from "./bottomAccessory"
 import { getLatestCachedArtworkPath } from "../image/imageLoader"
 import { DreamyFluidBackground } from "./components/DreamyBackground"
-import { notifyLaunchReady, onLaunchReady } from "./launchCoordinator"
-import { LoginView } from "./login"
+import { notifyLaunchReady, onLaunchReady } from "./LaunchCoordinator"
+import { LoginView } from "./LoginView"
 import {
   MainTabView,
   TAB_CONTENT_DEFS,
   useTabNavigation,
-} from "./tabShellShared"
+} from "./TabShellShared"
 import "./routes"
 
 function LaunchExperienceView() {

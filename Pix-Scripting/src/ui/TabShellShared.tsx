@@ -22,9 +22,9 @@ import {
   type PixivTabKind,
 } from "../store/routeNavigation"
 import { DiscoveryView } from "./discovery"
-import { RankingView } from "./ranking"
+import { RankingView } from "./RankingView"
 import { FollowFeedView } from "./followFeed"
-import { MoreView } from "./more"
+import { MoreView } from "./MoreView"
 
 /**
  * 五个 Tab 的**内容真源** —— 单栏外壳与 iPad 平行视界双栏外壳共用同一份定义。

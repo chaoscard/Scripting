@@ -26,7 +26,7 @@ import {
 import { isPixivCookieDomain } from "../api/pixiv"
 import { session } from "../api/session"
 import { appToolbar } from "./components"
-import { LoginNetworkSheet } from "./loginNetworkSheet"
+import { LoginNetworkSheet } from "./LoginNetworkSheet"
 import { DreamyFluidBackground } from "./components/DreamyBackground"
 
 export function LoginView(props: {

@@ -30,7 +30,7 @@ import { useLayoutMetrics } from "./hooks"
 import { useExperimentalAmbientPalette } from "./ambient"
 import { recordPixivisionCoverUrl } from "../image/imageLoader"
 import { loadSettings, onSettingsChanged } from "../store/settings"
-import { LibraryView } from "./library"
+import { LibraryView } from "./LibraryView"
 import { triggerHaptic } from "../platform/haptics"
 
 const FLOW_HORIZONTAL_PADDING = 12

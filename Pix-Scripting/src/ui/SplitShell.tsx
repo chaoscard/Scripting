@@ -13,7 +13,7 @@ import {
 } from "./hooks"
 import {
   MainTabView,
-} from "./tabShellShared"
+} from "./TabShellShared"
 import {
   DetailPaneContent,
   DualRouteContext,

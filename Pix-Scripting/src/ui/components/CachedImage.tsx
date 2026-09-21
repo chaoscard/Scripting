@@ -19,7 +19,7 @@ import {
   onImageCacheChanged,
 } from "../../image/imageLoader"
 import { loadSettings } from "../../store/settings"
-import { notifyLaunchReady } from "../launchCoordinator"
+import { notifyLaunchReady } from "../LaunchCoordinator"
 import { useLatest } from "../hooks"
 function imageFadeDurationSec(): number {
   const ms = loadSettings().imageFadeInDuration ?? 80

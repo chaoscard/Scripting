@@ -24,12 +24,12 @@ export * from "./GeminiAmbientBackground"
 export * from "./FeatureHighlightsSheet"
 export * from "./IpadSplitViewNoticeSheet"
 export function SeriesEpisodePager(props: any): any {
-  const mod = require("../seriesEpisodePager")
+  const mod = require("../SeriesEpisodePager")
   const Comp = mod.SeriesEpisodePager || mod.default
   return Comp(props)
 }
 
 export function useSeriesEpisodeNav(...args: any[]): any {
-  const mod = require("../seriesEpisodePager")
+  const mod = require("../SeriesEpisodePager")
   return mod.useSeriesEpisodeNav(...args)
 }

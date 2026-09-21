@@ -20,7 +20,7 @@ import { sheetDetents, sheetTopBar } from "./components/pageChrome"
 import { session } from "../api/session"
 import type { StoredAccountProfile } from "../api/auth"
 import { AvatarImage } from "./components/CachedImage"
-import { LoginView } from "./login"
+import { LoginView } from "./LoginView"
 import { triggerHaptic } from "../platform/haptics"
 
 export function AccountSwitcherSheet(props: {

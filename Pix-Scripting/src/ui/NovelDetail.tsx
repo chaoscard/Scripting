@@ -111,15 +111,15 @@ import {
   SeriesEpisodePager,
   TagChip,
 } from "./components"
-import { NovelReaderView, NovelReaderWebView } from "./novelReader"
-import { NovelImmersiveReaderView } from "./novelImmersiveReader"
+import { NovelReaderView, NovelReaderWebView } from "./NovelReader"
+import { NovelImmersiveReaderView } from "./NovelImmersiveReader"
 import {
   PAGE_TOOLBAR_BACKGROUND,
   PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
 } from "./components/pageChrome"
 import { CommentsSheet } from "./comments"
 import { NovelAISheet, type NovelAIMode } from "./aiSheet"
-import { NovelTypographySheet } from "./novelTypographySheet"
+import { NovelTypographySheet } from "./NovelTypographySheet"
 import {
   loadNovelReaderSettings,
   onNovelReaderSettingsChanged,
