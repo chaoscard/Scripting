@@ -20,7 +20,7 @@ import {
 } from "../../image/imageLoader"
 import { loadSettings } from "../../store/settings"
 import { notifyLaunchReady } from "../LaunchCoordinator"
-import { useLatest } from "../hooks"
+import { useLatest } from "../Hooks"
 function imageFadeDurationSec(): number {
   const ms = loadSettings().imageFadeInDuration ?? 80
   return Math.max(0.001, Math.min(0.5, ms / 1000))

@@ -7,7 +7,7 @@ import {
   useLatest,
   usePagedList,
   currentBatchSize,
-} from "./hooks"
+} from "./Hooks"
 import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl } from "./ambient"
 import type { PixivIllustration } from "../types"
 import {

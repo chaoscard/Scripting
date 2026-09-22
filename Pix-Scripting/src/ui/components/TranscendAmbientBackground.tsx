@@ -5,7 +5,7 @@ import {
   ZStack,
 } from "scripting"
 import type { AmbientIntensity } from "../../store/settings"
-import { useLayoutMetrics } from "../hooks"
+import { useLayoutMetrics } from "../Hooks"
 
 export interface TranscendAmbientBackgroundProps {
   leadColor: Color

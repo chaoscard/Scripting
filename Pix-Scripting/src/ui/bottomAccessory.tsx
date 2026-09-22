@@ -47,7 +47,7 @@ import {
   useUserFollow,
   notifyOpenBookmarkDetail,
   notifyOpenRelatedUsers,
-} from "./hooks"
+} from "./Hooks"
 import {
   downloadEntireMangaSeries,
   downloadEntireNovelSeries,
@@ -1417,7 +1417,7 @@ export function renderRouteInfoBar(top: string) {
   if (top === "downloadManager")
     return <DockInfoBar icon="square.and.arrow.down.fill" title="下载与文件管理" />
   if (top === "downloadTasks")
-    return <DockInfoBar icon="hourglass" title="下载任务" />
+    return <DockInfoBar icon="list.clipboard" title="任务列表" />
   if (top === "downloadCreators" || top.startsWith("downloadCreator:")) {
     return <DockInfoBar icon="person.2.fill" title="创作者归档" />
   }

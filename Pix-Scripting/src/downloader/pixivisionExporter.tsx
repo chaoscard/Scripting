@@ -739,18 +739,19 @@ export async function exportPixivisionLongImageToAlbum(
         await runConcurrentTasks(uniqueUrls, 4, async (url) => {
           await ensureImageCached(url)
           loadedCount++
-          onProgress?.(loadedCount, uniqueUrls.length, `正在缓存图片 (${loadedCount}/${uniqueUrls.length})…`)
+          const statusMsg = `正在缓存画作素材 (第 ${loadedCount} 张)…`
+          onProgress?.(loadedCount, uniqueUrls.length, statusMsg)
           bgTask.updateProgress({
             current: loadedCount,
             total: totalSteps,
-            statusText: `正在缓存画作 (${loadedCount}/${uniqueUrls.length})`,
+            statusText: statusMsg,
           })
           await yieldToMainThread()
         })
 
-        onProgress?.(uniqueUrls.length, uniqueUrls.length, "正在排版与计算安全尺寸…")
+        onProgress?.(uniqueUrls.length + 1, totalSteps, "正在排版与计算安全尺寸…")
         bgTask.updateProgress({
-          current: uniqueUrls.length,
+          current: uniqueUrls.length + 1,
           total: totalSteps,
           statusText: "正在排版与计算安全尺寸…",
         })
@@ -885,9 +886,9 @@ export async function exportPixivisionLongImageToAlbum(
         const calculatedScale = maxSafePixels / Math.max(1, estimatedHeight)
         const renderScale = Math.round(Math.max(1.0, Math.min(2.0, calculatedScale)) * 10) / 10
 
-        onProgress?.(uniqueUrls.length, uniqueUrls.length, "正在渲染高清排版长图…")
+        onProgress?.(totalSteps, totalSteps, "正在渲染高清排版长图…")
         bgTask.updateProgress({
-          current: uniqueUrls.length + 1,
+          current: totalSteps,
           total: totalSteps,
           statusText: "正在渲染高清排版长图…",
         })
@@ -1093,7 +1094,7 @@ export async function exportPixivisionToEpub(
               if (cached && FileManager.existsSync(cached)) {
                 FileManager.copyFileSync(cached, imgTask.destPath)
               } else {
-                const data = await fetchImageBinaryWithRetry(imgTask.url, 2)
+                const data = await fetchImageBinaryWithRetry(imgTask.url, 2, token)
                 if (data) {
                   FileManager.writeAsDataSync(imgTask.destPath, data)
                 }
@@ -1102,7 +1103,7 @@ export async function exportPixivisionToEpub(
               console.log(`Failed to download epub image ${imgTask.fileName}:`, e?.message ?? e)
             }
             downloadedImagesCount++
-            const statusText = `正在下载原画 (${downloadedImagesCount}/${downloadTasks.length})…`
+            const statusText = `正在下载原画素材 (第 ${downloadedImagesCount} 张)…`
             onProgress?.(downloadedImagesCount, downloadTasks.length, statusText)
             task.updateProgress({
               current: downloadedImagesCount,
@@ -1113,9 +1114,9 @@ export async function exportPixivisionToEpub(
           })
 
           // 5. 构造 EPUB 章节与页面内容
-          onProgress?.(downloadTasks.length, totalSteps, "正在合成 EPUB 电子画报…")
+          onProgress?.(downloadTasks.length + 1, totalSteps, "正在合成 EPUB 电子画报…")
           task.updateProgress({
-            current: downloadTasks.length,
+            current: downloadTasks.length + 1,
             total: totalSteps,
             statusText: "正在生成画报页面与目录…",
           })
@@ -1343,9 +1344,9 @@ ${manifestItemsXml}
           FileManager.writeAsStringSync(`${oebpsDir}/content.opf`, contentOpf, "utf-8")
 
           // 7. 组装与打包 EPUB
-          onProgress?.(downloadTasks.length + 1, totalSteps, "正在压缩封装 EPUB 归档…")
+          onProgress?.(totalSteps, totalSteps, "正在压缩封装 EPUB 归档…")
           task.updateProgress({
-            current: downloadTasks.length + 1,
+            current: totalSteps,
             total: totalSteps,
             statusText: "正在压缩封装 EPUB 归档…",
           })

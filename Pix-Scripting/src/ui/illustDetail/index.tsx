@@ -9,7 +9,7 @@ import {
   PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
 } from "../components/pageChrome"
 import { useDualRoute } from "../DualRouteContext"
-import { useLayoutMetrics } from "../hooks"
+import { useLayoutMetrics } from "../Hooks"
 import { addBookmark, bookmarkDetail, bookmarkTags } from "../../api/pixiv"
 import { session } from "../../api/session"
 import { updateHistoryBookmark } from "../../store/history"

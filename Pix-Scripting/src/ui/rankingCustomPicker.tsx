@@ -32,7 +32,7 @@ import {
   type AppSettings,
   type RankingOptionDef,
 } from "../store/settings"
-import { useTimedFlag } from "./hooks"
+import { useTimedFlag } from "./Hooks"
 import {
   PAGE_TOOLBAR_BACKGROUND,
   PAGE_TOOLBAR_BACKGROUND_VISIBILITY,

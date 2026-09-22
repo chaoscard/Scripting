@@ -55,11 +55,11 @@ import {
 import { cacheIllust } from "../store/illustCache"
 import { cacheNovel } from "../store/novelCache"
 import { cardThumbUrlOf, novelThumbUrlOf, prefetch } from "../image/imageLoader"
-import { currentBatchSize, useLatest, usePagedList } from "./hooks"
+import { currentBatchSize, useLatest, usePagedList } from "./Hooks"
 import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl, recordActiveAmbientImageUrl } from "./ambient"
 import { useDualRoute } from "./DualRouteContext"
 import { getActiveTabKind, onActiveTabChanged, requestPixivRoute, type PixivTabKind } from "../store/routeNavigation"
-import { HistoryAnalyticsView } from "./historyAnalytics"
+import { HistoryAnalyticsView } from "./HistoryAnalytics"
 import type { PixivIllustration, PixivNovel } from "../types"
 
 export type HistoryKind = HistoryContentKind

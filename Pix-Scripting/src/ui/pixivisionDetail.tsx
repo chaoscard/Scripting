@@ -39,7 +39,7 @@ import {
   withAlbumKeepAlive,
 } from "../downloader"
 import { renderDestination } from "../store/routeNavigation"
-import { useAsyncGuard, useLayoutMetrics } from "./hooks"
+import { useAsyncGuard, useLayoutMetrics } from "./Hooks"
 import { AppNavigationLink, useDualRoute } from "./DualRouteContext"
 import { useExperimentalAmbientPalette } from "./ambient"
 import { IllustGalleryView } from "./IllustGalleryView"

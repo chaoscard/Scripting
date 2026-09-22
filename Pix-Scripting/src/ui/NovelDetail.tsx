@@ -60,7 +60,7 @@ import {
   useOpenRelatedUsersListener,
   usePagedList,
   waitForNovelLoadingFeedback,
-} from "./hooks"
+} from "./Hooks"
 import { useNovelExperimentalAmbientPalette } from "./ambient"
 import { useFloatingCapsuleHeight } from "./bottomAccessory"
 import { novelThumbUrlOf, prefetch } from "../image/imageLoader"

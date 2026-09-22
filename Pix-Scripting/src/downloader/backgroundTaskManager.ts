@@ -6,6 +6,11 @@ import { PixivTaskLiveActivity, type TaskLiveActivityState } from "../../live_ac
 import { loadSettings } from "../store/settings"
 import { triggerHaptic } from "../platform/haptics"
 import { isScriptingProUser } from "../platform/pro"
+import {
+  saveActiveTaskActivityMeta,
+  clearActiveTaskActivityMeta,
+  clearTaskSignal,
+} from "./TaskSignal"
 
 export interface BackgroundTaskOptions {
   taskId?: string
@@ -87,6 +92,21 @@ export async function beginBackgroundTask(
         isPaused: false,
       }
       await liveActivityInstance.start(initialState)
+      saveActiveTaskActivityMeta({
+        taskId,
+        activityId: liveActivityInstance.activityId,
+        title: options.title,
+        subtitle: options.subtitle,
+        statusText: options.initialStatus || "正在准备任务…",
+        progress: 0.0,
+        current: 0,
+        total: currentTotal,
+        categoryIcon: options.categoryIcon || "square.and.arrow.down.fill",
+        isPaused: false,
+        isDone: false,
+        isError: false,
+        updatedAt: Date.now(),
+      })
     } catch (err: any) {
       console.log("LiveActivity start error:", err?.message ?? err)
       liveActivityInstance = null
@@ -120,11 +140,12 @@ export async function beginBackgroundTask(
 
     if (liveActivityInstance) {
       try {
+        const finalStatus = isCurrentlyPaused ? "任务已暂停" : progressOptions.statusText
         liveActivityInstance.update({
           taskId,
           title: options.title,
           subtitle: options.subtitle,
-          statusText: isCurrentlyPaused ? "任务已暂停" : progressOptions.statusText,
+          statusText: finalStatus,
           progress: progressVal,
           current: currentCount,
           total: currentTotal,
@@ -132,6 +153,21 @@ export async function beginBackgroundTask(
           isDone: false,
           isError: false,
           isPaused: isCurrentlyPaused,
+        })
+        saveActiveTaskActivityMeta({
+          taskId,
+          activityId: liveActivityInstance.activityId,
+          title: options.title,
+          subtitle: options.subtitle,
+          statusText: finalStatus,
+          progress: progressVal,
+          current: currentCount,
+          total: currentTotal,
+          categoryIcon: options.categoryIcon || "square.and.arrow.down.fill",
+          isPaused: isCurrentlyPaused,
+          isDone: false,
+          isError: false,
+          updatedAt: Date.now(),
         })
       } catch (err: any) {
         console.log("LiveActivity update error:", err?.message ?? err)
@@ -149,6 +185,9 @@ export async function beginBackgroundTask(
   }) => {
     if (isFinished) return
     isFinished = true
+
+    clearActiveTaskActivityMeta()
+    clearTaskSignal(taskId)
 
     const currentSettings = loadSettings()
     const isCanceled = Boolean(finishOptions.isCanceled)

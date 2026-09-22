@@ -26,7 +26,7 @@ import { AppNavigationLink, isPaneRoute, useDualRoute } from "./DualRouteContext
 import { session } from "../api/session"
 import { loadSettings, onSettingsChanged } from "../store/settings"
 import { appToolbar, AvatarImage } from "./components"
-import { useLayoutMetrics } from "./hooks"
+import { useLayoutMetrics } from "./Hooks"
 import { requestPixivRoute, setActiveTabKind, useIsCurrentTab } from "../store/routeNavigation"
 import { destinationElement } from "./destinationElement"
 import { DockActionBar, useRegisterBottomAccessory, type DockActionItem } from "./bottomAccessory"

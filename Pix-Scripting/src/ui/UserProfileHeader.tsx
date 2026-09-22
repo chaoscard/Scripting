@@ -11,7 +11,7 @@ import {
   useMemo,
 } from "scripting"
 import { appGlass } from "./components/glass"
-import { useLayoutMetrics } from "./hooks"
+import { useLayoutMetrics } from "./Hooks"
 import type { PixivUserDetail, PixivWebUserDetail } from "../types"
 import type { UserAmbientPalette } from "../image/colorExtractor"
 import { AvatarImage, CachedImage, ExpandableIntroduction, useCachedImage } from "./components"

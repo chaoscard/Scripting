@@ -25,7 +25,7 @@ function SeriesView(props: any) {
 
 // 延迟引用 HistoryAnalyticsView 解耦
 function HistoryAnalyticsView(props: any) {
-  const mod = require("./historyAnalytics")
+  const mod = require("./HistoryAnalytics")
   const Comp = mod.HistoryAnalyticsView || mod.default
   return <Comp {...props} />
 }

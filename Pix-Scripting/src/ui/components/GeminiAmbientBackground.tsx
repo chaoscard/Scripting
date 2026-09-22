@@ -11,7 +11,7 @@ import {
   onSettingsChanged,
   type AmbientIntensity,
 } from "../../store/settings"
-import { useLayoutMetrics } from "../hooks"
+import { useLayoutMetrics } from "../Hooks"
 
 export interface GeminiAmbientBackgroundProps {
   /**

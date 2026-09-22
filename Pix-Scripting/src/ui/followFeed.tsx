@@ -46,7 +46,7 @@ import { setActiveTabKind } from "../store/routeNavigation"
 import { destinationElement } from "./destinationElement"
 import { useDualRoute } from "./DualRouteContext"
 import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
-import { useLatest, usePagedList, currentBatchSize, useLayoutMetrics } from "./hooks"
+import { useLatest, usePagedList, currentBatchSize, useLayoutMetrics } from "./Hooks"
 import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl } from "./ambient"
 import type {
   PixivIllustration,

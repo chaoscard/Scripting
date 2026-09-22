@@ -11,7 +11,7 @@ import {
 import { triggerResumeSync } from "./src/store/historySync"
 import { abortAllAITasks } from "./src/api/aiService"
 import { requestPixivRoute } from "./src/store/routeNavigation"
-import { useIsFullScreen } from "./src/ui/fullScreenState"
+import { useIsFullScreen } from "./src/ui/FullScreenState"
 
 // 顶层初始化：首次挂载 Tab 时执行存储准备与服务预热
 bootstrapStorage().catch(() => {})

@@ -28,23 +28,27 @@ export async function fetchImageBinaryWithRetry(
   if (token) await token.checkOrWait()
 
   try {
-    const data = await downloadBinary(url)
+    const data = await downloadBinary(url, undefined, token?.signal)
     if (data) return data
   } catch (err: any) {
+    if (token?.isCancelled || token?.isPaused) return null
     console.log("fetchImageBinary error (retrying):", url.slice(0, 80), err?.message ?? err)
   }
 
   if (token) await token.checkOrWait()
 
   if (retryCount > 0) {
+    if (token?.isCancelled || token?.isPaused) return null
     await new Promise<void>((resolve) => {
       setTimeout(resolve, 600)
     })
     if (token) await token.checkOrWait()
     try {
-      const data = await downloadBinary(url)
+      const data = await downloadBinary(url, undefined, token?.signal)
       if (data) return data
-    } catch {}
+    } catch {
+      if (token?.isCancelled || token?.isPaused) return null
+    }
   }
   return null
 }

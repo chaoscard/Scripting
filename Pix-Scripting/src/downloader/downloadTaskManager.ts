@@ -2,6 +2,14 @@ import { getCategoryDirectory } from "./directoryResolver"
 import { beginBackgroundTask, type BackgroundTaskHandle } from "./backgroundTaskManager"
 import { notifyDownloadFilesChanged } from "./downloadFileManager"
 import { yieldToMainThread } from "./downloadHelper"
+import {
+  consumeTaskSignal,
+  clearTaskSignal,
+  clearActiveTaskActivityMeta,
+} from "./TaskSignal"
+
+declare const AbortController: any
+type AbortSignal = any
 
 export type DownloadTaskType =
   | "illust_album"
@@ -67,13 +75,16 @@ export class TaskPauseError extends Error {
 }
 
 /**
- * 任务执行控制令牌，提供细粒度暂停、恢复、取消及断点等待能力
+ * 任务执行控制令牌，提供细粒度暂停、恢复、取消、网络 I/O 中断及断点等待能力
  */
 export class TaskControlToken {
   private _isPaused = false
   private _isCancelled = false
   private _resumePromise: Promise<void> | null = null
   private _resumeResolver: (() => void) | null = null
+  private _abortController = new AbortController()
+
+  constructor(public readonly taskId?: string) {}
 
   get isPaused(): boolean {
     return this._isPaused
@@ -83,9 +94,17 @@ export class TaskControlToken {
     return this._isCancelled
   }
 
+  get signal(): AbortSignal {
+    return this._abortController.signal
+  }
+
   pause(): void {
     if (this._isCancelled || this._isPaused) return
     this._isPaused = true
+    try {
+      this._abortController.abort("Task paused")
+    } catch {}
+    this._abortController = new AbortController()
     this._resumePromise = new Promise<void>((resolve) => {
       this._resumeResolver = resolve
     })
@@ -94,6 +113,7 @@ export class TaskControlToken {
   resume(): void {
     if (!this._isPaused) return
     this._isPaused = false
+    this._abortController = new AbortController()
     if (this._resumeResolver) {
       this._resumeResolver()
       this._resumeResolver = null
@@ -103,6 +123,9 @@ export class TaskControlToken {
 
   cancel(): void {
     this._isCancelled = true
+    try {
+      this._abortController.abort("Task cancelled")
+    } catch {}
     if (this._resumeResolver) {
       this._resumeResolver()
       this._resumeResolver = null
@@ -110,7 +133,19 @@ export class TaskControlToken {
     }
   }
 
-  async checkOrWait(): Promise<void> {
+  async checkOrWait(overrideTaskId?: string): Promise<void> {
+    const id = overrideTaskId || this.taskId
+    if (id) {
+      const signal = consumeTaskSignal(id)
+      if (signal === "cancel") {
+        this.cancel()
+        throw new TaskAbortError()
+      } else if (signal === "pause") {
+        this.pause()
+      } else if (signal === "resume") {
+        this.resume()
+      }
+    }
     if (this._isCancelled) {
       throw new TaskAbortError()
     }
@@ -146,9 +181,38 @@ class DownloadTaskManagerImpl {
   private activeTaskId: string | null = null
   private listeners = new Set<() => void>()
   private notifyTimer: any = null
+  private signalPollTimer: any = null
 
   constructor() {
     this.ensureTaskDirectory()
+  }
+
+  private startSignalPolling(): void {
+    if (this.signalPollTimer) return
+    const poll = () => {
+      if (!this.activeTaskId) {
+        this.stopSignalPolling()
+        return
+      }
+      const targetId = this.activeTaskId
+      const signal = consumeTaskSignal(targetId)
+      if (signal === "pause") {
+        void this.pauseTask(targetId)
+      } else if (signal === "resume") {
+        void this.resumeTask(targetId)
+      } else if (signal === "cancel") {
+        void this.cancelTask(targetId)
+      }
+      this.signalPollTimer = setTimeout(poll, 250)
+    }
+    this.signalPollTimer = setTimeout(poll, 250)
+  }
+
+  private stopSignalPolling(): void {
+    if (this.signalPollTimer) {
+      clearTimeout(this.signalPollTimer)
+      this.signalPollTimer = null
+    }
   }
 
   private ensureTaskDirectory(): string {
@@ -307,7 +371,7 @@ class DownloadTaskManagerImpl {
       startTime: Date.now(),
     }
 
-    const token = new TaskControlToken()
+    const token = new TaskControlToken(taskId)
     const record: InternalTaskRecord = {
       item,
       runner: options.runner,
@@ -346,6 +410,7 @@ class DownloadTaskManagerImpl {
     if (!record || !record.runner) return
 
     this.activeTaskId = nextId
+    this.startSignalPolling()
     record.item = {
       ...record.item,
       status: "running",
@@ -468,6 +533,7 @@ class DownloadTaskManagerImpl {
       }
     } finally {
       this.activeTaskId = null
+      this.stopSignalPolling()
       this.notify()
       void this.scheduleNext()
     }
@@ -497,6 +563,7 @@ class DownloadTaskManagerImpl {
           isPaused: true,
         })
       }
+      clearTaskSignal(targetId)
       this.notify()
       return true
     } else if (record.item.status === "queued") {
@@ -505,6 +572,7 @@ class DownloadTaskManagerImpl {
         status: "paused",
         statusText: "已暂停",
       }
+      clearTaskSignal(targetId)
       this.notify()
       return true
     }
@@ -521,6 +589,7 @@ class DownloadTaskManagerImpl {
     if (!record) return false
 
     if (record.item.status === "paused") {
+      clearTaskSignal(targetId)
       if (record.token.isPaused) {
         record.item = {
           ...record.item,
@@ -562,6 +631,8 @@ class DownloadTaskManagerImpl {
     const record = this.tasks.get(targetId)
     if (!record) return false
 
+    clearTaskSignal(targetId)
+    clearActiveTaskActivityMeta()
     record.token.cancel()
     if (record.item.status === "running") {
       record.item = {
@@ -613,6 +684,20 @@ class DownloadTaskManagerImpl {
   }
 
   /**
+   * 清除单条已完成/已取消/失败的任务记录
+   */
+  removeTask(taskId: string): void {
+    const record = this.tasks.get(taskId)
+    if (!record) return
+    if (record.item.status === "running") return
+
+    this.cleanupTaskDir(taskId)
+    this.tasks.delete(taskId)
+    this.taskOrder = this.taskOrder.filter((id) => id !== taskId)
+    this.notify()
+  }
+
+  /**
    * 清除所有已完成/已取消的任务记录
    */
   clearCompletedTasks(): void {
@@ -635,6 +720,7 @@ class DownloadTaskManagerImpl {
    */
   cleanupTaskDir(taskId: string): void {
     try {
+      clearTaskSignal(taskId)
       const dir = `${this.ensureTaskDirectory()}/${taskId}`
       if (FileManager.existsSync(dir)) {
         FileManager.removeSync(dir)

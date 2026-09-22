@@ -10,7 +10,7 @@ import {
   ContainerLayoutContext,
   ResponsiveContainer,
   useLayoutMetrics,
-} from "./hooks"
+} from "./Hooks"
 import {
   MainTabView,
 } from "./TabShellShared"

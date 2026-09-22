@@ -21,7 +21,7 @@ import {
   nextNotifications,
   type PixivNotification,
 } from "../api/pixiv"
-import { currentBatchSize, usePagedList } from "./hooks"
+import { currentBatchSize, usePagedList } from "./Hooks"
 import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl, recordActiveAmbientImageUrl } from "./ambient"
 import { prefetch } from "../image/imageLoader"
 import { loadSettings, onSettingsChanged } from "../store/settings"

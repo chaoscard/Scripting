@@ -42,7 +42,7 @@ import {
   getCachedIllustBookmark,
   getCachedNovelBookmark,
 } from "../store/bookmarkSync"
-import { useAsyncGuard, useLatest, usePagedList, currentBatchSize } from "./hooks"
+import { useAsyncGuard, useLatest, usePagedList, currentBatchSize } from "./Hooks"
 import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl, recordActiveAmbientImageUrl } from "./ambient"
 import type { PixivBookmarkTag, PixivIllustration, PixivNovel } from "../types"
 import {

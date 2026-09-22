@@ -79,7 +79,7 @@ import {
   useLatest,
   usePagedList,
   useSeriesWatchlist,
-} from "./hooks"
+} from "./Hooks"
 import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl } from "./ambient"
 
 type SeriesKind = "manga" | "novel"

@@ -203,12 +203,16 @@ async function withTransientRetry<T>(
   throw lastError
 }
 
+declare const AbortController: any
+export type AbortSignal = any
+
 export interface RequestOptions {
   headers?: Record<string, string>
   body?: string
   timeout?: number
   skipPace?: boolean
   allowedOrigin?: string | string[]
+  signal?: AbortSignal
 }
 
 function assertAllowedURL(url: string, allowedOrigin: string | string[]): void {
@@ -258,6 +262,9 @@ async function rawRequest(
         }
       : undefined,
   }
+  if (opts.signal) {
+    init.signal = opts.signal
+  }
   if (opts.body !== undefined) {
     init.body = opts.body
   }
@@ -265,7 +272,10 @@ async function rawRequest(
   try {
     response = await fetch(url, init)
   } catch (err: any) {
-    if (err?.name === "TimeoutError" || err?.name === "AbortError") {
+    if (err?.name === "AbortError" || opts.signal?.aborted) {
+      throw err
+    }
+    if (err?.name === "TimeoutError") {
       throw new PixivError(0, "请求超时，请检查网络后重试")
     }
     throw new PixivError(0, `网络错误：${err?.message ?? "未知错误"}`)
@@ -510,22 +520,39 @@ export function isAllowedImageDownloadURL(url: string): boolean {
 
 // 下载二进制（图片等），带 Referer 与 HTTPS 安全过滤；跳过 API 限速（图片 CDN 并发下载）
 // 支持自动解析图片镜像源（如 i.pixiv.re），并在镜像源下载失败时静默回退至官方原始源重试
+// 支持通过 AbortSignal 实现秒级中断掐断网络阻塞
 export async function downloadBinary(
   url: string,
-  extraHeaders?: Record<string, string>
+  extraHeaders?: Record<string, string>,
+  signal?: AbortSignal
 ): Promise<Data | null> {
+  if (signal?.aborted) {
+    return null
+  }
   const targetUrl = resolveImageUrl(url)
   if (!isAllowedImageDownloadURL(targetUrl)) {
     console.log("downloadBinary rejected insecure or non-HTTPS URL:", targetUrl.slice(0, 90))
     return null
   }
-  const { status, data } = await rawRequest(targetUrl, "GET", {
-    headers: { ...imageHeaders(targetUrl), ...(extraHeaders ?? {}) },
-    timeout: 60,
-    skipPace: true,
-  })
-  if (status >= 200 && status < 300) {
-    return data
+
+  try {
+    const { status, data } = await rawRequest(targetUrl, "GET", {
+      headers: { ...imageHeaders(targetUrl), ...(extraHeaders ?? {}) },
+      timeout: 60,
+      skipPace: true,
+      signal,
+    })
+    if (status >= 200 && status < 300) {
+      return data
+    }
+  } catch (err: any) {
+    if (err?.name === "AbortError" || signal?.aborted) {
+      return null
+    }
+  }
+
+  if (signal?.aborted) {
+    return null
   }
 
   // 容灾降级：若镜像源未成功且与原 URL 不同，尝试回退官方原源重试
@@ -535,15 +562,20 @@ export async function downloadBinary(
         headers: { ...imageHeaders(url), ...(extraHeaders ?? {}) },
         timeout: 45,
         skipPace: true,
+        signal,
       })
       if (fallbackRes.status >= 200 && fallbackRes.status < 300 && fallbackRes.data) {
         return fallbackRes.data
       }
-    } catch {
-      // ignore fallback error
+    } catch (err: any) {
+      if (err?.name === "AbortError" || signal?.aborted) {
+        return null
+      }
     }
   }
 
-  console.log("image download failed:", targetUrl.slice(0, 90), "status:", status)
+  if (!signal?.aborted) {
+    console.log("image download failed:", targetUrl.slice(0, 90))
+  }
   return null
 }

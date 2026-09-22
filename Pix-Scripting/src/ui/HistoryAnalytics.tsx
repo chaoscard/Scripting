@@ -41,7 +41,7 @@ import {
   type TopCreatorItem,
   type TopTagItem,
 } from "../store/historyAnalytics"
-import { ResponsiveContainer, useLayoutMetrics } from "./hooks"
+import { ResponsiveContainer, useLayoutMetrics } from "./Hooks"
 import { useDualRoute } from "./DualRouteContext"
 import { requestPixivRoute } from "../store/routeNavigation"
 import { triggerHaptic } from "../platform/haptics"

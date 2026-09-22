@@ -24,7 +24,7 @@ import { EmptyView, ErrorView, LoadingView } from "./StatusViews"
 import { LoadMoreTrigger } from "./RefreshableScrollView"
 import { sheetDetents, sheetTopBar } from "./pageChrome"
 import { prefetch } from "../../image/imageLoader"
-import { currentBatchSize, usePagedList } from "../hooks"
+import { currentBatchSize, usePagedList } from "../Hooks"
 import type { PixivPage, PixivUserPreview } from "../../types"
 
 type ConnectionPreview = PixivUserPreview & { id: number }

@@ -84,7 +84,7 @@ import {
   useLatest,
   usePagedList,
   useLayoutMetrics,
-} from "./hooks"
+} from "./Hooks"
 import { useExperimentalAmbientPalette } from "./ambient"
 import type {
   AdvancedSearchParams,

@@ -13,7 +13,7 @@ import { isIllustContentVisible } from "../../store/contentFilter"
 import { loadSettings, onSettingsChanged } from "../../store/settings"
 import type { PixivIllustration } from "../../types"
 import { IllustFlowFeed } from "../components"
-import { currentBatchSize, useLatest, usePagedList } from "../hooks"
+import { currentBatchSize, useLatest, usePagedList } from "../Hooks"
 
 function filterRelatedIllustrations(
   items: PixivIllustration[],

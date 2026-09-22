@@ -39,7 +39,7 @@ import {
   isNovelContentVisible,
 } from "../store/contentFilter"
 import { isUserFollowed, onUserFollowChanged } from "../store/userFollow"
-import { useAsyncGuard, useLatest, usePagedList, currentBatchSize } from "./hooks"
+import { useAsyncGuard, useLatest, usePagedList, currentBatchSize } from "./Hooks"
 import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl, recordActiveAmbientImageUrl } from "./ambient"
 import type { PixivIllustration, PixivNovel } from "../types"
 import { triggerHaptic } from "../platform/haptics"

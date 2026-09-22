@@ -26,7 +26,7 @@ import {
 } from "../store/pixivisionBookmarks"
 import { CachedImage } from "./components/CachedImage"
 import { EmptyView, RefreshableScrollView } from "./components"
-import { useLayoutMetrics } from "./hooks"
+import { useLayoutMetrics } from "./Hooks"
 import { useExperimentalAmbientPalette } from "./ambient"
 import { recordPixivisionCoverUrl } from "../image/imageLoader"
 import { loadSettings, onSettingsChanged } from "../store/settings"

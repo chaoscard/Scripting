@@ -47,7 +47,7 @@ import {
   DockSegmentedBar,
   useRegisterBottomAccessory,
 } from "./bottomAccessory"
-import { useLatest, usePagedList, currentBatchSize, useLayoutMetrics } from "./hooks"
+import { useLatest, usePagedList, currentBatchSize, useLayoutMetrics } from "./Hooks"
 import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl } from "./ambient"
 import type {
   PixivIllustration,

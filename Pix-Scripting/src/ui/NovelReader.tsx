@@ -20,7 +20,7 @@ import {
 import { appGlass } from "./components/glass"
 import { requestPixivRoute } from "../store/routeNavigation"
 import { CachedImage, presentExternalURL, routeForDescriptionLink } from "./components"
-import { useLayoutMetrics } from "./hooks"
+import { useLayoutMetrics } from "./Hooks"
 import { session } from "../api/session"
 import { illustrationDetail } from "../api/pixiv"
 import { imageUrlOf, pageThumbUrlOf, cachedFilePath, loadImage } from "../image/imageLoader"

@@ -69,7 +69,7 @@ import {
 } from "../../store/illustCache"
 import { getCachedIllustBookmark } from "../../store/bookmarkSync"
 import { getSeriesByWorkID, recordWorkSeriesAssociation } from "../../store/seriesCache"
-import { useAsyncGuard, useIllustBookmark, useLatest, useOpenBookmarkDetailListener, useOpenRelatedUsersListener } from "../hooks"
+import { useAsyncGuard, useIllustBookmark, useLatest, useOpenBookmarkDetailListener, useOpenRelatedUsersListener } from "../Hooks"
 import { renderAmbientBackground, recordActiveAmbientImageUrl, getLastActiveAmbientImageUrl } from "../ambient"
 import type { PixivIllustration } from "../../types"
 import { IllustGalleryView } from "../IllustGalleryView"

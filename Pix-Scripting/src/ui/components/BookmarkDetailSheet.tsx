@@ -35,7 +35,7 @@ import {
 } from "../../api/pixiv"
 import { session } from "../../api/session"
 import { loadSettings } from "../../store/settings"
-import { useIllustBookmark, useLatest, useNovelBookmark } from "../hooks"
+import { useIllustBookmark, useLatest, useNovelBookmark } from "../Hooks"
 import { TagChip } from "./TagChip"
 import { CachedImage } from "./CachedImage"
 import { LoadingView } from "./StatusViews"

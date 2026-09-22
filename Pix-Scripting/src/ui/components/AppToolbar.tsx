@@ -1,7 +1,7 @@
 import { Button, Device, HStack, Script, Spacer, Text } from "scripting"
 import { loadSettings } from "../../store/settings"
 import { abortAllAITasks } from "../../api/aiService"
-import { useIsFullScreen, toggleFullScreen } from "../fullScreenState"
+import { useIsFullScreen, toggleFullScreen } from "../FullScreenState"
 
 export function FullScreenToggleButton() {
   const isFull = useIsFullScreen()

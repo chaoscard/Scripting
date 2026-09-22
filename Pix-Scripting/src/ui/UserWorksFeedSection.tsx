@@ -25,7 +25,7 @@ import { cardThumbUrlOf, novelThumbUrlOf, prefetch } from "../image/imageLoader"
 import { loadSettings, onSettingsChanged } from "../store/settings"
 import { isIllustContentVisible, isNovelContentVisible } from "../store/contentFilter"
 import { isUserFollowed, onUserFollowChanged } from "../store/userFollow"
-import { currentBatchSize, useLatest, usePagedList } from "./hooks"
+import { currentBatchSize, useLatest, usePagedList } from "./Hooks"
 import {
   EmptyView,
   ErrorView,

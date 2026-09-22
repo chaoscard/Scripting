@@ -25,7 +25,7 @@ import {
   ZStack,
 } from "scripting"
 import { appGlass } from "./components/glass"
-import { useLayoutMetrics } from "./hooks"
+import { useLayoutMetrics } from "./Hooks"
 import { presentExternalURL, routeForDescriptionLink } from "./components"
 import { requestPixivRoute } from "../store/routeNavigation"
 import {

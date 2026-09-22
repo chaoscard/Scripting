@@ -24,7 +24,7 @@ import {
   PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
 } from "./components/pageChrome"
 import { appGlass } from "./components/glass"
-import { ContainerLayoutContext, useLayoutMetrics } from "./hooks"
+import { ContainerLayoutContext, useLayoutMetrics } from "./Hooks"
 import { useExperimentalAmbientPalette } from "./ambient/useIllustAmbient"
 import { useLastActiveAmbientImageUrl } from "./ambient/tracker"
 import {

@@ -51,7 +51,7 @@ import {
   type DownloadTaskItem,
 } from "../downloader/downloadTaskManager"
 import { appToolbar } from "./components"
-import { useLayoutMetrics } from "./hooks"
+import { useLayoutMetrics } from "./Hooks"
 import { destinationElement } from "./destinationElement"
 import { loadSettings, onSettingsChanged, updateSettings } from "../store/settings"
 import {
@@ -560,13 +560,13 @@ export function DownloadTasksView(props: { onClose?: () => void }) {
   return (
     <ZStack
       frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-      navigationTitle="下载任务"
+      navigationTitle="任务列表"
       navigationBarTitleDisplayMode="inline"
       toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
       toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
       toolbar={
         props.onClose
-          ? appToolbar(props.onClose, "下载任务", menuToolbar, undefined, { isCompact, isSplitViewActive, isDetailPane })
+          ? appToolbar(props.onClose, "任务列表", menuToolbar, undefined, { isCompact, isSplitViewActive, isDetailPane })
           : { topBarTrailing: [menuToolbar] }
       }
     >
@@ -592,7 +592,7 @@ export function DownloadTasksView(props: { onClose?: () => void }) {
               foregroundStyle="secondaryLabel"
             />
             <Text font="headline" fontWeight="medium" foregroundStyle="secondaryLabel" multilineTextAlignment="center">
-              暂无下载任务
+              暂无任务
             </Text>
           </VStack>
         </Section>
@@ -679,7 +679,91 @@ function DownloadTaskCardRow(props: { task: DownloadTaskItem }) {
   const percentVal = Math.max(0, Math.min(100, Math.round(task.progress * 100)))
 
   return (
-    <VStack spacing={8} padding={{ vertical: 4 }}>
+    <VStack
+      spacing={8}
+      padding={{ vertical: 4 }}
+      frame={{ maxWidth: "infinity" }}
+      contentShape="rect"
+      onTapGesture={
+        isCompleted && task.outputPath
+          ? () => {
+              void previewFileQuickLook(task.outputPath!)
+            }
+          : undefined
+      }
+      trailingSwipeActions={
+        !isRunning && !isPaused && !isQueued
+          ? {
+              allowsFullSwipe: true,
+              actions: [
+                <Button
+                  key="del"
+                  title="删除"
+                  systemImage="trash"
+                  role="destructive"
+                  action={() => {
+                    DownloadTaskManager.removeTask(task.id)
+                  }}
+                />,
+                ...(isCompleted && task.outputPath
+                  ? [
+                      <Button
+                        key="preview"
+                        title="预览"
+                        systemImage="eye"
+                        tint="tintColor"
+                        action={() => {
+                          void previewFileQuickLook(task.outputPath!)
+                        }}
+                      />,
+                      <Button
+                        key="share"
+                        title="分享"
+                        systemImage="square.and.arrow.up"
+                        tint="systemGreen"
+                        action={() => {
+                          void shareFilesSystem([task.outputPath!])
+                        }}
+                      />,
+                    ]
+                  : []),
+              ],
+            }
+          : undefined
+      }
+      contextMenu={
+        isCompleted && task.outputPath
+          ? {
+              menuItems: (
+                <Group>
+                  <Button
+                    title="快速预览 (QuickLook)"
+                    systemImage="eye"
+                    action={() => {
+                      void previewFileQuickLook(task.outputPath!)
+                    }}
+                  />
+                  <Button
+                    title="系统分享"
+                    systemImage="square.and.arrow.up"
+                    action={() => {
+                      void shareFilesSystem([task.outputPath!])
+                    }}
+                  />
+                  <Button
+                    title="移除记录"
+                    systemImage="trash"
+                    role="destructive"
+                    action={() => {
+                      DownloadTaskManager.removeTask(task.id)
+                    }}
+                  />
+                </Group>
+              ),
+            }
+          : undefined
+      }
+    >
       {/* 1. 顶行：左侧图标 Tile + 主副标题 + 右侧精致状态胶囊 */}
       <HStack spacing={12} alignment="center">
         <HStack
@@ -801,60 +885,60 @@ function DownloadTaskCardRow(props: { task: DownloadTaskItem }) {
         </Text>
         <Spacer />
 
-        <HStack spacing={6}>
-          {isRunning ? (
-            <Button
-              controlSize="mini"
-              buttonStyle="bordered"
-              buttonBorderShape="circle"
-              action={() => {
-                void DownloadTaskManager.pauseTask(task.id)
-              }}
-            >
-              <Image systemName="pause.fill" font="caption" />
-            </Button>
-          ) : null}
+        {isRunning || isPaused || isQueued || isFailed ? (
+          <HStack spacing={6}>
+            {isRunning ? (
+              <Button
+                controlSize="mini"
+                buttonStyle="bordered"
+                buttonBorderShape="circle"
+                action={() => {
+                  void DownloadTaskManager.pauseTask(task.id)
+                }}
+              >
+                <Image systemName="pause.fill" font="caption" />
+              </Button>
+            ) : null}
 
-          {isPaused ? (
-            <Button
-              controlSize="mini"
-              buttonStyle="borderedProminent"
-              buttonBorderShape="circle"
-              action={() => {
-                void DownloadTaskManager.resumeTask(task.id)
-              }}
-            >
-              <Image systemName="play.fill" font="caption" />
-            </Button>
-          ) : null}
+            {isPaused ? (
+              <Button
+                controlSize="mini"
+                buttonStyle="borderedProminent"
+                buttonBorderShape="circle"
+                action={() => {
+                  void DownloadTaskManager.resumeTask(task.id)
+                }}
+              >
+                <Image systemName="play.fill" font="caption" />
+              </Button>
+            ) : null}
 
-          {isQueued ? (
-            <Button
-              controlSize="mini"
-              buttonStyle="bordered"
-              buttonBorderShape="circle"
-              action={() => {
-                void DownloadTaskManager.pauseTask(task.id)
-              }}
-            >
-              <Image systemName="pause.fill" font="caption" />
-            </Button>
-          ) : null}
+            {isQueued ? (
+              <Button
+                controlSize="mini"
+                buttonStyle="bordered"
+                buttonBorderShape="circle"
+                action={() => {
+                  void DownloadTaskManager.pauseTask(task.id)
+                }}
+              >
+                <Image systemName="pause.fill" font="caption" />
+              </Button>
+            ) : null}
 
-          {isFailed ? (
-            <Button
-              controlSize="mini"
-              buttonStyle="bordered"
-              buttonBorderShape="circle"
-              action={() => {
-                void DownloadTaskManager.retryTask(task.id)
-              }}
-            >
-              <Image systemName="arrow.clockwise" font="caption" />
-            </Button>
-          ) : null}
+            {isFailed ? (
+              <Button
+                controlSize="mini"
+                buttonStyle="bordered"
+                buttonBorderShape="circle"
+                action={() => {
+                  void DownloadTaskManager.retryTask(task.id)
+                }}
+              >
+                <Image systemName="arrow.clockwise" font="caption" />
+              </Button>
+            ) : null}
 
-          {isRunning || isPaused || isQueued ? (
             <Button
               controlSize="mini"
               buttonStyle="bordered"
@@ -866,33 +950,8 @@ function DownloadTaskCardRow(props: { task: DownloadTaskItem }) {
             >
               <Image systemName="xmark" font="caption" />
             </Button>
-          ) : null}
-
-          {isCompleted && task.outputPath ? (
-            <HStack spacing={6}>
-              <Button
-                title="预览"
-                systemImage="eye"
-                controlSize="mini"
-                buttonStyle="bordered"
-                buttonBorderShape="capsule"
-                action={() => {
-                  void previewFileQuickLook(task.outputPath!)
-                }}
-              />
-              <Button
-                title="分享"
-                systemImage="square.and.arrow.up"
-                controlSize="mini"
-                buttonStyle="bordered"
-                buttonBorderShape="capsule"
-                action={() => {
-                  void shareFilesSystem([task.outputPath!])
-                }}
-              />
-            </HStack>
-          ) : null}
-        </HStack>
+          </HStack>
+        ) : null}
       </HStack>
     </VStack>
   )
@@ -916,6 +975,7 @@ export function DownloadDetailListView(props: {
   const [sortMode, setSortMode] = useState<SortMode>("date_desc")
   const [isEditing, setIsEditing] = useState(false)
   const [selectedPaths, setSelectedPaths] = useState<string[]>([])
+  const isDeletingRef = useRef(false)
   const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
   const isAppleMusic = pageLayout === "appleMusic"
 
@@ -956,6 +1016,7 @@ export function DownloadDetailListView(props: {
   useEffect(() => {
     loadFileList(false)
     const unsubscribe = addDownloadFilesChangeListener(() => {
+      if (isDeletingRef.current) return
       void loadFileList(false)
     })
     return () => {
@@ -998,8 +1059,17 @@ export function DownloadDetailListView(props: {
     setSelectedPaths([])
     setIsEditing(false)
 
-    const { successCount } = await deleteManagedFiles(targets)
-    setFiles((prev) => prev.filter((f) => !targets.includes(f.path)))
+    isDeletingRef.current = true
+    let successCount = 0
+    try {
+      const res = await deleteManagedFiles(targets)
+      successCount = res.successCount
+      setFiles((prev) => prev.filter((f) => !targets.includes(f.path)))
+    } finally {
+      setTimeout(() => {
+        isDeletingRef.current = false
+      }, 400)
+    }
 
     if (typeof Dialog !== "undefined" && typeof Dialog.alert === "function") {
       void Dialog.alert({
@@ -1035,7 +1105,20 @@ export function DownloadDetailListView(props: {
     }
   }
 
-  async function handleDeleteSingle(item: ManagedFileItem) {
+  function handleDeleteSingleDirect(item: ManagedFileItem) {
+    isDeletingRef.current = true
+    // 1. 同步更新状态：立即从列表中移除该项，触发 iOS 原生平滑的行折叠消除动画
+    setFiles((prev) => prev.filter((f) => f.path !== item.path))
+
+    // 2. 后台异步删除物理文件，500ms 后平滑释放守卫，防止全局扫描冲突
+    void deleteManagedFile(item.path).finally(() => {
+      setTimeout(() => {
+        isDeletingRef.current = false
+      }, 500)
+    })
+  }
+
+  async function handleDeleteSingleWithConfirm(item: ManagedFileItem) {
     if (typeof Dialog !== "undefined" && typeof Dialog.confirm === "function") {
       const confirmed = await Dialog.confirm({
         title: "删除文件",
@@ -1043,26 +1126,10 @@ export function DownloadDetailListView(props: {
         confirmLabel: "删除",
         cancelLabel: "取消",
       })
-      if (!confirmed) {
-        // 用户取消时，显式进行不可变浅拷贝刷新，强制恢复可能发生位移的 Cell
-        setFiles((prev) => [...prev])
-        return
-      }
+      if (!confirmed) return
     }
 
-    // 关键：延迟 200ms 等待 iOS 原生侧滑/长按菜单动画完全收起归位，避免 Cell 消除动画与空状态切换冲突崩断
-    await new Promise<void>((resolve) => {
-      setTimeout(() => resolve(), 200)
-    })
-
-    const ok = await deleteManagedFile(item.path)
-    if (ok) {
-      setFiles((prev) => prev.filter((f) => f.path !== item.path))
-    } else {
-      if (typeof Dialog !== "undefined" && typeof Dialog.alert === "function") {
-        void Dialog.alert({ title: "删除失败", message: "无法删除该文件" })
-      }
-    }
+    handleDeleteSingleDirect(item)
   }
 
   async function handleItemTap(item: ManagedFileItem) {
@@ -1329,17 +1396,9 @@ export function DownloadDetailListView(props: {
         </Section>
       ) : null}
 
-      {/* 文件列表 */}
-      <Section
-        header={
-          <HStack>
-            <Text>共 {files.length} 个文件</Text>
-            <Spacer />
-            <Text>{loading ? "正在扫描…" : ""}</Text>
-          </HStack>
-        }
-      >
-        {files.length === 0 && !loading ? (
+      {/* 文件列表为空时的独立展示 */}
+      {files.length === 0 && !loading ? (
+        <Section>
           <VStack
             alignment="center"
             spacing={8}
@@ -1351,8 +1410,21 @@ export function DownloadDetailListView(props: {
               {searchQuery ? "未找到匹配的文件" : "当前分类暂无已下载文件"}
             </Text>
           </VStack>
-        ) : (
-          files.map((file) => {
+        </Section>
+      ) : null}
+
+      {/* 文件列表有数据时的标准展示 */}
+      {files.length > 0 ? (
+        <Section
+          header={
+            <HStack>
+              <Text>共 {files.length} 个文件</Text>
+              <Spacer />
+              <Text>{loading ? "正在扫描…" : ""}</Text>
+            </HStack>
+          }
+        >
+          {files.map((file) => {
             const isSelected = selectedPaths.includes(file.path)
             return (
               <FileRowItem
@@ -1362,12 +1434,13 @@ export function DownloadDetailListView(props: {
                 isSelected={isSelected}
                 onTap={() => handleItemTap(file)}
                 onRename={() => handleRename(file)}
-                onDelete={() => handleDeleteSingle(file)}
+                onDeleteDirect={() => handleDeleteSingleDirect(file)}
+                onDeleteWithConfirm={() => handleDeleteSingleWithConfirm(file)}
               />
             )
-          })
-        )}
-      </Section>
+          })}
+        </Section>
+      ) : null}
     </List>
   </ZStack>
   )
@@ -1436,9 +1509,10 @@ function FileRowItem(props: {
   isSelected: boolean
   onTap: () => void
   onRename: () => void
-  onDelete: () => void
+  onDeleteDirect: () => void
+  onDeleteWithConfirm: () => void
 }) {
-  const { item, isEditing, isSelected, onTap, onRename, onDelete } = props
+  const { item, isEditing, isSelected, onTap, onRename, onDeleteDirect, onDeleteWithConfirm } = props
   const { iconName, iconColor } = getFileItemVisual(item)
 
   return (
@@ -1446,15 +1520,18 @@ function FileRowItem(props: {
       alignment="center"
       spacing={12}
       padding={{ vertical: 4 }}
+      frame={{ maxWidth: "infinity" }}
+      contentShape="rect"
+      onTapGesture={onTap}
       trailingSwipeActions={{
-        allowsFullSwipe: false,
+        allowsFullSwipe: true,
         actions: [
           <Button
             key="del"
             title="删除"
             systemImage="trash"
             role="destructive"
-            action={onDelete}
+            action={onDeleteDirect}
           />,
           <Button
             key="rename"
@@ -1507,67 +1584,48 @@ function FileRowItem(props: {
               title="删除文件"
               systemImage="trash"
               role="destructive"
-              action={onDelete}
+              action={onDeleteWithConfirm}
             />
           </Group>
         ),
       }}
     >
-      {/* 行主体：点击触发主动作（查看/分享或多选切换） */}
-      <Button
-        buttonStyle="plain"
-        action={onTap}
-        frame={{ maxWidth: "infinity" }}
-      >
-        <HStack alignment="center" spacing={12} frame={{ maxWidth: "infinity" }}>
-          {/* 多选勾选指示器 */}
-          {isEditing ? (
-            <Image
-              systemName={isSelected ? "checkmark.circle.fill" : "circle"}
-              foregroundStyle={isSelected ? "tintColor" : "secondaryLabel"}
-              font="title3"
-            />
-          ) : null}
+      {/* 多选勾选指示器 */}
+      {isEditing ? (
+        <Image
+          systemName={isSelected ? "checkmark.circle.fill" : "circle"}
+          foregroundStyle={isSelected ? "tintColor" : "secondaryLabel"}
+          font="title3"
+        />
+      ) : null}
 
-          {/* 格式图标 */}
-          <Image
-            systemName={iconName}
-            foregroundStyle={iconColor as any}
-            font="title3"
-            frame={{ width: 28 }}
-          />
+      {/* 格式图标 */}
+      <Image
+        systemName={iconName}
+        foregroundStyle={iconColor as any}
+        font="title3"
+        frame={{ width: 28 }}
+      />
 
-          {/* 文件详情 */}
-          <VStack alignment="leading" spacing={3}>
-            <Text font="body" fontWeight="medium" lineLimit={2}>
-              {item.name}
-            </Text>
-            <HStack alignment="center" spacing={6}>
-              <Text font="caption" foregroundStyle="secondaryLabel">
-                {item.formattedSize}
-              </Text>
-              <Text font="caption" foregroundStyle="secondaryLabel">
-                •
-              </Text>
-              <Text font="caption" foregroundStyle="secondaryLabel">
-                {item.formattedTime}
-              </Text>
-              {item.creatorFolder ? (
-                <HStack alignment="center" spacing={2}>
-                  <Text font="caption" foregroundStyle="secondaryLabel">
-                    •
-                  </Text>
-                  <Text font="caption" foregroundStyle="tintColor" lineLimit={1}>
-                    {item.creatorFolder}
-                  </Text>
-                </HStack>
-              ) : null}
-            </HStack>
-          </VStack>
-
-          <Spacer />
+      {/* 文件详情 */}
+      <VStack alignment="leading" spacing={3}>
+        <Text font="body" fontWeight="medium" lineLimit={2}>
+          {item.name}
+        </Text>
+        <HStack alignment="center" spacing={6}>
+          <Text font="caption" foregroundStyle="secondaryLabel" lineLimit={1}>
+            {item.formattedSize}
+          </Text>
+          <Text font="caption" foregroundStyle="secondaryLabel">
+            •
+          </Text>
+          <Text font="caption" foregroundStyle="secondaryLabel" lineLimit={1}>
+            {item.formattedTime}
+          </Text>
         </HStack>
-      </Button>
+      </VStack>
+
+      <Spacer />
     </HStack>
   )
 }
@@ -1583,6 +1641,7 @@ export function DownloadCreatorsListView(props: { onClose?: () => void }) {
   const [sortMode, setSortMode] = useState<SortMode>("size_desc")
   const [isEditing, setIsEditing] = useState(false)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const isDeletingRef = useRef(false)
   const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
   const isAppleMusic = pageLayout === "appleMusic"
 
@@ -1607,6 +1666,7 @@ export function DownloadCreatorsListView(props: { onClose?: () => void }) {
   useEffect(() => {
     loadCreators(false)
     const unsubscribe = addDownloadFilesChangeListener(() => {
+      if (isDeletingRef.current) return
       void loadCreators(false)
     })
     return () => {
@@ -1648,15 +1708,24 @@ export function DownloadCreatorsListView(props: { onClose?: () => void }) {
       setTimeout(() => resolve(), 200)
     })
 
-    let successCount = 0
-    for (const c of toDelete) {
-      const ok = await deleteCreatorDirectory(c.path)
-      if (ok) successCount++
-    }
-
+    const targetIds = [...selectedIds]
     setSelectedIds([])
     setIsEditing(false)
-    setCreators((prev) => prev.filter((c) => !selectedIds.includes(c.id)))
+
+    isDeletingRef.current = true
+    let successCount = 0
+    try {
+      for (const c of toDelete) {
+        const ok = await deleteCreatorDirectory(c.path)
+        if (ok) successCount++
+      }
+      setCreators((prev) => prev.filter((c) => !targetIds.includes(c.id)))
+    } finally {
+      setTimeout(() => {
+        isDeletingRef.current = false
+      }, 400)
+    }
+
     if (typeof Dialog !== "undefined" && typeof Dialog.alert === "function") {
       void Dialog.alert({
         title: "删除完成",
@@ -1665,7 +1734,20 @@ export function DownloadCreatorsListView(props: { onClose?: () => void }) {
     }
   }
 
-  async function handleDeleteCreator(creator: CreatorFolderItem) {
+  function handleDeleteCreatorDirect(creator: CreatorFolderItem) {
+    isDeletingRef.current = true
+    // 1. 同步更新状态：立即从列表中移除，触发 iOS 原生平滑折叠消除动画
+    setCreators((prev) => prev.filter((c) => c.id !== creator.id))
+
+    // 2. 后台异步清理物理目录
+    void deleteCreatorDirectory(creator.path).finally(() => {
+      setTimeout(() => {
+        isDeletingRef.current = false
+      }, 500)
+    })
+  }
+
+  async function handleDeleteCreatorWithConfirm(creator: CreatorFolderItem) {
     if (typeof Dialog !== "undefined" && typeof Dialog.confirm === "function") {
       const confirmed = await Dialog.confirm({
         title: "删除创作者归档？",
@@ -1673,28 +1755,10 @@ export function DownloadCreatorsListView(props: { onClose?: () => void }) {
         confirmLabel: "删除全部",
         cancelLabel: "取消",
       })
-      if (!confirmed) {
-        // 用户取消时，显式进行不可变浅拷贝刷新，强制恢复 Cell
-        setCreators((prev) => [...prev])
-        return
-      }
+      if (!confirmed) return
     }
 
-    await new Promise<void>((resolve) => {
-      setTimeout(() => resolve(), 200)
-    })
-
-    const ok = await deleteCreatorDirectory(creator.path)
-    if (ok) {
-      setCreators((prev) => prev.filter((c) => c.id !== creator.id))
-      if (typeof Dialog !== "undefined" && typeof Dialog.alert === "function") {
-        void Dialog.alert({ title: "删除成功", message: `已移除创作者「${creator.name}」的文件归档。` })
-      }
-    } else {
-      if (typeof Dialog !== "undefined" && typeof Dialog.alert === "function") {
-        void Dialog.alert({ title: "删除失败", message: "无法删除该创作者文件夹" })
-      }
-    }
+    handleDeleteCreatorDirect(creator)
   }
 
   const sortContextMenu = useMemo(() => {
@@ -1886,16 +1950,9 @@ export function DownloadCreatorsListView(props: { onClose?: () => void }) {
         </Section>
       ) : null}
 
-      <Section
-        header={
-          <HStack>
-            <Text>共 {creators.length} 位创作者</Text>
-            <Spacer />
-            <Text>{loading ? "正在扫描…" : ""}</Text>
-          </HStack>
-        }
-      >
-        {creators.length === 0 && !loading ? (
+      {/* 创作者列表为空时的独立展示 */}
+      {creators.length === 0 && !loading ? (
+        <Section>
           <VStack
             alignment="center"
             spacing={8}
@@ -1907,8 +1964,21 @@ export function DownloadCreatorsListView(props: { onClose?: () => void }) {
               {searchQuery ? "未找到匹配的创作者" : "当前分类暂无已下载文件"}
             </Text>
           </VStack>
-        ) : (
-          creators.map((creator) => {
+        </Section>
+      ) : null}
+
+      {/* 创作者列表有数据时的标准展示 */}
+      {creators.length > 0 ? (
+        <Section
+          header={
+            <HStack>
+              <Text>共 {creators.length} 位创作者</Text>
+              <Spacer />
+              <Text>{loading ? "正在扫描…" : ""}</Text>
+            </HStack>
+          }
+        >
+          {creators.map((creator) => {
             const isSelected = selectedIds.includes(creator.id)
 
             const rowContent = (
@@ -1920,14 +1990,14 @@ export function DownloadCreatorsListView(props: { onClose?: () => void }) {
                 trailingSwipeActions={
                   !isEditing
                     ? {
-                        allowsFullSwipe: false,
+                        allowsFullSwipe: true,
                         actions: [
                           <Button
                             key="del"
                             title="删除全部"
                             systemImage="trash"
                             role="destructive"
-                            action={() => void handleDeleteCreator(creator)}
+                            action={() => handleDeleteCreatorDirect(creator)}
                           />,
                         ],
                       }
@@ -1990,9 +2060,9 @@ export function DownloadCreatorsListView(props: { onClose?: () => void }) {
                 {rowContent}
               </NavigationLink>
             )
-          })
-        )}
-      </Section>
+          })}
+        </Section>
+      ) : null}
     </List>
   </ZStack>
   )

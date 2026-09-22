@@ -21,7 +21,7 @@ import {
 } from "scripting"
 import { session } from "../api/session"
 import { loadSettings, onSettingsChanged, updateSettings, type AppSettings } from "../store/settings"
-import { ResponsiveContainer, useLayoutMetrics } from "./hooks"
+import { ResponsiveContainer, useLayoutMetrics } from "./Hooks"
 import { SPLIT_SHELL_MIN_WIDTH, SplitShell } from "./SplitShell"
 import { SplitViewContainer } from "./DualRouteContext"
 import { FeatureHighlightsSheet } from "./components/FeatureHighlightsSheet"

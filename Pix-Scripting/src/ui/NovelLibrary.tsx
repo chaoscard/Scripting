@@ -15,7 +15,7 @@ import {
 } from "../store/settings"
 import { isNovelContentVisible } from "../store/contentFilter"
 import { onNovelMarkerChanged } from "../store/bookmarkSync"
-import { useLatest, usePagedList, currentBatchSize } from "./hooks"
+import { useLatest, usePagedList, currentBatchSize } from "./Hooks"
 import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl, recordActiveAmbientImageUrl } from "./ambient"
 import { destinationElement } from "./destinationElement"
 import {

@@ -67,7 +67,7 @@ import {
 } from "../store/userFollow"
 import { requestPixivRoute } from "../store/routeNavigation"
 import { useDualRoute } from "./DualRouteContext"
-import { useAsyncGuard, useOpenRelatedUsersListener } from "./hooks"
+import { useAsyncGuard, useOpenRelatedUsersListener } from "./Hooks"
 import { useUserAmbientPalette } from "./ambient"
 import type {
   PixivUserDetail,

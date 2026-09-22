@@ -24,7 +24,7 @@ import { isIllustContentVisible, isNovelContentVisible } from "../../store/conte
 import { isUserFollowed } from "../../store/userFollow"
 import { novelThumbUrlOf, thumbUrlOf } from "../../image/imageLoader"
 import { triggerHaptic } from "../../platform/haptics"
-import { useLayoutMetrics, useUserFollow } from "../hooks"
+import { useLayoutMetrics, useUserFollow } from "../Hooks"
 import { AvatarImage, CachedImage } from "./CachedImage"
 import type { PixivIllustration, PixivNovel, PixivUserPreview } from "../../types"
 

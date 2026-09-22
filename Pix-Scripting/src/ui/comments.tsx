@@ -32,7 +32,7 @@ import {
 } from "../api/pixiv"
 import { session } from "../api/session"
 import { requestPixivRoute } from "../store/routeNavigation"
-import { dedupeByID, mergeUniqueByID } from "./hooks"
+import { dedupeByID, mergeUniqueByID } from "./Hooks"
 import type { PixivComment } from "../types"
 import {
   AvatarImage,

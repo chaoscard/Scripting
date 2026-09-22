@@ -14,7 +14,7 @@ import {
 } from "scripting"
 import { cachedFilePath, loadImage } from "../image/imageLoader"
 import { loadSettings } from "../store/settings"
-import { useLatest } from "./hooks"
+import { useLatest } from "./Hooks"
 import { cachedUgoiraFrames, prepareUgoira } from "../ugoira/ugoira"
 import type { UgoiraFramesResult } from "../ugoira/ugoira"
 

@@ -75,7 +75,7 @@ import {
 import { editAIShowSettings, syncWebCookies } from "../api/pixiv"
 import { session } from "../api/session"
 import { clearUgoiraCache, enforceUgoiraCacheLimit, ugoiraCacheUsageBytes } from "../ugoira/ugoira"
-import { useTimedFlag } from "./hooks"
+import { useTimedFlag } from "./Hooks"
 
 declare const Dialog: any
 
