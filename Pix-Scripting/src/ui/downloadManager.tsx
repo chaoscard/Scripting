@@ -864,7 +864,7 @@ function DownloadTaskCardRow(props: { task: DownloadTaskItem }) {
             <Text font="caption2" fontWeight="bold" foregroundStyle="tintColor">
               {percentVal}%
             </Text>
-            {task.total > 0 ? (
+            {task.total > 0 && task.total !== 1000 ? (
               <Text font="caption2" foregroundStyle="tintColor" opacity={0.75}>
                 {task.current}/{task.total}
               </Text>

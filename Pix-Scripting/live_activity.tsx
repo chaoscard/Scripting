@@ -12,6 +12,7 @@ import {
   Spacer,
   ProgressView,
   Button,
+  Script,
 } from "scripting"
 import { PauseDownloadIntent, ResumeDownloadIntent, CancelDownloadIntent } from "./app_intents"
 
@@ -27,6 +28,14 @@ export type TaskLiveActivityState = {
   isError?: boolean
   isPaused?: boolean
   categoryIcon?: string
+}
+
+function getDirectAppTasksUrl(): string {
+  try {
+    return Script.createRunURLScheme(Script.name || "Pix-Scripting", { route: "downloadTasks" })
+  } catch {
+    return "scripting://run/Pix-Scripting?route=downloadTasks"
+  }
 }
 
 function LockScreenContentView(state: TaskLiveActivityState) {
@@ -54,11 +63,13 @@ function LockScreenContentView(state: TaskLiveActivityState) {
 
   const cleanSubtitle = state.subtitle ? state.subtitle.replace(/^用户[:：]\s*/, "") : ""
   const titleText = cleanSubtitle ? `${state.title} · ${cleanSubtitle}` : state.title
+  const directUrl = getDirectAppTasksUrl()
 
   return (
     <VStack
       spacing={8}
       padding={{ horizontal: 14, vertical: 10 }}
+      widgetURL={directUrl}
     >
       {/* 1. 顶行：左侧图标 + 主副标题；右侧醒目大号百分比与数字 */}
       <HStack spacing={8}>
@@ -89,7 +100,7 @@ function LockScreenContentView(state: TaskLiveActivityState) {
           >
             {isDone ? "完成" : isError ? "失败" : isPaused ? "已暂停" : percentText}
           </Text>
-          {state.total > 0 && !isDone ? (
+          {state.total > 0 && state.total !== 1000 && !isDone ? (
             <Text font="caption2" foregroundStyle="secondaryLabel">
               {state.current}/{state.total}
             </Text>
@@ -180,7 +191,7 @@ const builder: LiveActivityUIBuilder<TaskLiveActivityState> = (state) => {
       }
       compactTrailing={
         <Text font="caption2" foregroundStyle="secondaryLabel">
-          {state.total > 0 && !isDone ? `${state.current}/${state.total}` : "Pixiv"}
+          {state.total > 0 && state.total !== 1000 && !isDone ? `${state.current}/${state.total}` : "Pixiv"}
         </Text>
       }
       minimal={
@@ -188,7 +199,7 @@ const builder: LiveActivityUIBuilder<TaskLiveActivityState> = (state) => {
       }
     >
       <LiveActivityUIExpandedLeading>
-        <HStack spacing={6}>
+        <HStack spacing={6} widgetURL={getDirectAppTasksUrl()}>
           <Image
             systemName={iconName}
             foregroundStyle={iconColor}
@@ -207,7 +218,7 @@ const builder: LiveActivityUIBuilder<TaskLiveActivityState> = (state) => {
         </HStack>
       </LiveActivityUIExpandedLeading>
       <LiveActivityUIExpandedTrailing>
-        <VStack alignment="trailing" spacing={1}>
+        <VStack alignment="trailing" spacing={1} widgetURL={getDirectAppTasksUrl()}>
           <Text
             font="title3"
             fontWeight="bold"
@@ -223,7 +234,7 @@ const builder: LiveActivityUIBuilder<TaskLiveActivityState> = (state) => {
           >
             {isDone ? "100%" : isError ? "失败" : isPaused ? "暂停" : percentText}
           </Text>
-          {state.total > 0 && !isDone ? (
+          {state.total > 0 && state.total !== 1000 && !isDone ? (
             <Text font="caption2" foregroundStyle="secondaryLabel">
               {state.current}/{state.total}
             </Text>
@@ -231,7 +242,7 @@ const builder: LiveActivityUIBuilder<TaskLiveActivityState> = (state) => {
         </VStack>
       </LiveActivityUIExpandedTrailing>
       <LiveActivityUIExpandedBottom>
-        <VStack spacing={6}>
+        <VStack spacing={6} widgetURL={getDirectAppTasksUrl()}>
           <ProgressView value={Math.max(0, Math.min(1, state.progress || 0))} total={1.0} />
           <HStack>
             <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={1}>

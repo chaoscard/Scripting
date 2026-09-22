@@ -156,6 +156,9 @@ export async function runConcurrentTasks<T, R>(
       try {
         results[index] = await task(items[index], index)
       } catch (e: any) {
+        if (e?.name === "TaskAbortError" || token?.isCancelled) {
+          throw e
+        }
         console.log(`Task at index ${index} failed:`, e?.message ?? e)
       }
       if (token) {

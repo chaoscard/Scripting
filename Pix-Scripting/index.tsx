@@ -9,6 +9,7 @@ import {
 } from "./src/bootstrap"
 import { triggerResumeSync } from "./src/store/historySync"
 import { requestPixivRoute } from "./src/store/routeNavigation"
+import { DownloadTaskManager } from "./src/downloader/downloadTaskManager"
 
 async function main() {
   try {
@@ -32,6 +33,9 @@ async function main() {
         seedIfRoute(resumeRoute)
         requestPixivRoute(resumeRoute)
       }
+      try {
+        DownloadTaskManager.checkPendingSignals()
+      } catch {}
       triggerResumeSync()
     })
     Script.onMinimize(() => {

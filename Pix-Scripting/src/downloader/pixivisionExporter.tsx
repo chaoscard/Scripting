@@ -25,6 +25,7 @@ import { session } from "../api/session"
 import { illustrationDetail } from "../api/pixiv"
 import { runWithBackgroundTask } from "./backgroundTaskManager"
 import { DownloadTaskManager } from "./downloadTaskManager"
+import { StageProgressPipeline } from "./StageProgressPipeline"
 
 declare const Dialog: any
 
@@ -978,6 +979,12 @@ export async function exportPixivisionToEpub(
       total: initialTotal,
       categoryIcon: "rectangle.stack.fill",
       runner: async (token, task, manifest, saveManifest) => {
+        const pipeline = new StageProgressPipeline(task, {
+          prepare: 0.10, // 解析直链 10%
+          download: 0.85, // 并发下载原画 85%
+          pack: 0.05, // 生成排版与压缩 5%
+        })
+
         const tempDir = `${getCategoryDirectory("temp")}/epub_pixivision_${detail.id}_${Date.now()}`
         const oebpsDir = `${tempDir}/OEBPS`
         const metaInfDir = `${tempDir}/META-INF`
@@ -988,12 +995,9 @@ export async function exportPixivisionToEpub(
           const quality = getDownloadImageQuality()
 
           // 1. 并发解析各精选画作的高清原画/大图元数据与下载直链（带协程让出主线程）
-          onProgress?.(0, artworks.length + 1, "正在解析特辑高清原画直链…")
-          task.updateProgress({
-            current: 0,
-            total: initialTotal,
-            statusText: "正在解析特辑高清原画直链…",
-          })
+          const initParsingMsg = "正在解析特辑高清原画直链…"
+          onProgress?.(0, artworks.length + 1, initParsingMsg)
+          pipeline.reportPrepare(0, artworks.length, initParsingMsg)
 
           interface ResolvedArtInfo {
             art: PixivisionArtwork
@@ -1017,6 +1021,8 @@ export async function exportPixivisionToEpub(
               fileName,
               mediaType,
             })
+            const parseMsg = `正在解析画作直链 (${idx + 1}/${artworks.length})…`
+            pipeline.reportPrepare(idx + 1, artworks.length, parseMsg)
             await yieldToMainThread()
           })
 
@@ -1080,12 +1086,9 @@ export async function exportPixivisionToEpub(
 
           // 4. 并发下载高清原图与封面（带协程让出主线程）
           let downloadedImagesCount = 0
-          onProgress?.(0, downloadTasks.length, `正在下载特辑高清原画 (共 ${downloadTasks.length} 张)…`)
-          task.updateProgress({
-            current: 0,
-            total: totalSteps,
-            statusText: `正在下载原画素材 (共 ${downloadTasks.length} 张)…`,
-          })
+          const startDownloadMsg = `正在下载原画素材 (共 ${downloadTasks.length} 张)…`
+          onProgress?.(0, downloadTasks.length, startDownloadMsg)
+          pipeline.reportDownload(0, downloadTasks.length, startDownloadMsg)
 
           await runConcurrentTasks(downloadTasks, 4, async (imgTask) => {
             await token.checkOrWait()
@@ -1105,21 +1108,14 @@ export async function exportPixivisionToEpub(
             downloadedImagesCount++
             const statusText = `正在下载原画素材 (第 ${downloadedImagesCount} 张)…`
             onProgress?.(downloadedImagesCount, downloadTasks.length, statusText)
-            task.updateProgress({
-              current: downloadedImagesCount,
-              total: totalSteps,
-              statusText,
-            })
+            pipeline.reportDownload(downloadedImagesCount, downloadTasks.length, statusText)
             await yieldToMainThread()
           })
 
           // 5. 构造 EPUB 章节与页面内容
-          onProgress?.(downloadTasks.length + 1, totalSteps, "正在合成 EPUB 电子画报…")
-          task.updateProgress({
-            current: downloadTasks.length + 1,
-            total: totalSteps,
-            statusText: "正在生成画报页面与目录…",
-          })
+          const synthesizingMsg = "正在生成画报页面与目录…"
+          onProgress?.(downloadTasks.length + 1, totalSteps, synthesizingMsg)
+          pipeline.reportPack(0, 2, synthesizingMsg)
           await yieldToMainThread()
 
           const manifestImages: Array<{ id: string; href: string; mediaType: string; isCover?: boolean }> = []
@@ -1344,12 +1340,9 @@ ${manifestItemsXml}
           FileManager.writeAsStringSync(`${oebpsDir}/content.opf`, contentOpf, "utf-8")
 
           // 7. 组装与打包 EPUB
-          onProgress?.(totalSteps, totalSteps, "正在压缩封装 EPUB 归档…")
-          task.updateProgress({
-            current: totalSteps,
-            total: totalSteps,
-            statusText: "正在压缩封装 EPUB 归档…",
-          })
+          const packagingMsg = "正在压缩封装 EPUB 归档…"
+          onProgress?.(totalSteps, totalSteps, packagingMsg)
+          pipeline.reportPack(1, 2, packagingMsg)
           await yieldToMainThread()
 
           const targetDir = getCategoryDirectory("pixivision")
@@ -1374,6 +1367,8 @@ ${manifestItemsXml}
 
           publishPreparedFile(tempZipPath, targetFilePath)
           notifyDownloadFilesChanged()
+
+          pipeline.reportComplete("特辑导出成功")
 
           resolve({
             success: true,

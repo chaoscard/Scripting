@@ -10,6 +10,7 @@ import {
   saveActiveTaskActivityMeta,
   clearActiveTaskActivityMeta,
   clearTaskSignal,
+  peekTaskSignal,
 } from "./TaskSignal"
 
 export interface BackgroundTaskOptions {
@@ -127,7 +128,11 @@ export async function beginBackgroundTask(
     currentCount = Math.max(0, progressOptions.current)
     const progressVal = Math.max(0, Math.min(1, currentTotal > 0 ? currentCount / currentTotal : 0))
 
-    if (progressOptions.isPaused !== undefined) {
+    // 状态熔断保护：若当前已标记为暂停，或外部有尚未消费的 pause 信号，严禁将 isPaused 冲刷为 false！
+    const pendingSignal = peekTaskSignal(taskId)
+    if (pendingSignal === "pause") {
+      isCurrentlyPaused = true
+    } else if (progressOptions.isPaused !== undefined) {
       isCurrentlyPaused = Boolean(progressOptions.isPaused)
     }
 

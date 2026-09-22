@@ -680,6 +680,12 @@ export async function exportAuthorManga(
           const customFileName = `[${safeAuthorName}] - [系列] ${seriesTitle} (全${episodeCount}话)`
           const isSeriesR18 = series.works.some((w) => (w.x_restrict ?? 0) > 0 || w.tags?.some((t: any) => /r-?18/i.test(t.name)))
           const seriesTags = series.works[0]?.tags?.map((t: any) => t.name) ?? []
+          const onSubMangaProgress = (subMsg: string) => {
+            const compositeMsg = `导出漫画系列「${seriesTitle}」(${currentProgress + 1}/${totalTasks}) · ${subMsg}`
+            onProgress?.(compositeMsg, currentProgress, totalTasks)
+            task.updateProgress({ current: currentProgress, total: totalTasks, statusText: compositeMsg })
+          }
+
           const res = format === "cbz"
             ? await exportMangaToCbz({
                 id: series.seriesId,
@@ -696,6 +702,7 @@ export async function exportAuthorManga(
                 customFileName,
                 token,
                 taskId: `${taskId}_series_${series.seriesId}`,
+                onProgress: onSubMangaProgress,
               })
             : await exportMangaToEpub({
                 id: series.seriesId,
@@ -710,6 +717,7 @@ export async function exportAuthorManga(
                 chapters,
                 targetDir,
                 customFileName,
+                onProgress: onSubMangaProgress,
               })
 
           if (res.success) {
@@ -749,6 +757,12 @@ export async function exportAuthorManga(
           const isSingleR18 = (single.x_restrict ?? 0) > 0 || single.tags?.some((t: any) => /r-?18/i.test(t.name))
           const singleTags = single.tags?.map((t: any) => t.name) ?? []
 
+          const onSingleMangaProgress = (subMsg: string) => {
+            const compositeMsg = `导出短篇漫画「${title}」(${currentProgress + 1}/${totalTasks}) · ${subMsg}`
+            onProgress?.(compositeMsg, currentProgress, totalTasks)
+            task.updateProgress({ current: currentProgress, total: totalTasks, statusText: compositeMsg })
+          }
+
           const res = format === "cbz"
             ? await exportMangaToCbz({
                 id: single.id,
@@ -764,6 +778,7 @@ export async function exportAuthorManga(
                 customFileName,
                 token,
                 taskId: `${taskId}_single_${single.id}`,
+                onProgress: onSingleMangaProgress,
               })
             : await exportMangaToEpub({
                 id: single.id,
@@ -777,6 +792,7 @@ export async function exportAuthorManga(
                 pages,
                 targetDir,
                 customFileName,
+                onProgress: onSingleMangaProgress,
               })
 
           if (res.success) {
@@ -906,6 +922,12 @@ export async function exportAuthorNovels(
             const seriesTags = series.works[0]?.tags?.map((t: any) => t.name) ?? []
             const customFileName = `[${safeAuthorName}] - [系列] ${seriesTitle} (全${chapterCount}章)`
 
+            const onNovelSeriesProgress = (subMsg: string) => {
+              const compositeMsg = `导出小说系列「${seriesTitle}」(${completedTasks + 1}/${totalTasks}) · ${subMsg}`
+              onProgress?.(compositeMsg, completedTasks, totalTasks)
+              task.updateProgress({ current: completedTasks, total: totalTasks, statusText: compositeMsg })
+            }
+
             const filePath = await exportNovelToEpub({
               id: series.seriesId,
               title: seriesTitle,
@@ -920,6 +942,7 @@ export async function exportAuthorNovels(
               chapters,
               targetDir,
               customFileName,
+              onProgress: onNovelSeriesProgress,
             })
 
             if (filePath) {
@@ -966,6 +989,12 @@ export async function exportAuthorNovels(
               const singleTags = single.tags?.map((t: any) => t.name) ?? []
               const customFileName = `[${safeAuthorName}] - [短篇] ${title}`
 
+              const onSingleNovelProgress = (subMsg: string) => {
+                const compositeMsg = `导出单篇小说「${title}」(${completedTasks + 1}/${totalTasks}) · ${subMsg}`
+                onProgress?.(compositeMsg, completedTasks, totalTasks)
+                task.updateProgress({ current: completedTasks, total: totalTasks, statusText: compositeMsg })
+              }
+
               const filePath = await exportNovelToEpub({
                 id: single.id,
                 title,
@@ -987,6 +1016,7 @@ export async function exportAuthorNovels(
                 ],
                 targetDir,
                 customFileName,
+                onProgress: onSingleNovelProgress,
               })
 
               if (filePath) {

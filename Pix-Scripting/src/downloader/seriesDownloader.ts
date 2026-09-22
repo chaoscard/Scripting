@@ -14,6 +14,7 @@ import { exportMangaToCbz } from "./cbzExporter"
 import { exportMangaToEpub } from "./epubExporter"
 import { DownloadTaskManager } from "./downloadTaskManager"
 import { yieldToMainThread } from "./downloadHelper"
+import { StageProgressPipeline } from "./StageProgressPipeline"
 
 /**
  * 整本下载并导出小说系列为单本 EPUB 电子书（支持断点续传与手动暂停/恢复/取消）
@@ -33,10 +34,16 @@ export async function downloadEntireNovelSeries(
       subtitle: fallbackTitle ? `《${fallbackTitle}》` : `系列 ID: ${seriesID}`,
       categoryIcon: "book.closed.fill",
       runner: async (token, task, manifest, saveManifest) => {
+        const pipeline = new StageProgressPipeline(task, {
+          prepare: 0.10, // 章节与正文扫描 10%
+          download: 0.85, // 全量插图下载 85%
+          pack: 0.05, // EPUB 封装生成 5%
+        })
+
         try {
           const initMsg = "正在获取小说系列目录…"
           onProgress?.(initMsg, 0, 1)
-          task.updateProgress({ current: 0, total: 1, statusText: initMsg })
+          pipeline.reportPrepare(0, 1, initMsg)
 
           const allNovels: any[] = []
           let seriesTitle = fallbackTitle || ""
@@ -81,9 +88,9 @@ export async function downloadEntireNovelSeries(
           for (let i = 0; i < totalNovels; i++) {
             await token.checkOrWait()
             const novelItem = allNovels[i]
-            const statusMsg = `正在拉取正文 (${i + 1}/${totalNovels}): ${novelItem.title}`
+            const statusMsg = `正在拉取章节正文 (${i + 1}/${totalNovels}): ${novelItem.title}`
             onProgress?.(statusMsg, i + 1, totalNovels)
-            task.updateProgress({ current: i + 1, total: totalNovels, statusText: statusMsg })
+            pipeline.reportPrepare(i + 1, totalNovels, statusMsg)
 
             try {
               const viewer = await session.call((tokenVal) => novelViewerData(novelItem.id, tokenVal))
@@ -132,9 +139,19 @@ export async function downloadEntireNovelSeries(
 
           // 3. 打包为整本 EPUB
           await token.checkOrWait()
-          const packMsg = "正在合成整本小说 EPUB…"
-          onProgress?.(packMsg, chapters.length, chapters.length)
-          task.updateProgress({ current: chapters.length, total: chapters.length, statusText: packMsg })
+          const packMsg = `准备合成整本小说 EPUB (共 ${chapters.length} 章)…`
+          onProgress?.(packMsg, 0, 1)
+          pipeline.reportPack(0, 1, packMsg)
+
+          const handleNovelExportProgress = (msg: string, cur: number, tot: number) => {
+            onProgress?.(msg, cur, tot)
+            const isCompressing = msg.includes("打包") || msg.includes("压缩") || msg.includes("合成")
+            if (isCompressing) {
+              pipeline.reportPack(cur, tot, msg)
+            } else {
+              pipeline.reportDownload(cur, tot, msg)
+            }
+          }
 
           const isNovelSeriesR18 = allNovels.some((n) => (n.x_restrict ?? 0) > 0 || n.tags?.some((t: any) => /r-?18/i.test(t.name)))
           const novelSeriesTags = allNovels[0]?.tags?.map((t: any) => t.name) ?? []
@@ -150,7 +167,7 @@ export async function downloadEntireNovelSeries(
             isR18: isNovelSeriesR18,
             coverUrl: seriesCoverUrl,
             chapters,
-            onProgress: (msg, cur, tot) => onProgress?.(msg, cur, tot),
+            onProgress: handleNovelExportProgress,
           })
 
           if (!filePath) {
@@ -158,6 +175,7 @@ export async function downloadEntireNovelSeries(
           }
 
           const summary = `《${seriesTitle}》整本 EPUB (共 ${chapters.length} 章) 导出成功。`
+          pipeline.reportComplete("导出成功")
           resolve(filePath)
           return { outputPath: filePath, summary }
         } catch (err: any) {
@@ -190,10 +208,16 @@ export async function downloadEntireMangaSeries(
       subtitle: fallbackTitle ? `《${fallbackTitle}》` : `系列 ID: ${seriesID}`,
       categoryIcon: "books.vertical.fill",
       runner: async (token, task, manifest, saveManifest) => {
+        const pipeline = new StageProgressPipeline(task, {
+          prepare: 0.05, // 话数与页面扫描 5%
+          download: 0.90, // 高清原画并发下载 90%
+          pack: 0.05, // CBZ/EPUB 压缩打包 5%
+        })
+
         try {
           const initMsg = "正在获取漫画系列目录…"
           onProgress?.(initMsg, 0, 1)
-          task.updateProgress({ current: 0, total: 1, statusText: initMsg })
+          pipeline.reportPrepare(0, 1, initMsg)
 
           const allIllusts: any[] = []
           let seriesTitle = fallbackTitle || ""
@@ -235,9 +259,9 @@ export async function downloadEntireMangaSeries(
             await token.checkOrWait()
             const item = allIllusts[i]
             const chapTitle = item.title || `第 ${i + 1} 话`
-            const statusMsg = `正在解析话数信息 (${i + 1}/${totalIllusts}): ${chapTitle}`
+            const statusMsg = `正在解析目录与页面 (${i + 1}/${totalIllusts}): ${chapTitle}`
             onProgress?.(statusMsg, i + 1, totalIllusts)
-            task.updateProgress({ current: i + 1, total: totalIllusts, statusText: statusMsg })
+            pipeline.reportPrepare(i + 1, totalIllusts, statusMsg)
 
             try {
               const detail = await session.call((tokenVal) => illustrationDetail(item.id, tokenVal))
@@ -274,17 +298,29 @@ export async function downloadEntireMangaSeries(
 
           const authorName = allIllusts[0]?.user?.name || "Pixiv"
           const authorId = allIllusts[0]?.user?.id
+          const totalPagesCount = allPages.length
+          const totalProgressSteps = totalPagesCount + 1 // +1 为最后的 CBZ/EPUB 压缩打包
 
           // 3. 导出为 CBZ 或 EPUB
           await token.checkOrWait()
           let filePath: string | null = null
-          const exportMsg = `正在合并导出整本漫画 ${formatLabel}…`
-          onProgress?.(exportMsg, allPages.length, allPages.length)
-          task.updateProgress({ current: allPages.length, total: allPages.length, statusText: exportMsg })
+          const exportStartMsg = `准备下载漫画原图 (共 ${totalPagesCount} 页)…`
+          onProgress?.(exportStartMsg, 0, totalProgressSteps)
+          pipeline.reportDownload(0, totalPagesCount, exportStartMsg)
 
           let isPartial = false
           let downloadedCount = 0
-          let totalCount = allPages.length
+          let totalCount = totalPagesCount
+
+          const handleExportProgress = (msg: string, cur: number, tot: number) => {
+            onProgress?.(msg, cur, tot)
+            const isCompressing = msg.includes("打包") || msg.includes("压缩") || msg.includes("归档")
+            if (isCompressing) {
+              pipeline.reportPack(cur, tot, msg)
+            } else {
+              pipeline.reportDownload(cur, tot, msg)
+            }
+          }
 
           const isR18 = allIllusts.some((a) => (a.x_restrict ?? 0) > 0 || a.tags?.some((t: any) => /r-?18/i.test(t.name)))
           if (format === "cbz") {
@@ -301,7 +337,7 @@ export async function downloadEntireMangaSeries(
               chapters,
               token,
               taskId,
-              onProgress: (msg, cur, tot) => onProgress?.(msg, cur, tot),
+              onProgress: handleExportProgress,
             })
             filePath = res.success ? (res.path ?? null) : null
             isPartial = Boolean(res.isPartial)
@@ -319,7 +355,7 @@ export async function downloadEntireMangaSeries(
               createdDate: allIllusts[0]?.create_date,
               isR18,
               chapters,
-              onProgress: (msg, cur, tot) => onProgress?.(msg, cur, tot),
+              onProgress: handleExportProgress,
             })
             filePath = res.success ? (res.path ?? null) : null
             isPartial = Boolean(res.isPartial)
@@ -333,6 +369,7 @@ export async function downloadEntireMangaSeries(
 
           const partialNote = isPartial ? ` (容错导出，部分缺页: ${downloadedCount}/${totalCount}P)` : ""
           const summary = `《${seriesTitle}》全 ${totalIllusts} 话 (${downloadedCount}P) ${formatLabel} 导出成功${partialNote}。`
+          pipeline.reportComplete("导出成功")
           resolve(filePath)
           return { outputPath: filePath, summary }
         } catch (err: any) {

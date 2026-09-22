@@ -6,6 +6,7 @@ import {
   consumeTaskSignal,
   clearTaskSignal,
   clearActiveTaskActivityMeta,
+  peekTaskSignal,
 } from "./TaskSignal"
 
 declare const AbortController: any
@@ -139,11 +140,20 @@ export class TaskControlToken {
       const signal = consumeTaskSignal(id)
       if (signal === "cancel") {
         this.cancel()
+        if (typeof DownloadTaskManager !== "undefined") {
+          void DownloadTaskManager.cancelTask(id)
+        }
         throw new TaskAbortError()
       } else if (signal === "pause") {
         this.pause()
+        if (typeof DownloadTaskManager !== "undefined") {
+          void DownloadTaskManager.pauseTask(id)
+        }
       } else if (signal === "resume") {
         this.resume()
+        if (typeof DownloadTaskManager !== "undefined") {
+          void DownloadTaskManager.resumeTask(id)
+        }
       }
     }
     if (this._isCancelled) {
@@ -173,6 +183,7 @@ interface InternalTaskRecord {
   manifest?: TaskManifest
   manifestPath: string
   taskDir: string
+  lastPauseTimestamp?: number
 }
 
 class DownloadTaskManagerImpl {
@@ -441,9 +452,13 @@ class DownloadTaskManagerImpl {
       updateProgress: ({ current, total, statusText, isPaused }) => {
         if (record.item.status !== "running" && record.item.status !== "paused") return
         
-        // 状态锁保护：如果任务已处于暂停或令牌已暂停，禁止并发回调冲刷为运行态
+        // 状态锁保护：如果任务已处于暂停或令牌已暂停或磁盘有未消费的 pause 信号，禁止并发回调冲刷为运行态
+        const hasPendingPauseSignal = peekTaskSignal(record.item.id) === "pause"
         const isCurrentlyPaused =
-          record.item.status === "paused" || record.token.isPaused || Boolean(isPaused)
+          record.item.status === "paused" ||
+          record.token.isPaused ||
+          Boolean(isPaused) ||
+          hasPendingPauseSignal
         const finalStatusText = isCurrentlyPaused ? "任务已暂停" : statusText
 
         const newTotal = total && total > 0 ? total : record.item.total
@@ -540,6 +555,26 @@ class DownloadTaskManagerImpl {
   }
 
   /**
+   * 检查并消费当前所有任务的挂起控制信号（供前台恢复 onResume 或心跳补偿调用）
+   */
+  checkPendingSignals(): void {
+    const activeTasks = this.taskOrder
+      .map((id) => this.tasks.get(id))
+      .filter((r): r is InternalTaskRecord => Boolean(r))
+
+    for (const record of activeTasks) {
+      const sig = consumeTaskSignal(record.item.id)
+      if (sig === "pause") {
+        void this.pauseTask(record.item.id)
+      } else if (sig === "resume") {
+        void this.resumeTask(record.item.id)
+      } else if (sig === "cancel") {
+        void this.cancelTask(record.item.id)
+      }
+    }
+  }
+
+  /**
    * 手动暂停任务
    */
   async pauseTask(taskId?: string): Promise<boolean> {
@@ -548,7 +583,8 @@ class DownloadTaskManagerImpl {
     const record = this.tasks.get(targetId)
     if (!record) return false
 
-    if (record.item.status === "running") {
+    if (record.item.status === "running" || !record.token.isPaused) {
+      record.lastPauseTimestamp = Date.now()
       record.item = {
         ...record.item,
         status: "paused",
@@ -583,41 +619,44 @@ class DownloadTaskManagerImpl {
    * 恢复任务
    */
   async resumeTask(taskId?: string): Promise<boolean> {
-    const targetId = taskId || this.taskOrder.find((id) => this.tasks.get(id)?.item.status === "paused")
+    const targetId =
+      taskId ||
+      this.taskOrder.find((id) => {
+        const r = this.tasks.get(id)
+        return r && (r.item.status === "paused" || r.token.isPaused)
+      })
     if (!targetId) return false
     const record = this.tasks.get(targetId)
     if (!record) return false
 
-    if (record.item.status === "paused") {
-      clearTaskSignal(targetId)
-      if (record.token.isPaused) {
-        record.item = {
-          ...record.item,
-          status: "running",
-          statusText: "继续下载中…",
-        }
-        record.token.resume()
-        if (record.bgHandle) {
-          record.bgHandle.updateProgress({
-            current: record.item.current,
-            total: record.item.total,
-            statusText: "继续下载中…",
-            isPaused: false,
-          })
-        }
-        this.notify()
-        return true
-      } else {
-        // 从挂起队列重新入队调度
-        record.item = {
-          ...record.item,
-          status: "queued",
-          statusText: "排队中…",
-        }
-        this.notify()
-        this.scheduleNext()
-        return true
+    if (record.item.status === "paused" || record.token.isPaused) {
+      // 防误触与连按冷却门禁：暂停后 600ms 内禁止立即恢复，彻底杜绝灵动岛按钮原地翻转导致的误触与时序漂移
+      if (record.lastPauseTimestamp && Date.now() - record.lastPauseTimestamp < 600) {
+        console.log(`[resumeTask] Debounce guard hit for ${targetId}, ignoring resume within 600ms`)
+        return false
       }
+
+      clearTaskSignal(targetId)
+      record.item = {
+        ...record.item,
+        status: "running",
+        statusText: "继续下载中…",
+      }
+      record.token.resume()
+      if (record.bgHandle) {
+        record.bgHandle.updateProgress({
+          current: record.item.current,
+          total: record.item.total,
+          statusText: "继续下载中…",
+          isPaused: false,
+        })
+      }
+      this.notify()
+      return true
+    } else if (record.item.status === "queued") {
+      this.notify()
+      this.scheduleNext()
+      return true
     }
     return false
   }
@@ -641,6 +680,35 @@ class DownloadTaskManagerImpl {
         statusText: "正在取消…",
       }
       this.notify()
+
+      // 1.2 秒超时强制兜底：若底层 runner 因网络挂死等原因未及时抛错退出，强制完成终态收尾
+      setTimeout(() => {
+        const currentRecord = this.tasks.get(targetId)
+        if (
+          currentRecord &&
+          currentRecord.item.status === "canceled" &&
+          currentRecord.item.statusText === "正在取消…"
+        ) {
+          currentRecord.item = {
+            ...currentRecord.item,
+            statusText: "任务已取消",
+          }
+          if (currentRecord.bgHandle) {
+            void currentRecord.bgHandle.finish({
+              success: false,
+              isCanceled: true,
+              summary: "下载已取消",
+            })
+          }
+          this.cleanupTaskDir(targetId)
+          if (this.activeTaskId === targetId) {
+            this.activeTaskId = null
+            this.stopSignalPolling()
+            this.scheduleNext()
+          }
+          this.notify()
+        }
+      }, 1200)
     } else {
       record.item = {
         ...record.item,

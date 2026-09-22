@@ -12,6 +12,7 @@ import { triggerResumeSync } from "./src/store/historySync"
 import { abortAllAITasks } from "./src/api/aiService"
 import { requestPixivRoute } from "./src/store/routeNavigation"
 import { useIsFullScreen } from "./src/ui/FullScreenState"
+import { DownloadTaskManager } from "./src/downloader/downloadTaskManager"
 
 // 顶层初始化：首次挂载 Tab 时执行存储准备与服务预热
 bootstrapStorage().catch(() => {})
@@ -60,6 +61,9 @@ export default function HomeScreenEntry() {
         seedIfRoute(resumeRoute)
         requestPixivRoute(resumeRoute)
       }
+      try {
+        DownloadTaskManager.checkPendingSignals()
+      } catch {}
       triggerResumeSync()
     })
 
