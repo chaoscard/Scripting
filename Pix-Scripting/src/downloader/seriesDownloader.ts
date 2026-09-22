@@ -167,6 +167,7 @@ export async function downloadEntireNovelSeries(
             isR18: isNovelSeriesR18,
             coverUrl: seriesCoverUrl,
             chapters,
+            token,
             onProgress: handleNovelExportProgress,
           })
 
@@ -355,6 +356,7 @@ export async function downloadEntireMangaSeries(
               createdDate: allIllusts[0]?.create_date,
               isR18,
               chapters,
+              token,
               onProgress: handleExportProgress,
             })
             filePath = res.success ? (res.path ?? null) : null

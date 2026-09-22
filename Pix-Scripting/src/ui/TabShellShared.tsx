@@ -21,9 +21,9 @@ import {
   setPixivRouteNavigator,
   type PixivTabKind,
 } from "../store/routeNavigation"
-import { DiscoveryView } from "./discovery"
+import { DiscoveryView } from "./DiscoveryView"
 import { RankingView } from "./RankingView"
-import { FollowFeedView } from "./followFeed"
+import { FollowFeedView } from "./FollowFeedView"
 import { MoreView } from "./MoreView"
 
 /**

@@ -24,6 +24,7 @@ import { exportMangaToEpub, exportNovelToEpub, type NovelChapter } from "./epubE
 import { downloadIllustToAlbum, saveVideoToPixivAlbum } from "./photoAlbum"
 import { DownloadTaskManager } from "./downloadTaskManager"
 import { runWithBackgroundTask } from "./backgroundTaskManager"
+import { StageProgressPipeline } from "./StageProgressPipeline"
 import { publishPreparedFile } from "../store/safeFile"
 import type { PixivIllustration, PixivNovel } from "../types"
 
@@ -250,8 +251,17 @@ export async function downloadAuthorIllustrationsToAlbum(
           await yieldToMainThread()
         }
 
+        if (totalCount > 0 && successCount === 0) {
+          const err = new Error(`全量 ${totalCount} 部插画均保存失败，请检查网络或相册访问权限`)
+          reject(err)
+          throw err
+        }
+
         const albumName = loadSettings().downloadPhotoAlbumName || "Pix-Scripting"
-        const summary = `已成功将 ${successCount}/${totalCount} 部插画保存至相簿「${albumName}」。`
+        const failedCount = totalCount - successCount
+        const summary = failedCount > 0
+          ? `已保存 ${successCount}/${totalCount} 部插画至相簿「${albumName}」（${failedCount} 部失败）。`
+          : `已成功将全部 ${totalCount} 部插画保存至相簿「${albumName}」。`
         resolve({ successCount, totalCount })
         return { summary }
       },
@@ -306,8 +316,17 @@ export async function downloadAuthorUgoiraToAlbum(
           await yieldToMainThread()
         }
 
+        if (totalCount > 0 && successCount === 0) {
+          const err = new Error(`全量 ${totalCount} 部动图均保存失败，请检查网络或相册访问权限`)
+          reject(err)
+          throw err
+        }
+
         const albumName = loadSettings().downloadPhotoAlbumName || "Pix-Scripting"
-        const summary = `已成功将 ${successCount}/${totalCount} 部动图保存至相簿「${albumName}」。`
+        const failedCount = totalCount - successCount
+        const summary = failedCount > 0
+          ? `已保存 ${successCount}/${totalCount} 部动图至相簿「${albumName}」（${failedCount} 部失败）。`
+          : `已成功将全部 ${totalCount} 部动图保存至相簿「${albumName}」。`
         resolve({ successCount, totalCount })
         return { summary }
       },
@@ -370,7 +389,16 @@ export async function exportAuthorUgoiraToFiles(
           await yieldToMainThread()
         }
 
-        const summary = `已成功将 ${successCount}/${totalCount} 部动图导出至 Ugoira 文件夹。`
+        if (totalCount > 0 && successCount === 0) {
+          const err = new Error(`全量 ${totalCount} 部动图均导出失败`)
+          reject(err)
+          throw err
+        }
+
+        const failedCount = totalCount - successCount
+        const summary = failedCount > 0
+          ? `已导出 ${successCount}/${totalCount} 部动图至 Ugoira 文件夹（${failedCount} 部失败）。`
+          : `已成功将全部 ${totalCount} 部动图导出至 Ugoira 文件夹。`
         resolve({ successCount, totalCount })
         return { summary }
       },
@@ -428,7 +456,16 @@ export async function exportAuthorUgoiraZipToFiles(
           await yieldToMainThread()
         }
 
-        const summary = `已成功将 ${successCount}/${totalCount} 部动图原始 ZIP 帧包导出至画师 Ugoira 文件夹。`
+        if (totalCount > 0 && successCount === 0) {
+          const err = new Error(`全量 ${totalCount} 部动图原始 ZIP 帧包均导出失败`)
+          reject(err)
+          throw err
+        }
+
+        const failedCount = totalCount - successCount
+        const summary = failedCount > 0
+          ? `已导出 ${successCount}/${totalCount} 部动图原始 ZIP 帧包至画师 Ugoira 文件夹（${failedCount} 部失败）。`
+          : `已成功将全部 ${totalCount} 部动图原始 ZIP 帧包导出至画师 Ugoira 文件夹。`
         resolve({ successCount, totalCount })
         return { summary }
       },
@@ -470,13 +507,19 @@ export async function exportAuthorIllustrationsToZip(
       total: totalPages,
       categoryIcon: "doc.zipper",
       runner: async (token, task, manifest, saveManifest) => {
+        const pipeline = new StageProgressPipeline(task, {
+          prepare: 0.02, // 扫描准备 2%
+          download: 0.88, // 插画原画下载 88%
+          pack: 0.10, // ZIP 压缩打包 10%
+        })
+
         try {
           FileManager.createDirectorySync(tempDir, true)
 
           let processedPages = manifest.completedIndices.length
           const initialMsg = `准备下载用户「${safeAuthorName}」插画全集 (共 ${pureIllusts.length} 部, ${totalPages} 张)…`
           onProgress?.(initialMsg, processedPages, totalPages)
-          task.updateProgress({ current: processedPages, total: totalPages, statusText: initialMsg })
+          pipeline.reportPrepare(processedPages > 0 ? 1 : 0, 1, initialMsg)
 
           for (let i = 0; i < pureIllusts.length; i++) {
             await token.checkOrWait()
@@ -496,14 +539,14 @@ export async function exportAuthorIllustrationsToZip(
                   FileManager.writeAsDataSync(filePath, data)
                 }
               }
-              if (!manifest.completedIndices.includes(processedPages)) {
+              if (FileManager.existsSync(filePath) && !manifest.completedIndices.includes(processedPages)) {
                 manifest.completedIndices.push(processedPages)
                 saveManifest()
               }
               processedPages++
               const statusMsg = `下载插画 (${processedPages}/${totalPages}): ${item.title}`
               onProgress?.(statusMsg, processedPages, totalPages)
-              task.updateProgress({ current: processedPages, total: totalPages, statusText: statusMsg })
+              pipeline.reportDownload(processedPages, totalPages, statusMsg)
             } else {
               const subFolder = `${tempDir}/${item.id}_${safeTitle} (${pageCount}P)`
               FileManager.createDirectorySync(subFolder, true)
@@ -530,14 +573,14 @@ export async function exportAuthorIllustrationsToZip(
                       FileManager.writeAsDataSync(filePath, data)
                     }
                   }
-                  if (!manifest.completedIndices.includes(processedPages)) {
+                  if (FileManager.existsSync(filePath) && !manifest.completedIndices.includes(processedPages)) {
                     manifest.completedIndices.push(processedPages)
                     saveManifest()
                   }
                   processedPages++
                   const statusMsg = `下载插画 (${processedPages}/${totalPages}): ${item.title} (P${idx + 1})`
                   onProgress?.(statusMsg, processedPages, totalPages)
-                  task.updateProgress({ current: processedPages, total: totalPages, statusText: statusMsg })
+                  pipeline.reportDownload(processedPages, totalPages, statusMsg)
                 },
                 token
               )
@@ -568,6 +611,13 @@ export async function exportAuthorIllustrationsToZip(
             })),
           }
 
+          const savedPagesCount = manifest.completedIndices.length
+          if (totalPages > 0 && savedPagesCount === 0) {
+            const err = new Error(`全量 ${totalPages} 页插画原图均下载失败，无法生成 ZIP 归档包`)
+            reject(err)
+            throw err
+          }
+
           FileManager.writeAsStringSync(
             `${tempDir}/info.json`,
             JSON.stringify(metaJson, null, 2),
@@ -576,7 +626,7 @@ export async function exportAuthorIllustrationsToZip(
 
           const packMsg = "正在打包插画全集 ZIP 压缩包…"
           onProgress?.(packMsg, totalPages, totalPages)
-          task.updateProgress({ current: totalPages, total: totalPages, statusText: packMsg })
+          pipeline.reportPack(0, 1, packMsg)
 
           const tempZipPath = `${tempDir}.zip`
           if (FileManager.existsSync(tempZipPath)) {
@@ -591,7 +641,11 @@ export async function exportAuthorIllustrationsToZip(
           publishPreparedFile(tempZipPath, targetFilePath)
           notifyDownloadFilesChanged()
 
-          const summary = `已成功将 ${pureIllusts.length} 部静态插画作品 (${totalPages}P) 打包归档至文件。`
+          pipeline.reportComplete("打包归档完成")
+          const isPartial = savedPagesCount < totalPages
+          const summary = isPartial
+            ? `已将 ${pureIllusts.length} 部静态插画作品 (${savedPagesCount}/${totalPages}P) 打包归档至文件（部分缺页）。`
+            : `已成功将全部 ${pureIllusts.length} 部静态插画作品 (${totalPages}P) 打包归档至文件。`
           resolve(targetFilePath)
           return { outputPath: targetFilePath, summary }
         } finally {
@@ -717,6 +771,7 @@ export async function exportAuthorManga(
                 chapters,
                 targetDir,
                 customFileName,
+                token,
                 onProgress: onSubMangaProgress,
               })
 
@@ -792,6 +847,7 @@ export async function exportAuthorManga(
                 pages,
                 targetDir,
                 customFileName,
+                token,
                 onProgress: onSingleMangaProgress,
               })
 
@@ -810,6 +866,12 @@ export async function exportAuthorManga(
         }
 
         const totalSuccessful = completedTasks + partialTasks
+        if (totalTasks > 0 && totalSuccessful === 0) {
+          const err = new Error(`全量 ${totalTasks} 部漫画作品均导出失败`)
+          reject(err)
+          throw err
+        }
+
         const summaryParts: string[] = []
         if (completedTasks > 0) summaryParts.push(`${completedTasks} 部完整`)
         if (partialTasks > 0) summaryParts.push(`${partialTasks} 部缺页容错`)
@@ -942,6 +1004,7 @@ export async function exportAuthorNovels(
               chapters,
               targetDir,
               customFileName,
+              token,
               onProgress: onNovelSeriesProgress,
             })
 
@@ -1016,6 +1079,7 @@ export async function exportAuthorNovels(
                 ],
                 targetDir,
                 customFileName,
+                token,
                 onProgress: onSingleNovelProgress,
               })
 
@@ -1031,7 +1095,16 @@ export async function exportAuthorNovels(
           await yieldToMainThread()
         }
 
-        const summary = `已将「${safeAuthorName}」的小说导出至文件（共 ${completedTasks}/${totalTasks} 部）。`
+        if (totalTasks > 0 && completedTasks === 0) {
+          const err = new Error(`全量 ${totalTasks} 部小说作品均导出失败`)
+          reject(err)
+          throw err
+        }
+
+        const failedTasks = totalTasks - completedTasks
+        const summary = failedTasks > 0
+          ? `已将「${safeAuthorName}」的小说导出至文件（成功 ${completedTasks}/${totalTasks} 部，${failedTasks} 部失败）。`
+          : `已成功将「${safeAuthorName}」的全部 ${totalTasks} 部小说导出至文件。`
         resolve({ totalExported: completedTasks, targetDir })
         return { summary }
       },

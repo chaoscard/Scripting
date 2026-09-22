@@ -196,6 +196,143 @@ class DownloadTaskManagerImpl {
 
   constructor() {
     this.ensureTaskDirectory()
+    this.rehydrateExistingTasks()
+  }
+
+  private resolveCategoryIcon(type: DownloadTaskType, customIcon?: string): string {
+    return (
+      customIcon ||
+      (type.includes("pixivision")
+        ? "rectangle.stack.fill"
+        : type.includes("novel")
+        ? "book.closed.fill"
+        : type.includes("manga")
+        ? "books.vertical.fill"
+        : type.includes("ugoira")
+        ? "film.stack"
+        : "photo.stack.fill")
+    )
+  }
+
+  private getHistoryFilePath(): string {
+    return `${this.ensureTaskDirectory()}/tasks_history.json`
+  }
+
+  /**
+   * 持久化已完成/已取消/已失败的历史终态任务快照（最多保留 30 条）
+   */
+  private saveHistoryTasks(): void {
+    try {
+      const historyItems: DownloadTaskItem[] = []
+      for (const id of this.taskOrder) {
+        const r = this.tasks.get(id)
+        if (
+          r &&
+          (r.item.status === "completed" ||
+            r.item.status === "failed" ||
+            r.item.status === "canceled")
+        ) {
+          historyItems.push({ ...r.item })
+          if (historyItems.length >= 30) break
+        }
+      }
+      FileManager.writeAsStringSync(
+        this.getHistoryFilePath(),
+        JSON.stringify(historyItems, null, 2)
+      )
+    } catch (e: any) {
+      console.log("saveHistoryTasks error:", e?.message ?? e)
+    }
+  }
+
+  /**
+   * 应用冷启动时从磁盘水合恢复历史终态任务与未完成中断任务
+   */
+  private rehydrateExistingTasks(): void {
+    const baseDir = this.ensureTaskDirectory()
+    const historyPath = this.getHistoryFilePath()
+
+    // 1. 从 tasks_history.json 水合恢复最近的终态任务记录
+    try {
+      if (FileManager.existsSync(historyPath)) {
+        const text = FileManager.readAsStringSync(historyPath)
+        if (text) {
+          const parsed = JSON.parse(text) as DownloadTaskItem[]
+          if (Array.isArray(parsed)) {
+            for (const item of parsed) {
+              if (item && item.id && !this.tasks.has(item.id)) {
+                const token = new TaskControlToken(item.id)
+                this.tasks.set(item.id, {
+                  item,
+                  token,
+                  manifestPath: `${baseDir}/${item.id}/manifest.json`,
+                  taskDir: `${baseDir}/${item.id}`,
+                })
+                this.taskOrder.push(item.id)
+              }
+            }
+          }
+        }
+      }
+    } catch (err: any) {
+      console.log("rehydrate history tasks error:", err?.message ?? err)
+    }
+
+    // 2. 扫描 tasks 工作区子目录，检索因应用退出意外中断的任务与清理废弃目录
+    try {
+      if (FileManager.existsSync(baseDir)) {
+        const entries = FileManager.readDirectorySync(baseDir, false)
+        for (const entry of entries) {
+          if (entry === "tasks_history.json") continue
+          const taskDir = `${baseDir}/${entry}`
+          try {
+            if (FileManager.isDirectorySync(taskDir)) {
+              const manifestPath = `${taskDir}/manifest.json`
+              if (FileManager.existsSync(manifestPath)) {
+                // 如果尚未在任务列表中（说明上次应用退出时该任务还在 running/queued，未能写入终态历史）
+                if (!this.tasks.has(entry)) {
+                  const mText = FileManager.readAsStringSync(manifestPath)
+                  if (mText) {
+                    const manifest = JSON.parse(mText) as TaskManifest
+                    const total = manifest.totalItems || 1
+                    const current = manifest.completedIndices?.length ?? 0
+                    const progress = total > 0 ? Math.min(1.0, current / total) : 0
+                    const defaultIcon = this.resolveCategoryIcon(manifest.type)
+
+                    const item: DownloadTaskItem = {
+                      id: manifest.taskId || entry,
+                      type: manifest.type,
+                      title: manifest.title || "已中断的任务",
+                      subtitle: manifest.subtitle,
+                      categoryIcon: defaultIcon,
+                      status: "failed",
+                      progress,
+                      current,
+                      total,
+                      statusText: "应用退出导致中断",
+                      errorMessage: "应用进程退出，临时切片保留在磁盘，可删除清理",
+                      startTime: manifest.updatedAt || Date.now(),
+                    }
+
+                    const token = new TaskControlToken(item.id)
+                    this.tasks.set(item.id, {
+                      item,
+                      token,
+                      manifest,
+                      manifestPath,
+                      taskDir,
+                    })
+                    this.taskOrder.unshift(item.id)
+                  }
+                }
+              }
+            }
+          } catch {}
+        }
+      }
+    } catch (e: any) {
+      console.log("rehydrate disk tasks error:", e?.message ?? e)
+    }
   }
 
   private startSignalPolling(): void {
@@ -549,6 +686,7 @@ class DownloadTaskManagerImpl {
     } finally {
       this.activeTaskId = null
       this.stopSignalPolling()
+      this.saveHistoryTasks()
       this.notify()
       void this.scheduleNext()
     }
@@ -706,6 +844,7 @@ class DownloadTaskManagerImpl {
             this.stopSignalPolling()
             this.scheduleNext()
           }
+          this.saveHistoryTasks()
           this.notify()
         }
       }, 1200)
@@ -723,6 +862,7 @@ class DownloadTaskManagerImpl {
         })
       }
       this.cleanupTaskDir(targetId)
+      this.saveHistoryTasks()
       this.notify()
       if (this.activeTaskId === targetId) {
         this.activeTaskId = null
@@ -762,6 +902,7 @@ class DownloadTaskManagerImpl {
     this.cleanupTaskDir(taskId)
     this.tasks.delete(taskId)
     this.taskOrder = this.taskOrder.filter((id) => id !== taskId)
+    this.saveHistoryTasks()
     this.notify()
   }
 
@@ -780,6 +921,7 @@ class DownloadTaskManagerImpl {
       this.tasks.delete(id)
     }
     this.taskOrder = this.taskOrder.filter((id) => !toRemove.includes(id))
+    this.saveHistoryTasks()
     this.notify()
   }
 

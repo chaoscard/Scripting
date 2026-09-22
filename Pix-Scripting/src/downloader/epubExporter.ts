@@ -13,6 +13,7 @@ import { session } from "../api/session"
 import { illustrationDetail } from "../api/pixiv"
 import { imageUrlOf, pageThumbUrlOf } from "../image/imageLoader"
 import { htmlToPlainText } from "../ui/components/formatUtils"
+import type { TaskControlToken } from "./downloadTaskManager"
 
 export interface NovelChapter {
   id: number
@@ -37,6 +38,7 @@ export interface NovelEpubOptions {
   chapters: NovelChapter[]
   targetDir?: string
   customFileName?: string
+  token?: TaskControlToken
   onProgress?: (msg: string, current: number, total: number) => void
 }
 
@@ -67,6 +69,7 @@ export interface MangaEpubOptions {
   pages?: MangaPageItem[]
   targetDir?: string
   customFileName?: string
+  token?: TaskControlToken
   onProgress?: (msg: string, current: number, total: number) => void
 }
 
@@ -705,8 +708,11 @@ export async function exportNovelToEpub(options: NovelEpubOptions): Promise<stri
     chapters,
     targetDir: customTargetDir,
     customFileName,
+    token,
     onProgress,
   } = options
+
+  if (token) await token.checkOrWait()
 
   const safeTitle = customFileName
     ? sanitizeFileName(customFileName)
@@ -748,7 +754,8 @@ export async function exportNovelToEpub(options: NovelEpubOptions): Promise<stri
     let hasCover = false
     let rawCoverData: Data | null = null
     if (coverUrl) {
-      rawCoverData = await fetchImageBinaryWithRetry(coverUrl)
+      if (token) await token.checkOrWait()
+      rawCoverData = await fetchImageBinaryWithRetry(coverUrl, 1, token)
     }
 
     if (seriesTitle || rawCoverData) {
@@ -821,15 +828,24 @@ export async function exportNovelToEpub(options: NovelEpubOptions): Promise<stri
     }
 
     if (allImagesToDownload.length > 0) {
+      if (token) await token.checkOrWait()
       progressReporter.notify(`下载插图 (共 ${allImagesToDownload.length} 张)...`, 0, allImagesToDownload.length)
-      await runConcurrentTasks(allImagesToDownload, 4, async (item, idx) => {
-        const data = await fetchImageBinaryWithRetry(item.url)
-        if (data) {
-          FileManager.writeAsDataSync(`${imagesDir}/${item.filename}`, data)
-        }
-        progressReporter.notify(`下载插图 (${idx + 1}/${allImagesToDownload.length})`, idx + 1, allImagesToDownload.length)
-      })
+      await runConcurrentTasks(
+        allImagesToDownload,
+        4,
+        async (item, idx) => {
+          if (token) await token.checkOrWait()
+          const data = await fetchImageBinaryWithRetry(item.url, 1, token)
+          if (data) {
+            FileManager.writeAsDataSync(`${imagesDir}/${item.filename}`, data)
+          }
+          progressReporter.notify(`下载插图 (${idx + 1}/${allImagesToDownload.length})`, idx + 1, allImagesToDownload.length)
+        },
+        token
+      )
     }
+
+    if (token) await token.checkOrWait()
 
     // 5. 规划章节与多页切分结构
     interface NovelPageSection {
@@ -1234,6 +1250,9 @@ export async function exportNovelToEpub(options: NovelEpubOptions): Promise<stri
     const success = await packageEpubDirectory(tempDir, targetFilePath)
     return success ? targetFilePath : null
   } catch (err: any) {
+    if (err?.name === "TaskAbortError" || token?.isCancelled) {
+      throw err
+    }
     console.log("exportNovelToEpub failed:", err?.message ?? err)
     return null
   } finally {
@@ -1263,8 +1282,11 @@ export async function exportMangaToEpub(options: MangaEpubOptions): Promise<Expo
     pages,
     targetDir: customTargetDir,
     customFileName,
+    token,
     onProgress,
   } = options
+
+  if (token) await token.checkOrWait()
 
   const progressReporter = createThrottledProgress(onProgress, 80)
   const tempDir = `${getCategoryDirectory("temp")}/epub_manga_${id}_${Date.now()}`
@@ -1387,41 +1409,61 @@ export async function exportMangaToEpub(options: MangaEpubOptions): Promise<Expo
     }>()
     const failedPages: number[] = []
 
-    await runConcurrentTasks(allPagesToDownload, 4, async (p, idx) => {
-      const pageNum = p.globalIndex
-      const data = await fetchImageBinaryWithRetry(p.url)
-      if (data) {
+    await runConcurrentTasks(
+      allPagesToDownload,
+      4,
+      async (p, idx) => {
+        if (token) await token.checkOrWait()
+        const pageNum = p.globalIndex
         const paddedNum = String(pageNum).padStart(allPagesToDownload.length >= 1000 ? 4 : 3, "0")
         const ext = p.url.includes(".png") ? "png" : "jpg"
         const fileName = `page_${paddedNum}.${ext}`
         const filePath = `${imagesDir}/${fileName}`
-        FileManager.writeAsDataSync(filePath, data)
 
-        let width = 1200
-        let height = 1800
-        try {
-          const uiImg = UIImage.fromFile(filePath)
-          if (uiImg && uiImg.width > 0 && uiImg.height > 0) {
-            const scale = uiImg.scale || 1
-            width = Math.round(uiImg.width * scale)
-            height = Math.round(uiImg.height * scale)
+        let isSuccess = false
+        let data: Data | null = null
+
+        // 检查点断点续传：若磁盘已有完整文件则跳过下载
+        if (FileManager.existsSync(filePath) && (FileManager.statSync(filePath)?.size ?? 0) > 0) {
+          isSuccess = true
+        } else {
+          data = await fetchImageBinaryWithRetry(p.url, 1, token)
+          if (data) {
+            FileManager.writeAsDataSync(filePath, data)
+            isSuccess = true
           }
-        } catch {}
+        }
 
-        downloadedPagesMap.set(pageNum, {
-          index: pageNum,
-          pageInChap: p.pageInChap,
-          chapTitle: p.chapTitle,
-          isChapFirstPage: p.isChapFirstPage ?? (p.pageInChap === 1),
-          fileName,
-          width,
-          height,
-        })
-      } else {
-        failedPages.push(pageNum)
-      }
-      progressReporter.notify(`下载漫画图片 (${idx + 1}/${allPagesToDownload.length})`, idx + 1, allPagesToDownload.length)
-    })
+        if (isSuccess) {
+          let width = 1200
+          let height = 1800
+          try {
+            const uiImg = UIImage.fromFile(filePath)
+            if (uiImg && uiImg.width > 0 && uiImg.height > 0) {
+              const scale = uiImg.scale || 1
+              width = Math.round(uiImg.width * scale)
+              height = Math.round(uiImg.height * scale)
+            }
+          } catch {}
+
+          downloadedPagesMap.set(pageNum, {
+            index: pageNum,
+            pageInChap: p.pageInChap,
+            chapTitle: p.chapTitle,
+            isChapFirstPage: p.isChapFirstPage ?? (p.pageInChap === 1),
+            fileName,
+            width,
+            height,
+          })
+        } else {
+          failedPages.push(pageNum)
+        }
+        progressReporter.notify(`下载漫画图片 (${idx + 1}/${allPagesToDownload.length})`, idx + 1, allPagesToDownload.length)
+      },
+      token
+    )
+
+    if (token) await token.checkOrWait()
 
     const downloadedCount = downloadedPagesMap.size
     failedPages.sort((a, b) => a - b)
@@ -1735,6 +1777,9 @@ export async function exportMangaToEpub(options: MangaEpubOptions): Promise<Expo
       failedPages,
     }
   } catch (err: any) {
+    if (err?.name === "TaskAbortError" || token?.isCancelled) {
+      throw err
+    }
     console.log("exportMangaToEpub error:", err?.message ?? err)
     return {
       success: false,

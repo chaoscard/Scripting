@@ -553,9 +553,15 @@ export function IllustDetailDockBar(props: { illustID: number }) {
     setDownloading(true)
     try {
       if (current.type === "ugoira") {
-        await exportUgoiraToAlbum(current)
+        const res = await exportUgoiraToAlbum(current)
+        if (res.success) {
+          triggerHaptic("success")
+        }
       } else {
-        await downloadIllustToAlbum(current, getDownloadImageQuality())
+        const ok = await downloadIllustToAlbum(current, getDownloadImageQuality())
+        if (ok) {
+          triggerHaptic("success")
+        }
       }
     } finally {
       setDownloading(false)
@@ -570,7 +576,11 @@ export function IllustDetailDockBar(props: { illustID: number }) {
     } catch {}
     setDownloading(true)
     try {
-      await exportUgoiraZip(current)
+      const res = await exportUgoiraZip(current)
+      if (res.success && res.savedPath) {
+        triggerHaptic("success")
+        await ShareSheet.present([res.savedPath])
+      }
     } finally {
       setDownloading(false)
     }
@@ -591,10 +601,14 @@ export function IllustDetailDockBar(props: { illustID: number }) {
         const url = imageUrlOf(current, i, downloadQuality)
         if (url) urls.push(url)
       }
-      await exportIllustToZip({
+      const res = await exportIllustToZip({
         illust: current,
         imageUrls: urls,
       })
+      if (res.success && res.path) {
+        triggerHaptic("success")
+        await ShareSheet.present([res.path])
+      }
     } finally {
       setDownloading(false)
     }
@@ -618,8 +632,9 @@ export function IllustDetailDockBar(props: { illustID: number }) {
       const isR18 =
         (current.x_restrict ?? 0) > 0 ||
         current.tags?.some((t) => /r-?18/i.test(t.name))
+      let filePath: string | null = null
       if (format === "cbz") {
-        await exportMangaToCbz({
+        const res = await exportMangaToCbz({
           id: current.id,
           title: current.title,
           author: current.user?.name || "Unknown",
@@ -630,8 +645,9 @@ export function IllustDetailDockBar(props: { illustID: number }) {
           isR18,
           pages,
         })
+        filePath = res.success ? (res.path ?? null) : null
       } else {
-        await exportMangaToEpub({
+        const res = await exportMangaToEpub({
           id: current.id,
           title: current.title,
           author: current.user?.name || "Unknown",
@@ -642,6 +658,11 @@ export function IllustDetailDockBar(props: { illustID: number }) {
           isR18,
           pages,
         })
+        filePath = res.success ? (res.path ?? null) : null
+      }
+      if (filePath) {
+        triggerHaptic("success")
+        await ShareSheet.present([filePath])
       }
     } finally {
       setDownloading(false)

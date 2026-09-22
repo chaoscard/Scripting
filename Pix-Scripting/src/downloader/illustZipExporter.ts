@@ -9,12 +9,14 @@ import { getCategoryDirectory, sanitizeFileName } from "./directoryResolver"
 import { notifyDownloadFilesChanged } from "./downloadFileManager"
 import { publishPreparedFile } from "../store/safeFile"
 import type { PixivIllustration } from "../types"
+import type { TaskControlToken } from "./downloadTaskManager"
 
 export interface IllustZipOptions {
   illust: PixivIllustration
   imageUrls: string[]
   targetDir?: string
   customFileName?: string
+  token?: TaskControlToken
   onProgress?: (msg: string, current: number, total: number) => void
 }
 
@@ -22,7 +24,8 @@ export interface IllustZipOptions {
  * 将插画/组图导出为包含元数据的 ZIP 归档包（支持容错导出与确切结果报告）
  */
 export async function exportIllustToZip(options: IllustZipOptions): Promise<ExportResult> {
-  const { illust, imageUrls, targetDir: customTargetDir, customFileName, onProgress } = options
+  const { illust, imageUrls, targetDir: customTargetDir, customFileName, token, onProgress } = options
+  if (token) await token.checkOrWait()
   const authorName = illust.user?.name || "Unknown"
   const title = illust.title || "Illust"
 
@@ -37,20 +40,28 @@ export async function exportIllustToZip(options: IllustZipOptions): Promise<Expo
     const downloadedIndexes = new Set<number>()
     const failedPages: number[] = []
 
-    await runConcurrentTasks(imageUrls, 4, async (url, idx) => {
-      const pageNum = idx + 1
-      const data = await fetchImageBinaryWithRetry(url)
-      if (data) {
-        const paddedNum = String(pageNum).padStart(imageUrls.length >= 100 ? 3 : 2, "0")
-        const ext = url.includes(".png") ? "png" : "jpg"
-        const fileName = `${paddedNum}.${ext}`
-        FileManager.writeAsDataSync(`${tempDir}/${fileName}`, data)
-        downloadedIndexes.add(pageNum)
-      } else {
-        failedPages.push(pageNum)
-      }
-      progressReporter.notify(`下载插画原图 (${idx + 1}/${imageUrls.length})`, idx + 1, imageUrls.length)
-    })
+    await runConcurrentTasks(
+      imageUrls,
+      4,
+      async (url, idx) => {
+        if (token) await token.checkOrWait()
+        const pageNum = idx + 1
+        const data = await fetchImageBinaryWithRetry(url, 1, token)
+        if (data) {
+          const paddedNum = String(pageNum).padStart(imageUrls.length >= 100 ? 3 : 2, "0")
+          const ext = url.includes(".png") ? "png" : "jpg"
+          const fileName = `${paddedNum}.${ext}`
+          FileManager.writeAsDataSync(`${tempDir}/${fileName}`, data)
+          downloadedIndexes.add(pageNum)
+        } else {
+          failedPages.push(pageNum)
+        }
+        progressReporter.notify(`下载插画原图 (${idx + 1}/${imageUrls.length})`, idx + 1, imageUrls.length)
+      },
+      token
+    )
+
+    if (token) await token.checkOrWait()
 
     const downloadedCount = downloadedIndexes.size
     failedPages.sort((a, b) => a - b)
@@ -148,6 +159,9 @@ export async function exportIllustToZip(options: IllustZipOptions): Promise<Expo
       failedPages,
     }
   } catch (err: any) {
+    if (err?.name === "TaskAbortError" || token?.isCancelled) {
+      throw err
+    }
     console.log("exportIllustToZip error:", err?.message ?? err)
     return {
       success: false,

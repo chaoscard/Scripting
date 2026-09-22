@@ -51,6 +51,18 @@ export async function withAlbumKeepAlive<T>(action: () => Promise<T>): Promise<T
   }
 }
 
+// 专属相簿内存快照缓存，避免每次保存高频遍历相簿
+let cachedAlbumInstance: PHAssetCollection | null = null
+let cachedAlbumTitle: string | null = null
+
+/**
+ * 清除相簿缓存
+ */
+export function invalidateAlbumCache(): void {
+  cachedAlbumInstance = null
+  cachedAlbumTitle = null
+}
+
 /**
  * 获取或自动创建专属相簿（默认 "Pix-Scripting"）
  */
@@ -58,16 +70,27 @@ export async function getOrCreatePixivAlbum(customTitle?: string): Promise<PHAss
   const albumTitle = (customTitle ?? loadSettings().downloadPhotoAlbumName ?? "Pix-Scripting").trim()
   if (!albumTitle) return null
 
+  if (cachedAlbumInstance && cachedAlbumTitle === albumTitle) {
+    return cachedAlbumInstance
+  }
+
   try {
     const albums = await Photos.fetchAlbums({ type: "album" })
     const existing = albums.find((a) => a.title === albumTitle)
     if (existing) {
+      cachedAlbumInstance = existing
+      cachedAlbumTitle = albumTitle
       return existing
     }
     const created = await Photos.createAlbum(albumTitle)
+    if (created) {
+      cachedAlbumInstance = created
+      cachedAlbumTitle = albumTitle
+    }
     return created
   } catch (err: any) {
     console.log("getOrCreatePixivAlbum error:", err?.message ?? err)
+    invalidateAlbumCache()
     return null
   }
 }
@@ -131,6 +154,45 @@ async function findNewlySavedAsset(
   } catch {
     return null
   }
+}
+
+/**
+ * 批量差量反查新存入的图片资产集合
+ */
+async function findNewlySavedAssetsBatch(
+  knownBeforeIds: Set<string>,
+  expectedCount: number,
+  maxRetries = 3
+): Promise<PHAsset[]> {
+  const foundMap = new Map<string, PHAsset>()
+  const fetchLimit = Math.max(16, Math.min(100, expectedCount + 8))
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const candidates = await Photos.fetchAssets({
+        mediaType: "image",
+        limit: fetchLimit,
+      })
+      if (candidates && candidates.length > 0) {
+        for (const a of candidates) {
+          if (!knownBeforeIds.has(a.localIdentifier)) {
+            foundMap.set(a.localIdentifier, a)
+          }
+        }
+        if (foundMap.size >= expectedCount) {
+          return Array.from(foundMap.values()).slice(0, expectedCount)
+        }
+      }
+    } catch (e: any) {
+      console.log(`findNewlySavedAssetsBatch attempt ${attempt} error:`, e?.message ?? e)
+    }
+
+    if (attempt < maxRetries && foundMap.size < expectedCount) {
+      await new Promise<void>((resolve) => setTimeout(() => resolve(), 100 * (attempt + 1)))
+    }
+  }
+
+  return Array.from(foundMap.values())
 }
 
 /**
@@ -234,6 +296,76 @@ export async function saveVideoToPixivAlbum(
   })
 }
 
+export interface BatchSaveImageItem {
+  source: string | Data
+  fileName?: string
+}
+
+/**
+ * 高性能批量将一组图片保存至系统相册，并一次性归类至专属相簿
+ * 显著降低 PhotoKit XPC 轮询开销与 assetsd 压力
+ */
+export async function saveImagesBatchToPixivAlbum(
+  items: BatchSaveImageItem[]
+): Promise<{ successCount: number; totalCount: number }> {
+  if (!items || items.length === 0) return { successCount: 0, totalCount: 0 }
+  if (items.length === 1) {
+    const ok = await saveImageToPixivAlbum(items[0].source, items[0].fileName)
+    return { successCount: ok ? 1 : 0, totalCount: 1 }
+  }
+
+  return withAlbumKeepAlive(async () => {
+    return enqueueAlbumOperation(async () => {
+      // 1. 保存前单次快照
+      let beforeIds = new Set<string>()
+      try {
+        const beforeAssets = await Photos.fetchAssets({
+          mediaType: "image",
+          limit: 16,
+        })
+        beforeIds = new Set((beforeAssets ?? []).map((a) => a.localIdentifier))
+      } catch (e: any) {
+        console.log("saveImagesBatchToPixivAlbum snapshot error:", e?.message ?? e)
+      }
+
+      // 2. 连续写入主相册
+      let savedCount = 0
+      for (const it of items) {
+        try {
+          let ok = false
+          if (typeof it.source === "string") {
+            ok = await Photos.savePhoto(it.source, { fileName: it.fileName })
+          } else {
+            ok = await Photos.savePhoto(it.source, { fileName: it.fileName })
+          }
+          if (ok) savedCount++
+        } catch (err: any) {
+          console.log("savePhoto error in batch:", err?.message ?? err)
+        }
+      }
+
+      if (savedCount === 0) {
+        return { successCount: 0, totalCount: items.length }
+      }
+
+      // 3. 批量差量反查一次并归入相簿
+      try {
+        const album = await getOrCreatePixivAlbum()
+        if (album) {
+          const newAssets = await findNewlySavedAssetsBatch(beforeIds, savedCount)
+          if (newAssets.length > 0) {
+            await album.addAssets(newAssets)
+          }
+        }
+      } catch (albumErr: any) {
+        console.log("addAssets batch error (saved to main library):", albumErr?.message ?? albumErr)
+      }
+
+      return { successCount: savedCount, totalCount: items.length }
+    })
+  })
+}
+
 /**
  * 专用于将插画（单页/多页）下载并存入系统相册的独立通道
  * 全流程持有系统后台保活令牌，包容退后台切出与锁屏场景；
@@ -260,7 +392,28 @@ export async function downloadIllustToAlbum(
 
     if (tasks.length === 0) return false
 
-    let successCount = 0
+    // 单张插画：即时直存
+    if (tasks.length === 1) {
+      const task = tasks[0]
+      const fileName = `pixiv_${illust.id}_p1`
+      const cached = cachedFilePath(task.url)
+      let ok = false
+      if (cached) {
+        ok = await saveImageToPixivAlbum(cached, fileName)
+      } else {
+        const data = await fetchImageBinaryWithRetry(task.url, 1, token)
+        if (data) {
+          ok = await saveImageToPixivAlbum(data, fileName)
+        }
+      }
+      onProgress?.(1, 1)
+      return ok
+    }
+
+    // 多张插画：并发拉取资源，随后走高性能批处理写入与单次归类
+    const batchItems: { index: number; source: string | Data; fileName: string }[] = []
+    let downloadedCount = 0
+
     await runConcurrentTasks(
       tasks,
       3,
@@ -270,23 +423,32 @@ export async function downloadIllustToAlbum(
         try {
           const cached = cachedFilePath(task.url)
           if (cached) {
-            const ok = await saveImageToPixivAlbum(cached, fileName)
-            if (ok) successCount++
+            batchItems.push({ index: task.pageIndex, source: cached, fileName })
+            downloadedCount++
           } else {
             const data = await fetchImageBinaryWithRetry(task.url, 1, token)
             if (data) {
-              const ok = await saveImageToPixivAlbum(data, fileName)
-              if (ok) successCount++
+              batchItems.push({ index: task.pageIndex, source: data, fileName })
+              downloadedCount++
             }
           }
         } catch (err: any) {
-          console.log(`downloadIllustToAlbum error for page ${task.pageIndex}:`, err?.message ?? err)
+          console.log(`downloadIllustToAlbum fetch error for p${task.pageIndex}:`, err?.message ?? err)
         }
-        onProgress?.(task.pageIndex, tasks.length)
+        onProgress?.(downloadedCount, tasks.length)
       },
       token
     )
 
-    return successCount > 0
+    if (token) await token.checkOrWait()
+    if (batchItems.length === 0) return false
+
+    // 保持原始页码先后顺序
+    batchItems.sort((a, b) => a.index - b.index)
+
+    const batchRes = await saveImagesBatchToPixivAlbum(
+      batchItems.map((it) => ({ source: it.source, fileName: it.fileName }))
+    )
+    return batchRes.successCount > 0
   })
 }
