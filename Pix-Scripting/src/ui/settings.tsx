@@ -1019,11 +1019,11 @@ export function SettingsView() {
             label={
               <VStack alignment="leading" spacing={2}>
                 <Text>玻璃效果</Text>
-                <Text font="caption2" foregroundStyle="secondaryLabel">
-                  {settings.glassCustomTintEnabled
-                    ? "已由下方自定义色调接管"
-                    : "仅作用于部分玻璃"}
-                </Text>
+                {settings.glassCustomTintEnabled ? (
+                  <Text font="caption2" foregroundStyle="secondaryLabel">
+                    已由下方自定义色调接管
+                  </Text>
+                ) : null}
                 <Text font="caption2" foregroundStyle="secondaryLabel">
                   仅对新打开的页面生效
                 </Text>

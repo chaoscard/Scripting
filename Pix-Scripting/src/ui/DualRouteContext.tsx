@@ -23,7 +23,7 @@ import {
   PAGE_TOOLBAR_BACKGROUND,
   PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
 } from "./components/pageChrome"
-import { appGlass } from "./components/glass"
+import { appGlass, appThemeColor } from "./components/glass"
 import { ContainerLayoutContext, useLayoutMetrics } from "./Hooks"
 import { useExperimentalAmbientPalette } from "./ambient/useIllustAmbient"
 import { useLastActiveAmbientImageUrl } from "./ambient/tracker"
@@ -258,7 +258,7 @@ function DetailPaneRouteView(props: {
               systemName="chevron.backward"
               font="body"
               fontWeight="semibold"
-              foregroundStyle="label"
+              foregroundStyle={appThemeColor("label")}
             />
           </Button>
         ),
