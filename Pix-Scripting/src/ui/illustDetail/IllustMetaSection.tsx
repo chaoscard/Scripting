@@ -8,6 +8,7 @@ import {
 } from "scripting"
 import type { PixivIllustration } from "../../types"
 import {
+  appThemeColor,
   ExpandableIntroduction,
   formatDate,
   formatNumber,
@@ -34,6 +35,8 @@ export function IllustMetaSection(props: IllustMetaSectionProps) {
     resolvedSeriesTitle,
     resolvedEpisodeNumber,
   } = props
+
+  const commentAccent = appThemeColor("#0096FA")
 
   return (
     <>
@@ -70,7 +73,7 @@ export function IllustMetaSection(props: IllustMetaSectionProps) {
             }}
           >
             <HStack spacing={3}>
-              <Image systemName="bubble.left" font="footnote" foregroundStyle="systemBlue" />
+              <Image systemName="bubble.left" font="footnote" foregroundStyle={commentAccent} />
               <Text font="footnote">
                 {formatNumber(illust.total_comments)}
               </Text>

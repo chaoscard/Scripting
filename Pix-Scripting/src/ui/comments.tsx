@@ -18,8 +18,9 @@ import {
   useRef,
   useState,
   VStack,
+  type Color,
 } from "scripting"
-import { appGlass } from "./components/glass"
+import { appGlass, appThemeColor } from "./components/glass"
 import { sheetDetents, sheetTopBar } from "./components/pageChrome"
 import {
   comments,
@@ -384,11 +385,13 @@ export function CommentsSheet(props: {
     return ` (${count})`
   }
   const titleText = `评论${formatTitleCount(commentCount)}`
+  const themeColor = appThemeColor("#0096FA") as Color
 
   return (
     <NavigationStack
       presentationDetents={sheetDetents()}
       presentationDragIndicator="visible"
+      tint={themeColor}
     >
       <VStack
         alignment="leading"
@@ -491,6 +494,7 @@ function CommentInputBar(props: {
   const [showEmotePanel, setShowEmotePanel] = useState(false)
   const [emoteTab, setEmoteTab] = useState<string>("emoji")
   const [stampCategoryKey, setStampCategoryKey] = useState<string>("all")
+  const themeColor = appThemeColor("#0096FA")
 
   // 当外部回复目标切换时，收起表情面板
   useEffect(() => {
@@ -539,7 +543,7 @@ function CommentInputBar(props: {
           <Image
             systemName="arrowshape.turn.up.left.fill"
             font="caption"
-            foregroundStyle="#0096FA"
+            foregroundStyle={themeColor}
           />
           <Text
             font="caption"
@@ -567,7 +571,7 @@ function CommentInputBar(props: {
         <Button
           title={showEmotePanel ? "键盘" : "表情"}
           systemImage={showEmotePanel ? "keyboard" : "face.smiling"}
-          tint="#0096FA"
+          tint={themeColor}
           buttonStyle="glass"
           action={() => {
             withAnimation(() => {
@@ -597,7 +601,7 @@ function CommentInputBar(props: {
         <Button
           title="发送"
           buttonStyle="glassProminent"
-          tint="#0096FA"
+          tint={themeColor}
           disabled={posting || !text.trim()}
           action={handleSendText}
         />
@@ -639,6 +643,7 @@ function CommentCard(props: {
   } = props
   const avatarUrl = comment.user.profile_image_urls?.medium ?? null
   const hasReplies = comment.has_replies || (comment.reply_count ?? 0) > 0
+  const themeColor = appThemeColor("#0096FA") as Color
 
   return (
     <VStack
@@ -680,7 +685,7 @@ function CommentCard(props: {
               title="回复"
               systemImage="arrowshape.turn.up.left"
               font="caption2"
-              tint="#0096FA"
+              tint={themeColor}
               action={() => onReply(comment)}
             />
           </HStack>
@@ -714,14 +719,14 @@ function CommentCard(props: {
             >
               <Button action={onToggleReplies}>
                 <HStack spacing={4} alignment="center">
-                  <Text font="caption2" foregroundStyle="#0096FA">
+                  <Text font="caption2" foregroundStyle={themeColor}>
                     {replyState?.expanded ? "收起回复" : "查看回复"}
                     {comment.reply_count ? ` (${comment.reply_count})` : ""}
                   </Text>
                   <Image
                     systemName={replyState?.expanded ? "chevron.up" : "chevron.down"}
                     font="caption2"
-                    foregroundStyle="#0096FA"
+                    foregroundStyle={themeColor}
                   />
                 </HStack>
               </Button>
@@ -755,7 +760,7 @@ function CommentCard(props: {
                     <Button
                       title={replyState.loadingMore ? "加载中…" : "加载更多回复"}
                       font="caption2"
-                      tint="#0096FA"
+                      tint={themeColor}
                       disabled={replyState.loadingMore}
                       action={onLoadMoreReplies}
                     />
@@ -777,6 +782,7 @@ function SubCommentRow(props: {
 }) {
   const { comment, onReply, onOpenUser } = props
   const avatarUrl = comment.user.profile_image_urls?.medium ?? null
+  const themeColor = appThemeColor("#0096FA") as Color
 
   return (
     <VStack
@@ -817,7 +823,7 @@ function SubCommentRow(props: {
               title="回复"
               systemImage="arrowshape.turn.up.left"
               font="caption2"
-              tint="#0096FA"
+              tint={themeColor}
               action={() => onReply(comment)}
             />
           </HStack>
@@ -964,6 +970,7 @@ function EmotePickerPanel(props: {
     categoryKey === "all"
       ? "全部"
       : PIXIV_STAMP_CATEGORIES.find((c) => c.key === categoryKey)?.title ?? "分类"
+  const themeColor = appThemeColor("#0096FA") as Color
 
   return (
     <VStack
@@ -997,13 +1004,13 @@ function EmotePickerPanel(props: {
           <Menu
             label={
               <HStack spacing={4} alignment="center">
-                <Text font="caption" foregroundStyle="#0096FA">
+                <Text font="caption" foregroundStyle={themeColor}>
                   {currentCategoryTitle}
                 </Text>
                 <Image
                   systemName="line.3.horizontal.decrease.circle"
                   font="caption"
-                  foregroundStyle="#0096FA"
+                  foregroundStyle={themeColor}
                 />
               </HStack>
             }

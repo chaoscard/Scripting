@@ -31,7 +31,7 @@ import {
   type Color,
   type ScrollViewProxy,
 } from "scripting"
-import { appGlass } from "./components/glass"
+import { appGlass, appThemeColor } from "./components/glass"
 import {
   addNovelBookmark,
   addNovelMarker,
@@ -1648,7 +1648,7 @@ export function NovelDetailView(props: { novelID: number }) {
               }}
             >
               <HStack spacing={3}>
-                <Image systemName="bubble.left" font="footnote" foregroundStyle="systemBlue" />
+                <Image systemName="bubble.left" font="footnote" foregroundStyle={appThemeColor("#0096FA")} />
                 <Text font="footnote">
                   {formatNumber(current.total_comments)}
                 </Text>

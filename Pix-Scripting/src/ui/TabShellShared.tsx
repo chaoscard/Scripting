@@ -225,12 +225,12 @@ export function MainTabView(props: {
         systemImage={discovery.systemImage}
         value={discovery.id}
       >
-        <NavigationStack path={paths.discoveryPath}>
+        <NavigationStack path={paths.discoveryPath} tint={tabTint}>
           {discovery.renderRoot({ onClose: props.onClose })}
         </NavigationStack>
       </Tab>
       <Tab title={ranking.title} systemImage={ranking.systemImage} value={ranking.id}>
-        <NavigationStack path={paths.rankingPath}>
+        <NavigationStack path={paths.rankingPath} tint={tabTint}>
           {ranking.renderRoot({ onClose: props.onClose })}
         </NavigationStack>
       </Tab>
@@ -239,12 +239,12 @@ export function MainTabView(props: {
         systemImage={following.systemImage}
         value={following.id}
       >
-        <NavigationStack path={paths.followingPath}>
+        <NavigationStack path={paths.followingPath} tint={tabTint}>
           {following.renderRoot({ onClose: props.onClose })}
         </NavigationStack>
       </Tab>
       <Tab title={more.title} systemImage={more.systemImage} value={more.id}>
-        <NavigationStack path={paths.morePath}>
+        <NavigationStack path={paths.morePath} tint={tabTint}>
           {more.renderRoot({ onClose: props.onClose })}
         </NavigationStack>
       </Tab>
@@ -254,7 +254,7 @@ export function MainTabView(props: {
         value={search.id}
         role="search"
       >
-        <NavigationStack path={paths.searchPath}>
+        <NavigationStack path={paths.searchPath} tint={tabTint}>
           {search.renderRoot({ onClose: props.onClose })}
         </NavigationStack>
       </Tab>

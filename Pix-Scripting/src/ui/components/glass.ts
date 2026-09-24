@@ -95,6 +95,19 @@ export function appGlassNoTint(shape: Shape): GlassEffectValue {
   return glass ? { glass, shape } : shape
 }
 
+/**
+ * 获取当前激活的自定义主题色。
+ * 若开启了「自定义玻璃色调」且配置了颜色，则返回该主题色；
+ * 否则返回回退色（默认 #0096FA，即 Pixiv 经典蓝）。
+ */
+export function appThemeColor(fallback: string = "#0096FA"): Color {
+  const settings = loadSettings()
+  if (settings.glassCustomTintEnabled && settings.glassTintColor) {
+    return settings.glassTintColor as Color
+  }
+  return fallback as Color
+}
+
 /** 「颜色 + 浓度(%)」合成带 alpha 的 rgba 字符串（注意不能带空格，Color 模板字面量类型不允许） */
 function tintRGBA(color: string, strength: number): Color {
   const [r, g, b] =
