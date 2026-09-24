@@ -12,6 +12,7 @@ import {
   LongPressGesture,
   Menu,
   NavigationLink,
+  Picker,
   ProgressView,
   Rectangle,
   ScrollView,
@@ -229,7 +230,7 @@ export function NovelDetailView(props: { novelID: number }) {
   // 底部自绘覆盖层（苹果音乐浮动胶囊）的**实测**高度；未出现为 0。
   // 避让值跟随胶囊内容自适应，不写死常量。
   const capsuleHeight = useFloatingCapsuleHeight()
-  const bottomOverlayInset = isAppleMusic ? capsuleHeight + 24 : 0
+  const bottomOverlayInset = isAppleMusic ? capsuleHeight : 0
 
   const guard = useAsyncGuard()
   const novelRef = useLatest(novel)
@@ -1142,7 +1143,7 @@ export function NovelDetailView(props: { novelID: number }) {
     const immersiveBtn = renderImmersiveButton()
 
     const isPagerShown = totalPages > 1 && pagerVisible
-    const bottomPadding = (isPagerShown ? 60 : 24) + bottomOverlayInset
+    const bottomPadding = (isPagerShown ? 56 : 20) + bottomOverlayInset
 
     return (
       <HStack
@@ -1283,7 +1284,7 @@ export function NovelDetailView(props: { novelID: number }) {
                 ? {
                     alignment: "bottom",
                     content: (
-                      <VStack padding={{ horizontal: 20, bottom: 12 + bottomOverlayInset }} frame={{ maxWidth: "infinity" }}>
+                      <VStack padding={{ horizontal: 20, bottom: 8 + bottomOverlayInset }} frame={{ maxWidth: "infinity" }}>
                         <GlassEffectContainer>
                           <HStack alignment="center" frame={{ maxWidth: "infinity" }}>
                             {/* 左侧区域（固定宽 80，上一页按钮靠左，第一页时隐藏） */}
@@ -1308,7 +1309,7 @@ export function NovelDetailView(props: { novelID: number }) {
 
                             <Spacer />
 
-                            {/* 中间区域（独立页码胶囊选择器，始终严格居中） */}
+                            {/* 中间区域（独立页码毛玻璃胶囊选择器，始终严格居中） */}
                             <Menu
                               label={
                                 <HStack
@@ -1317,8 +1318,9 @@ export function NovelDetailView(props: { novelID: number }) {
                                   padding={{ horizontal: 14, vertical: 8 }}
                                   glassEffect={appGlass("capsule")}
                                   contentShape="capsule"
+                                  background="#80808020"
                                 >
-                                  <Text font="body" fontWeight="bold">
+                                  <Text font="body" foregroundStyle="label">
                                     {currentPage} / {totalPages}
                                   </Text>
                                   <Image
@@ -1329,20 +1331,17 @@ export function NovelDetailView(props: { novelID: number }) {
                                 </HStack>
                               }
                             >
-                              {Array.from({ length: totalPages }, (_, i) => totalPages - i).map((p) => (
-                                <Button
-                                  key={p}
-                                  title={`第 ${p} 页${p === markerPage ? "（书签）" : ""}`}
-                                  systemImage={
-                                    p === currentPage
-                                      ? "checkmark"
-                                      : p === markerPage
-                                      ? "book.pages.fill"
-                                      : undefined
-                                  }
-                                  action={() => handlePageChange(p)}
-                                />
-                              ))}
+                              <Picker
+                                title=""
+                                value={currentPage}
+                                onChanged={(val: number) => handlePageChange(Number(val))}
+                              >
+                                {Array.from({ length: totalPages }, (_, i) => totalPages - i).map((p) => (
+                                  <Text key={p} tag={p}>
+                                    {`第 ${p} 页${p === markerPage ? "（书签）" : ""}`}
+                                  </Text>
+                                ))}
+                              </Picker>
                             </Menu>
 
                             <Spacer />

@@ -304,13 +304,16 @@ export async function downloadAuthorUgoiraToAlbum(
           task.updateProgress({ current: i + 1, total: totalCount, statusText: statusMsg })
 
           try {
-            const res = await exportUgoiraToAlbum(item)
+            const res = await exportUgoiraToAlbum(item, undefined, undefined, token)
             if (res.success) {
               successCount++
               manifest.completedIndices.push(i)
               saveManifest()
             }
           } catch (e: any) {
+            if (e?.name === "TaskAbortError" || token.isCancelled) {
+              throw e
+            }
             console.log(`downloadAuthorUgoiraToAlbum failed for ${item.id}:`, e?.message ?? e)
           }
           await yieldToMainThread()
@@ -375,7 +378,8 @@ export async function exportAuthorUgoiraToFiles(
           task.updateProgress({ current: i + 1, total: totalCount, statusText: statusMsg })
 
           try {
-            const ugoiraRes = await buildUgoira(item.id, format)
+            const ugoiraRes = await buildUgoira(item.id, format, token)
+            if (token) await token.checkOrWait()
             if (ugoiraRes?.mp4Path && FileManager.existsSync(ugoiraRes.mp4Path)) {
               await FileManager.copyFile(ugoiraRes.mp4Path, destPath)
               notifyDownloadFilesChanged()
@@ -384,6 +388,9 @@ export async function exportAuthorUgoiraToFiles(
               saveManifest()
             }
           } catch (ugErr: any) {
+            if (ugErr?.name === "TaskAbortError" || token.isCancelled) {
+              throw ugErr
+            }
             console.log(`exportAuthorUgoiraToFiles failed for ${item.id}:`, ugErr?.message ?? ugErr)
           }
           await yieldToMainThread()

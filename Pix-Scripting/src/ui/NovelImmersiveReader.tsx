@@ -8,6 +8,7 @@ import {
   Image,
   Menu,
   NavigationStack,
+  Picker,
   ProgressView,
   Rectangle,
   ScrollView,
@@ -2256,7 +2257,7 @@ export function NovelImmersiveReaderView(props: NovelImmersiveReaderViewProps) {
 
               <Spacer />
 
-              {/* 中间：页码胶囊与跳页 Menu */}
+              {/* 中间：页码毛玻璃胶囊与跳页 Menu Picker */}
               <Menu
                 label={
                   <HStack
@@ -2265,9 +2266,10 @@ export function NovelImmersiveReaderView(props: NovelImmersiveReaderViewProps) {
                     padding={{ horizontal: 16, vertical: 8 }}
                     glassEffect={appGlass("capsule")}
                     contentShape="capsule"
+                    background="#80808020"
                     shadow={{ color: "#0000001F", radius: 8, y: 2 }}
                   >
-                    <Text font="body" fontWeight="bold">
+                    <Text font="body" foregroundStyle="label">
                       {currentPage} / {totalPages}
                     </Text>
                     <Image
@@ -2278,20 +2280,17 @@ export function NovelImmersiveReaderView(props: NovelImmersiveReaderViewProps) {
                   </HStack>
                 }
               >
-                {Array.from({ length: totalPages }, (_, i) => totalPages - i).map((p) => (
-                  <Button
-                    key={p}
-                    title={`第 ${p} 页${p === markerPage ? "（书签）" : ""}`}
-                    systemImage={
-                      p === currentPage
-                        ? "checkmark"
-                        : p === markerPage
-                        ? "book.pages.fill"
-                        : undefined
-                    }
-                    action={() => handlePageChange(p)}
-                  />
-                ))}
+                <Picker
+                  title=""
+                  value={currentPage}
+                  onChanged={(val: number) => handlePageChange(Number(val))}
+                >
+                  {Array.from({ length: totalPages }, (_, i) => totalPages - i).map((p) => (
+                    <Text key={p} tag={p}>
+                      {`第 ${p} 页${p === markerPage ? "（书签）" : ""}`}
+                    </Text>
+                  ))}
+                </Picker>
               </Menu>
 
               <Spacer />

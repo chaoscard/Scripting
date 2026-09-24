@@ -5,6 +5,7 @@ import {
   Image,
   Menu,
   NavigationStack,
+  Picker,
   ScrollView,
   Slider,
   Spacer,
@@ -168,22 +169,22 @@ export function NovelTypographySheet(props: { onClose?: () => void }) {
                   label={
                     <HStack spacing={4} alignment="center">
                       <Text font="body" foregroundStyle="secondaryLabel">
-                        {settings.layoutDirection === "horizontal" ? "横排" : "竖排"}
+                        {settings.layoutDirection === "vertical" ? "竖排" : "横排"}
                       </Text>
                       <Image systemName="chevron.up.chevron.down" font="caption2" foregroundStyle="tertiaryLabel" />
                     </HStack>
                   }
                 >
-                  <Button
-                    title="横排"
-                    systemImage={settings.layoutDirection === "horizontal" ? "checkmark" : undefined}
-                    action={() => updateSetting({ layoutDirection: "horizontal" })}
-                  />
-                  <Button
-                    title="竖排"
-                    systemImage={settings.layoutDirection === "vertical" ? "checkmark" : undefined}
-                    action={() => updateSetting({ layoutDirection: "vertical" })}
-                  />
+                  <Picker
+                    title=""
+                    value={settings.layoutDirection}
+                    onChanged={(val: string) =>
+                      updateSetting({ layoutDirection: val as "horizontal" | "vertical" })
+                    }
+                  >
+                    <Text tag="horizontal">横排</Text>
+                    <Text tag="vertical">竖排</Text>
+                  </Picker>
                 </Menu>
               </HStack>
 
@@ -207,21 +208,17 @@ export function NovelTypographySheet(props: { onClose?: () => void }) {
                     </HStack>
                   }
                 >
-                  <Button
-                    title="紧凑"
-                    systemImage={settings.lineSpacingLevel === "compact" ? "checkmark" : undefined}
-                    action={() => updateSetting({ lineSpacingLevel: "compact" })}
-                  />
-                  <Button
-                    title="标准"
-                    systemImage={settings.lineSpacingLevel === "normal" ? "checkmark" : undefined}
-                    action={() => updateSetting({ lineSpacingLevel: "normal" })}
-                  />
-                  <Button
-                    title="宽松"
-                    systemImage={settings.lineSpacingLevel === "loose" ? "checkmark" : undefined}
-                    action={() => updateSetting({ lineSpacingLevel: "loose" })}
-                  />
+                  <Picker
+                    title=""
+                    value={settings.lineSpacingLevel}
+                    onChanged={(val: string) =>
+                      updateSetting({ lineSpacingLevel: val as "compact" | "normal" | "loose" })
+                    }
+                  >
+                    <Text tag="compact">紧凑</Text>
+                    <Text tag="normal">标准</Text>
+                    <Text tag="loose">宽松</Text>
+                  </Picker>
                 </Menu>
               </HStack>
             </VStack>
@@ -260,17 +257,20 @@ export function NovelTypographySheet(props: { onClose?: () => void }) {
                     </HStack>
                   }
                 >
-                  {PRESET_FONTS.map((item) => {
-                    const isSelected = settings.fontId === item.id
-                    return (
-                      <Button
-                        key={item.id}
-                        title={item.name}
-                        systemImage={isSelected ? "checkmark" : undefined}
-                        action={() => updateSetting({ fontId: item.id })}
-                      />
-                    )
-                  })}
+                  <Picker
+                    title=""
+                    value={settings.fontId}
+                    onChanged={(val: string) => updateSetting({ fontId: val as BuiltinFontId })}
+                  >
+                    {PRESET_FONTS.map((item) => (
+                      <Text key={item.id} tag={item.id}>
+                        {item.name}
+                      </Text>
+                    ))}
+                    {settings.fontId === "custom" ? (
+                      <Text tag="custom">自定义字体</Text>
+                    ) : null}
+                  </Picker>
                 </Menu>
               </HStack>
 
@@ -342,21 +342,17 @@ export function NovelTypographySheet(props: { onClose?: () => void }) {
                     </HStack>
                   }
                 >
-                  <Button
-                    title="纤细"
-                    systemImage={settings.fontWeight === "regular" ? "checkmark" : undefined}
-                    action={() => updateSetting({ fontWeight: "regular" })}
-                  />
-                  <Button
-                    title="标准"
-                    systemImage={settings.fontWeight === "medium" ? "checkmark" : undefined}
-                    action={() => updateSetting({ fontWeight: "medium" })}
-                  />
-                  <Button
-                    title="加粗"
-                    systemImage={settings.fontWeight === "bold" ? "checkmark" : undefined}
-                    action={() => updateSetting({ fontWeight: "bold" })}
-                  />
+                  <Picker
+                    title=""
+                    value={settings.fontWeight}
+                    onChanged={(val: string) =>
+                      updateSetting({ fontWeight: val as "regular" | "medium" | "bold" })
+                    }
+                  >
+                    <Text tag="regular">纤细</Text>
+                    <Text tag="medium">标准</Text>
+                    <Text tag="bold">加粗</Text>
+                  </Picker>
                 </Menu>
               </HStack>
 

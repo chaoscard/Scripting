@@ -1,4 +1,4 @@
-import { AppIntentManager, AppIntentProtocol, LiveActivity, Widget } from "scripting"
+import { AppIntentManager, AppIntentProtocol, LiveActivity, Script, Widget } from "scripting"
 import { advanceWidgetArtwork, toggleWidgetArtworkBookmark } from "./src/store/widgetStore"
 import { triggerHaptic } from "./src/platform/haptics"
 import {
@@ -151,18 +151,22 @@ export async function dispatchTaskAction(action: TaskAction, taskId?: string): P
     }
   }
 
-  // 5. 后备懒加载调用
-  try {
-    const { DownloadTaskManager } = await import("./src/downloader/downloadTaskManager")
-    if (action === "pause") {
-      return await DownloadTaskManager.pauseTask(effectiveTaskId)
-    } else if (action === "resume") {
-      return await DownloadTaskManager.resumeTask(effectiveTaskId)
-    } else if (action === "cancel") {
-      return await DownloadTaskManager.cancelTask(effectiveTaskId)
+  // 5. 后备懒加载调用（仅在主应用前台进程 Script.env === "index" 下执行）
+  // 锁屏/灵动岛扩展子进程（Script.env === "app_intents"）内存配额仅 15~30MB，已通过步骤 2 写入 TaskSignal 管道
+  // 严禁在扩展子进程中冗余引入并实例化完整任务管理器，从根源杜绝 Jetsam 内存超限被杀风险
+  if (typeof Script !== "undefined" && Script.env === "index") {
+    try {
+      const { DownloadTaskManager } = await import("./src/downloader/downloadTaskManager")
+      if (action === "pause") {
+        return await DownloadTaskManager.pauseTask(effectiveTaskId)
+      } else if (action === "resume") {
+        return await DownloadTaskManager.resumeTask(effectiveTaskId)
+      } else if (action === "cancel") {
+        return await DownloadTaskManager.cancelTask(effectiveTaskId)
+      }
+    } catch (err: any) {
+      console.log(`dispatchTaskAction lazy import error:`, err?.message ?? err)
     }
-  } catch (err: any) {
-    console.log(`dispatchTaskAction lazy import error:`, err?.message ?? err)
   }
   return true
 }

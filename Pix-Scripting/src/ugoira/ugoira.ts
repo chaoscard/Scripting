@@ -1,4 +1,4 @@
-import { downloadBinary } from "../api/client"
+import { downloadBinary, type AbortSignal } from "../api/client"
 import { ugoiraMetadata } from "../api/pixiv"
 import { session } from "../api/session"
 import { loadSettings } from "../store/settings"
@@ -20,6 +20,12 @@ export interface UgoiraFramesResult {
 export interface UgoiraResult {
   mp4Path: string
   duration: number
+}
+
+export interface UgoiraCancellationToken {
+  checkOrWait?: () => Promise<void>
+  isCancelled?: boolean
+  signal?: AbortSignal
 }
 
 interface UgoiraCacheEntry {
@@ -211,9 +217,12 @@ export function cachedUgoiraFrames(illustID: number): UgoiraFramesResult | null 
 }
 
 /**
- * 准备动图序列帧（下载 zip、解压并缓存），支持多请求并发合并
+ * 准备动图序列帧（下载 zip、解压并缓存），支持多请求并发合并与中断取消
  */
-export function prepareUgoira(illustID: number): Promise<UgoiraFramesResult> {
+export function prepareUgoira(
+  illustID: number,
+  token?: UgoiraCancellationToken
+): Promise<UgoiraFramesResult> {
   const cached = cachedUgoiraFrames(illustID)
   if (cached) return Promise.resolve(cached)
 
@@ -221,7 +230,7 @@ export function prepareUgoira(illustID: number): Promise<UgoiraFramesResult> {
   if (active) return active
 
   let task: Promise<UgoiraFramesResult>
-  task = performPrepare(illustID).finally(() => {
+  task = performPrepare(illustID, token).finally(() => {
     if (inflightTasks.get(illustID) === task) {
       inflightTasks.delete(illustID)
     }
@@ -230,7 +239,10 @@ export function prepareUgoira(illustID: number): Promise<UgoiraFramesResult> {
   return task
 }
 
-async function performPrepare(illustID: number): Promise<UgoiraFramesResult> {
+async function performPrepare(
+  illustID: number,
+  token?: UgoiraCancellationToken
+): Promise<UgoiraFramesResult> {
   const generation = cacheGeneration
   const taskID = `${illustID}_${Date.now()}_${++taskSequence}`
   const taskDir = joinPath(FileManager.temporaryDirectory, `PixivUgoiraPrep_${taskID}`)
@@ -239,18 +251,23 @@ async function performPrepare(illustID: number): Promise<UgoiraFramesResult> {
   FileManager.createDirectorySync(tempFramesDir, true)
 
   try {
-    const metadata = await session.call((token) => ugoiraMetadata(illustID, token))
+    if (token?.checkOrWait) await token.checkOrWait()
+    const metadata = await session.call((t) => ugoiraMetadata(illustID, t))
+    if (token?.checkOrWait) await token.checkOrWait()
     const zipUrl = metadata?.zip_urls?.medium
     if (!zipUrl) throw new Error("未找到动图资源")
     const frames: UgoiraFrame[] = metadata.frames ?? []
     if (frames.length === 0) throw new Error("动图帧数据为空")
 
-    const zipData = await downloadBinary(zipUrl)
+    const zipData = await downloadBinary(zipUrl, undefined, token?.signal)
+    if (token?.checkOrWait) await token.checkOrWait()
     if (!zipData || generation !== cacheGeneration) {
       throw new Error(generation !== cacheGeneration ? "动图缓存已清空，请重试" : "动图帧下载失败")
     }
     FileManager.writeAsDataSync(tempZipPath, zipData)
+    if (token?.checkOrWait) await token.checkOrWait()
     await extractZipEntries(tempZipPath, tempFramesDir)
+    if (token?.checkOrWait) await token.checkOrWait()
     validateFrames(tempFramesDir, frames)
 
     // 解压验证完成后，立刻移除临时 zip，释放空间
@@ -313,13 +330,16 @@ async function performPrepare(illustID: number): Promise<UgoiraFramesResult> {
 }
 
 /**
- * 将动图序列帧通过 FFmpeg 合成指定格式并返回本地输出路径（供导出使用）
+ * 将动图序列帧通过 FFmpeg 合成指定格式并返回本地输出路径（供导出使用，支持中断取消）
  */
 export async function buildUgoira(
   illustID: number,
-  format: "mp4" | "gif" = "mp4"
+  format: "mp4" | "gif" = "mp4",
+  token?: UgoiraCancellationToken
 ): Promise<UgoiraResult> {
-  const prep = await prepareUgoira(illustID)
+  if (token?.checkOrWait) await token.checkOrWait()
+  const prep = await prepareUgoira(illustID, token)
+  if (token?.checkOrWait) await token.checkOrWait()
   const workDir = ugoiraWorkDir(illustID)
   const duration = Math.max(0.1, prep.totalDurationMs / 1000)
 
@@ -329,7 +349,9 @@ export async function buildUgoira(
       touchUgoira(String(illustID), workDir)
       return { mp4Path: gifPath, duration }
     }
+    if (token?.checkOrWait) await token.checkOrWait()
     await exportFramesToGif(prep.framesDir, prep.frames, gifPath)
+    if (token?.checkOrWait) await token.checkOrWait()
     touchUgoira(String(illustID), workDir)
     return { mp4Path: gifPath, duration }
   } else {
@@ -338,7 +360,9 @@ export async function buildUgoira(
       touchUgoira(String(illustID), workDir)
       return { mp4Path, duration }
     }
+    if (token?.checkOrWait) await token.checkOrWait()
     await exportFramesToMp4(prep.framesDir, prep.frames, mp4Path)
+    if (token?.checkOrWait) await token.checkOrWait()
     touchUgoira(String(illustID), workDir)
     return { mp4Path, duration }
   }

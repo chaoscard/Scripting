@@ -684,11 +684,19 @@ class DownloadTaskManagerImpl {
         })
       }
     } finally {
-      this.activeTaskId = null
-      this.stopSignalPolling()
-      this.saveHistoryTasks()
-      this.notify()
-      void this.scheduleNext()
+      // 关键所有权守卫：仅当当前活跃任务依然属于自身时，才由自身释放活跃态并调度下一个任务
+      if (this.activeTaskId === record.item.id) {
+        this.activeTaskId = null
+        this.stopSignalPolling()
+        this.saveHistoryTasks()
+        this.notify()
+        void this.scheduleNext()
+      } else {
+        // 若当前 activeTaskId 已不等于自身（说明已被 1.2s 超时兜底强行接管并已推进了下一个任务）
+        // 此时自身仅保存最终状态并通知 UI，严禁抹除 activeTaskId，严禁掐断新任务的信号轮询，严禁重复触发 scheduleNext
+        this.saveHistoryTasks()
+        this.notify()
+      }
     }
   }
 

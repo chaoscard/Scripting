@@ -4,39 +4,18 @@ import { fetchImageBinaryWithRetry, runConcurrentTasks } from "./downloadHelper"
 import type { PixivIllustration } from "../types"
 import type { TaskControlToken } from "./downloadTaskManager"
 import { isScriptingProUser } from "../platform/pro"
+import { acquireGlobalKeepAlive, releaseGlobalKeepAlive } from "./backgroundTaskManager"
 
 /**
- * 相册保存专用后台保活引用计数管理器
- * 确保在写入相册、反查索引以及后台并发下载期间系统不被挂起
+ * 相册保存专用后台保活通道
+ * 统一收束至全局保活引用计数中枢，确保相册写入与大下载任务并发时不发生提前注销
  */
-let albumKeepAliveRefCount = 0
-
 export async function acquireAlbumKeepAlive(): Promise<void> {
-  if (!isScriptingProUser()) return
-  albumKeepAliveRefCount++
-  if (albumKeepAliveRefCount === 1) {
-    try {
-      if (typeof BackgroundKeeper !== "undefined" && typeof BackgroundKeeper.keepAlive === "function") {
-        await BackgroundKeeper.keepAlive()
-      }
-    } catch (e: any) {
-      console.log("acquireAlbumKeepAlive error:", e?.message ?? e)
-    }
-  }
+  await acquireGlobalKeepAlive()
 }
 
 export async function releaseAlbumKeepAlive(): Promise<void> {
-  if (!isScriptingProUser()) return
-  albumKeepAliveRefCount = Math.max(0, albumKeepAliveRefCount - 1)
-  if (albumKeepAliveRefCount === 0) {
-    try {
-      if (typeof BackgroundKeeper !== "undefined" && typeof BackgroundKeeper.stopKeepAlive === "function") {
-        await BackgroundKeeper.stopKeepAlive()
-      }
-    } catch (e: any) {
-      console.log("releaseAlbumKeepAlive error:", e?.message ?? e)
-    }
-  }
+  await releaseGlobalKeepAlive()
 }
 
 /**
@@ -164,6 +143,7 @@ async function findNewlySavedAssetsBatch(
   expectedCount: number,
   maxRetries = 3
 ): Promise<PHAsset[]> {
+  if (expectedCount <= 0) return []
   const foundMap = new Map<string, PHAsset>()
   const fetchLimit = Math.max(16, Math.min(100, expectedCount + 8))
 
@@ -316,12 +296,13 @@ export async function saveImagesBatchToPixivAlbum(
 
   return withAlbumKeepAlive(async () => {
     return enqueueAlbumOperation(async () => {
-      // 1. 保存前单次快照
+      // 1. 保存前单次快照（深度动态扩容，严格覆盖下游反查范围，彻底消除私人照片误入相簿风险）
       let beforeIds = new Set<string>()
       try {
+        const snapLimit = Math.max(32, Math.min(120, items.length + 32))
         const beforeAssets = await Photos.fetchAssets({
           mediaType: "image",
-          limit: 16,
+          limit: snapLimit,
         })
         beforeIds = new Set((beforeAssets ?? []).map((a) => a.localIdentifier))
       } catch (e: any) {

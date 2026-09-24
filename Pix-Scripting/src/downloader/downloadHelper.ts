@@ -183,3 +183,153 @@ export interface ExportResult {
   failedPages?: number[]
   error?: string
 }
+
+/**
+ * 从二进制数据或文件头部高效嗅探图片尺寸（PNG / JPEG / WebP / GIF）
+ * 仅解析文件前几个字节的 Header，绝不将未经压缩的完整位图解码入内存，
+ * 避免在批量下载几十上百张漫画时产生数百兆的瞬时内存波峰与 Jetsam OOM 风险。
+ */
+export function sniffImageDimensions(
+  source: Data | Uint8Array | string
+): { width: number; height: number } | null {
+  try {
+    let bytes: Uint8Array | null = null
+
+    if (typeof source === "string") {
+      const d = Data.fromFile(source)
+      if (!d || d.size < 16) return null
+      const headerData = d.size > 65536 ? d.slice(0, 65536) : d
+      bytes = headerData.toUint8Array()
+    } else if (source instanceof Uint8Array) {
+      bytes = source
+    } else if (source && typeof (source as Data).toUint8Array === "function") {
+      const d = source as Data
+      const headerData = d.size > 65536 ? d.slice(0, 65536) : d
+      bytes = headerData.toUint8Array()
+    }
+
+    if (!bytes || bytes.length < 16) return null
+
+    // 1. PNG 探测: 前 8 字节为 89 50 4E 47 0D 0A 1A 0A
+    if (
+      bytes[0] === 0x89 &&
+      bytes[1] === 0x50 &&
+      bytes[2] === 0x4e &&
+      bytes[3] === 0x47 &&
+      bytes[4] === 0x0d &&
+      bytes[5] === 0x0a &&
+      bytes[6] === 0x1a &&
+      bytes[7] === 0x0a &&
+      bytes.length >= 24
+    ) {
+      const width =
+        ((bytes[16] << 24) >>> 0) +
+        (bytes[17] << 16) +
+        (bytes[18] << 8) +
+        bytes[19]
+      const height =
+        ((bytes[20] << 24) >>> 0) +
+        (bytes[21] << 16) +
+        (bytes[22] << 8) +
+        bytes[23]
+      if (width > 0 && height > 0) {
+        return { width, height }
+      }
+    }
+
+    // 2. JPEG 探测: 前 2 字节为 FF D8 (SOI)
+    if (bytes[0] === 0xff && bytes[1] === 0xd8) {
+      let offset = 2
+      const len = bytes.length
+
+      while (offset < len) {
+        while (offset < len && bytes[offset] !== 0xff) {
+          offset++
+        }
+        while (offset < len && bytes[offset] === 0xff) {
+          offset++
+        }
+        if (offset >= len) break
+
+        const marker = bytes[offset]
+        offset++
+
+        // 遇到图像扫描开始 SOS (0xDA) 或文件结束 EOI (0xD9)，说明已超出元数据区
+        if (marker === 0xda || marker === 0xd9) break
+
+        if (offset + 1 >= len) break
+        const segmentLength = (bytes[offset] << 8) | bytes[offset + 1]
+        if (segmentLength < 2) break
+
+        // 识别 SOF 帧开始标记
+        const isSOF =
+          (marker >= 0xc0 && marker <= 0xc3) ||
+          (marker >= 0xc5 && marker <= 0xc7) ||
+          (marker >= 0xc9 && marker <= 0xcb) ||
+          (marker >= 0xcd && marker <= 0xcf)
+
+        if (isSOF && offset + segmentLength <= len) {
+          if (segmentLength >= 7 && offset + 6 < len) {
+            const height = (bytes[offset + 3] << 8) | bytes[offset + 4]
+            const width = (bytes[offset + 5] << 8) | bytes[offset + 6]
+            if (width > 0 && height > 0) {
+              return { width, height }
+            }
+          }
+        }
+
+        offset += segmentLength
+      }
+    }
+
+    // 3. GIF 探测: "GIF87a" 或 "GIF89a"
+    if (
+      bytes[0] === 0x47 &&
+      bytes[1] === 0x49 &&
+      bytes[2] === 0x46 &&
+      bytes.length >= 10
+    ) {
+      const width = bytes[6] | (bytes[7] << 8)
+      const height = bytes[8] | (bytes[9] << 8)
+      if (width > 0 && height > 0) {
+        return { width, height }
+      }
+    }
+
+    // 4. WebP 探测: "RIFF" .... "WEBP"
+    if (
+      bytes[0] === 0x52 &&
+      bytes[1] === 0x49 &&
+      bytes[2] === 0x46 &&
+      bytes[3] === 0x46 &&
+      bytes.length >= 30 &&
+      bytes[8] === 0x57 &&
+      bytes[9] === 0x45 &&
+      bytes[10] === 0x42 &&
+      bytes[11] === 0x50
+    ) {
+      if (bytes[12] === 0x56 && bytes[13] === 0x50 && bytes[14] === 0x38 && bytes[15] === 0x20) {
+        if (bytes.length >= 30) {
+          const width = (bytes[26] | (bytes[27] << 8)) & 0x3fff
+          const height = (bytes[28] | (bytes[29] << 8)) & 0x3fff
+          if (width > 0 && height > 0) return { width, height }
+        }
+      }
+      if (bytes[12] === 0x56 && bytes[13] === 0x50 && bytes[14] === 0x38 && bytes[15] === 0x4c) {
+        if (bytes.length >= 25 && bytes[20] === 0x2f) {
+          const b1 = bytes[21]
+          const b2 = bytes[22]
+          const b3 = bytes[23]
+          const b4 = bytes[24]
+          const width = 1 + (((b2 & 0x3f) << 8) | b1)
+          const height = 1 + (((b4 & 0xf) << 10) | (b3 << 2) | ((b2 & 0xc0) >> 6))
+          if (width > 0 && height > 0) return { width, height }
+        }
+      }
+    }
+  } catch (err: any) {
+    console.log("sniffImageDimensions parse error:", err?.message ?? err)
+  }
+
+  return null
+}

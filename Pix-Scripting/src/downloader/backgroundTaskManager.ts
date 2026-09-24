@@ -39,7 +39,57 @@ export interface BackgroundTaskHandle {
   }) => Promise<void>
 }
 
-let activeTasksCount = 0
+/**
+ * 全局后台保活引用计数中枢（严格保证多任务、相册批量写入与子流程并发时保活不被意外中断）
+ */
+let globalKeepAliveRefCount = 0
+
+/**
+ * 申请全局系统后台保活令牌（Pro 权限门禁拦截）
+ * 仅在首次申请（引用计数从 0 -> 1）时真正触发系统 BackgroundKeeper.keepAlive()
+ */
+export async function acquireGlobalKeepAlive(): Promise<boolean> {
+  if (!isScriptingProUser()) return false
+  globalKeepAliveRefCount++
+  if (globalKeepAliveRefCount === 1) {
+    try {
+      if (typeof BackgroundKeeper !== "undefined" && typeof BackgroundKeeper.keepAlive === "function") {
+        const started = await BackgroundKeeper.keepAlive()
+        if (!started) {
+          console.log("BackgroundKeeper.keepAlive: system refused")
+          globalKeepAliveRefCount = 0
+          return false
+        }
+        return true
+      }
+    } catch (e: any) {
+      console.log("BackgroundKeeper.keepAlive error:", e?.message ?? e)
+      globalKeepAliveRefCount = 0
+      return false
+    }
+  }
+  return true
+}
+
+/**
+ * 释放全局系统后台保活令牌
+ * 仅当全进程所有持有者全部释放（引用计数严格降至 0）时才真正触发 BackgroundKeeper.stopKeepAlive()
+ */
+export async function releaseGlobalKeepAlive(): Promise<void> {
+  if (!isScriptingProUser()) return
+  if (globalKeepAliveRefCount > 0) {
+    globalKeepAliveRefCount--
+  }
+  if (globalKeepAliveRefCount === 0) {
+    try {
+      if (typeof BackgroundKeeper !== "undefined" && typeof BackgroundKeeper.stopKeepAlive === "function") {
+        await BackgroundKeeper.stopKeepAlive()
+      }
+    } catch (e: any) {
+      console.log("BackgroundKeeper.stopKeepAlive error:", e?.message ?? e)
+    }
+  }
+}
 
 /**
  * 启动后台任务管理：包含后台保活、灵动岛实时活动生命周期与任务完成通知
@@ -50,22 +100,10 @@ export async function beginBackgroundTask(
   const taskId = options.taskId || `task_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
   const settings = loadSettings()
   
-  // 1. 开启系统后台保活（仅针对 PRO 用户，非 PRO 用户静默跳过，防止原生内购弹窗拦截）
+  // 1. 开启系统后台保活（统一通过全局单例中枢申请，Pro 用户门禁）
   let isKeptAlive = false
   if (isScriptingProUser()) {
-    try {
-      if (typeof BackgroundKeeper !== "undefined" && typeof BackgroundKeeper.keepAlive === "function") {
-        const started = await BackgroundKeeper.keepAlive()
-        if (started) {
-          isKeptAlive = true
-          activeTasksCount++
-        } else {
-          console.log("BackgroundKeeper.keepAlive: system refused")
-        }
-      }
-    } catch (e: any) {
-      console.log("BackgroundKeeper.keepAlive error:", e?.message ?? e)
-    }
+    isKeptAlive = await acquireGlobalKeepAlive()
   }
 
   // 2. 检查灵动岛能力与用户设置
@@ -250,19 +288,10 @@ export async function beginBackgroundTask(
       }
     }
 
-    // 4.3 释放后台保活
+    // 4.3 释放后台保活（通过全局单例中枢安全扣减，仅当全局引用归零时才真正注销系统保活）
     if (isKeptAlive) {
       isKeptAlive = false
-      try {
-        if (typeof BackgroundKeeper !== "undefined" && typeof BackgroundKeeper.stopKeepAlive === "function") {
-          if (activeTasksCount > 0) {
-            activeTasksCount--
-          }
-          await BackgroundKeeper.stopKeepAlive()
-        }
-      } catch (e: any) {
-        console.log("BackgroundKeeper.stopKeepAlive error:", e?.message ?? e)
-      }
+      await releaseGlobalKeepAlive()
     }
   }
 

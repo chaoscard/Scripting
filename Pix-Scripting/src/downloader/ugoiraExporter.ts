@@ -6,6 +6,7 @@ import { loadSettings, type UgoiraExportFormat } from "../store/settings"
 import { publishPreparedFile } from "../store/safeFile"
 import { yieldToMainThread, yieldIfExceeded } from "./downloadHelper"
 import type { PixivIllustration } from "../types"
+import type { TaskControlToken } from "./downloadTaskManager"
 
 export interface UgoiraExportResult {
   success: boolean
@@ -16,14 +17,16 @@ export interface UgoiraExportResult {
 }
 
 /**
- * 将 Ugoira 动图合成为 MP4 或 GIF 并保存至专属相簿 Pix-Scripting
+ * 将 Ugoira 动图合成为 MP4 或 GIF 并保存至专属相簿 Pix-Scripting（支持中断取消 Token）
  */
 export async function exportUgoiraToAlbum(
   illust: PixivIllustration,
   onProgress?: (msg: string) => void,
-  formatOverride?: UgoiraExportFormat
+  formatOverride?: UgoiraExportFormat,
+  token?: TaskControlToken
 ): Promise<UgoiraExportResult> {
   return withAlbumKeepAlive(async () => {
+    if (token) await token.checkOrWait()
     const format: UgoiraExportFormat = formatOverride ?? loadSettings().ugoiraExportFormat ?? "mp4"
     try {
       const author = illust.user?.name || "Unknown"
@@ -31,7 +34,9 @@ export async function exportUgoiraToAlbum(
 
       if (format === "gif") {
         onProgress?.("正在通过 FFmpeg 合成高质量 GIF 动图...")
-        const ugoiraRes = await buildUgoira(illust.id, "gif")
+        if (token) await token.checkOrWait()
+        const ugoiraRes = await buildUgoira(illust.id, "gif", token)
+        if (token) await token.checkOrWait()
         if (!ugoiraRes || !ugoiraRes.mp4Path) {
           return { success: false, mp4Path: null, format: "gif", error: "GIF 动图合成失败" }
         }
@@ -45,7 +50,9 @@ export async function exportUgoiraToAlbum(
         return { success: true, mp4Path: ugoiraRes.mp4Path, format: "gif", savedPath: ugoiraRes.mp4Path }
       } else {
         onProgress?.("正在通过 FFmpeg 合成高清 MP4 视频...")
-        const ugoiraRes = await buildUgoira(illust.id, "mp4")
+        if (token) await token.checkOrWait()
+        const ugoiraRes = await buildUgoira(illust.id, "mp4", token)
+        if (token) await token.checkOrWait()
         if (!ugoiraRes || !ugoiraRes.mp4Path) {
           return { success: false, mp4Path: null, format: "mp4", error: "MP4 视频合成失败" }
         }
@@ -59,6 +66,9 @@ export async function exportUgoiraToAlbum(
         return { success: true, mp4Path: ugoiraRes.mp4Path, format: "mp4", savedPath: ugoiraRes.mp4Path }
       }
     } catch (err: any) {
+      if (err?.name === "TaskAbortError" || token?.isCancelled) {
+        throw err
+      }
       console.log("exportUgoiraToAlbum error:", err?.message ?? err)
       return { success: false, mp4Path: null, format, error: err?.message ?? String(err) }
     }
@@ -66,19 +76,22 @@ export async function exportUgoiraToAlbum(
 }
 
 /**
- * 将动图原始 ZIP 压缩帧包（包含所有帧与完整元数据 info.json）导出保存至文件存储目录
+ * 将动图原始 ZIP 压缩帧包（包含所有帧与完整元数据 info.json）导出保存至文件存储目录（支持中断取消 Token）
  */
 export async function exportUgoiraZip(
   illust: PixivIllustration,
   onProgress?: (msg: string) => void,
-  targetDirOverride?: string
+  targetDirOverride?: string,
+  token?: TaskControlToken
 ): Promise<UgoiraExportResult> {
   const tempDir = `${getCategoryDirectory("temp")}/zip_ugoira_${illust.id}_${Date.now()}`
   const tempZipPath = `${tempDir}.zip`
 
   try {
+    if (token) await token.checkOrWait()
     onProgress?.("正在准备动图序列帧资源...")
-    const prep = await prepareUgoira(illust.id)
+    const prep = await prepareUgoira(illust.id, token)
+    if (token) await token.checkOrWait()
     if (!prep || !prep.frames || prep.frames.length === 0) {
       return { success: false, mp4Path: null, format: "zip", error: "动图资源准备失败" }
     }

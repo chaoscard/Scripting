@@ -4,6 +4,7 @@ import {
   yieldToMainThread,
   yieldIfExceeded,
   createThrottledProgress,
+  sniffImageDimensions,
   type ExportResult,
 } from "./downloadHelper"
 import { getCategoryDirectory, sanitizeFileName } from "./directoryResolver"
@@ -1438,11 +1439,19 @@ export async function exportMangaToEpub(options: MangaEpubOptions): Promise<Expo
           let width = 1200
           let height = 1800
           try {
-            const uiImg = UIImage.fromFile(filePath)
-            if (uiImg && uiImg.width > 0 && uiImg.height > 0) {
-              const scale = uiImg.scale || 1
-              width = Math.round(uiImg.width * scale)
-              height = Math.round(uiImg.height * scale)
+            // 优先通过轻量二进制 Header 嗅探尺寸，避免 UIImage.fromFile 解码高分辨率完整位图导致百兆内存波峰与 OOM
+            const sniffed = sniffImageDimensions(data ?? filePath)
+            if (sniffed && sniffed.width > 0 && sniffed.height > 0) {
+              width = sniffed.width
+              height = sniffed.height
+            } else {
+              // 极端冷门编码兼容兜底
+              const uiImg = UIImage.fromFile(filePath)
+              if (uiImg && uiImg.width > 0 && uiImg.height > 0) {
+                const scale = uiImg.scale || 1
+                width = Math.round(uiImg.width * scale)
+                height = Math.round(uiImg.height * scale)
+              }
             }
           } catch {}
 
