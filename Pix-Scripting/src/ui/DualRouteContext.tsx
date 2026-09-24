@@ -258,7 +258,7 @@ function DetailPaneRouteView(props: {
               systemName="chevron.backward"
               font="body"
               fontWeight="semibold"
-              foregroundStyle="tintColor"
+              foregroundStyle="label"
             />
           </Button>
         ),

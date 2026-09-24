@@ -1,4 +1,4 @@
-import { Button, Device, HStack, Script, Spacer, Text } from "scripting"
+import { Button, Device, HStack, Image, Script, Spacer, Text } from "scripting"
 import { loadSettings } from "../../store/settings"
 import { abortAllAITasks } from "../../api/aiService"
 import { useIsFullScreen, toggleFullScreen } from "../FullScreenState"
@@ -8,16 +8,19 @@ export function FullScreenToggleButton() {
   return (
     <Button
       key="app-toolbar-fullscreen-toggle"
-      title={isFull ? "收缩" : "全屏"}
-      systemImage={
-        isFull
-          ? "arrow.down.left.and.arrow.up.right"
-          : "arrow.up.right.and.arrow.down.left"
-      }
       action={() => {
         toggleFullScreen()
       }}
-    />
+    >
+      <Image
+        systemName={
+          isFull
+            ? "arrow.down.left.and.arrow.up.right"
+            : "arrow.up.right.and.arrow.down.left"
+        }
+        foregroundStyle="label"
+      />
+    </Button>
   )
 }
 
@@ -84,10 +87,10 @@ export function appToolbar(
   let leadingButton: any = (
     <Button
       key="app-toolbar-close"
-      title="关闭"
-      systemImage="xmark"
       action={() => performAppClose(dismiss)}
-    />
+    >
+      <Image systemName="xmark" foregroundStyle="label" />
+    </Button>
   )
 
   if (isHomeScreen) {
