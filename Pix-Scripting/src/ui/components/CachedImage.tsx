@@ -675,12 +675,12 @@ export function PageCountBadge(props: { count: number; hero?: boolean }) {
       <Image
         systemName="rectangle.stack.fill"
         font={isHero ? "title3" : "body"}
-        foregroundStyle="#FF9500"
+        foregroundStyle="systemOrange"
       />
       <Text
         font={isHero ? "headline" : "body"}
         fontWeight="semibold"
-        foregroundStyle="#FF9500"
+        foregroundStyle="systemOrange"
       >
         {props.count}
       </Text>

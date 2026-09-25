@@ -47,6 +47,11 @@ export function ErrorView(props: {
         <Button
           title="重试"
           buttonStyle="glass"
+          tint={
+            loadSettings().glassCustomTintEnabled && loadSettings().glassTintColor
+              ? (loadSettings().glassTintColor as any)
+              : "systemBlue"
+          }
           action={props.onRetry}
         />
       </VStack>

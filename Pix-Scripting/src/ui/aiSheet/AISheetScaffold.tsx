@@ -307,7 +307,7 @@ export function AISheetScaffold(props: {
                       <ProgressView />
                       <Text
                         font="caption"
-                        foregroundStyle="#007AFF"
+                        foregroundStyle="systemBlue"
                       >
                         {progressInfo || ""}
                       </Text>

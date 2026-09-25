@@ -113,6 +113,8 @@ function TagIllustFeed(props: { tag: string }) {
             onLoadMore={paged.loadMore}
             hasMore={paged.hasMore}
             isLoading={paged.loadingMore}
+            loadMoreError={paged.loadMoreError}
+            onRetryLoadMore={paged.retryLoadMore}
           />
         )}
       </VStack>
@@ -190,6 +192,8 @@ function TagNovelFeed(props: { tag: string }) {
                 onLoadMore={paged.loadMore}
                 hasMore={paged.hasMore}
                 isLoading={paged.loadingMore}
+                loadMoreError={paged.loadMoreError}
+                onRetry={paged.retryLoadMore}
               />
             ) : null}
           </LazyVStack>
@@ -270,6 +274,8 @@ function TagPixivisionFeed(props: { tag: string }) {
                 onLoadMore={paged.loadMore}
                 hasMore={paged.hasMore}
                 isLoading={paged.loadingMore}
+                loadMoreError={paged.loadMoreError}
+                onRetry={paged.retryLoadMore}
               />
             ) : null}
           </LazyVStack>

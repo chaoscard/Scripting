@@ -28,7 +28,7 @@ import { loadSettings, onSettingsChanged } from "../store/settings"
 import { appToolbar, AvatarImage } from "./components"
 import { useLayoutMetrics } from "./Hooks"
 import { requestPixivRoute, setActiveTabKind, useIsCurrentTab } from "../store/routeNavigation"
-import { destinationElement } from "./destinationElement"
+import { destinationElement } from "./DestinationElement"
 import { DockActionBar, useRegisterBottomAccessory, type DockActionItem } from "./bottomAccessory"
 import { useExperimentalAmbientPalette, recordActiveAmbientImageUrl } from "./ambient"
 import { AccountSwitcherSheet } from "./accountSwitcherSheet"
@@ -265,33 +265,33 @@ export function MoreView(props: { onClose: () => void }) {
       >
       <Section header={<Text>浏览</Text>}>
         <AppNavigationLink value="library">
-          <MoreRow icon="heart.fill" iconColor="#FF375F" title="我的收藏" />
+          <MoreRow icon="heart.fill" iconColor="systemPink" title="我的收藏" />
         </AppNavigationLink>
         <AppNavigationLink value="history">
-          <MoreRow icon="clock.fill" iconColor="#FF9F0A" title="浏览记录" />
+          <MoreRow icon="clock.fill" iconColor="systemOrange" title="浏览记录" />
         </AppNavigationLink>
         {hideNovels ? null : (
           <AppNavigationLink value="novelBookmarks">
-            <MoreRow icon="book.pages.fill" iconColor="#AF52DE" title="小说书签" />
+            <MoreRow icon="book.pages.fill" iconColor="systemPurple" title="小说书签" />
           </AppNavigationLink>
         )}
       </Section>
 
       <Section header={<Text>关联</Text>}>
         <AppNavigationLink value="connections:following">
-          <MoreRow icon="person.2.fill" iconColor="#007AFF" title="我的关注" />
+          <MoreRow icon="person.2.fill" iconColor="systemBlue" title="我的关注" />
         </AppNavigationLink>
         <AppNavigationLink value="connections:follower">
-          <MoreRow icon="person.2.badge.plus" iconColor="#34C759" title="我的粉丝" />
+          <MoreRow icon="person.2.badge.plus" iconColor="systemGreen" title="我的粉丝" />
         </AppNavigationLink>
         <AppNavigationLink value="friends">
-          <MoreRow icon="person.2.badge.gearshape" iconColor="#AF52DE" title="我的好友" />
+          <MoreRow icon="person.2.badge.gearshape" iconColor="systemPurple" title="我的好友" />
         </AppNavigationLink>
         <AppNavigationLink value="myWorks">
-          <MoreRow icon="photo.stack.fill" iconColor="#FF9500" title="我的作品" />
+          <MoreRow icon="photo.stack.fill" iconColor="systemOrange" title="我的作品" />
         </AppNavigationLink>
         <AppNavigationLink value="notifications">
-          <MoreRow icon="bell.fill" iconColor="#FF375F" title="我的通知" />
+          <MoreRow icon="bell.fill" iconColor="systemPink" title="我的通知" />
         </AppNavigationLink>
       </Section>
 
@@ -300,7 +300,7 @@ export function MoreView(props: { onClose: () => void }) {
           <MoreRow icon="gearshape.fill" iconColor="secondaryLabel" title="应用设置" />
         </AppNavigationLink>
         <AppNavigationLink value="about">
-          <MoreRow icon="info.circle.fill" iconColor="#007AFF" title="关于应用" />
+          <MoreRow icon="info.circle.fill" iconColor="systemBlue" title="关于应用" />
         </AppNavigationLink>
         <Button
           buttonStyle="plain"

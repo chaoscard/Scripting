@@ -200,7 +200,7 @@ function PixivisionBookmarkCard(props: {
               <Image
                 systemName="heart.fill"
                 font="subheadline"
-                foregroundStyle="#FF2D55"
+                foregroundStyle="systemPink"
               />
             </Button>
           </HStack>

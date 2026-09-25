@@ -41,7 +41,7 @@ export function LinkedDescription(props: {
         if (target.startsWith("http")) {
           items.push({
             content: formatTextWithBreakOpportunities(segment.label, true),
-            foregroundColor: "#007AFF",
+            foregroundColor: "systemBlue",
             underlineStyle: "single",
             onTapGesture: () => {
               void presentExternalURL(target)
@@ -50,7 +50,7 @@ export function LinkedDescription(props: {
         } else {
           items.push({
             content: formatTextWithBreakOpportunities(segment.label, true),
-            foregroundColor: "#007AFF",
+            foregroundColor: "systemBlue",
             underlineStyle: "single",
             onTapGesture: () => {
               requestPixivRoute(target)

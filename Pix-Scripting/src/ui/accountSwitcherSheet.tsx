@@ -133,8 +133,8 @@ export function AccountSwitcherSheet(props: {
               clipShape={{ type: "rect", cornerRadius: 10 }}
               frame={{ maxWidth: "infinity" }}
             >
-              <Image systemName="exclamationmark.triangle.fill" foregroundStyle="#FF3B30" font="subheadline" />
-              <Text font="caption" foregroundStyle="#FF3B30">
+              <Image systemName="exclamationmark.triangle.fill" foregroundStyle="systemRed" font="subheadline" />
+              <Text font="caption" foregroundStyle="systemRed">
                 {error}
               </Text>
             </HStack>
@@ -209,7 +209,7 @@ export function AccountSwitcherSheet(props: {
                               <HStack
                                 spacing={2}
                                 padding={{ horizontal: 5, vertical: 1 }}
-                                background="#FF9500"
+                                background="systemOrange"
                                 clipShape="capsule"
                               >
                                 <Text font="caption2" fontWeight="bold" foregroundStyle="white">
@@ -236,13 +236,13 @@ export function AccountSwitcherSheet(props: {
                             glassEffect={appGlass("capsule")}
                             contentShape="capsule"
                           >
-                            <Image systemName="checkmark.circle.fill" font="caption" foregroundStyle="#34C759" />
-                            <Text font="caption2" fontWeight="bold" foregroundStyle="#34C759">
+                            <Image systemName="checkmark.circle.fill" font="caption" foregroundStyle="systemGreen" />
+                            <Text font="caption2" fontWeight="bold" foregroundStyle="systemGreen">
                               当前使用
                             </Text>
                           </HStack>
                         ) : isSwitching ? (
-                          <Text font="caption" foregroundStyle="#007AFF">
+                          <Text font="caption" foregroundStyle="systemBlue">
                             切换中...
                           </Text>
                         ) : (
@@ -282,8 +282,8 @@ export function AccountSwitcherSheet(props: {
                 frame={{ maxWidth: "infinity", alignment: "leading" }}
                 contentShape="rect"
               >
-                <Image systemName="plus.circle.fill" font="body" foregroundStyle="#007AFF" />
-                <Text font="body" fontWeight="medium" foregroundStyle="#007AFF">
+                <Image systemName="plus.circle.fill" font="body" foregroundStyle="systemBlue" />
+                <Text font="body" fontWeight="medium" foregroundStyle="systemBlue">
                   登录并添加新账号
                 </Text>
                 <Spacer />
@@ -291,7 +291,7 @@ export function AccountSwitcherSheet(props: {
                   systemName="chevron.right"
                   font="subheadline"
                   fontWeight="semibold"
-                  foregroundStyle="#007AFF"
+                  foregroundStyle="systemBlue"
                 />
               </HStack>
             </Button>
@@ -324,8 +324,8 @@ export function AccountSwitcherSheet(props: {
                 frame={{ maxWidth: "infinity", alignment: "leading" }}
                 contentShape="rect"
               >
-                <Image systemName="rectangle.portrait.and.arrow.right" font="body" foregroundStyle="#FF3B30" />
-                <Text font="body" fontWeight="medium" foregroundStyle="#FF3B30">
+                <Image systemName="rectangle.portrait.and.arrow.right" font="body" foregroundStyle="systemRed" />
+                <Text font="body" fontWeight="medium" foregroundStyle="systemRed">
                   退出当前账号
                 </Text>
                 <Spacer />
@@ -333,7 +333,7 @@ export function AccountSwitcherSheet(props: {
                   systemName="chevron.right"
                   font="subheadline"
                   fontWeight="semibold"
-                  foregroundStyle="#FF3B30"
+                  foregroundStyle="systemRed"
                 />
               </HStack>
             </Button>

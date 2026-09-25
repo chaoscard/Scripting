@@ -255,8 +255,8 @@ export function NovelCard(props: {
                 ) : null}
                 {activeMarker != null ? (
                   <HStack spacing={3}>
-                    <Image systemName="book.pages" font="caption2" foregroundStyle="#007AFF" />
-                    <Text font="caption2" foregroundStyle="#007AFF" lineLimit={1}>
+                    <Image systemName="book.pages" font="caption2" foregroundStyle="systemBlue" />
+                    <Text font="caption2" foregroundStyle="systemBlue" lineLimit={1}>
                       第 {activeMarker} 页
                     </Text>
                   </HStack>

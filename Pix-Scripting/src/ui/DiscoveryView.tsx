@@ -40,7 +40,7 @@ import {
   isNovelContentVisible,
 } from "../store/contentFilter"
 import { requestPixivRoute, setActiveTabKind } from "../store/routeNavigation"
-import { destinationElement } from "./destinationElement"
+import { destinationElement } from "./DestinationElement"
 import { useDualRoute } from "./DualRouteContext"
 import {
   DockActionBar,
@@ -714,6 +714,8 @@ function IllustFeedContent(props: {
           onLoadMore={paged.loadMore}
           hasMore={paged.hasMore}
           isLoading={paged.loadingMore}
+          loadMoreError={paged.loadMoreError}
+          onRetryLoadMore={paged.retryLoadMore}
           enableHeroFirst={heroFirst}
         />
       )}
@@ -751,6 +753,8 @@ function NovelFeedContent(props: {
             onLoadMore={paged.loadMore}
             hasMore={paged.hasMore}
             isLoading={paged.loadingMore}
+            loadMoreError={paged.loadMoreError}
+            onRetry={paged.retryLoadMore}
           />
         </LazyVStack>
       )}
@@ -780,6 +784,8 @@ function PixivisionFeedContent(props: {
             onLoadMore={paged.loadMore}
             hasMore={paged.hasMore}
             isLoading={paged.loadingMore}
+            loadMoreError={paged.loadMoreError}
+            onRetry={paged.retryLoadMore}
           />
         </LazyVStack>
       )}

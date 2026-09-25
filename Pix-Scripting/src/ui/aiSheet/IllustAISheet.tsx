@@ -360,7 +360,7 @@ function IllustAIPageRow(props: {
                   <Image
                     systemName="sparkles"
                     font="largeTitle"
-                    foregroundStyle="#FFD60A"
+                    foregroundStyle="systemYellow"
                   />
                 </ZStack>
               </Button>

@@ -789,7 +789,7 @@ export function CustomAISettingsView() {
             <Image
               systemName={testingGeneral ? "arrow.triangle.2.circlepath" : "bolt.fill"}
               foregroundStyle={
-                profile.general.apiKey || profile.general.noKeyRequired ? "#FF9500" : "secondaryLabel"
+                profile.general.apiKey || profile.general.noKeyRequired ? "systemOrange" : "secondaryLabel"
               }
             />
           </Button>
@@ -981,7 +981,7 @@ export function CustomAISettingsView() {
                   systemName={testingImage ? "arrow.triangle.2.circlepath" : "bolt.fill"}
                   foregroundStyle={
                     profile.general.apiKey || profile.imageGen.apiKey || profile.general.noKeyRequired
-                      ? "#FF9500"
+                      ? "systemOrange"
                       : "secondaryLabel"
                   }
                 />

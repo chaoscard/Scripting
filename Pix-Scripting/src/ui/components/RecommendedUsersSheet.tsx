@@ -134,6 +134,8 @@ export function RecommendedUsersSheet(props: {
                       onLoadMore={paged.loadMore}
                       hasMore={paged.hasMore}
                       isLoading={paged.loadingMore}
+                      loadMoreError={paged.loadMoreError}
+                      onRetry={paged.retryLoadMore}
                       bottomInset={0}
                     />
                   </LazyVStack>

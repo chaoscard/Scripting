@@ -298,7 +298,7 @@ export function ConnectionRow(props: {
                   : "person.badge.plus"
               }
               font="body"
-              foregroundStyle={followed ? "secondaryLabel" : "#007AFF"}
+              foregroundStyle={followed ? "secondaryLabel" : "systemBlue"}
               frame={{ width: 38, height: 38 }}
             />
           </Button>

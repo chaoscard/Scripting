@@ -389,6 +389,8 @@ export function UserWorksFeedSection(props: {
           onLoadMore={illustPaged.loadMore}
           hasMore={illustPaged.hasMore}
           isLoading={illustPaged.loadingMore}
+          loadMoreError={illustPaged.loadMoreError}
+          onRetryLoadMore={illustPaged.retryLoadMore}
           contextMenuOf={illustContextMenuOf}
         />
       </VStack>
@@ -428,6 +430,8 @@ export function UserWorksFeedSection(props: {
           onLoadMore={mangaPaged.loadMore}
           hasMore={mangaPaged.hasMore}
           isLoading={mangaPaged.loadingMore}
+          loadMoreError={mangaPaged.loadMoreError}
+          onRetryLoadMore={mangaPaged.retryLoadMore}
           contextMenuOf={illustContextMenuOf}
         />
       </VStack>
@@ -470,6 +474,8 @@ export function UserWorksFeedSection(props: {
         onLoadMore={novelPaged.loadMore}
         hasMore={novelPaged.hasMore}
         isLoading={novelPaged.loadingMore}
+        loadMoreError={novelPaged.loadMoreError}
+        onRetry={novelPaged.retryLoadMore}
       />
     </LazyVStack>
   )

@@ -40,7 +40,7 @@ import {
   isNovelContentVisible,
 } from "../store/contentFilter"
 import { setActiveTabKind } from "../store/routeNavigation"
-import { destinationElement } from "./destinationElement"
+import { destinationElement } from "./DestinationElement"
 import { useDualRoute } from "./DualRouteContext"
 import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
 import { useLatest, usePagedList, currentBatchSize, useLayoutMetrics } from "./Hooks"
@@ -496,9 +496,9 @@ function AdvancedRankingBar(props: {
           <Image
             systemName="arrow.uturn.backward"
             font="caption"
-            foregroundStyle="#007AFF"
+            foregroundStyle="systemBlue"
           />
-          <Text font="subheadline" foregroundStyle="#007AFF">
+          <Text font="subheadline" foregroundStyle="systemBlue">
             返回
           </Text>
         </HStack>
@@ -1072,6 +1072,8 @@ function NovelRankingFeedContent(props: {
             onLoadMore={paged.loadMore}
             hasMore={paged.hasMore}
             isLoading={paged.loadingMore}
+            loadMoreError={paged.loadMoreError}
+            onRetry={paged.retryLoadMore}
           />
         </LazyVStack>
       )}
@@ -1221,6 +1223,8 @@ function IllustRankingFeedContent(props: {
           onLoadMore={paged.loadMore}
           hasMore={paged.hasMore}
           isLoading={paged.loadingMore}
+          loadMoreError={paged.loadMoreError}
+          onRetryLoadMore={paged.retryLoadMore}
           cornerBadgeOf={badgeOf}
           enableHeroFirst={heroFirst}
         />

@@ -75,7 +75,7 @@ export function IllustQuickActionButton(props: IllustQuickActionButtonProps) {
 
   if (quickActionType === "bookmark") {
     iconName = bookmarked ? "heart.fill" : "heart"
-    iconColor = bookmarked ? "#FF375F" : "label"
+    iconColor = bookmarked ? "systemPink" : "label"
     disabled = bookmarkLoading || bookmarkLongPressLocked
     action = onToggleBookmark
     gesture = LongPressGesture({ minDuration: 500 }).onEnded(() => {

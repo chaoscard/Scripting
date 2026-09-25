@@ -61,6 +61,8 @@ export function IllustRelatedSection(props: IllustRelatedSectionProps) {
           onLoadMore={paged.loadMore}
           hasMore={paged.hasMore}
           isLoading={paged.loadingMore}
+          loadMoreError={paged.loadMoreError}
+          onRetryLoadMore={paged.retryLoadMore}
           bottomInset={0}
         />
       )}

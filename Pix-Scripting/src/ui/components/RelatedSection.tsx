@@ -1,4 +1,5 @@
-import { Button, HStack, ProgressView, Spacer, Text, VStack } from "scripting"
+import { HStack, ProgressView, Spacer, Text, VStack } from "scripting"
+import { LoadMoreErrorRetry } from "./RefreshableScrollView"
 import { loadSettings } from "../../store/settings"
 
 export interface RelatedSectionProps<T> {
@@ -54,16 +55,11 @@ export function RelatedSection<T>(props: RelatedSectionProps<T>) {
           <Spacer />
         </HStack>
       ) : error && items.length === 0 ? (
-        <VStack alignment="center" spacing={12} padding={{ top: 20, bottom: 20, horizontal: 16 }} frame={{ maxWidth: "infinity" }}>
-          <Text font="footnote" foregroundStyle="secondaryLabel">
-            {errorText}
-          </Text>
-          <Button
-            title="重试"
-            buttonStyle="glass"
-            action={onRetry}
-          />
-        </VStack>
+        <HStack spacing={0} padding={{ top: 16, bottom: 16, horizontal: 16 }} frame={{ maxWidth: "infinity" }}>
+          <Spacer />
+          <LoadMoreErrorRetry onRetry={onRetry} />
+          <Spacer />
+        </HStack>
       ) : items.length > 0 ? (
         renderContent(items)
       ) : (

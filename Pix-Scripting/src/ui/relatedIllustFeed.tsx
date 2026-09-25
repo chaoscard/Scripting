@@ -17,7 +17,7 @@ import {
   IllustFlowFeed,
   RefreshableScrollView,
 } from "./components"
-import { destinationElement } from "./destinationElement"
+import { destinationElement } from "./DestinationElement"
 import { getCachedIllust } from "../store/illustCache"
 
 export function RelatedIllustFeedView(props: { illustID: number }) {
@@ -86,6 +86,8 @@ export function RelatedIllustFeedView(props: { illustID: number }) {
             onLoadMore={paged.loadMore}
             hasMore={paged.hasMore}
             isLoading={paged.loadingMore}
+            loadMoreError={paged.loadMoreError}
+            onRetryLoadMore={paged.retryLoadMore}
           />
         )}
       </VStack>

@@ -44,7 +44,7 @@ import { seedIllustFromWidgetPool, seedPixivisionFromWidgetPool } from "../store
 import { seedIllustFromPixivCache } from "../image/imageLoader"
 import { normalizeRoute, setGlobalRouteRenderer, setDetailRouteRenderer } from "../store/routeNavigation"
 export { normalizeRoute } from "../store/routeNavigation"
-export { destinationElement } from "./destinationElement"
+export { destinationElement } from "./DestinationElement"
 
 // 延迟引用 SettingsView 彻底解耦深层循环依赖
 function SettingsView(props: any) {

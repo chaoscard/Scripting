@@ -1,5 +1,6 @@
 import { useLatest } from "../Hooks"
 import {
+  Button,
   HStack,
   Image,
   ProgressView,
@@ -18,6 +19,7 @@ import {
   type ScrollViewProxy,
 } from "scripting"
 import { loadSettings } from "../../store/settings"
+import { triggerHaptic } from "../../platform/haptics"
 import {
   PAGE_TOOLBAR_BACKGROUND,
   PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
@@ -154,11 +156,40 @@ export function RefreshableScrollView(props: {
 // 异步图片加载状态（CachedImage / AvatarImage 共用）：
 
 
+/**
+ * 通用触底翻页失败重试组件（方案A：iOS 26 质感轻量胶囊按钮）
+ */
+export function LoadMoreErrorRetry(props: {
+  message?: string | null
+  onRetry: () => void
+}) {
+  const { onRetry } = props
+  const settings = loadSettings()
+  const tintColor =
+    settings.glassCustomTintEnabled && settings.glassTintColor
+      ? (settings.glassTintColor as any)
+      : "systemBlue"
+
+  return (
+    <Button
+      title="重试"
+      buttonStyle="glass"
+      tint={tintColor}
+      action={() => {
+        triggerHaptic("selection")
+        onRetry()
+      }}
+    />
+  )
+}
+
 export function LoadMoreTrigger(props: {
   anchor: number | string
   onLoadMore: (anchor: number | string) => void
   hasMore: boolean
   isLoading?: boolean
+  loadMoreError?: string | null
+  onRetry?: () => void
   bottomInset?: number
 }) {
   const triggerHeight = props.bottomInset ?? Math.round(loadSettings().feedBottomInset / 2)
@@ -174,20 +205,48 @@ export function LoadMoreTrigger(props: {
     }
     return null
   }
-  const loadingHeight = triggerHeight > 0 ? triggerHeight : 48
+  const loadingHeight = 48
+  const handleRetry = () => {
+    if (props.onRetry) {
+      props.onRetry()
+    } else {
+      props.onLoadMore(props.anchor)
+    }
+  }
+
   return (
     <VStack
       key={`load-more:${props.anchor}`}
       spacing={0}
-      frame={{ height: loadingHeight, maxWidth: "infinity" }}
-      onAppear={() => props.onLoadMore(props.anchor)}
+      frame={{ maxWidth: "infinity" }}
+      onAppear={() => {
+        if (!props.loadMoreError) {
+          props.onLoadMore(props.anchor)
+        }
+      }}
     >
       {props.isLoading ? (
-        <HStack spacing={0} frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
+        <HStack spacing={0} frame={{ height: loadingHeight, maxWidth: "infinity" }}>
           <Spacer />
           <ProgressView progressViewStyle="circular" />
           <Spacer />
         </HStack>
+      ) : props.loadMoreError ? (
+        <HStack spacing={0} frame={{ height: loadingHeight, maxWidth: "infinity" }}>
+          <Spacer />
+          <LoadMoreErrorRetry
+            message={props.loadMoreError}
+            onRetry={handleRetry}
+          />
+          <Spacer />
+        </HStack>
+      ) : null}
+      {triggerHeight > 0 ? (
+        <Rectangle
+          key="load-more-spacer"
+          fill="clear"
+          frame={{ height: triggerHeight, maxWidth: "infinity" }}
+        />
       ) : null}
     </VStack>
   )

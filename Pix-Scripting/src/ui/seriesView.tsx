@@ -764,6 +764,8 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
                         onLoadMore={paged.loadMore}
                         hasMore={paged.hasMore}
                         isLoading={paged.loadingMore}
+                        loadMoreError={paged.loadMoreError}
+                        onRetry={paged.retryLoadMore}
                       />
                     ) : null}
                   </>
@@ -786,6 +788,8 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
                     onLoadMore={paged.loadMore}
                     hasMore={paged.hasMore}
                     isLoading={paged.loadingMore}
+                    loadMoreError={paged.loadMoreError}
+                    onRetryLoadMore={paged.retryLoadMore}
                     cornerBadgeOf={(illust, index) => (
                       <ImageNumberBadge
                         number={

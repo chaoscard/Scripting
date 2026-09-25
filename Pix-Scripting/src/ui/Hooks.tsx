@@ -232,6 +232,7 @@ export function usePagedList<T extends { id: number | string }>(
   const [initialLoading, setInitialLoading] = useState(true)
   const [hasLoaded, setHasLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null)
   const [hasFilteredContent, setHasFilteredContent] = useState(false)
 
   const seqRef = useRef(0)
@@ -270,6 +271,7 @@ export function usePagedList<T extends { id: number | string }>(
     seqRef.current++
     loadingMoreTaskRef.current = null
     setLoadingMore(false)
+    setLoadMoreError(null)
     consumedTailRef.current = null
     clearBatchPublishedEffects()
     // 首次加载尚未完成就离开时，下次激活必须重新请求，不能停在加载中。
@@ -316,6 +318,7 @@ export function usePagedList<T extends { id: number | string }>(
     loadingMoreTaskRef.current = null
     setLoadingMore(false)
     setError(null)
+    setLoadMoreError(null)
     if (clear) {
       setInitialLoading(true)
       setHasLoaded(false)
@@ -436,6 +439,7 @@ export function usePagedList<T extends { id: number | string }>(
       const task = { id: ++moreTaskIDRef.current, seq: seqRef.current, url: "pending" }
       loadingMoreTaskRef.current = task
       setLoadingMore(true)
+      setLoadMoreError(null)
       try {
         // 触底回弹缓冲：由设置中的 loadingAnimationDuration 动态控制，随后平滑展开新批次卡片
         await waitForPaginationFeedback()
@@ -448,6 +452,15 @@ export function usePagedList<T extends { id: number | string }>(
         setItems((current) => mergeUniqueByID(current, nextBatch))
         setPendingItems(pending.slice(batchSize))
         notifyBatchPublished(nextBatch, pending.slice(batchSize))
+      } catch (err: any) {
+        if (
+          seqRef.current === task.seq &&
+          loadingMoreTaskRef.current === task &&
+          enabledRef.current
+        ) {
+          setLoadMoreError(err?.message ?? "加载失败，请重试")
+        }
+        consumedTailRef.current = null
       } finally {
         if (loadingMoreTaskRef.current === task) {
           loadingMoreTaskRef.current = null
@@ -465,6 +478,7 @@ export function usePagedList<T extends { id: number | string }>(
     const task = { id: ++moreTaskIDRef.current, seq, url }
     loadingMoreTaskRef.current = task
     setLoadingMore(true)
+    setLoadMoreError(null)
     try {
       const batchSize = currentBatchSize()
       const currentItems = itemsRef.current
@@ -528,8 +542,14 @@ export function usePagedList<T extends { id: number | string }>(
       if (published.length === 0 && nextPageURL && attempts >= MAX_ATTEMPTS) {
         consumedTailRef.current = null
       }
-    } catch {
-      // 加载更多失败静默，允许同一尾项再次触发。
+    } catch (err: any) {
+      if (
+        seq === seqRef.current &&
+        activation === activationRef.current &&
+        enabledRef.current
+      ) {
+        setLoadMoreError(err?.message ?? "加载失败，请重试")
+      }
       consumedTailRef.current = null
     } finally {
       // 只有当前锁的所有者可以释放它；旧任务不得清除刷新后新建的锁。
@@ -593,10 +613,16 @@ export function usePagedList<T extends { id: number | string }>(
     }
   }, [])
 
+  const retryLoadMore = useCallback(() => {
+    setLoadMoreError(null)
+    return loadMore()
+  }, [loadMore])
+
   return {
     items,
     nextURL,
     loadingMore,
+    loadMoreError,
     initialLoading,
     hasLoaded,
     error,
@@ -605,6 +631,7 @@ export function usePagedList<T extends { id: number | string }>(
     removeItem,
     prependItems,
     loadMore,
+    retryLoadMore,
     hasMore: pendingItems.length > 0 || nextURL != null,
     hasFilteredContent,
   }

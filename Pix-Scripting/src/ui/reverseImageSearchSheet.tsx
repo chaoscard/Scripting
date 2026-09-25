@@ -267,8 +267,8 @@ export function ReverseImageSearchSheet(props: {
                     border={{ style: "#007AFF40", width: 1 }}
                     clipShape={{ type: "rect", cornerRadius: 8 }}
                   >
-                    <Image systemName="photo.badge.plus" font="subheadline" foregroundStyle="#007AFF" />
-                    <Text font="subheadline" fontWeight="semibold" foregroundStyle="#007AFF">
+                    <Image systemName="photo.badge.plus" font="subheadline" foregroundStyle="systemBlue" />
+                    <Text font="subheadline" fontWeight="semibold" foregroundStyle="systemBlue">
                       重新选图
                     </Text>
                   </HStack>
@@ -312,7 +312,7 @@ export function ReverseImageSearchSheet(props: {
                   background="#FF95001A"
                   alignment="center"
                 >
-                  <Image systemName="key.fill" font="title2" foregroundStyle="#FF9500" />
+                  <Image systemName="key.fill" font="title2" foregroundStyle="systemOrange" />
                 </ZStack>
 
                 {/* 2. 中间信息（严格左对齐，无 Emoji） */}
@@ -348,12 +348,12 @@ export function ReverseImageSearchSheet(props: {
                       <Image
                         systemName="gearshape"
                         font="caption"
-                        foregroundStyle="#007AFF"
+                        foregroundStyle="systemBlue"
                       />
                       <Text
                         font="caption"
                         fontWeight="medium"
-                        foregroundStyle="#007AFF"
+                        foregroundStyle="systemBlue"
                       >
                         配置密钥
                       </Text>
@@ -376,12 +376,12 @@ export function ReverseImageSearchSheet(props: {
                       <Image
                         systemName="safari"
                         font="caption"
-                        foregroundStyle="#007AFF"
+                        foregroundStyle="systemBlue"
                       />
                       <Text
                         font="caption"
                         fontWeight="medium"
-                        foregroundStyle="#007AFF"
+                        foregroundStyle="systemBlue"
                       >
                         获取密钥
                       </Text>
@@ -403,7 +403,7 @@ export function ReverseImageSearchSheet(props: {
             ) : results.length > 0 ? (
               <LazyVStack alignment="leading" spacing={10} frame={{ maxWidth: "infinity", alignment: "leading" }}>
                 <HStack alignment="center" spacing={6}>
-                  <Image systemName="sparkles" font="caption" foregroundStyle="#007AFF" />
+                  <Image systemName="sparkles" font="caption" foregroundStyle="systemBlue" />
                   <Text font="caption" fontWeight="semibold" foregroundStyle="secondaryLabel">
                     匹配结果（按相似度排序）
                   </Text>
@@ -617,7 +617,7 @@ function SauceNAOConfigView(props: {
               : k
             return (
               <HStack key={`${k}-${index}`} alignment="center" spacing={10}>
-                <Image systemName="key.fill" font="subheadline" foregroundStyle="#007AFF" />
+                <Image systemName="key.fill" font="subheadline" foregroundStyle="systemBlue" />
                 <Text font="subheadline" foregroundStyle="label">
                   {displayStr}
                 </Text>
@@ -670,7 +670,7 @@ function SauceNAOConfigView(props: {
             />
           )}
           <Button buttonStyle="plain" action={handlePasteNewKey}>
-            <Image systemName="doc.on.clipboard" foregroundStyle="#007AFF" />
+            <Image systemName="doc.on.clipboard" foregroundStyle="systemBlue" />
           </Button>
           <Button buttonStyle="plain" action={() => setShowNewKeyText(!showNewKeyText)}>
             <Image
@@ -698,7 +698,7 @@ function SauceNAOMatchCard(props: {
   const similarityScore = match.similarity
   const isHighSim = similarityScore >= 80
   const isMedSim = similarityScore >= 60
-  const badgeColor = isHighSim ? "#34C759" : isMedSim ? "#FF9500" : "#8E8E93"
+  const badgeColor = isHighSim ? "systemGreen" : isMedSim ? "systemOrange" : "systemGray"
 
   const hasWorkAction = Boolean(match.pixivId || match.extUrls.length > 0)
   const hasAuthorAction = Boolean(match.authorId || match.authorUrl)
@@ -835,12 +835,12 @@ function SauceNAOMatchCard(props: {
               <Image
                 systemName="photo.stack"
                 font="caption"
-                foregroundStyle="#007AFF"
+                foregroundStyle="systemBlue"
               />
               <Text
                 font="caption"
                 fontWeight="medium"
-                foregroundStyle="#007AFF"
+                foregroundStyle="systemBlue"
               >
                 作品详情
               </Text>
@@ -863,12 +863,12 @@ function SauceNAOMatchCard(props: {
               <Image
                 systemName="arrow.up.right.square"
                 font="caption"
-                foregroundStyle="#007AFF"
+                foregroundStyle="systemBlue"
               />
               <Text
                 font="caption"
                 fontWeight="medium"
-                foregroundStyle="#007AFF"
+                foregroundStyle="systemBlue"
               >
                 来源网页
               </Text>
@@ -893,12 +893,12 @@ function SauceNAOMatchCard(props: {
               <Image
                 systemName="person.crop.circle"
                 font="caption"
-                foregroundStyle="#007AFF"
+                foregroundStyle="systemBlue"
               />
               <Text
                 font="caption"
                 fontWeight="medium"
-                foregroundStyle="#007AFF"
+                foregroundStyle="systemBlue"
               >
                 作者主页
               </Text>
@@ -921,12 +921,12 @@ function SauceNAOMatchCard(props: {
               <Image
                 systemName="person.crop.circle"
                 font="caption"
-                foregroundStyle="#007AFF"
+                foregroundStyle="systemBlue"
               />
               <Text
                 font="caption"
                 fontWeight="medium"
-                foregroundStyle="#007AFF"
+                foregroundStyle="systemBlue"
               >
                 作者主页
               </Text>
@@ -951,12 +951,12 @@ function SauceNAOMatchCard(props: {
               <Image
                 systemName="doc.on.clipboard"
                 font="caption"
-                foregroundStyle="#007AFF"
+                foregroundStyle="systemBlue"
               />
               <Text
                 font="caption"
                 fontWeight="medium"
-                foregroundStyle="#007AFF"
+                foregroundStyle="systemBlue"
               >
                 复制信息
               </Text>

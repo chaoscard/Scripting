@@ -921,6 +921,8 @@ function IllustHistoryContent(props: {
         onLoadMore={paged.loadMore}
         hasMore={paged.hasMore}
         isLoading={paged.loadingMore}
+        loadMoreError={paged.loadMoreError}
+        onRetryLoadMore={paged.retryLoadMore}
         footerTextOf={footerTextOf}
         contextMenuOf={contextMenuOf}
       />
@@ -996,6 +998,8 @@ function NovelHistoryContent(props: {
             onLoadMore={paged.loadMore}
             hasMore={paged.hasMore}
             isLoading={paged.loadingMore}
+            loadMoreError={paged.loadMoreError}
+            onRetry={paged.retryLoadMore}
           />
         ) : null}
       </LazyVStack>

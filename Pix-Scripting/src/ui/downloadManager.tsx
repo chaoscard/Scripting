@@ -53,7 +53,7 @@ import {
 } from "../downloader/downloadTaskManager"
 import { appToolbar } from "./components"
 import { useLayoutMetrics } from "./Hooks"
-import { destinationElement } from "./destinationElement"
+import { destinationElement } from "./DestinationElement"
 import { loadSettings, onSettingsChanged, updateSettings } from "../store/settings"
 import {
   DockActionBar,
@@ -358,7 +358,7 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
         <NavigationLink value="downloadDetail:ugoira">
           <DownloadCategoryRow
             icon="play.circle.fill"
-            iconColor="#FF9500"
+            iconColor="systemOrange"
             title="动图"
             subtitle={
               overview
@@ -371,7 +371,7 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
         <NavigationLink value="downloadDetail:manga">
           <DownloadCategoryRow
             icon="photo.on.rectangle.fill"
-            iconColor="#34C759"
+            iconColor="systemGreen"
             title="漫画"
             subtitle={
               overview
@@ -384,7 +384,7 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
         <NavigationLink value="downloadDetail:novels">
           <DownloadCategoryRow
             icon="book.fill"
-            iconColor="#AF52DE"
+            iconColor="systemPurple"
             title="小说"
             subtitle={
               overview
@@ -397,7 +397,7 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
         <NavigationLink value="downloadDetail:pixivision">
           <DownloadCategoryRow
             icon="rectangle.stack.fill"
-            iconColor="#00C7BE"
+            iconColor="systemTeal"
             title="特辑"
             subtitle={
               overview
@@ -410,7 +410,7 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
         <NavigationLink value="downloadCreators">
           <DownloadCategoryRow
             icon="person.2.fill"
-            iconColor="#FF2D55"
+            iconColor="systemPink"
             title="创作者归档"
             subtitle={
               overview
@@ -1196,12 +1196,12 @@ export function DownloadDetailListView(props: {
   }, [creatorFolder, category])
 
   const categoryColor = useMemo(() => {
-    if (creatorFolder) return "#FF2D55"
+    if (creatorFolder) return "systemPink"
     if (category === "illustrations") return "#0096FA"
-    if (category === "ugoira") return "#FF9500"
-    if (category === "manga") return "#34C759"
-    if (category === "novels") return "#AF52DE"
-    if (category === "pixivision") return "#00C7BE"
+    if (category === "ugoira") return "systemOrange"
+    if (category === "manga") return "systemGreen"
+    if (category === "novels") return "systemPurple"
+    if (category === "pixivision") return "systemTeal"
     return "secondaryLabel"
   }, [creatorFolder, category])
 
@@ -1459,15 +1459,15 @@ function getFileItemVisual(item: ManagedFileItem): { iconName: string; iconColor
   // 1. 漫画分类：统一采用绿色系漫画图标
   if (category === "manga") {
     if (ext === "cbz") {
-      return { iconName: "book.closed.fill", iconColor: "#34C759" }
+      return { iconName: "book.closed.fill", iconColor: "systemGreen" }
     }
-    return { iconName: "photo.on.rectangle.fill", iconColor: "#34C759" }
+    return { iconName: "photo.on.rectangle.fill", iconColor: "systemGreen" }
   }
 
   // 2. 小说分类：统一采用紫色系
   if (category === "novels") {
     if (ext === "txt") {
-      return { iconName: "doc.text.fill", iconColor: "#AF52DE" }
+      return { iconName: "doc.text.fill", iconColor: "systemPurple" }
     }
     return { iconName: "book.fill", iconColor: "#AF52DE" }
   }

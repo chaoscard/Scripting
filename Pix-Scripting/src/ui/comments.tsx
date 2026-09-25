@@ -87,6 +87,7 @@ export function CommentsSheet(props: {
   const [nextURL, setNextURL] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [postError, setPostError] = useState<string | null>(null)
   const [posting, setPosting] = useState(false)
@@ -110,6 +111,7 @@ export function CommentsSheet(props: {
     const seq = ++seqRef.current
     setLoading(true)
     setError(null)
+    setLoadMoreError(null)
     try {
       const page = await session.call((token) =>
         novelID != null ? novelComments(novelID, token) : comments(illustID ?? 0, token)
@@ -212,14 +214,17 @@ export function CommentsSheet(props: {
     if (!url || loadingMoreRef.current) return
     loadingMoreRef.current = true
     setLoadingMore(true)
+    setLoadMoreError(null)
     const seq = seqRef.current
     try {
       const page = await session.call((token) => nextComments(url, token))
       if (seq !== seqRef.current) return
       setItems((prev) => mergeUniqueByID(prev, page.items))
       setNextURL(page.nextURL)
-    } catch {
-      // 加载更多失败静默，允许再次触发
+    } catch (err: any) {
+      if (seq === seqRef.current) {
+        setLoadMoreError(err?.message ?? "加载失败，请重试")
+      }
     } finally {
       loadingMoreRef.current = false
       setLoadingMore(false)
@@ -483,6 +488,8 @@ export function CommentsSheet(props: {
                 onLoadMore={loadMore}
                 hasMore={nextURL != null}
                 isLoading={loadingMore}
+                loadMoreError={loadMoreError}
+                onRetry={loadMore}
                 bottomInset={0}
               />
             </LazyVStack>

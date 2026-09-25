@@ -43,7 +43,7 @@ import {
 import { onWatchlistChanged } from "../store/bookmarkSync"
 import { recordWorkSeriesAssociation } from "../store/seriesCache"
 import { setActiveTabKind } from "../store/routeNavigation"
-import { destinationElement } from "./destinationElement"
+import { destinationElement } from "./DestinationElement"
 import { useDualRoute } from "./DualRouteContext"
 import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
 import { useLatest, usePagedList, currentBatchSize, useLayoutMetrics } from "./Hooks"
@@ -504,6 +504,8 @@ function FollowingFeed(props: {
                 onLoadMore={illustPaged.loadMore}
                 hasMore={illustPaged.hasMore}
                 isLoading={illustPaged.loadingMore}
+                loadMoreError={illustPaged.loadMoreError}
+                onRetryLoadMore={illustPaged.retryLoadMore}
               />
             )}
           </VStack>
@@ -539,6 +541,8 @@ function FollowingFeed(props: {
                   onLoadMore={novelPaged.loadMore}
                   hasMore={novelPaged.hasMore}
                   isLoading={novelPaged.loadingMore}
+                  loadMoreError={novelPaged.loadMoreError}
+                  onRetry={novelPaged.retryLoadMore}
                 />
               )}
             </VStack>
@@ -665,6 +669,8 @@ function WatchlistFeed(props: {
                   onLoadMore={mangaPaged.loadMore}
                   hasMore={mangaPaged.hasMore}
                   isLoading={mangaPaged.loadingMore}
+                  loadMoreError={mangaPaged.loadMoreError}
+                  onRetry={mangaPaged.retryLoadMore}
                 />
               </LazyVStack>
             )}
@@ -698,6 +704,8 @@ function WatchlistFeed(props: {
                     onLoadMore={novelPaged.loadMore}
                     hasMore={novelPaged.hasMore}
                     isLoading={novelPaged.loadingMore}
+                    loadMoreError={novelPaged.loadMoreError}
+                    onRetry={novelPaged.retryLoadMore}
                   />
                 </LazyVStack>
               )}
@@ -818,6 +826,8 @@ function FriendsFeed(props: {
                 onLoadMore={illustPaged.loadMore}
                 hasMore={illustPaged.hasMore}
                 isLoading={illustPaged.loadingMore}
+                loadMoreError={illustPaged.loadMoreError}
+                onRetryLoadMore={illustPaged.retryLoadMore}
               />
             )}
           </VStack>
@@ -853,6 +863,8 @@ function FriendsFeed(props: {
                   onLoadMore={novelPaged.loadMore}
                   hasMore={novelPaged.hasMore}
                   isLoading={novelPaged.loadingMore}
+                  loadMoreError={novelPaged.loadMoreError}
+                  onRetry={novelPaged.retryLoadMore}
                 />
               )}
             </VStack>
@@ -868,6 +880,8 @@ function NovelFeedItems(props: {
   onLoadMore: (anchor: number | string) => void
   hasMore: boolean
   isLoading: boolean
+  loadMoreError?: string | null
+  onRetry?: () => void
 }) {
   return (
     <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
@@ -879,6 +893,8 @@ function NovelFeedItems(props: {
         onLoadMore={props.onLoadMore}
         hasMore={props.hasMore}
         isLoading={props.isLoading}
+        loadMoreError={props.loadMoreError}
+        onRetry={props.onRetry}
       />
     </LazyVStack>
   )

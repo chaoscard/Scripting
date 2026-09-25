@@ -541,8 +541,8 @@ function NovelPixivImageItemView(props: {
             frame={{ maxWidth: "infinity" }}
             alignment="center"
           >
-            <Image systemName="photo" foregroundStyle="#007AFF" />
-            <Text font="subheadline" foregroundStyle="#007AFF">
+            <Image systemName="photo" foregroundStyle="systemBlue" />
+            <Text font="subheadline" foregroundStyle="systemBlue">
               Pixiv 插画 #{illustId}
             </Text>
             <Spacer />
@@ -625,7 +625,7 @@ function NovelPixivImageItemView(props: {
           ) : null}
 
           <HStack spacing={6} alignment="center">
-            <Text font="caption" fontWeight="semibold" foregroundStyle="#007AFF" lineLimit={1}>
+            <Text font="caption" fontWeight="semibold" foregroundStyle="systemBlue" lineLimit={1}>
               {illust.title}
             </Text>
             {illust.user?.name ? (
@@ -662,7 +662,7 @@ function NovelChunkRenderer(props: {
         frame={{ maxWidth: "infinity" }}
       >
         <HStack spacing={6} alignment="center">
-          <Text font="caption" fontWeight="bold" foregroundStyle="#007AFF">
+          <Text font="caption" fontWeight="bold" foregroundStyle="systemBlue">
             CHAPTER
           </Text>
         </HStack>
@@ -694,12 +694,12 @@ function NovelChunkRenderer(props: {
           <Image
             systemName={isBookmark ? "book.pages.fill" : "doc.text"}
             font="footnote"
-            foregroundStyle={isBookmark ? "#007AFF" : "secondaryLabel"}
+            foregroundStyle={isBookmark ? "systemBlue" : "secondaryLabel"}
           />
           <Text
             font="footnote"
             fontWeight={isBookmark ? "bold" : "regular"}
-            foregroundStyle={isBookmark ? "#007AFF" : "secondaryLabel"}
+            foregroundStyle={isBookmark ? "systemBlue" : "secondaryLabel"}
           >
             第 {item.page} 页{isBookmark ? "（书签）" : ""}
           </Text>
@@ -728,10 +728,10 @@ function NovelChunkRenderer(props: {
             padding={{ horizontal: 10, vertical: 6 }}
             glassEffect={appGlass({ type: "rect", cornerRadius: 8 })}
           >
-            <Text font="subheadline" foregroundStyle="#007AFF">
+            <Text font="subheadline" foregroundStyle="systemBlue">
               📄 跳转至第 {item.page} 页
             </Text>
-            <Image systemName="chevron.right" font="caption2" foregroundStyle="#007AFF" />
+            <Image systemName="chevron.right" font="caption2" foregroundStyle="systemBlue" />
           </HStack>
         </Button>
       </HStack>
@@ -1767,8 +1767,8 @@ export function NovelReaderView(props: {
             <Divider />
           </VStack>
           <HStack spacing={4} alignment="center">
-            <Image systemName="book.pages.fill" font="footnote" foregroundStyle="#007AFF" />
-            <Text font="footnote" fontWeight="bold" foregroundStyle="#007AFF">
+            <Image systemName="book.pages.fill" font="footnote" foregroundStyle="systemBlue" />
+            <Text font="footnote" fontWeight="bold" foregroundStyle="systemBlue">
               第 1 页（书签）
             </Text>
           </HStack>

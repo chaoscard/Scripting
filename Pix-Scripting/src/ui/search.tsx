@@ -75,7 +75,7 @@ import {
   setActiveTabKind,
   useIsCurrentTab,
 } from "../store/routeNavigation"
-import { destinationElement } from "./destinationElement"
+import { destinationElement } from "./DestinationElement"
 import { triggerHaptic } from "../platform/haptics"
 import {
   currentBatchSize,
@@ -191,7 +191,7 @@ export function parseDirectRouteTargets(
         title: `查看插画 / 漫画`,
         subtitle: `PID: ${id}`,
         icon: "photo.stack",
-        color: "#007AFF",
+        color: "systemBlue",
       })
       targets.push({
         type: "user",
@@ -199,7 +199,7 @@ export function parseDirectRouteTargets(
         title: `访问画师主页`,
         subtitle: `UID: ${id}`,
         icon: "person.circle",
-        color: "#34C759",
+        color: "systemGreen",
       })
       if (!hideNovels) {
         targets.push({
@@ -208,7 +208,7 @@ export function parseDirectRouteTargets(
           title: `查看小说`,
           subtitle: `NID: ${id}`,
           icon: "book.closed",
-          color: "#FF9500",
+          color: "systemOrange",
         })
       }
     } else if (scope === "novel") {
@@ -218,7 +218,7 @@ export function parseDirectRouteTargets(
         title: `查看小说`,
         subtitle: `NID: ${id}`,
         icon: "book.closed",
-        color: "#FF9500",
+        color: "systemOrange",
       })
       targets.push({
         type: "illust",
@@ -226,7 +226,7 @@ export function parseDirectRouteTargets(
         title: `查看插画 / 漫画`,
         subtitle: `PID: ${id}`,
         icon: "photo.stack",
-        color: "#007AFF",
+        color: "systemBlue",
       })
       targets.push({
         type: "user",
@@ -234,7 +234,7 @@ export function parseDirectRouteTargets(
         title: `访问画师主页`,
         subtitle: `UID: ${id}`,
         icon: "person.circle",
-        color: "#34C759",
+        color: "systemGreen",
       })
     } else {
       targets.push({
@@ -243,7 +243,7 @@ export function parseDirectRouteTargets(
         title: `访问画师主页`,
         subtitle: `UID: ${id}`,
         icon: "person.circle",
-        color: "#34C759",
+        color: "systemGreen",
       })
       targets.push({
         type: "illust",
@@ -251,7 +251,7 @@ export function parseDirectRouteTargets(
         title: `查看插画 / 漫画`,
         subtitle: `PID: ${id}`,
         icon: "photo.stack",
-        color: "#007AFF",
+        color: "systemBlue",
       })
       if (!hideNovels) {
         targets.push({
@@ -260,7 +260,7 @@ export function parseDirectRouteTargets(
           title: `查看小说`,
           subtitle: `NID: ${id}`,
           icon: "book.closed",
-          color: "#FF9500",
+          color: "systemOrange",
         })
       }
     }
@@ -282,7 +282,7 @@ export function parseDirectRouteTargets(
           title: `直达插画 / 漫画详情`,
           subtitle: `PID: ${id}`,
           icon: "photo.stack",
-          color: "#007AFF",
+          color: "systemBlue",
         },
       ]
     }
@@ -302,7 +302,7 @@ export function parseDirectRouteTargets(
           title: `直达漫画系列`,
           subtitle: `SID: ${id}`,
           icon: "photo.stack",
-          color: "#007AFF",
+          color: "systemBlue",
         },
       ]
     }
@@ -322,7 +322,7 @@ export function parseDirectRouteTargets(
           title: `直达画师主页`,
           subtitle: `UID: ${id}`,
           icon: "person.circle",
-          color: "#34C759",
+          color: "systemGreen",
         },
       ]
     }
@@ -342,7 +342,7 @@ export function parseDirectRouteTargets(
           title: `直达小说系列`,
           subtitle: `SID: ${id}`,
           icon: "books.vertical",
-          color: "#FF9500",
+          color: "systemOrange",
         },
       ]
     }
@@ -360,7 +360,7 @@ export function parseDirectRouteTargets(
           title: `直达小说详情`,
           subtitle: `NID: ${id}`,
           icon: "book.closed",
-          color: "#FF9500",
+          color: "systemOrange",
         },
       ]
     }
@@ -378,7 +378,7 @@ export function parseDirectRouteTargets(
           title: `直达 Pixivision 特辑`,
           subtitle: `ID: ${id}`,
           icon: "rectangle.stack",
-          color: "#AF52DE",
+          color: "systemPurple",
         },
       ]
     }
@@ -989,7 +989,7 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
       badges.push({
         key: "bookmark",
         icon: "heart.fill",
-        iconColor: "#FF2D55",
+        iconColor: "systemPink",
         label: `≥${
           advancedParams.bookmarkThreshold >= 10000
             ? `${advancedParams.bookmarkThreshold / 10000}万`
@@ -1007,7 +1007,7 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
       badges.push({
         key: "date",
         icon: "calendar",
-        iconColor: "#007AFF",
+        iconColor: "systemBlue",
         label: formatShortDateRange(
           advancedParams.startDate,
           advancedParams.endDate,
@@ -1034,7 +1034,7 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
       badges.push({
         key: "media",
         icon: mediaInfo.icon,
-        iconColor: "#AF52DE",
+        iconColor: "systemPurple",
         label: mediaInfo.label,
         onClear: () =>
           setAdvancedParams((prev) => ({
@@ -1196,8 +1196,8 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
                   }}
                 >
                   <HStack alignment="center" spacing={4}>
-                    <Image systemName="arrow.uturn.backward" font="caption" foregroundStyle="#007AFF" />
-                    <Text font="subheadline" foregroundStyle="#007AFF">
+                    <Image systemName="arrow.uturn.backward" font="caption" foregroundStyle="systemBlue" />
+                    <Text font="subheadline" foregroundStyle="systemBlue">
                       返回热门
                     </Text>
                   </HStack>
@@ -1316,13 +1316,17 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
                   onLoadMore={illustPaged.loadMore}
                   hasMore={illustPaged.hasMore}
                   isLoading={illustPaged.loadingMore}
+                  loadMoreError={illustPaged.loadMoreError}
+                  onRetryLoadMore={illustPaged.retryLoadMore}
                 />
               ) : targetScope === "novel" ? (
                 <NovelResults
                   items={novelPaged.items}
                   loadingMore={novelPaged.loadingMore}
+                  loadMoreError={novelPaged.loadMoreError}
                   hasMore={novelPaged.hasMore}
                   onLoadMore={novelPaged.loadMore}
+                  onRetry={novelPaged.retryLoadMore}
                 />
               ) : (
                 <UserResults
@@ -1601,7 +1605,7 @@ function DirectRouteSection(props: {
                     <Image
                       systemName={target.icon}
                       font="body"
-                      foregroundStyle={(target.color ?? "#007AFF") as any}
+                      foregroundStyle={(target.color ?? "systemBlue") as any}
                     />
                   </ZStack>
                   <VStack alignment="leading" spacing={2}>
@@ -1794,9 +1798,9 @@ function SearchHistorySection(props: {
               <Image
                 systemName="trash"
                 font="caption"
-                foregroundStyle="#FF3B30"
+                foregroundStyle="systemRed"
               />
-              <Text font="subheadline" foregroundStyle="#FF3B30">
+              <Text font="subheadline" foregroundStyle="systemRed">
                 清除记录
               </Text>
             </HStack>
@@ -1808,8 +1812,8 @@ function SearchHistorySection(props: {
             action={onBackToTrending}
           >
             <HStack alignment="center" spacing={4} padding={{ horizontal: 6, vertical: 4 }}>
-              <Image systemName="arrow.uturn.backward" font="caption" foregroundStyle="#007AFF" />
-              <Text font="subheadline" foregroundStyle="#007AFF">
+              <Image systemName="arrow.uturn.backward" font="caption" foregroundStyle="systemBlue" />
+              <Text font="subheadline" foregroundStyle="systemBlue">
                 返回热门
               </Text>
             </HStack>
@@ -2218,6 +2222,8 @@ function RecommendedUsersSection(props: {
           onLoadMore={paged.loadMore}
           hasMore={paged.hasMore}
           isLoading={paged.loadingMore}
+          loadMoreError={paged.loadMoreError}
+          onRetry={paged.retryLoadMore}
         />
       ) : null}
     </LazyVStack>
@@ -2248,6 +2254,8 @@ function UserResults(props: {
           onLoadMore={paged.loadMore}
           hasMore={paged.hasMore}
           isLoading={paged.loadingMore}
+          loadMoreError={paged.loadMoreError}
+          onRetry={paged.retryLoadMore}
         />
       ) : null}
     </LazyVStack>
@@ -2257,8 +2265,10 @@ function UserResults(props: {
 function NovelResults(props: {
   items: PixivNovel[]
   loadingMore: boolean
+  loadMoreError?: string | null
   hasMore: boolean
   onLoadMore: (anchor?: number | string) => void
+  onRetry?: () => void
 }) {
   const lastNovel = props.items[props.items.length - 1]
   return (
@@ -2272,6 +2282,8 @@ function NovelResults(props: {
           onLoadMore={props.onLoadMore}
           hasMore={props.hasMore}
           isLoading={props.loadingMore}
+          loadMoreError={props.loadMoreError}
+          onRetry={props.onRetry}
         />
       ) : null}
     </LazyVStack>

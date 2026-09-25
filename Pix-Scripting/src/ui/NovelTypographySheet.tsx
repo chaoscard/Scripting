@@ -109,7 +109,7 @@ export function NovelTypographySheet(props: { onClose?: () => void }) {
       : undefined
   const menuTextColor = (customTint ?? "secondaryLabel") as Color
   const menuIconColor = (customTint ?? "tertiaryLabel") as Color
-  const accentColor = (customTint ?? "#007AFF") as Color
+  const accentColor = (customTint ?? "systemBlue") as Color
 
   return (
     <NavigationStack
@@ -301,7 +301,7 @@ export function NovelTypographySheet(props: { onClose?: () => void }) {
                       <Text
                         font="caption2"
                         fontWeight="bold"
-                        foregroundStyle="#FF9500"
+                        foregroundStyle="systemOrange"
                       >
                         PRO
                       </Text>
@@ -329,7 +329,7 @@ export function NovelTypographySheet(props: { onClose?: () => void }) {
               </HStack>
 
               {fontError ? (
-                <Text font="caption2" foregroundStyle="#FF3B30" padding={{ horizontal: 16, bottom: 8 }}>
+                <Text font="caption2" foregroundStyle="systemRed" padding={{ horizontal: 16, bottom: 8 }}>
                   {fontError}
                 </Text>
               ) : null}

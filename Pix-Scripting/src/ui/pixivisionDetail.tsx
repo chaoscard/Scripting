@@ -527,7 +527,7 @@ export function PixivisionDetailView(props: { articleID: number }) {
                     >
                       <Image
                         systemName={bookmarked ? "heart.fill" : "heart"}
-                        foregroundStyle={bookmarked ? "#FF2D55" : undefined}
+                        foregroundStyle={bookmarked ? "systemPink" : undefined}
                       />
                     </Button>,
                     <Menu key="more-menu" label={<Image systemName="ellipsis.circle" />}>
@@ -579,7 +579,7 @@ export function PixivisionDetailView(props: { articleID: number }) {
                     >
                       <Image
                         systemName={bookmarked ? "heart.fill" : "heart"}
-                        foregroundStyle={bookmarked ? "#FF2D55" : undefined}
+                        foregroundStyle={bookmarked ? "systemPink" : undefined}
                       />
                     </Button>,
                     <Button key="share" action={handleShare}>
@@ -833,7 +833,7 @@ export function PixivisionDetailView(props: { articleID: number }) {
                           >
                             <VStack
                               frame={{ width: 4, minHeight: 24 }}
-                              background="#FF9500"
+                              background="systemOrange"
                               clipShape={{ type: "rect", cornerRadius: 2 }}
                             />
                             <VStack alignment="leading" spacing={4} frame={{ maxWidth: "infinity" }}>
@@ -1184,7 +1184,7 @@ export function PixivisionDetailView(props: { articleID: number }) {
                             <Image
                               systemName="play.circle.fill"
                               font="title2"
-                              foregroundStyle="#FF3B30"
+                              foregroundStyle="systemRed"
                             />
                             <VStack alignment="leading" spacing={2}>
                               <Text font="subheadline" fontWeight="bold">

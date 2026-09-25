@@ -101,7 +101,7 @@ export function renderIllustToolbarActions(props: IllustToolbarActionsProps): Vi
           >
             <Image
               systemName={bookmarked ? "heart.fill" : "heart"}
-              foregroundStyle={bookmarked ? "#FF375F" : undefined}
+              foregroundStyle={bookmarked ? "systemPink" : undefined}
             />
           </Button>,
           <Button

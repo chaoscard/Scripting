@@ -98,7 +98,7 @@ let cachedRightIconDataUrl: string | null = null
 let cachedUpIconDataUrl: string | null = null
 let cachedDownIconDataUrl: string | null = null
 
-function getSystemSymbolDataUrl(name: string, tintColor: Color = "#007AFF"): string | null {
+function getSystemSymbolDataUrl(name: string, tintColor: Color = "systemBlue"): string | null {
   try {
     if (typeof UIImage !== "undefined" && typeof UIImage.fromSFSymbol === "function") {
       const img = UIImage.fromSFSymbol(name)
@@ -112,35 +112,35 @@ function getSystemSymbolDataUrl(name: string, tintColor: Color = "#007AFF"): str
 
 function getBooksSymbolDataUrl(): string {
   if (!cachedBooksIconDataUrl) {
-    cachedBooksIconDataUrl = getSystemSymbolDataUrl("books.vertical", "#007AFF") || ""
+    cachedBooksIconDataUrl = getSystemSymbolDataUrl("books.vertical", "systemBlue") || ""
   }
   return cachedBooksIconDataUrl
 }
 
 function getLeftSymbolDataUrl(): string {
   if (!cachedLeftIconDataUrl) {
-    cachedLeftIconDataUrl = getSystemSymbolDataUrl("chevron.left", "#007AFF") || ""
+    cachedLeftIconDataUrl = getSystemSymbolDataUrl("chevron.left", "systemBlue") || ""
   }
   return cachedLeftIconDataUrl
 }
 
 function getRightSymbolDataUrl(): string {
   if (!cachedRightIconDataUrl) {
-    cachedRightIconDataUrl = getSystemSymbolDataUrl("chevron.right", "#007AFF") || ""
+    cachedRightIconDataUrl = getSystemSymbolDataUrl("chevron.right", "systemBlue") || ""
   }
   return cachedRightIconDataUrl
 }
 
 function getUpSymbolDataUrl(): string {
   if (!cachedUpIconDataUrl) {
-    cachedUpIconDataUrl = getSystemSymbolDataUrl("chevron.up", "#007AFF") || ""
+    cachedUpIconDataUrl = getSystemSymbolDataUrl("chevron.up", "systemBlue") || ""
   }
   return cachedUpIconDataUrl
 }
 
 function getDownSymbolDataUrl(): string {
   if (!cachedDownIconDataUrl) {
-    cachedDownIconDataUrl = getSystemSymbolDataUrl("chevron.down", "#007AFF") || ""
+    cachedDownIconDataUrl = getSystemSymbolDataUrl("chevron.down", "systemBlue") || ""
   }
   return cachedDownIconDataUrl
 }
@@ -2313,7 +2313,7 @@ export function NovelImmersiveReaderView(props: NovelImmersiveReaderViewProps) {
                       systemName="chevron.left"
                       font="subheadline"
                       fontWeight="semibold"
-                      foregroundStyle="#007AFF"
+                      foregroundStyle="systemBlue"
                     />
                   </ZStack>
                 ) : null}
@@ -2374,7 +2374,7 @@ export function NovelImmersiveReaderView(props: NovelImmersiveReaderViewProps) {
                       systemName={markerPage === currentPage ? "book.pages.fill" : "book.pages"}
                       font="subheadline"
                       fontWeight="semibold"
-                      foregroundStyle={markerPage === currentPage ? "#007AFF" : "secondaryLabel"}
+                      foregroundStyle={markerPage === currentPage ? "systemBlue" : "secondaryLabel"}
                     />
                   </ZStack>
                 ) : null}
@@ -2392,7 +2392,7 @@ export function NovelImmersiveReaderView(props: NovelImmersiveReaderViewProps) {
                       systemName="chevron.right"
                       font="subheadline"
                       fontWeight="semibold"
-                      foregroundStyle="#007AFF"
+                      foregroundStyle="systemBlue"
                     />
                   </ZStack>
                 ) : null}

@@ -25,7 +25,7 @@ import { AppNavigationLink, useDualRoute } from "../DualRouteContext"
 import { CachedImage, PageCountBadge } from "./CachedImage"
 import { BookmarkButton, BookmarkDetailSheet } from "./BookmarkDetailSheet"
 import { BlockWorkSheet } from "./BlockWorkSheet"
-import { FilteredContentNotice, LoadMoreTrigger } from "./RefreshableScrollView"
+import { FilteredContentNotice, LoadMoreErrorRetry, LoadMoreTrigger } from "./RefreshableScrollView"
 import { appGlass } from "./glass"
 import { CORNER_ICON_SIZE, formatNumber } from "./formatUtils"
 import { useIllustBookmark, useLatest, useLayoutMetrics, useUserFollow } from "../Hooks"
@@ -515,6 +515,8 @@ export function IllustFlowFeed(props: {
   onLoadMore: (anchor: number | string) => void
   hasMore?: boolean
   isLoading?: boolean
+  loadMoreError?: string | null
+  onRetryLoadMore?: () => void
   enableHeroFirst?: boolean
   cornerBadgeOf?: (illust: PixivIllustration, index: number) => any
   footerTextOf?: (illust: PixivIllustration, index: number) => string | undefined
@@ -580,7 +582,11 @@ export function IllustFlowFeed(props: {
         <VStack
           key={`trigger:${triggerAnchor}`}
           frame={{ width: flowCardWidth, height: 1 }}
-          onAppear={() => props.onLoadMore(triggerAnchor)}
+          onAppear={() => {
+            if (!props.loadMoreError) {
+              props.onLoadMore(triggerAnchor)
+            }
+          }}
         />
       ) : null
       return columns.map((colItems, colIndex) => (
@@ -600,6 +606,7 @@ export function IllustFlowFeed(props: {
       flowCardWidth,
       triggerAnchor,
       props.hasMore,
+      props.loadMoreError,
       props.onLoadMore,
       props.cornerBadgeOf,
       props.footerTextOf,
@@ -656,21 +663,47 @@ export function IllustFlowFeed(props: {
         <VStack
           key={`hero-trigger:${triggerAnchor}`}
           frame={{ width: flowCardWidth, height: 1 }}
-          onAppear={() => props.onLoadMore(triggerAnchor)}
+          onAppear={() => {
+            if (!props.loadMoreError) {
+              props.onLoadMore(triggerAnchor)
+            }
+          }}
         />
       ) : null}
       {props.hasMore ? (
-        <VStack
-          key="flow-footer"
-          spacing={0}
-          frame={{ height: 48, maxWidth: "infinity" }}
-        >
-          {props.isLoading ? (
-            <HStack spacing={0} frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
-              <Spacer />
-              <ProgressView progressViewStyle="circular" />
-              <Spacer />
-            </HStack>
+        <VStack key="flow-footer" spacing={0} frame={{ maxWidth: "infinity" }}>
+          {props.isLoading || props.loadMoreError ? (
+            <VStack spacing={0} frame={{ height: 48, maxWidth: "infinity" }}>
+              {props.isLoading ? (
+                <HStack spacing={0} frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
+                  <Spacer />
+                  <ProgressView progressViewStyle="circular" />
+                  <Spacer />
+                </HStack>
+              ) : props.loadMoreError ? (
+                <HStack spacing={0} frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
+                  <Spacer />
+                  <LoadMoreErrorRetry
+                    message={props.loadMoreError}
+                    onRetry={() => {
+                      if (props.onRetryLoadMore) {
+                        props.onRetryLoadMore()
+                      } else if (triggerAnchor) {
+                        props.onLoadMore(triggerAnchor)
+                      }
+                    }}
+                  />
+                  <Spacer />
+                </HStack>
+              ) : null}
+            </VStack>
+          ) : null}
+          {(props.bottomInset ?? loadSettings().feedBottomInset) > 0 ? (
+            <Rectangle
+              key="flow-footer-spacer"
+              fill="clear"
+              frame={{ height: props.bottomInset ?? loadSettings().feedBottomInset, maxWidth: "infinity" }}
+            />
           ) : null}
         </VStack>
       ) : (props.bottomInset ?? loadSettings().feedBottomInset) > 0 ? (

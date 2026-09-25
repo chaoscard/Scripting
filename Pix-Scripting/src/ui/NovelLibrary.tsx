@@ -17,7 +17,7 @@ import { isNovelContentVisible } from "../store/contentFilter"
 import { onNovelMarkerChanged } from "../store/bookmarkSync"
 import { useLatest, usePagedList, currentBatchSize } from "./Hooks"
 import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl, recordActiveAmbientImageUrl } from "./ambient"
-import { destinationElement } from "./destinationElement"
+import { destinationElement } from "./DestinationElement"
 import {
   DockActionBar,
   useRegisterBottomAccessory,
@@ -180,6 +180,8 @@ export function NovelLibraryView() {
             onLoadMore={paged.loadMore}
             hasMore={paged.hasMore}
             isLoading={paged.loadingMore}
+            loadMoreError={paged.loadMoreError}
+            onRetry={paged.retryLoadMore}
           />
         </LazyVStack>
       )}

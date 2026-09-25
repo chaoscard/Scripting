@@ -1020,7 +1020,7 @@ export function NovelDetailView(props: { novelID: number }) {
 
     if (quickActionType === "bookmark") {
       iconName = bookmarked ? "heart.fill" : "heart"
-      iconColor = bookmarked ? "#FF375F" : "label"
+      iconColor = bookmarked ? "systemPink" : "label"
       disabled = bookmarkLoading || bookmarkLongPressLocked
       action = toggleBookmark
       gesture = LongPressGesture({ minDuration: 500 }).onEnded(() => {
@@ -1417,7 +1417,7 @@ export function NovelDetailView(props: { novelID: number }) {
                       >
                         <Image
                           systemName={bookmarked ? "heart.fill" : "heart"}
-                          foregroundStyle={bookmarked ? "#FF375F" : undefined}
+                          foregroundStyle={bookmarked ? "systemPink" : undefined}
                         />
                       </Button>,
                       <Button
@@ -2031,6 +2031,8 @@ function RelatedNovelsSection(props: {
             onLoadMore={paged.loadMore}
             hasMore={paged.hasMore}
             isLoading={paged.loadingMore}
+            loadMoreError={paged.loadMoreError}
+            onRetry={paged.retryLoadMore}
             bottomInset={0}
           />
         </LazyVStack>

@@ -211,7 +211,7 @@ export function BookmarkDetailSheet(props: {
             >
               <Image
                 systemName={props.bookmarked ? "heart.fill" : "heart"}
-                foregroundStyle={props.bookmarked && !saving ? "#FF375F" : undefined}
+                foregroundStyle={props.bookmarked && !saving ? "systemPink" : undefined}
               />
             </Button>
           ),
@@ -308,7 +308,7 @@ export function BookmarkDetailSheet(props: {
                 <Image
                   systemName={restrict === "private" ? "lock.fill" : "lock.open"}
                   font="body"
-                  foregroundStyle={restrict === "private" ? "#FF9500" : "secondaryLabel"}
+                  foregroundStyle={restrict === "private" ? "systemOrange" : "secondaryLabel"}
                 />
                 <VStack alignment="leading" spacing={2}>
                   <Text font="subheadline" fontWeight="medium">
@@ -424,7 +424,7 @@ export function BookmarkButton(props: {
         <Image
           systemName={props.bookmarked ? "heart.fill" : "heart"}
           font={props.hero ? "title3" : "body"}
-          foregroundStyle={props.bookmarked ? "#FF375F" : undefined}
+          foregroundStyle={props.bookmarked ? "systemPink" : undefined}
         />
       </Button>
     </ZStack>

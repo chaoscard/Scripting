@@ -439,6 +439,8 @@ function LibraryFeed(props: {
               onLoadMore={illustPaged.loadMore}
               hasMore={illustPaged.hasMore}
               isLoading={illustPaged.loadingMore}
+              loadMoreError={illustPaged.loadMoreError}
+              onRetryLoadMore={illustPaged.retryLoadMore}
             />
           </VStack>
         )}
@@ -477,6 +479,8 @@ function LibraryFeed(props: {
             onLoadMore={novelPaged.loadMore}
             hasMore={novelPaged.hasMore}
             isLoading={novelPaged.loadingMore}
+            loadMoreError={novelPaged.loadMoreError}
+            onRetry={novelPaged.retryLoadMore}
           />
         </LazyVStack>
       )}
