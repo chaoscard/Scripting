@@ -483,6 +483,7 @@ export function CommentsSheet(props: {
                 onLoadMore={loadMore}
                 hasMore={nextURL != null}
                 isLoading={loadingMore}
+                bottomInset={0}
               />
             </LazyVStack>
           )}

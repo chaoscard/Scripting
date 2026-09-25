@@ -1,4 +1,5 @@
 import { Button, HStack, Image, ProgressView, Spacer, Text, VStack, ZStack } from "scripting"
+import { loadSettings } from "../../store/settings"
 import {
   PAGE_TOOLBAR_BACKGROUND,
   PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
@@ -22,11 +23,13 @@ export function LoadingView() {
 export function ErrorView(props: {
   message: string
   onRetry: () => void
+  bottomInset?: number
 }) {
+  const effectiveBottomInset = props.bottomInset ?? loadSettings().feedBottomInset
   return (
     <ZStack
       frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-      padding={40}
+      padding={{ top: 40, horizontal: 40, bottom: effectiveBottomInset }}
     >
       <VStack alignment="center" spacing={14}>
         <Image
@@ -53,11 +56,12 @@ export function ErrorView(props: {
 
 
 
-export function EmptyView(props: { text?: string; systemImage?: string }) {
+export function EmptyView(props: { text?: string; systemImage?: string; bottomInset?: number }) {
+  const effectiveBottomInset = props.bottomInset ?? loadSettings().feedBottomInset
   return (
     <ZStack
       frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-      padding={{ vertical: 40, horizontal: 20 }}
+      padding={{ top: 40, horizontal: 20, bottom: effectiveBottomInset }}
     >
       <VStack alignment="center" spacing={14}>
         <Image

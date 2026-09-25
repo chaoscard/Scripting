@@ -172,7 +172,6 @@ export function IllustDetailView(props: { illustID: number }) {
       <ScrollView
         navigationTitle={isDetailPane ? current.title : ""}
         navigationBarTitleDisplayMode="inline"
-        ignoresSafeArea={{ edges: "bottom" }}
         toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
         toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
         scrollContentBackground="hidden"

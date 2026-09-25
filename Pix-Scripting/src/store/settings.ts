@@ -57,6 +57,7 @@ export type BackgroundPreheatDuration = number
 export type LoadingAnimationDuration = number
 export type NovelLoadingDuration = number
 export type LaunchAnimationDuration = number
+export type FeedBottomInset = number
 export type WidgetPoolCapacity = number
 export type WidgetReloadIntervalMinutes = number
 export type WidgetDefaultSource =
@@ -197,6 +198,7 @@ export interface AppSettings {
   loadingAnimationDuration: LoadingAnimationDuration
   novelLoadingDuration: NovelLoadingDuration
   launchAnimationDuration: LaunchAnimationDuration
+  feedBottomInset: FeedBottomInset
   enableLiveActivity: boolean
   enableTaskNotification: boolean
   advancedSettingsUnlocked: boolean
@@ -304,6 +306,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   loadingAnimationDuration: 400,
   novelLoadingDuration: 1000,
   launchAnimationDuration: 1500,
+  feedBottomInset: 96,
   enableLiveActivity: true,
   enableTaskNotification: true,
   advancedSettingsUnlocked: false,
@@ -560,6 +563,13 @@ function parseLaunchDuration(value: unknown): number {
     return Math.max(0, Math.min(30000, Math.round(value)))
   }
   return DEFAULT_SETTINGS.launchAnimationDuration
+}
+
+function parseFeedBottomInset(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+    return Math.max(0, Math.min(500, Math.round(value)))
+  }
+  return DEFAULT_SETTINGS.feedBottomInset
 }
 
 function parseWidgetPoolCapacity(value: unknown): number {
@@ -829,6 +839,7 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
     loadingAnimationDuration: parseLoadingDuration(stored?.loadingAnimationDuration),
     novelLoadingDuration: parseNovelLoadingDuration(stored?.novelLoadingDuration),
     launchAnimationDuration: parseLaunchDuration(stored?.launchAnimationDuration),
+    feedBottomInset: parseFeedBottomInset(stored?.feedBottomInset),
     enableLiveActivity: boolOr(stored?.enableLiveActivity, DEFAULT_SETTINGS.enableLiveActivity),
     enableTaskNotification: boolOr(
       stored?.enableTaskNotification,

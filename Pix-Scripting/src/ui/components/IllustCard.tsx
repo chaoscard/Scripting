@@ -9,6 +9,7 @@ import {
   Menu,
   NavigationLink,
   ProgressView,
+  Rectangle,
   RoundedRectangle,
   Spacer,
   Text,
@@ -525,6 +526,7 @@ export function IllustFlowFeed(props: {
     illust: PixivIllustration,
     index: number,
   ) => any
+  bottomInset?: number
 }) {
   cacheIllusts(props.items)
   const { width: containerWidth, isiPad, isCompact } = useLayoutMetrics()
@@ -661,7 +663,7 @@ export function IllustFlowFeed(props: {
         <VStack
           key="flow-footer"
           spacing={0}
-          frame={{ height: 44, maxWidth: "infinity" }}
+          frame={{ height: 48, maxWidth: "infinity" }}
         >
           {props.isLoading ? (
             <HStack spacing={0} frame={{ maxWidth: "infinity", maxHeight: "infinity" }}>
@@ -671,6 +673,12 @@ export function IllustFlowFeed(props: {
             </HStack>
           ) : null}
         </VStack>
+      ) : (props.bottomInset ?? loadSettings().feedBottomInset) > 0 ? (
+        <Rectangle
+          key="flow-footer-spacer"
+          fill="clear"
+          frame={{ height: props.bottomInset ?? loadSettings().feedBottomInset, maxWidth: "infinity" }}
+        />
       ) : null}
     </VStack>
   )

@@ -1,18 +1,12 @@
 import {
-  Button,
-  HStack,
-  ProgressView,
-  Spacer,
-  Text,
   useEffect,
-  VStack,
 } from "scripting"
 import { nextIllustrations, relatedIllustrations } from "../../api/pixiv"
 import { cardThumbUrlOf, prefetch } from "../../image/imageLoader"
 import { isIllustContentVisible } from "../../store/contentFilter"
 import { loadSettings, onSettingsChanged } from "../../store/settings"
 import type { PixivIllustration } from "../../types"
-import { IllustFlowFeed } from "../components"
+import { IllustFlowFeed, RelatedSection } from "../components"
 import { currentBatchSize, useLatest, usePagedList } from "../Hooks"
 
 function filterRelatedIllustrations(
@@ -56,51 +50,20 @@ export function IllustRelatedSection(props: IllustRelatedSectionProps) {
   }
 
   return (
-    <VStack
-      alignment="leading"
-      spacing={8}
-      padding={{ top: 4 }}
-      frame={{ maxWidth: "infinity", alignment: "leading" }}
-    >
-      <Text
-        font="subheadline"
-        fontWeight="semibold"
-        foregroundStyle="secondaryLabel"
-        padding={{ horizontal: 14 }}
-      >
-        相关作品
-      </Text>
-      {paged.initialLoading ? (
-        <HStack spacing={0} frame={{ maxWidth: "infinity", height: 80 }}>
-          <Spacer />
-          <ProgressView progressViewStyle="circular" />
-          <Spacer />
-        </HStack>
-      ) : paged.error && paged.items.length === 0 ? (
-        <VStack alignment="center" spacing={8} padding={16} frame={{ maxWidth: "infinity" }}>
-          <Text font="footnote" foregroundStyle="secondaryLabel">
-            相关作品加载失败
-          </Text>
-          <Button
-            title="重试"
-            buttonStyle="glass"
-            action={() => paged.refresh()}
-          />
-        </VStack>
-      ) : paged.items.length > 0 ? (
+    <RelatedSection
+      initialLoading={paged.initialLoading}
+      error={paged.error}
+      items={paged.items}
+      onRetry={() => paged.refresh()}
+      renderContent={(items) => (
         <IllustFlowFeed
-          items={paged.items}
+          items={items}
           onLoadMore={paged.loadMore}
           hasMore={paged.hasMore}
           isLoading={paged.loadingMore}
+          bottomInset={0}
         />
-      ) : (
-        <HStack spacing={0} padding={{ horizontal: 14, vertical: 8 }} frame={{ maxWidth: "infinity", alignment: "leading" }}>
-          <Text font="footnote" foregroundStyle="secondaryLabel">
-            暂无相关作品
-          </Text>
-        </HStack>
       )}
-    </VStack>
+    />
   )
 }

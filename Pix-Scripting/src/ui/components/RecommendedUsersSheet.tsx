@@ -134,6 +134,7 @@ export function RecommendedUsersSheet(props: {
                       onLoadMore={paged.loadMore}
                       hasMore={paged.hasMore}
                       isLoading={paged.loadingMore}
+                      bottomInset={0}
                     />
                   </LazyVStack>
                 </ScrollView>

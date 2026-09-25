@@ -235,6 +235,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
   const isAscendingRef = useRef(isAscending)
   isAscendingRef.current = isAscending
   const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
+  const [feedBottomInset, setFeedBottomInset] = useState(() => loadSettings().feedBottomInset)
   const isAppleMusic = pageLayout === "appleMusic"
   const { isSplitViewActive, isDetailPane } = useDualRoute()
   const isSplitMasterPane = isSplitViewActive && !isDetailPane
@@ -484,6 +485,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
     return onSettingsChanged(() => {
       const nextSettings = loadSettings()
       setPageLayout(nextSettings.pageLayout)
+      setFeedBottomInset(nextSettings.feedBottomInset)
       const targetAsc = nextSettings.watchlistSortOrder === "asc"
       setIsAscending(targetAsc)
       pagedRef.current.reapplyFilter()
@@ -662,7 +664,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
         scrollContentBackground="hidden"
         toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
         toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
-        ignoresSafeArea={{ edges: ["top", "bottom"] }}
+        ignoresSafeArea={{ edges: "top" }}
         refreshable={handleRefresh}
         toolbar={{
           topBarTrailing: trailingButtons,
@@ -685,7 +687,7 @@ export function SeriesView(props: { kind: SeriesKind; seriesID: number }) {
             <ErrorView message={paged.error} onRetry={handleRefresh} />
           </VStack>
         ) : (
-          <VStack alignment="leading" spacing={0} frame={{ maxWidth: "infinity" }} padding={{ bottom: isAppleMusic ? 70 : 16 }}>
+          <VStack alignment="leading" spacing={0} frame={{ maxWidth: "infinity" }} padding={{ bottom: 20 }}>
             {/* 沉浸式顶部背景图与居中悬浮胶囊标题 */}
             <ImmersiveHeaderBanner url={coverUrl} previewUrl={coverPreviewUrl}>
               <HStack

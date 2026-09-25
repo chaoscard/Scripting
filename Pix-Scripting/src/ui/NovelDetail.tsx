@@ -108,6 +108,7 @@ import {
   LoadingView,
   LoadMoreTrigger,
   NovelCard,
+  RelatedSection,
   RelatedUsersSheet,
   SeriesEpisodePager,
   TagChip,
@@ -1181,7 +1182,6 @@ export function NovelDetailView(props: { novelID: number }) {
           return (
             <ScrollView
               scrollContentBackground="hidden"
-              ignoresSafeArea={{ edges: "bottom" }}
               navigationTitle={isDetailPane ? current.title : ""}
               navigationBarTitleDisplayMode="inline"
             onAppear={() => {
@@ -2013,60 +2013,29 @@ function RelatedNovelsSection(props: {
   const showLoading = animating || paged.initialLoading
 
   return (
-    <VStack
-      alignment="leading"
-      spacing={8}
-      padding={{ top: 4, bottom: 32 }}
-      frame={{ maxWidth: "infinity", alignment: "leading" }}
-    >
-      <Text
-        font="subheadline"
-        fontWeight="semibold"
-        foregroundStyle="secondaryLabel"
-        padding={{ horizontal: 14 }}
-      >
-        相关作品
-      </Text>
-      {showLoading ? (
-        <HStack spacing={0} frame={{ maxWidth: "infinity", height: 100 }}>
-          <Spacer />
-          <ProgressView progressViewStyle="circular" />
-          <Spacer />
-        </HStack>
-      ) : paged.error && paged.items.length === 0 ? (
-        <VStack alignment="center" spacing={8} padding={16} frame={{ maxWidth: "infinity" }}>
-          <Text font="footnote" foregroundStyle="secondaryLabel">
-            相关作品加载失败
-          </Text>
-          <Button
-            title="重试"
-            buttonStyle="glass"
-            action={() => {
-              handleBottomAppear()
-              paged.refresh()
-            }}
-          />
-        </VStack>
-      ) : paged.items.length > 0 ? (
+    <RelatedSection
+      initialLoading={showLoading}
+      error={paged.error}
+      items={paged.items}
+      onRetry={() => {
+        handleBottomAppear()
+        paged.refresh()
+      }}
+      renderContent={(items) => (
         <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
-          {paged.items.map((novel, index) => (
+          {items.map((novel, index) => (
             <NovelCard key={novel.id} novel={novel} priority={index} />
           ))}
           <LoadMoreTrigger
-            anchor={paged.items[paged.items.length - 1].id}
+            anchor={items[items.length - 1].id}
             onLoadMore={paged.loadMore}
             hasMore={paged.hasMore}
             isLoading={paged.loadingMore}
+            bottomInset={0}
           />
         </LazyVStack>
-      ) : (
-        <HStack spacing={0} padding={{ horizontal: 14, vertical: 8 }} frame={{ maxWidth: "infinity", alignment: "leading" }}>
-          <Text font="footnote" foregroundStyle="secondaryLabel">
-            暂无相关作品
-          </Text>
-        </HStack>
       )}
-    </VStack>
+    />
   )
 }
 

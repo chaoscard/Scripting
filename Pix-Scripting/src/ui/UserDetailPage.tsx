@@ -106,6 +106,7 @@ export function UserDetailView(props: { userID: number }) {
   const [tagsByKind, setTagsByKind] = useState<Partial<Record<UserWorkKind, PixivWebUserTag[]>>>({})
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
   const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
+  const [feedBottomInset, setFeedBottomInset] = useState(() => loadSettings().feedBottomInset)
   const isAppleMusic = pageLayout === "appleMusic"
   const { isSplitViewActive, isDetailPane } = useDualRoute()
   const isSplitMasterPane = isSplitViewActive && !isDetailPane
@@ -257,6 +258,7 @@ export function UserDetailView(props: { userID: number }) {
       const next = loadSettings()
       setHideNovels(next.hideNovels)
       setPageLayout(next.pageLayout)
+      setFeedBottomInset(next.feedBottomInset)
       setEmptyKinds({})
     })
   }, [])
@@ -688,7 +690,7 @@ export function UserDetailView(props: { userID: number }) {
       navigationBarTitleDisplayMode="inline"
       toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
       toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
-      ignoresSafeArea={{ edges: ["top", "bottom"] }}
+      ignoresSafeArea={{ edges: "top" }}
       toolbar={{
         topBarTrailing: [
           ...(!isOwnProfile && !isSplitMasterPane ? [

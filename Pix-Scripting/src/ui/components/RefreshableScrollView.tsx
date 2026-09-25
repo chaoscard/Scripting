@@ -159,13 +159,27 @@ export function LoadMoreTrigger(props: {
   onLoadMore: (anchor: number | string) => void
   hasMore: boolean
   isLoading?: boolean
+  bottomInset?: number
 }) {
-  if (!props.hasMore) return null
+  const triggerHeight = props.bottomInset ?? Math.round(loadSettings().feedBottomInset / 2)
+  if (!props.hasMore) {
+    if (triggerHeight > 0) {
+      return (
+        <Rectangle
+          key="load-more-footer-spacer"
+          fill="clear"
+          frame={{ height: triggerHeight, maxWidth: "infinity" }}
+        />
+      )
+    }
+    return null
+  }
+  const loadingHeight = triggerHeight > 0 ? triggerHeight : 48
   return (
     <VStack
       key={`load-more:${props.anchor}`}
       spacing={0}
-      frame={{ height: 44, maxWidth: "infinity" }}
+      frame={{ height: loadingHeight, maxWidth: "infinity" }}
       onAppear={() => props.onLoadMore(props.anchor)}
     >
       {props.isLoading ? (

@@ -1861,7 +1861,7 @@ export function SettingsView() {
                 <Spacer />
                 {!expanded.debug ? (
                   <Text font="footnote" foregroundStyle="tertiaryLabel">
-                    {settings.geminiCustomParamsEnabled ? "23 项参数 (含Gemini)" : "13 项参数"}
+                    {settings.geminiCustomParamsEnabled ? "24 项参数 (含Gemini)" : "14 项参数"}
                   </Text>
                 ) : null}
               </HStack>
@@ -2028,6 +2028,16 @@ export function SettingsView() {
               min={0}
               max={10000}
               onSave={(val) => update({ launchAnimationDuration: val })}
+            />
+            <AdvancedNumberRow customTint={customTint}
+              title="作品流底垫高度"
+              subtitle="流末尾避让底栏间距"
+              unit="pt"
+              value={settings.feedBottomInset}
+              defaultValue={96}
+              min={0}
+              max={200}
+              onSave={(val) => update({ feedBottomInset: val })}
             />
             <Toggle
               title="启用自定义 Gemini 物理参数"
