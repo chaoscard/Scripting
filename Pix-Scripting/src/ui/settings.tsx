@@ -345,6 +345,10 @@ export function SettingsView() {
   const user = session.user
   const avatarURL = user?.profile_image_urls?.px_170x170 ?? null
   const { ambientBackground } = useExperimentalAmbientPalette(avatarURL, true)
+  const customTint =
+    settings.glassCustomTintEnabled && settings.glassTintColor
+      ? (settings.glassTintColor as Color)
+      : undefined
 
   return (
     <ZStack
@@ -492,7 +496,7 @@ export function SettingsView() {
             <HStack spacing={8}>
               <Text font="body">屏蔽设置</Text>
               <Spacer />
-              <Text font="caption" foregroundStyle="secondaryLabel">
+              <Text font="caption" foregroundStyle={customTint ?? "secondaryLabel"}>
                 标签 {blocklist.blockedTags.length}·用户 {blocklist.blockedUsers.length}
               </Text>
             </HStack>
@@ -773,7 +777,7 @@ export function SettingsView() {
                 }}
               >
                 <HStack spacing={8} alignment="center">
-                  <Image systemName="rectangle.split.2x1" font="subheadline" foregroundStyle="systemBlue" />
+                  <Image systemName="rectangle.split.2x1" font="subheadline" foregroundStyle={customTint ?? "systemBlue"} />
                   <Text font="subheadline">查看平行视界介绍</Text>
                   <Spacer />
                   <Image systemName="chevron.right" font="caption2" foregroundStyle="tertiaryLabel" />
@@ -1069,7 +1073,7 @@ export function SettingsView() {
                 <HStack>
                   <Text>着色浓度</Text>
                   <Spacer />
-                  <Text foregroundStyle="secondaryLabel">{`${settings.glassTintStrength}%`}</Text>
+                  <Text foregroundStyle={customTint ?? "secondaryLabel"}>{`${settings.glassTintStrength}%`}</Text>
                 </HStack>
                 <Slider
                   min={0}
@@ -1177,7 +1181,7 @@ export function SettingsView() {
                 <HStack spacing={8}>
                   <Text font="body">插画</Text>
                   <Spacer />
-                  <Text font="caption" foregroundStyle="secondaryLabel">
+                  <Text font="caption" foregroundStyle={customTint ?? "secondaryLabel"}>
                     {formatCustomRankingSummary("illust", settings)}
                   </Text>
                 </HStack>
@@ -1186,7 +1190,7 @@ export function SettingsView() {
                 <HStack spacing={8}>
                   <Text font="body">漫画</Text>
                   <Spacer />
-                  <Text font="caption" foregroundStyle="secondaryLabel">
+                  <Text font="caption" foregroundStyle={customTint ?? "secondaryLabel"}>
                     {formatCustomRankingSummary("manga", settings)}
                   </Text>
                 </HStack>
@@ -1196,7 +1200,7 @@ export function SettingsView() {
                   <HStack spacing={8}>
                     <Text font="body">小说</Text>
                     <Spacer />
-                    <Text font="caption" foregroundStyle="secondaryLabel">
+                    <Text font="caption" foregroundStyle={customTint ?? "secondaryLabel"}>
                       {formatCustomRankingSummary("novel", settings)}
                     </Text>
                   </HStack>
@@ -1282,7 +1286,7 @@ export function SettingsView() {
               <HStack spacing={8}>
                 <Text font="body">模型配置与端点管理</Text>
                 <Spacer />
-                <Text font="caption" foregroundStyle="secondaryLabel">
+                <Text font="caption" foregroundStyle={customTint ?? "secondaryLabel"}>
                   {getCustomAIProviderName(aiProfile)}
                 </Text>
               </HStack>
@@ -1672,7 +1676,7 @@ export function SettingsView() {
               ) : null}
               <Button
                 buttonStyle="plain"
-                foregroundStyle="systemBlue"
+                foregroundStyle={customTint ?? "systemBlue"}
                 action={async () => {
                   try {
                     const res = await DocumentPicker.pickDirectoryBookmark({
@@ -1719,10 +1723,10 @@ export function SettingsView() {
               }}
             >
               <HStack spacing={4} alignment="center">
-                <Text font="body" foregroundStyle="secondaryLabel">
+                <Text font="body" foregroundStyle={customTint ?? "secondaryLabel"}>
                   {settings.downloadPhotoAlbumName || "Pix-Scripting"}
                 </Text>
-                <Image systemName="pencil" font="caption" foregroundStyle="tertiaryLabel" />
+                <Image systemName="pencil" font="caption" foregroundStyle={customTint ?? "tertiaryLabel"} />
               </HStack>
             </Button>
           </HStack>
@@ -1731,7 +1735,7 @@ export function SettingsView() {
             <HStack spacing={8} alignment="center">
               <Text font="body">下载与文件管理</Text>
               <Spacer />
-              <Text font="caption" foregroundStyle="secondaryLabel">
+              <Text font="caption" foregroundStyle={customTint ?? "secondaryLabel"}>
                 分类浏览与清理
               </Text>
             </HStack>
@@ -1761,7 +1765,7 @@ export function SettingsView() {
           <HStack spacing={8}>
             <Text>当前记录数量</Text>
             <Spacer />
-            <Text font="body" foregroundStyle="secondaryLabel">{`${historyTotal} 条`}</Text>
+            <Text font="body" foregroundStyle={customTint ?? "secondaryLabel"}>{`${historyTotal} 条`}</Text>
             <Button
               action={() => {}}
               buttonStyle="glass"
@@ -1818,7 +1822,7 @@ export function SettingsView() {
           <HStack spacing={8}>
             <Text>当前缓存占用</Text>
             <Spacer />
-            <Text font="body" foregroundStyle="secondaryLabel">{cacheSize == null ? "计算中…" : formatSize(cacheSize)}</Text>
+            <Text font="body" foregroundStyle={customTint ?? "secondaryLabel"}>{cacheSize == null ? "计算中…" : formatSize(cacheSize)}</Text>
             <Button
               action={() => {}}
               buttonStyle="glass"
@@ -1876,7 +1880,7 @@ export function SettingsView() {
                 ) : null}
               </VStack>
             </Toggle>
-            <AdvancedNumberRow
+            <AdvancedNumberRow customTint={customTint}
               title="小组件池大小"
               unit="张"
               value={settings.widgetPoolCapacity}
@@ -1885,7 +1889,7 @@ export function SettingsView() {
               max={30}
               onSave={(val) => update({ widgetPoolCapacity: val })}
             />
-            <AdvancedNumberRow
+            <AdvancedNumberRow customTint={customTint}
               title="小组件刷新时长"
               unit="min"
               value={settings.widgetReloadIntervalMinutes}
@@ -1894,7 +1898,7 @@ export function SettingsView() {
               max={1440}
               onSave={(val) => update({ widgetReloadIntervalMinutes: val })}
             />
-            <AdvancedNumberRow
+            <AdvancedNumberRow customTint={customTint}
               title="图片并发总数"
               unit="张"
               value={settings.imageBatchConcurrency}
@@ -1903,7 +1907,7 @@ export function SettingsView() {
               max={90}
               onSave={(val) => update({ imageBatchConcurrency: val })}
             />
-            <AdvancedNumberRow
+            <AdvancedNumberRow customTint={customTint}
               title="前台并发窗口"
               unit="张"
               value={settings.imageForegroundConcurrency}
@@ -1912,7 +1916,7 @@ export function SettingsView() {
               max={30}
               onSave={(val) => update({ imageForegroundConcurrency: val })}
             />
-            <AdvancedNumberRow
+            <AdvancedNumberRow customTint={customTint}
               title="后台预取并发"
               unit="张"
               value={settings.imagePrefetchConcurrency}
@@ -1932,7 +1936,7 @@ export function SettingsView() {
                 </Text>
               </VStack>
             </Toggle>
-            <AdvancedNumberRow
+            <AdvancedNumberRow customTint={customTint}
               title="图片翻译并发数"
               unit="张"
               value={settings.aiTranslateConcurrency}
@@ -1941,7 +1945,7 @@ export function SettingsView() {
               max={6}
               onSave={(val) => update({ aiTranslateConcurrency: val })}
             />
-            <AdvancedNumberRow
+            <AdvancedNumberRow customTint={customTint}
               title="淡入动画时长"
               unit="ms"
               value={settings.imageFadeInDuration}
@@ -1950,7 +1954,7 @@ export function SettingsView() {
               max={500}
               onSave={(val) => update({ imageFadeInDuration: val })}
             />
-            <AdvancedNumberRow
+            <AdvancedNumberRow customTint={customTint}
               title="模糊消融时长"
               unit="ms"
               value={settings.blurCrossFadeDuration}
@@ -1959,7 +1963,7 @@ export function SettingsView() {
               max={250}
               onSave={(val) => update({ blurCrossFadeDuration: val })}
             />
-            <AdvancedNumberRow
+            <AdvancedNumberRow customTint={customTint}
               title="模糊消融半径"
               unit="pt"
               value={settings.blurCrossFadeRadius}
@@ -1969,7 +1973,7 @@ export function SettingsView() {
               allowFloat={true}
               onSave={(val) => update({ blurCrossFadeRadius: val })}
             />
-            <AdvancedNumberRow
+            <AdvancedNumberRow customTint={customTint}
               title="锐化动画时长"
               unit="ms"
               value={settings.sharpenFadeDuration}
@@ -1978,7 +1982,7 @@ export function SettingsView() {
               max={250}
               onSave={(val) => update({ sharpenFadeDuration: val })}
             />
-            <AdvancedNumberRow
+            <AdvancedNumberRow customTint={customTint}
               title="锐化失焦半径"
               unit="pt"
               value={settings.sharpenBlurRadius}
@@ -1988,7 +1992,7 @@ export function SettingsView() {
               allowFloat={true}
               onSave={(val) => update({ sharpenBlurRadius: val })}
             />
-            <AdvancedNumberRow
+            <AdvancedNumberRow customTint={customTint}
               title="背景预热时长"
               unit="ms"
               value={settings.backgroundPreheatDuration}
@@ -1997,7 +2001,7 @@ export function SettingsView() {
               max={2000}
               onSave={(val) => update({ backgroundPreheatDuration: val })}
             />
-            <AdvancedNumberRow
+            <AdvancedNumberRow customTint={customTint}
               title="加载动画时长"
               unit="ms"
               value={settings.loadingAnimationDuration}
@@ -2006,7 +2010,7 @@ export function SettingsView() {
               max={10000}
               onSave={(val) => update({ loadingAnimationDuration: val })}
             />
-            <AdvancedNumberRow
+            <AdvancedNumberRow customTint={customTint}
               title="小说加载时长"
               unit="ms"
               value={settings.novelLoadingDuration}
@@ -2015,7 +2019,7 @@ export function SettingsView() {
               max={5000}
               onSave={(val) => update({ novelLoadingDuration: val })}
             />
-            <AdvancedNumberRow
+            <AdvancedNumberRow customTint={customTint}
               title="启动动画时长"
               subtitle="基准时长，首图未就绪时自动延长"
               unit="ms"
@@ -2032,7 +2036,7 @@ export function SettingsView() {
             />
             {settings.geminiCustomParamsEnabled ? (
               <>
-                <AdvancedNumberRow
+                <AdvancedNumberRow customTint={customTint}
                   title="Gemini 换色周期"
                   unit="ms"
                   value={settings.geminiTransitionIntervalMs}
@@ -2041,7 +2045,7 @@ export function SettingsView() {
                   max={10000}
                   onSave={(val) => update({ geminiTransitionIntervalMs: val })}
                 />
-                <AdvancedNumberRow
+                <AdvancedNumberRow customTint={customTint}
                   title="Gemini 插值时长"
                   unit="ms"
                   value={settings.geminiTransitionDurationMs}
@@ -2050,7 +2054,7 @@ export function SettingsView() {
                   max={9000}
                   onSave={(val) => update({ geminiTransitionDurationMs: val })}
                 />
-                <AdvancedNumberRow
+                <AdvancedNumberRow customTint={customTint}
                   title="Gemini 旋转周期"
                   unit="s"
                   value={settings.geminiRotationPeriodSec}
@@ -2059,7 +2063,7 @@ export function SettingsView() {
                   max={60}
                   onSave={(val) => update({ geminiRotationPeriodSec: val })}
                 />
-                <AdvancedNumberRow
+                <AdvancedNumberRow customTint={customTint}
                   title="Gemini 摆动周期"
                   unit="ms"
                   value={settings.geminiSwingDurationMs}
@@ -2068,7 +2072,7 @@ export function SettingsView() {
                   max={15000}
                   onSave={(val) => update({ geminiSwingDurationMs: val })}
                 />
-                <AdvancedNumberRow
+                <AdvancedNumberRow customTint={customTint}
                   title="Gemini 垂直质心"
                   unit="pt"
                   value={settings.geminiCenterOffsetY}
@@ -2077,7 +2081,7 @@ export function SettingsView() {
                   max={-50}
                   onSave={(val) => update({ geminiCenterOffsetY: val })}
                 />
-                <AdvancedNumberRow
+                <AdvancedNumberRow customTint={customTint}
                   title="Gemini 两翼外展"
                   unit="pt"
                   value={settings.geminiWingOffsetX}
@@ -2086,7 +2090,7 @@ export function SettingsView() {
                   max={200}
                   onSave={(val) => update({ geminiWingOffsetX: val })}
                 />
-                <AdvancedNumberRow
+                <AdvancedNumberRow customTint={customTint}
                   title="Gemini 摆动幅度"
                   unit="pt"
                   value={settings.geminiSwingDistance}
@@ -2095,7 +2099,7 @@ export function SettingsView() {
                   max={120}
                   onSave={(val) => update({ geminiSwingDistance: val })}
                 />
-                <AdvancedNumberRow
+                <AdvancedNumberRow customTint={customTint}
                   title="Gemini 弥散模糊"
                   unit="pt"
                   value={settings.geminiBlurRadius}
@@ -2104,7 +2108,7 @@ export function SettingsView() {
                   max={200}
                   onSave={(val) => update({ geminiBlurRadius: val })}
                 />
-                <AdvancedNumberRow
+                <AdvancedNumberRow customTint={customTint}
                   title="Gemini 能量提亮"
                   unit="%"
                   value={settings.geminiLuminousBoostRatio}
@@ -2113,7 +2117,7 @@ export function SettingsView() {
                   max={100}
                   onSave={(val) => update({ geminiLuminousBoostRatio: val })}
                 />
-                <AdvancedNumberRow
+                <AdvancedNumberRow customTint={customTint}
                   title="Gemini 浅色浓度"
                   unit="%"
                   value={settings.geminiLightModeAlphaRatio}
@@ -2164,9 +2168,10 @@ function AdvancedNumberRow(props: {
   min?: number
   max?: number
   allowFloat?: boolean
+  customTint?: Color
   onSave: (num: number) => void
 }) {
-  const { title, subtitle, unit, value, defaultValue, min = 0, max = 30000, allowFloat = false, onSave } = props
+  const { title, subtitle, unit, value, defaultValue, min = 0, max = 30000, allowFloat = false, customTint, onSave } = props
   const [text, setText] = useState(String(value ?? defaultValue))
 
   useEffect(() => {
@@ -2197,16 +2202,16 @@ function AdvancedNumberRow(props: {
 
   return (
     <HStack alignment="center" spacing={8} frame={{ maxWidth: "infinity" }}>
-      <VStack alignment="leading" spacing={2}>
+      <VStack alignment="leading" spacing={2} layoutPriority={1}>
         <Text>{title}</Text>
         {subtitle ? (
-          <Text font="caption2" foregroundStyle="secondaryLabel">
+          <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={1}>
             {subtitle}
           </Text>
         ) : null}
       </VStack>
       <Spacer />
-      <HStack alignment="center" spacing={4}>
+      <HStack alignment="center" spacing={4} fixedSize={{ horizontal: true, vertical: false }}>
         <TextField
           label={<Text>{title}</Text>}
           prompt={String(defaultValue)}
@@ -2226,11 +2231,11 @@ function AdvancedNumberRow(props: {
           axis="horizontal"
           textFieldStyle="plain"
           multilineTextAlignment="trailing"
-          foregroundStyle="secondaryLabel"
+          foregroundStyle={customTint ?? "secondaryLabel"}
           frame={{ minWidth: 60, alignment: "trailing" }}
         />
         {unit ? (
-          <Text font="body" foregroundStyle="secondaryLabel">
+          <Text font="body" foregroundStyle={customTint ?? "secondaryLabel"}>
             {unit}
           </Text>
         ) : null}

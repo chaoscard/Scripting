@@ -2,6 +2,7 @@ import { apiGetPublicJson, apiGetPublicText, PixivError } from "./client"
 import { DEFAULT_WEB_BASE_URL } from "../config"
 import { getWebBaseUrl } from "../store/settings"
 import { derivePixivThumbUrl, recordPixivisionCoverUrl } from "../image/imageLoader"
+import { cachePixivisionDetail } from "../store/pixivisionCache"
 import type {
   PixivIllustration,
   PixivPage,
@@ -153,7 +154,9 @@ export async function pixivisionDetail(
     "text/html",
     pixivisionHeaders(PIXIVISION_HOME_URL)
   )
-  return parsePixivisionDetailPage(html, articleID)
+  const detail = parsePixivisionDetailPage(html, articleID)
+  cachePixivisionDetail(detail)
+  return detail
 }
 
 // 获取公开 Web 作品元数据（无需登录，快速获取确切真实物理宽高与大图地址）

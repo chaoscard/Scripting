@@ -40,6 +40,7 @@ import {
   onPixivisionBookmarksChanged,
   togglePixivisionBookmark,
 } from "../store/pixivisionBookmarks"
+import { cachePixivisionDetail, getCachedPixivisionDetail } from "../store/pixivisionCache"
 import {
   useIllustBookmark,
   useNovelBookmark,
@@ -1075,7 +1076,9 @@ export function PixivisionDetailDockBar(props: { articleID: number }) {
   const [bookmarked, setBookmarked] = useState<boolean>(() =>
     isPixivisionBookmarked(articleID)
   )
-  const [detail, setDetail] = useState<PixivisionDetail | null>(null)
+  const [detail, setDetail] = useState<PixivisionDetail | null>(() =>
+    getCachedPixivisionDetail(articleID)
+  )
   const [downloadStatus, setDownloadStatus] = useState<string | null>(null)
   const isDownloading = downloadStatus != null
 
@@ -1087,10 +1090,18 @@ export function PixivisionDetailDockBar(props: { articleID: number }) {
   }, [articleID])
 
   useEffect(() => {
+    const cached = getCachedPixivisionDetail(articleID)
+    if (cached) {
+      setDetail(cached)
+      return
+    }
     session
       .call((token) => pixivisionDetail(articleID, token))
       .then((res) => {
-        if (res) setDetail(res)
+        if (res) {
+          cachePixivisionDetail(res)
+          setDetail(res)
+        }
       })
       .catch(() => {})
   }, [articleID])

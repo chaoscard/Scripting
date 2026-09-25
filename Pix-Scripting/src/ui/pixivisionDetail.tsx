@@ -63,6 +63,7 @@ import {
   onPixivisionBookmarksChanged,
   togglePixivisionBookmark,
 } from "../store/pixivisionBookmarks"
+import { cachePixivisionDetail, getCachedPixivisionDetail } from "../store/pixivisionCache"
 
 declare const Pasteboard: any
 import { triggerHaptic } from "../platform/haptics"
@@ -81,8 +82,9 @@ export function PixivisionDetailView(props: { articleID: number }) {
   // 分栏外壳的右栏：特辑标题交给导航栏（左栏 / iPhone 保持空标题，维持原样）
   const { isDetailPane } = useDualRoute()
   const heroCardWidth = Math.floor(screenWidth - FLOW_HORIZONTAL_PADDING * 2)
-  const [detail, setDetail] = useState<PixivisionDetail | null>(null)
-  const [loading, setLoading] = useState(true)
+  const cachedInitial = getCachedPixivisionDetail(articleID)
+  const [detail, setDetail] = useState<PixivisionDetail | null>(() => cachedInitial)
+  const [loading, setLoading] = useState(() => cachedInitial == null)
   const [error, setError] = useState<string | null>(null)
   const [isTocExpanded, setIsTocExpanded] = useState(true)
   const [bookmarked, setBookmarked] = useState<boolean>(() => isPixivisionBookmarked(articleID))
@@ -396,6 +398,7 @@ export function PixivisionDetailView(props: { articleID: number }) {
           initialMap[item.id] = buildArtworkSkeletonIllust(item)
         }
       }
+      cachePixivisionDetail(value)
       setDetail(value)
     } catch (err: any) {
       if (g.isCurrent()) setError(err?.message ?? "加载失败")
