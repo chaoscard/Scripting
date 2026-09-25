@@ -1,5 +1,6 @@
 import {
   Button,
+  Circle,
   FlowLayout,
   HStack,
   Image,
@@ -18,6 +19,7 @@ import {
   useRef,
   useState,
   VStack,
+  ZStack,
   type Color,
 } from "scripting"
 import { appGlass, appThemeColor } from "./components/glass"
@@ -577,16 +579,22 @@ function CommentInputBar(props: {
         frame={{ maxWidth: "infinity" }}
       >
         <Button
-          title={showEmotePanel ? "键盘" : "表情"}
-          systemImage={showEmotePanel ? "keyboard" : "face.smiling"}
-          tint={themeColor}
-          buttonStyle="glass"
+          buttonStyle="plain"
+          frame={{ width: 36, height: 36 }}
+          glassEffect={appGlass("circle")}
+          contentShape="circle"
           action={() => {
             withAnimation(() => {
               setShowEmotePanel((prev) => !prev)
             })
           }}
-        />
+        >
+          <Image
+            systemName={showEmotePanel ? "keyboard" : "face.smiling"}
+            font="body"
+            foregroundStyle={themeColor}
+          />
+        </Button>
         <HStack
           alignment="center"
           padding={{ horizontal: 12, vertical: 6 }}
@@ -607,12 +615,25 @@ function CommentInputBar(props: {
           />
         </HStack>
         <Button
-          title="发送"
-          buttonStyle="glassProminent"
-          tint={themeColor}
+          buttonStyle="plain"
+          frame={{ width: 36, height: 36 }}
+          glassEffect={!posting && text.trim() ? undefined : appGlass("circle")}
+          contentShape="circle"
           disabled={posting || !text.trim()}
           action={handleSendText}
-        />
+        >
+          <ZStack frame={{ width: 36, height: 36 }} alignment="center">
+            {!posting && text.trim() ? (
+              <Circle fill={themeColor} frame={{ width: 36, height: 36 }} />
+            ) : null}
+            <Image
+              systemName="arrow.up"
+              font="body"
+              fontWeight="semibold"
+              foregroundStyle={!posting && text.trim() ? "white" : "tertiaryLabel"}
+            />
+          </ZStack>
+        </Button>
       </HStack>
 
       {/* 官方 Emoji 和 Stamp 面板（支持菜单切换） */}
@@ -1009,7 +1030,7 @@ function EmotePickerPanel(props: {
         <Spacer />
 
         {tab === "stamp" ? (
-          <Menu
+          <Picker
             label={
               <HStack spacing={4} alignment="center">
                 <Text font="caption" foregroundStyle={themeColor}>
@@ -1022,19 +1043,16 @@ function EmotePickerPanel(props: {
                 />
               </HStack>
             }
+            value={categoryKey}
+            onChanged={(val: string | number) => onCategoryChanged(String(val))}
           >
-            <Button
-              title="全部"
-              action={() => onCategoryChanged("all")}
-            />
+            <Text tag="all">全部</Text>
             {PIXIV_STAMP_CATEGORIES.map((cat) => (
-              <Button
-                key={cat.key}
-                title={cat.title}
-                action={() => onCategoryChanged(cat.key)}
-              />
+              <Text key={cat.key} tag={cat.key}>
+                {cat.title}
+              </Text>
             ))}
-          </Menu>
+          </Picker>
         ) : null}
       </HStack>
 
