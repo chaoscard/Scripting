@@ -32,6 +32,7 @@ import {
   novelCommentReplies,
 } from "../api/pixiv"
 import { session } from "../api/session"
+import { loadSettings } from "../store/settings"
 import { requestPixivRoute } from "../store/routeNavigation"
 import { dedupeByID, mergeUniqueByID } from "./Hooks"
 import type { PixivComment } from "../types"
@@ -385,13 +386,18 @@ export function CommentsSheet(props: {
     return ` (${count})`
   }
   const titleText = `评论${formatTitleCount(commentCount)}`
+  const settings = loadSettings()
+  const customTint =
+    settings.glassCustomTintEnabled && settings.glassTintColor
+      ? (settings.glassTintColor as Color)
+      : undefined
   const themeColor = appThemeColor("#0096FA") as Color
 
   return (
     <NavigationStack
       presentationDetents={sheetDetents()}
       presentationDragIndicator="visible"
-      tint={themeColor}
+      tint={customTint}
     >
       <VStack
         alignment="leading"
@@ -402,9 +408,11 @@ export function CommentsSheet(props: {
         navigationBarTitleDisplayMode="inline"
         toolbar={{
           topBarLeading: props.onClose ? (
-            <Button action={props.onClose}>
-              <Image systemName="xmark" />
-            </Button>
+            <Button
+              title="关闭"
+              systemImage="xmark"
+              action={props.onClose}
+            />
           ) : undefined,
           principal: (
             <Text font="headline" fontWeight="bold">

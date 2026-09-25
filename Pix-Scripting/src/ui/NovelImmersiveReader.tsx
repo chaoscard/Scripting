@@ -849,8 +849,29 @@ ${THEME_CSS_VARS}
       }
     };
 
-    window.addEventListener("DOMContentLoaded", flushPendingImages);
-    window.addEventListener("load", flushPendingImages);
+    function notifyReaderReady() {
+      flushPendingImages();
+      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.readerReady) {
+        window.webkit.messageHandlers.readerReady.postMessage({});
+      }
+    }
+
+    window.addEventListener("DOMContentLoaded", notifyReaderReady);
+    window.addEventListener("load", notifyReaderReady);
+    if (document.readyState === "complete" || document.readyState === "interactive") {
+      setTimeout(notifyReaderReady, 0);
+    }
+
+    function checkPlaceholders() {
+      flushPendingImages();
+      var spinners = document.querySelectorAll(".illust-spinner");
+      if (spinners.length > 0 && window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.readerReady) {
+        window.webkit.messageHandlers.readerReady.postMessage({});
+      }
+    }
+    setTimeout(checkPlaceholders, 300);
+    setTimeout(checkPlaceholders, 1000);
+    setTimeout(checkPlaceholders, 2500);
 
     function restoreProgress(chunkId) {
       var target = chunkId || targetChunkId;
@@ -1594,8 +1615,29 @@ ${THEME_CSS_VARS}
       }
     };
 
-    window.addEventListener("DOMContentLoaded", flushPendingImages);
-    window.addEventListener("load", flushPendingImages);
+    function notifyReaderReady() {
+      flushPendingImages();
+      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.readerReady) {
+        window.webkit.messageHandlers.readerReady.postMessage({});
+      }
+    }
+
+    window.addEventListener("DOMContentLoaded", notifyReaderReady);
+    window.addEventListener("load", notifyReaderReady);
+    if (document.readyState === "complete" || document.readyState === "interactive") {
+      setTimeout(notifyReaderReady, 0);
+    }
+
+    function checkPlaceholders() {
+      flushPendingImages();
+      var spinners = document.querySelectorAll(".illust-spinner");
+      if (spinners.length > 0 && window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.readerReady) {
+        window.webkit.messageHandlers.readerReady.postMessage({});
+      }
+    }
+    setTimeout(checkPlaceholders, 300);
+    setTimeout(checkPlaceholders, 1000);
+    setTimeout(checkPlaceholders, 2500);
 
     function scrollToNovelStart() {
       var container = document.querySelector(".vertical-container");
@@ -1820,6 +1862,24 @@ export function NovelImmersiveReaderView(props: NovelImmersiveReaderViewProps) {
   const imageCacheRef = useRef(imageCache)
   imageCacheRef.current = imageCache
 
+  // 页面就绪或重试时向 WebKit 重放所有已有缓存插图，确保零时序打空
+  const replayLoadedImages = useCallback(() => {
+    const ctrl = controllerRef.current
+    if (!ctrl) return
+    const currentCached = imageCacheRef.current
+    const keys = Object.keys(currentCached)
+    if (keys.length === 0) return
+    for (const chunkId of keys) {
+      const item = currentCached[chunkId]
+      if (item?.dataUrl) {
+        const script = `if (window.updateNovelImage) { window.updateNovelImage(${JSON.stringify(chunkId)}, ${JSON.stringify(item.dataUrl)}, ${JSON.stringify(item.title || "")}, ${JSON.stringify(item.author || "")}, ${item.illustId ?? "null"}); }`
+        void ctrl.evaluateJavaScript(script).catch(() => {})
+      }
+    }
+  }, [])
+  const replayLoadedImagesRef = useRef(replayLoadedImages)
+  replayLoadedImagesRef.current = replayLoadedImages
+
   // 关闭处理器：回传最终所在的 activeNovelId 与阅读位置
   const handleClose = useCallback(() => {
     onClose(currentChunkIdRef.current, currentPage, activeNovelId)
@@ -1972,6 +2032,10 @@ export function NovelImmersiveReaderView(props: NovelImmersiveReaderViewProps) {
 
     void ctrl.addScriptMessageHandler("toggleControls", () => {
       setControlsVisible((prev) => !prev)
+    }).catch(() => {})
+
+    void ctrl.addScriptMessageHandler("readerReady", () => {
+      replayLoadedImagesRef.current()
     }).catch(() => {})
 
     void ctrl.addScriptMessageHandler("openIllust", (data: any) => {

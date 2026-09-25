@@ -1177,14 +1177,49 @@ export async function novelViewerData(
 
   const text = novel?.text ?? ""
 
-  // 检查已解析的图片字典中是否包含有效图片
-  const hasEmbeddedImages =
-    textEmbeddedImages != null &&
-    typeof textEmbeddedImages === "object" &&
-    Object.keys(textEmbeddedImages).length > 0
+  // 精准检查正文中引用的每一个 [uploadedimage: ID]，确保现存字典中具备完整可用的图片 URL
+  const uploadedImageIds: string[] = []
+  const upTagRegex = /\[uploadedimage\s*[:：]\s*([^\s\]]+)\s*\]/gi
+  let upMatch: RegExpExecArray | null
+  while ((upMatch = upTagRegex.exec(text)) != null) {
+    const imgId = upMatch[1].trim()
+    if (imgId && !uploadedImageIds.includes(imgId)) {
+      uploadedImageIds.push(imgId)
+    }
+  }
 
-  // 若正文包含 uploadedimage 标签但尚未取得有效图片字典，则从 Web 端点降级补充拉取
-  if (!hasEmbeddedImages && /\[uploadedimage:\s*[^\]]+\]/i.test(text)) {
+  function hasValidEmbeddedUrl(img?: TextEmbeddedImage): boolean {
+    if (!img) return false
+    return Boolean(
+      img.urls?.["1200x1200"] ||
+      img.urls?.original ||
+      img.urls?.["480mw"] ||
+      img.urls?.["240mw"] ||
+      img.urls?.["128x128"] ||
+      (img as any)?.urls?.large ||
+      (img as any)?.urls?.medium ||
+      (img as any)?.url
+    )
+  }
+
+  // 只要正文包含 uploadedimage 且存在任何一张插图未在当前字典中获得有效链接，即触发 Web 端点补全拉取
+  const needsFetchWeb = uploadedImageIds.some((imgId) => {
+    const item =
+      textEmbeddedImages?.[imgId] ||
+      (textEmbeddedImages as any)?.[Number(imgId)] ||
+      (textEmbeddedImages
+        ? Object.values(textEmbeddedImages).find(
+            (val: any) =>
+              val?.novelImageId === imgId ||
+              val?.id === imgId ||
+              String(val?.novelImageId) === String(imgId) ||
+              String(val?.id) === String(imgId)
+          )
+        : undefined)
+    return !hasValidEmbeddedUrl(item)
+  })
+
+  if (needsFetchWeb) {
     try {
       const origin = getWebOrigin()
       const webData = await apiGetPublicJson<{
@@ -1195,7 +1230,10 @@ export async function novelViewerData(
         getWebHeaders(`${origin}/novel/show.php?id=${id}`)
       )
       if (webData?.body?.textEmbeddedImages) {
-        textEmbeddedImages = webData.body.textEmbeddedImages
+        textEmbeddedImages = {
+          ...(textEmbeddedImages ?? {}),
+          ...webData.body.textEmbeddedImages,
+        }
       }
     } catch {
       // 降级处理

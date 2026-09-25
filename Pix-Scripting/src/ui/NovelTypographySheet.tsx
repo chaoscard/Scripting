@@ -14,11 +14,13 @@ import {
   useEffect,
   useState,
   VStack,
+  type Color,
 } from "scripting"
 import { appGlass } from "./components/glass"
 import { sheetDetents, sheetTopBar } from "./components/pageChrome"
 import { isScriptingPro } from "../platform/pro"
 import { triggerHaptic } from "../platform/haptics"
+import { loadSettings } from "../store/settings"
 import {
   DEFAULT_NOVEL_READER_SETTINGS,
   loadNovelReaderSettings,
@@ -100,10 +102,20 @@ export function NovelTypographySheet(props: { onClose?: () => void }) {
     setSettings(updated)
   }, [])
 
+  const generalSettings = loadSettings()
+  const customTint =
+    generalSettings.glassCustomTintEnabled && generalSettings.glassTintColor
+      ? (generalSettings.glassTintColor as Color)
+      : undefined
+  const menuTextColor = (customTint ?? "secondaryLabel") as Color
+  const menuIconColor = (customTint ?? "tertiaryLabel") as Color
+  const accentColor = (customTint ?? "#007AFF") as Color
+
   return (
     <NavigationStack
       presentationDetents={sheetDetents([0.65, "large"])}
       presentationDragIndicator="visible"
+      tint={customTint}
     >
       <ScrollView
         {...sheetTopBar()}
@@ -149,7 +161,7 @@ export function NovelTypographySheet(props: { onClose?: () => void }) {
           {/* 1. 排版 */}
           <VStack alignment="leading" spacing={8} frame={{ maxWidth: "infinity" }}>
             <HStack spacing={6} alignment="center">
-              <Image systemName="rectangle.and.text.magnifyingglass" font="headline" foregroundStyle="#007AFF" />
+              <Image systemName="rectangle.and.text.magnifyingglass" font="headline" foregroundStyle={accentColor} />
               <Text font="headline" fontWeight="bold">
                 排版
               </Text>
@@ -168,10 +180,10 @@ export function NovelTypographySheet(props: { onClose?: () => void }) {
                 <Menu
                   label={
                     <HStack spacing={4} alignment="center">
-                      <Text font="body" foregroundStyle="secondaryLabel">
+                      <Text font="body" foregroundStyle={menuTextColor}>
                         {settings.layoutDirection === "vertical" ? "竖排" : "横排"}
                       </Text>
-                      <Image systemName="chevron.up.chevron.down" font="caption2" foregroundStyle="tertiaryLabel" />
+                      <Image systemName="chevron.up.chevron.down" font="caption2" foregroundStyle={menuIconColor} />
                     </HStack>
                   }
                 >
@@ -197,14 +209,14 @@ export function NovelTypographySheet(props: { onClose?: () => void }) {
                 <Menu
                   label={
                     <HStack spacing={4} alignment="center">
-                      <Text font="body" foregroundStyle="secondaryLabel">
+                      <Text font="body" foregroundStyle={menuTextColor}>
                         {settings.lineSpacingLevel === "compact"
                           ? "紧凑"
                           : settings.lineSpacingLevel === "loose"
                           ? "宽松"
                           : "标准"}
                       </Text>
-                      <Image systemName="chevron.up.chevron.down" font="caption2" foregroundStyle="tertiaryLabel" />
+                      <Image systemName="chevron.up.chevron.down" font="caption2" foregroundStyle={menuIconColor} />
                     </HStack>
                   }
                 >
@@ -227,7 +239,7 @@ export function NovelTypographySheet(props: { onClose?: () => void }) {
           {/* 2. 字体 */}
           <VStack alignment="leading" spacing={8} frame={{ maxWidth: "infinity" }}>
             <HStack spacing={6} alignment="center">
-              <Text font="headline" fontWeight="bold" foregroundStyle="#007AFF">
+              <Text font="headline" fontWeight="bold" foregroundStyle={accentColor}>
                 Aa
               </Text>
               <Text font="headline" fontWeight="bold">
@@ -248,12 +260,12 @@ export function NovelTypographySheet(props: { onClose?: () => void }) {
                 <Menu
                   label={
                     <HStack spacing={4} alignment="center">
-                      <Text font="body" foregroundStyle="secondaryLabel">
+                      <Text font="body" foregroundStyle={menuTextColor}>
                         {settings.fontId !== "custom"
                           ? PRESET_FONTS.find((f) => f.id === settings.fontId)?.name ?? "系统默认"
                           : "自定义字体"}
                       </Text>
-                      <Image systemName="chevron.up.chevron.down" font="caption2" foregroundStyle="tertiaryLabel" />
+                      <Image systemName="chevron.up.chevron.down" font="caption2" foregroundStyle={menuIconColor} />
                     </HStack>
                   }
                 >
@@ -302,7 +314,7 @@ export function NovelTypographySheet(props: { onClose?: () => void }) {
                   action={() => void handlePickFont()}
                 >
                   <HStack spacing={4} alignment="center">
-                    <Text font="body" foregroundStyle="secondaryLabel" lineLimit={1}>
+                    <Text font="body" foregroundStyle={menuTextColor} lineLimit={1}>
                       {settings.fontId === "custom" && settings.customFontPostscriptName
                         ? settings.customFontPostscriptName
                         : "从系统字体库选取"}
@@ -310,7 +322,7 @@ export function NovelTypographySheet(props: { onClose?: () => void }) {
                     <Image
                       systemName="chevron.right"
                       font="footnote"
-                      foregroundStyle="tertiaryLabel"
+                      foregroundStyle={menuIconColor}
                     />
                   </HStack>
                 </Button>
@@ -331,14 +343,14 @@ export function NovelTypographySheet(props: { onClose?: () => void }) {
                 <Menu
                   label={
                     <HStack spacing={4} alignment="center">
-                      <Text font="body" foregroundStyle="secondaryLabel">
+                      <Text font="body" foregroundStyle={menuTextColor}>
                         {settings.fontWeight === "regular"
                           ? "纤细"
                           : settings.fontWeight === "bold"
                           ? "加粗"
                           : "标准"}
                       </Text>
-                      <Image systemName="chevron.up.chevron.down" font="caption2" foregroundStyle="tertiaryLabel" />
+                      <Image systemName="chevron.up.chevron.down" font="caption2" foregroundStyle={menuIconColor} />
                     </HStack>
                   }
                 >
@@ -363,7 +375,7 @@ export function NovelTypographySheet(props: { onClose?: () => void }) {
                 <HStack alignment="center" frame={{ maxWidth: "infinity" }}>
                   <Text font="body">字号</Text>
                   <Spacer />
-                  <Text font="body" foregroundStyle="secondaryLabel">
+                  <Text font="body" foregroundStyle={menuTextColor}>
                     {settings.fontSize} pt
                   </Text>
                 </HStack>
@@ -376,7 +388,7 @@ export function NovelTypographySheet(props: { onClose?: () => void }) {
                       updateSetting({ fontSize: nextSize })
                     }}
                   >
-                    <Text font="subheadline" fontWeight="bold" foregroundStyle="#007AFF">
+                    <Text font="subheadline" fontWeight="bold" foregroundStyle={accentColor}>
                       A -
                     </Text>
                   </Button>
@@ -396,7 +408,7 @@ export function NovelTypographySheet(props: { onClose?: () => void }) {
                       updateSetting({ fontSize: nextSize })
                     }}
                   >
-                    <Text font="subheadline" fontWeight="bold" foregroundStyle="#007AFF">
+                    <Text font="subheadline" fontWeight="bold" foregroundStyle={accentColor}>
                       A +
                     </Text>
                   </Button>
