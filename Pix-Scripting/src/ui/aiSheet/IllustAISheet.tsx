@@ -241,12 +241,13 @@ function IllustAIPageRow(props: {
           frame={{ width: containerWidth, height: pageRenderHeight }}
         >
           <Canvas
+            key={`ocr-canvas-${pageIndex}-${isOverlayVisible}-${hiddenIndices.size}`}
             aspectRatio={{ value: pageAspect, contentMode: "fit" }}
             onTapGesture={{
               count: 1,
               coordinateSpace: "local",
               perform: (point?: any) => {
-                if (point && typeof point.x === "number" && typeof point.y === "number") {
+                if (isOverlayVisible && point && typeof point.x === "number" && typeof point.y === "number") {
                   onTapCanvasBubble(pageIndex, point)
                 }
               },
@@ -265,42 +266,44 @@ function IllustAIPageRow(props: {
             }}
           />
 
-          {cache!.bubbles!.map((bubble, bIdx) => {
-            const [ymin, xmin, ymax, xmax] = bubble.box_2d || [0, 0, 0, 0]
-            const rawW =
-              ((Math.max(0, Math.min(xmax, 1000)) - Math.max(0, Math.min(xmin, 1000))) / 1000) *
-              containerWidth
-            const rawH =
-              ((Math.max(0, Math.min(ymax, 1000)) - Math.max(0, Math.min(ymin, 1000))) / 1000) *
-              pageRenderHeight
-            const rawX = (Math.max(0, Math.min(xmin, 1000)) / 1000) * containerWidth
-            const rawY = (Math.max(0, Math.min(ymin, 1000)) / 1000) * pageRenderHeight
+          {isOverlayVisible
+            ? cache!.bubbles!.map((bubble, bIdx) => {
+                const [ymin, xmin, ymax, xmax] = bubble.box_2d || [0, 0, 0, 0]
+                const rawW =
+                  ((Math.max(0, Math.min(xmax, 1000)) - Math.max(0, Math.min(xmin, 1000))) / 1000) *
+                  containerWidth
+                const rawH =
+                  ((Math.max(0, Math.min(ymax, 1000)) - Math.max(0, Math.min(ymin, 1000))) / 1000) *
+                  pageRenderHeight
+                const rawX = (Math.max(0, Math.min(xmin, 1000)) / 1000) * containerWidth
+                const rawY = (Math.max(0, Math.min(ymin, 1000)) / 1000) * pageRenderHeight
 
-            const cX = rawX + rawW / 2
-            const cY = rawY + rawH / 2
-            const hitW = Math.max(30, rawW * fontScale)
-            const hitH = Math.max(30, rawH * fontScale)
-            const hitLeft = cX - hitW / 2
-            const hitTop = cY - hitH / 2
+                const cX = rawX + rawW / 2
+                const cY = rawY + rawH / 2
+                const hitW = Math.max(30, rawW * fontScale)
+                const hitH = Math.max(30, rawH * fontScale)
+                const hitLeft = cX - hitW / 2
+                const hitTop = cY - hitH / 2
 
-            return (
-              <Button
-                key={String(bIdx)}
-                buttonStyle="plain"
-                offset={{ x: hitLeft, y: hitTop }}
-                action={() => onToggleBubbleIndex(pageIndex, bIdx)}
-              >
-                <VStack
-                  frame={{
-                    width: hitW,
-                    height: hitH,
-                  }}
-                  background="rgba(0, 0, 0, 0.001)"
-                  contentShape="rect"
-                />
-              </Button>
-            )
-          })}
+                return (
+                  <Button
+                    key={String(bIdx)}
+                    buttonStyle="plain"
+                    offset={{ x: hitLeft, y: hitTop }}
+                    action={() => onToggleBubbleIndex(pageIndex, bIdx)}
+                  >
+                    <VStack
+                      frame={{
+                        width: hitW,
+                        height: hitH,
+                      }}
+                      background="rgba(0, 0, 0, 0.001)"
+                      contentShape="rect"
+                    />
+                  </Button>
+                )
+              })
+            : null}
         </ZStack>
       ) : mode === "vision" && hasVisionResult && visionUIImage ? (
         <ZStack alignment="center" frame={{ width: containerWidth, height: pageRenderHeight }}>
@@ -955,7 +958,24 @@ export function IllustAISheet(props: {
                       title={showAllOverlay ? "隐藏译文" : "显示译文"}
                       systemImage={showAllOverlay ? "eye" : "eye.slash"}
                       action={() => {
-                        setShowAllOverlay(!showAllOverlay)
+                        const nextShow = !showAllOverlay
+                        setShowAllOverlay(nextShow)
+                        if (nextShow) {
+                          setPageCaches((prev) => {
+                            const next = { ...prev }
+                            let hasChange = false
+                            for (let i = 0; i < pageCount; i++) {
+                              if (next[i]?.hiddenBubbleIndices?.length) {
+                                next[i] = {
+                                  ...next[i],
+                                  hiddenBubbleIndices: [],
+                                }
+                                hasChange = true
+                              }
+                            }
+                            return hasChange ? next : prev
+                          })
+                        }
                         triggerHaptic("selection")
                       }}
                     />
@@ -1010,7 +1030,7 @@ export function IllustAISheet(props: {
                           <Image
                             systemName="textformat.size"
                             font="subheadline"
-                            foregroundStyle="#007AFF"
+                            foregroundStyle="tintColor"
                           />
                           <Text font="subheadline" fontWeight="semibold">
                             气泡与文字大小
@@ -1031,7 +1051,7 @@ export function IllustAISheet(props: {
                             triggerHaptic("selection")
                           }}
                         >
-                          <Text font="subheadline" fontWeight="bold" foregroundStyle="#007AFF">
+                          <Text font="subheadline" fontWeight="bold" foregroundStyle="tintColor">
                             A -
                           </Text>
                         </Button>
@@ -1052,7 +1072,7 @@ export function IllustAISheet(props: {
                             triggerHaptic("selection")
                           }}
                         >
-                          <Text font="subheadline" fontWeight="bold" foregroundStyle="#007AFF">
+                          <Text font="subheadline" fontWeight="bold" foregroundStyle="tintColor">
                             A +
                           </Text>
                         </Button>

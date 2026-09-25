@@ -161,7 +161,8 @@ function OverviewMetricsCard(props: {
           />
           <MetricItem
             title="心动转化"
-            value={`${bookmarkRate}%`}
+            value={bookmarkRate}
+            unit="%"
             icon="heart.fill"
             iconColor="systemPink"
           />
@@ -197,7 +198,8 @@ function OverviewMetricsCard(props: {
             />
             <MetricItem
               title="心动转化"
-              value={`${bookmarkRate}%`}
+              value={bookmarkRate}
+              unit="%"
               icon="heart.fill"
               iconColor="systemPink"
             />

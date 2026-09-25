@@ -1,5 +1,6 @@
 import {
   Button,
+  Color,
   Group,
   HStack,
   Image,
@@ -92,16 +93,21 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
   const [overview, setOverview] = useState<StorageOverview | null>(null)
   const [cleaning, setCleaning] = useState(false)
   const [activeTasksCount, setActiveTasksCount] = useState(0)
-  const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
+  const [settings, setSettings] = useState(loadSettings)
+  const isAppleMusic = settings.pageLayout === "appleMusic"
+  const customTint =
+    settings.glassCustomTintEnabled && settings.glassTintColor
+      ? (settings.glassTintColor as Color)
+      : undefined
+
   const [showNoticeAlert, setShowNoticeAlert] = useState(false)
   const hasCheckedNoticeRef = useRef(false)
-  const isAppleMusic = pageLayout === "appleMusic"
 
   useEffect(() => {
     if (!hasCheckedNoticeRef.current) {
       hasCheckedNoticeRef.current = true
-      const settings = loadSettings()
-      if (!settings.dismissDownloadManagerNotice) {
+      const s = loadSettings()
+      if (!s.dismissDownloadManagerNotice) {
         setShowNoticeAlert(true)
       }
     }
@@ -109,7 +115,7 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
 
   useEffect(() => {
     return onSettingsChanged(() => {
-      setPageLayout(loadSettings().pageLayout)
+      setSettings(loadSettings())
     })
   }, [])
 
@@ -181,11 +187,11 @@ export function DownloadManagerView(props: { onClose?: () => void }) {
       <HStack spacing={4} alignment="center">
         <Image
           systemName={activeTasksCount > 0 ? "list.clipboard.fill" : "list.clipboard"}
-          foregroundStyle={activeTasksCount > 0 ? "tintColor" : "label"}
+          foregroundStyle={customTint ?? "label"}
           font="headline"
         />
         {activeTasksCount > 0 ? (
-          <Text font="caption" fontWeight="bold" foregroundStyle="tintColor">
+          <Text font="caption" fontWeight="bold" foregroundStyle={customTint ?? "systemPink"}>
             {String(activeTasksCount)}
           </Text>
         ) : null}

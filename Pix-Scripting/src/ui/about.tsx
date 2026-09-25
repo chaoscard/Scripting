@@ -234,7 +234,7 @@ function ExternalLinkRow(props: {
       <Spacer />
       <Button buttonStyle="plain" action={() => void presentExternalURL(props.url)}>
         <HStack spacing={4}>
-          <Text font="body" foregroundStyle="#007AFF">{props.title}</Text>
+          <Text font="body" foregroundStyle="tintColor">{props.title}</Text>
           <Image systemName="arrow.up.right" font="footnote" foregroundStyle="tertiaryLabel" />
         </HStack>
       </Button>

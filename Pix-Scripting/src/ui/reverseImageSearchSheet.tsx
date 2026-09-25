@@ -562,6 +562,16 @@ function SauceNAOConfigView(props: {
           <Button title="返回" systemImage="chevron.backward" action={onBack} />
         ),
         topBarTrailing: [
+          ...(keys.length > 0
+            ? [
+                <Button
+                  key="clear-all"
+                  action={handleClearAll}
+                >
+                  <Image systemName="trash" foregroundStyle="systemRed" />
+                </Button>,
+              ]
+            : []),
           <Button
             key="done"
             title="完成"
@@ -634,7 +644,7 @@ function SauceNAOConfigView(props: {
               buttonStyle="plain"
               action={() => void presentExternalURL("https://saucenao.com/user.php?page=search-api")}
             >
-              <Text font="caption" foregroundStyle="systemBlue">
+              <Text font="caption" foregroundStyle="tintColor">
                 去官方获取密钥 ↗
               </Text>
             </Button>
@@ -676,17 +686,6 @@ function SauceNAOConfigView(props: {
           action={handleAddKey}
         />
       </Section>
-
-      {/* 3. 清空所有密钥 */}
-      {keys.length > 0 ? (
-        <Section>
-          <Button
-            title="清空所有 SauceNAO 密钥"
-            role="destructive"
-            action={handleClearAll}
-          />
-        </Section>
-      ) : null}
     </List>
   )
 }
