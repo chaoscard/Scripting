@@ -23,7 +23,7 @@ import { CachedImage } from "./CachedImage"
 import { BookmarkButton, BookmarkDetailSheet } from "./BookmarkDetailSheet"
 import { CORNER_ICON_SIZE, formatNumber } from "./formatUtils"
 import { IllustCardAction } from "./IllustCard"
-import { useLatest, useNovelBookmark, useNovelMarker } from "../Hooks"
+import { useLatest, useNovelBookmark } from "../Hooks"
 import { isUserFollowed, notifyUserFollowChanged } from "../../store/userFollow"
 import { recordNovelMarker } from "../../store/bookmarkSync"
 import { loadSettings } from "../../store/settings"
@@ -69,7 +69,6 @@ export function NovelCard(props: {
     null
 
   const [bookmarked, setBookmarked] = useNovelBookmark(novel.id, novel.is_bookmarked)
-  const [activeMarker] = useNovelMarker(novel.id, markerPage ?? null)
   const [bookmarkBusy, setBookmarkBusy] = useState(false)
   const [showBookmarkDetail, setShowBookmarkDetail] = useState(false)
   const { isItemActive } = useDualRoute()
@@ -253,11 +252,11 @@ export function NovelCard(props: {
                     {`第${episodeNumber}话`}
                   </Text>
                 ) : null}
-                {activeMarker != null ? (
+                {markerPage != null && markerPage > 0 ? (
                   <HStack spacing={3}>
                     <Image systemName="book.pages" font="caption2" foregroundStyle="systemBlue" />
                     <Text font="caption2" foregroundStyle="systemBlue" lineLimit={1}>
-                      第 {activeMarker} 页
+                      第 {markerPage} 页
                     </Text>
                   </HStack>
                 ) : null}
