@@ -11,6 +11,7 @@ import {
   NavigationLink,
   Picker,
   Rectangle,
+  Script,
   Section,
   Slider,
   Spacer,
@@ -53,6 +54,7 @@ import {
   type GeminiMotionSpeed,
   type GlassStrength,
   type LaunchPage,
+  type PrivacyShieldMaterial,
   type QuickActionButtonAction,
   type QuickActionButtonPosition,
   type TopBarEffect,
@@ -615,6 +617,34 @@ export function SettingsView() {
             </HStack>
           }
         >
+          {Script.env === "home_screen" ? (
+            <Group>
+              <Toggle
+                value={settings.privacyShieldEnabled}
+                onChanged={(value) => update({ privacyShieldEnabled: value })}
+              >
+                <VStack alignment="leading" spacing={2}>
+                  <Text font="body">多任务隐私保护</Text>
+                  <Text font="caption" foregroundStyle="secondaryLabel">
+                    切换多任务或退入后台时模糊遮挡界面
+                  </Text>
+                </VStack>
+              </Toggle>
+              {settings.privacyShieldEnabled ? (
+                <Picker
+                  title="遮罩模糊强度"
+                  value={settings.privacyShieldMaterial}
+                  onChanged={(value: string) =>
+                    update({ privacyShieldMaterial: value as PrivacyShieldMaterial })
+                  }
+                >
+                  <Text tag="ultraThinMaterial">超薄</Text>
+                  <Text tag="thinMaterial">较薄</Text>
+                  <Text tag="regularMaterial">标准</Text>
+                </Picker>
+              ) : null}
+            </Group>
+          ) : null}
           <Toggle
             title="预取后续图片"
             value={settings.prefetchEnabled}

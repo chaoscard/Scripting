@@ -1,4 +1,5 @@
 import {
+  AppEvents,
   Device,
   Image,
   Navigation,
@@ -13,6 +14,7 @@ import {
   VStack,
   ZStack,
   type Color,
+  type ScenePhase,
   useEffect,
   useMemo,
   useObservable,
@@ -258,6 +260,23 @@ export function RootView() {
     updateSettings({ hasSeenIpadSplitViewNotice: true })
   }
 
+  // 多任务隐私保护生命周期监听
+  const [scenePhase, setScenePhase] = useState<ScenePhase>("active")
+  useEffect(() => {
+    const listener = (phase: ScenePhase) => {
+      setScenePhase(phase)
+    }
+    AppEvents.scenePhase.addListener(listener)
+    return () => {
+      AppEvents.scenePhase.removeListener(listener)
+    }
+  }, [])
+
+  const isPrivacyShieldActive =
+    Script.env === "home_screen" &&
+    settings.privacyShieldEnabled &&
+    (scenePhase === "inactive" || scenePhase === "background")
+
   // 顶栏过渡：由设置驱动，随设置变更即时生效（上方已订阅 onSettingsChanged）
   const topBarEdge = topBarScrollEdge(settings.topBarEffect)
 
@@ -282,6 +301,15 @@ export function RootView() {
             />
           </NavigationStack>
         </ResponsiveContainer>
+
+        {/* 隐私保护遮罩 */}
+        {isPrivacyShieldActive ? (
+          <Rectangle
+            fill={settings.privacyShieldMaterial ?? "ultraThinMaterial"}
+            frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+            ignoresSafeArea={true}
+          />
+        ) : null}
       </ZStack>
     )
   }
@@ -324,6 +352,15 @@ export function RootView() {
       {/* 顶层：启动动画遮罩，根据调试设置自定义时长（默认 1500ms）平滑过渡 */}
       {!isReady ? (
         <LaunchExperienceView />
+      ) : null}
+
+      {/* 顶层：多任务隐私保护（纯净毛玻璃材质遮罩，不含任何多余图标文字） */}
+      {isPrivacyShieldActive ? (
+        <Rectangle
+          fill={settings.privacyShieldMaterial ?? "ultraThinMaterial"}
+          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          ignoresSafeArea={true}
+        />
       ) : null}
     </ZStack>
   )

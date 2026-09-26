@@ -68,6 +68,8 @@ export type WidgetDefaultSource =
   | "follow"
   | "pixivision"
 
+export type PrivacyShieldMaterial = "ultraThinMaterial" | "thinMaterial" | "regularMaterial"
+
 export interface RankingOptionDef {
   key: string
   title: string
@@ -182,6 +184,8 @@ export interface AppSettings {
   downloadCustomDirectoryPath: string | null
   downloadPhotoAlbumName: string
   prefetchEnabled: boolean
+  privacyShieldEnabled: boolean
+  privacyShieldMaterial: PrivacyShieldMaterial
   cacheLimitMB: number | null
   recordHistory: boolean
   imageBatchConcurrency: ImageBatchConcurrency
@@ -290,6 +294,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   downloadCustomDirectoryPath: null,
   downloadPhotoAlbumName: "Pix-Scripting",
   prefetchEnabled: true,
+  privacyShieldEnabled: true,
+  privacyShieldMaterial: "ultraThinMaterial",
   cacheLimitMB: 300,
   recordHistory: true,
   imageBatchConcurrency: 30,
@@ -386,6 +392,11 @@ const QUICK_ACTION_BUTTON_ACTION_VALUES: readonly QuickActionButtonAction[] = [
 const QUICK_ACTION_BUTTON_POSITION_VALUES: readonly QuickActionButtonPosition[] = [
   "leading",
   "trailing",
+]
+const PRIVACY_SHIELD_MATERIAL_VALUES: readonly PrivacyShieldMaterial[] = [
+  "ultraThinMaterial",
+  "thinMaterial",
+  "regularMaterial",
 ]
 const AMBIENT_INTENSITY_VALUES: readonly AmbientIntensity[] = ["low", "medium", "high"]
 const BASE_AMBIENT_ALGORITHM_VALUES: readonly BaseAmbientAlgorithm[] = [
@@ -820,6 +831,10 @@ function parseSettings(stored: Partial<AppSettings> & Record<string, unknown>): 
         ? stored.downloadPhotoAlbumName.trim()
         : DEFAULT_SETTINGS.downloadPhotoAlbumName,
     prefetchEnabled: boolOr(stored?.prefetchEnabled, DEFAULT_SETTINGS.prefetchEnabled),
+    privacyShieldEnabled: boolOr(stored?.privacyShieldEnabled, DEFAULT_SETTINGS.privacyShieldEnabled),
+    privacyShieldMaterial: isOneOf(stored?.privacyShieldMaterial, PRIVACY_SHIELD_MATERIAL_VALUES)
+      ? stored.privacyShieldMaterial
+      : DEFAULT_SETTINGS.privacyShieldMaterial,
     cacheLimitMB: cacheLimitOf(stored?.cacheLimitMB),
     recordHistory: boolOr(stored?.recordHistory, DEFAULT_SETTINGS.recordHistory),
     imageBatchConcurrency: parseImageConcurrency(stored?.imageBatchConcurrency),
