@@ -1,5 +1,6 @@
 import {
   Button,
+  Device,
   HStack,
   Image,
   LazyVStack,
@@ -14,14 +15,14 @@ import {
   useState,
 } from "scripting"
 import { appGlass } from "./components/glass"
-import { AppNavigationLink } from "./DualRouteContext"
+import { AppNavigationLink, useDualRoute } from "./DualRouteContext"
 import {
   notificationViewMore,
   notifications,
   nextNotifications,
   type PixivNotification,
 } from "../api/pixiv"
-import { currentBatchSize, usePagedList } from "./Hooks"
+import { currentBatchSize, usePagedList, useLayoutMetrics } from "./Hooks"
 import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl, recordActiveAmbientImageUrl } from "./ambient"
 import { prefetch } from "../image/imageLoader"
 import { loadSettings, onSettingsChanged } from "../store/settings"
@@ -171,6 +172,13 @@ function NotificationList(props: {
     return null
   }, [paged.items])
 
+  const { isSplitViewActive } = useDualRoute()
+  const layoutMetrics = useLayoutMetrics()
+  const isFullScreenPad =
+    Device.isiPad &&
+    !isSplitViewActive &&
+    layoutMetrics.width >= 675
+
   useEffect(() => {
     if (paged.initialLoading) return
     setAmbientImageUrl(firstImageUrl)
@@ -180,22 +188,38 @@ function NotificationList(props: {
     <RefreshableScrollView
       navigationBarTitleDisplayMode="inline"
       toolbar={{
-        principal: (
+        principal: isFullScreenPad ? undefined : (
           <Text font="title2" fontWeight="bold">
             {props.title}
           </Text>
         ),
-        topBarTrailing: [
-          <Button
-            key="refresh-btn"
-            disabled={isRefreshing}
-            action={() => {
-              void handleRefresh()
-            }}
-          >
-            <Image systemName="arrow.clockwise" />
-          </Button>,
-        ],
+        topBarTrailing: isFullScreenPad
+          ? [
+              <HStack key="notifications-wide-badge" alignment="center" spacing={8}>
+                <Text font="subheadline" fontWeight="semibold">
+                  {props.title}
+                </Text>
+                <Button
+                  disabled={isRefreshing}
+                  action={() => {
+                    void handleRefresh()
+                  }}
+                >
+                  <Image systemName="arrow.clockwise" />
+                </Button>
+              </HStack>,
+            ]
+          : [
+              <Button
+                key="refresh-btn"
+                disabled={isRefreshing}
+                action={() => {
+                  void handleRefresh()
+                }}
+              >
+                <Image systemName="arrow.clockwise" />
+              </Button>,
+            ],
       }}
       background={ambientBackground}
       refreshable={paged.refresh}

@@ -1,5 +1,6 @@
 import {
   Button,
+  Device,
   Group,
   HStack,
   Image,
@@ -55,7 +56,7 @@ import {
 import { cacheIllust } from "../store/illustCache"
 import { cacheNovel } from "../store/novelCache"
 import { cardThumbUrlOf, novelThumbUrlOf, prefetch } from "../image/imageLoader"
-import { currentBatchSize, useLatest, usePagedList } from "./Hooks"
+import { currentBatchSize, useLatest, usePagedList, useLayoutMetrics } from "./Hooks"
 import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl, recordActiveAmbientImageUrl } from "./ambient"
 import { useDualRoute } from "./DualRouteContext"
 import { getActiveTabKind, onActiveTabChanged, requestPixivRoute, type PixivTabKind } from "../store/routeNavigation"
@@ -185,6 +186,11 @@ export function HistoryView() {
   const [isAnalyticsPresented, setIsAnalyticsPresented] = useState(false)
   const isSelectingFromAnalyticsRef = useRef(false)
   const { isSplitViewActive, openDetailRoute } = useDualRoute()
+  const layoutMetrics = useLayoutMetrics()
+  const isFullScreenPad =
+    Device.isiPad &&
+    !isSplitViewActive &&
+    layoutMetrics.width >= 675
   const [showNoticeAlert, setShowNoticeAlert] = useState(false)
   const hasCheckedNoticeRef = useRef(false)
 
@@ -284,7 +290,6 @@ export function HistoryView() {
 
   return (
     <ZStack
-      navigationTitle={isAppleMusic ? "浏览记录" : `浏览记录 · ${historyKindTitle(kind)}`}
       navigationBarTitleDisplayMode="inline"
       toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
       toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
@@ -365,6 +370,7 @@ export function HistoryView() {
         hideNovels,
         isAppleMusic,
         isSplitViewActive,
+        isFullScreenPad,
         onKindChange: setKind,
         onClear: clearCurrentKind,
         onOpenAnalytics: handleOpenAnalytics,
@@ -458,12 +464,14 @@ function historyToolbar(props: {
   hideNovels: boolean
   isAppleMusic?: boolean
   isSplitViewActive?: boolean
+  isFullScreenPad?: boolean
   onKindChange: (kind: HistoryKind) => void
   onClear: () => void
   onOpenAnalytics?: () => void
 }) {
   const isClassic = !props.isAppleMusic
   const kindLabel = historyKindTitle(props.kind)
+  const fullTitle = `浏览记录 · ${kindLabel}`
 
   async function handleClearConfirm() {
     try {
@@ -490,7 +498,53 @@ function historyToolbar(props: {
   }
 
   const trailingActions = (() => {
-    // 1. 分栏双栏模式（isSplitViewActive）：收拢在更多菜单内，避免向左挤压 Tab 胶囊
+    // 1. iPad 宽屏单栏（isFullScreenPad）：展示大热区全称胶囊菜单，消除双层顶栏并统领分类、足迹与清空
+    if (props.isFullScreenPad) {
+      return (
+        <Menu
+          key="history-wide-menu"
+          label={
+            <HStack alignment="center" spacing={4}>
+              <Text font="subheadline" fontWeight="semibold">
+                {fullTitle}
+              </Text>
+              <Image
+                systemName="chevron.down"
+                font="caption2"
+                foregroundStyle="secondaryLabel"
+              />
+            </HStack>
+          }
+        >
+          <Picker
+            title="记录类型"
+            value={props.kind}
+            onChanged={(v: string) => props.onKindChange(v as HistoryKind)}
+          >
+            <Label tag="illustration" title="插画" systemImage="photo" />
+            <Label tag="manga" title="漫画" systemImage="photo.on.rectangle" />
+            {!props.hideNovels && (
+              <Label tag="novel" title="小说" systemImage="book" />
+            )}
+          </Picker>
+          {props.onOpenAnalytics ? (
+            <Button
+              title="我的足迹"
+              systemImage="chart.xyaxis.line"
+              action={props.onOpenAnalytics}
+            />
+          ) : null}
+          <Button
+            title={`清空${kindLabel}记录`}
+            systemImage="trash"
+            role="destructive"
+            action={handleClearConfirm}
+          />
+        </Menu>
+      )
+    }
+
+    // 2. 分栏双栏模式（isSplitViewActive）：收拢在更多菜单内，避免向左挤压 Tab 胶囊
     if (props.isSplitViewActive) {
       if (props.isAppleMusic) {
         return (
@@ -620,9 +674,9 @@ function historyToolbar(props: {
   })()
 
   return {
-    principal: (
+    principal: props.isFullScreenPad ? undefined : (
       <Text font="title2" fontWeight="bold">
-        {isClassic ? `浏览记录 · ${kindLabel}` : "浏览记录"}
+        {isClassic ? fullTitle : "浏览记录"}
       </Text>
     ),
     topBarTrailing: trailingActions,

@@ -23,6 +23,8 @@ export interface IllustToolbarActionsProps {
   illust: PixivIllustration
   isAppleMusic: boolean
   isFullScreenPad?: boolean
+  quickActionEnabled?: boolean
+  quickActionType?: string
   bookmarked: boolean
   bookmarkLoading: boolean
   bookmarkLongPressLocked: boolean
@@ -54,6 +56,8 @@ export function renderIllustToolbarActions(props: IllustToolbarActionsProps): Vi
     illust,
     isAppleMusic,
     isFullScreenPad = false,
+    quickActionEnabled = false,
+    quickActionType = "bookmark",
     bookmarked,
     bookmarkLoading,
     bookmarkLongPressLocked,
@@ -80,6 +84,10 @@ export function renderIllustToolbarActions(props: IllustToolbarActionsProps): Vi
     onOpenAI,
   } = props
 
+  const hideToolbarBookmark = !isAppleMusic && quickActionEnabled && quickActionType === "bookmark"
+  const hideToolbarFollow = !isAppleMusic && quickActionEnabled && quickActionType === "follow"
+  const hasFreedSlot = hideToolbarBookmark || hideToolbarFollow
+
   return [
     ...(isAppleMusic
       ? [
@@ -88,69 +96,77 @@ export function renderIllustToolbarActions(props: IllustToolbarActionsProps): Vi
           </Button>,
         ]
       : [
-          <Button
-            disabled={bookmarkLoading || bookmarkLongPressLocked}
-            action={onToggleBookmark}
-            simultaneousGesture={
-              LongPressGesture({ minDuration: 500 }).onEnded(() => {
-                onSetBookmarkLongPressLocked(true)
-                onBookmarkLongPress()
-                setTimeout(() => onSetBookmarkLongPressLocked(false), 1500)
-              })
-            }
-          >
-            <Image
-              systemName={bookmarked ? "heart.fill" : "heart"}
-              foregroundStyle={bookmarked ? "systemPink" : undefined}
-            />
-          </Button>,
-          <Button
-            disabled={followLoading}
-            action={onToggleFollow}
-            contextMenu={{
-              menuItems: (
-                <Group>
-                  {followed ? (
-                    followRestrict === "private" ? (
-                      <Button
-                        title="设为公开关注"
-                        systemImage="globe"
-                        disabled={followLoading}
-                        action={() => void onFollowWithVisibility("public")}
-                      />
-                    ) : (
-                      <Button
-                        title="设为私密关注"
-                        systemImage="lock"
-                        disabled={followLoading}
-                        action={() => void onFollowWithVisibility("private")}
-                      />
-                    )
-                  ) : (
-                    <Button
-                      title="私密关注"
-                      systemImage="lock"
-                      disabled={followLoading}
-                      action={() => void onFollowWithVisibility("private")}
-                    />
-                  )}
-                </Group>
-              ),
-            }}
-          >
-            <Image
-              systemName={
-                followed
-                  ? (followRestrict === "private"
-                      ? "person.badge.shield.checkmark"
-                      : "person.fill.checkmark")
-                  : "person.badge.plus"
-              }
-            />
-          </Button>,
+          ...(!hideToolbarBookmark
+            ? [
+                <Button
+                  disabled={bookmarkLoading || bookmarkLongPressLocked}
+                  action={onToggleBookmark}
+                  simultaneousGesture={
+                    LongPressGesture({ minDuration: 500 }).onEnded(() => {
+                      onSetBookmarkLongPressLocked(true)
+                      onBookmarkLongPress()
+                      setTimeout(() => onSetBookmarkLongPressLocked(false), 1500)
+                    })
+                  }
+                >
+                  <Image
+                    systemName={bookmarked ? "heart.fill" : "heart"}
+                    foregroundStyle={bookmarked ? "systemPink" : undefined}
+                  />
+                </Button>,
+              ]
+            : []),
+          ...(!hideToolbarFollow
+            ? [
+                <Button
+                  disabled={followLoading}
+                  action={onToggleFollow}
+                  contextMenu={{
+                    menuItems: (
+                      <Group>
+                        {followed ? (
+                          followRestrict === "private" ? (
+                            <Button
+                              title="设为公开关注"
+                              systemImage="globe"
+                              disabled={followLoading}
+                              action={() => void onFollowWithVisibility("public")}
+                            />
+                          ) : (
+                            <Button
+                              title="设为私密关注"
+                              systemImage="lock"
+                              disabled={followLoading}
+                              action={() => void onFollowWithVisibility("private")}
+                            />
+                          )
+                        ) : (
+                          <Button
+                            title="私密关注"
+                            systemImage="lock"
+                            disabled={followLoading}
+                            action={() => void onFollowWithVisibility("private")}
+                          />
+                        )}
+                      </Group>
+                    ),
+                  }}
+                >
+                  <Image
+                    systemName={
+                      followed
+                        ? (followRestrict === "private"
+                            ? "person.badge.shield.checkmark"
+                            : "person.fill.checkmark")
+                        : "person.badge.plus"
+                    }
+                  />
+                </Button>,
+              ]
+            : []),
         ]),
     <Menu label={<Image systemName="ellipsis.circle" />}>
-      {!isAppleMusic && isFullScreenPad ? (
+      {!isAppleMusic && isFullScreenPad && !hasFreedSlot ? (
         <Button
           title="主页"
           systemImage="person.crop.circle"
@@ -319,7 +335,7 @@ export function renderIllustToolbarActions(props: IllustToolbarActionsProps): Vi
         )}
       </Menu>
     </Menu>,
-    ...(isFullScreenPad && !isAppleMusic
+    ...(isFullScreenPad && !isAppleMusic && !hasFreedSlot
       ? []
       : [
           <AppNavigationLink value={`user:${illust.user?.id ?? 0}`}>

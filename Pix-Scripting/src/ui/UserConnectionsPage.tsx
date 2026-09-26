@@ -1,6 +1,8 @@
 import {
   Button,
+  Device,
   GeometryReader,
+  HStack,
   Image,
   Label,
   LazyVStack,
@@ -12,6 +14,7 @@ import {
   useMemo,
   useState,
 } from "scripting"
+import { useDualRoute } from "./DualRouteContext"
 import {
   myPixivUsers,
   nextUsers,
@@ -35,7 +38,7 @@ import {
   RefreshableScrollView,
 } from "./components"
 import { prefetch } from "../image/imageLoader"
-import { currentBatchSize, usePagedList } from "./Hooks"
+import { currentBatchSize, usePagedList, useLayoutMetrics } from "./Hooks"
 import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl, recordActiveAmbientImageUrl } from "./ambient"
 import {
   DockActionBar,
@@ -81,6 +84,12 @@ export function UserConnectionsView(props: {
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
   const showVisibilityPicker =
     props.showVisibilityPicker ?? isMyFollowing
+  const { isSplitViewActive } = useDualRoute()
+  const layoutMetrics = useLayoutMetrics()
+  const isFullScreenPad =
+    Device.isiPad &&
+    !isSplitViewActive &&
+    layoutMetrics.width >= 675
 
   useEffect(() => {
     return onSettingsChanged(() => {
@@ -182,12 +191,52 @@ export function UserConnectionsView(props: {
             navigationBarTitleDisplayMode="inline"
             background={ambientBackground}
             toolbar={{
-              principal: (
+              principal: isFullScreenPad ? undefined : (
                 <Text font="title2" fontWeight="bold">
                   {title}
                 </Text>
               ),
-              topBarTrailing: showVisibilityPicker
+              topBarTrailing: isFullScreenPad
+                ? showVisibilityPicker
+                  ? [
+                      <Menu
+                        key="connection-wide-menu"
+                        label={
+                          <HStack alignment="center" spacing={4}>
+                            <Text font="subheadline" fontWeight="semibold">
+                              {`${title} · ${restrict === "public" ? "公开" : "私密"}`}
+                            </Text>
+                            <Image
+                              systemName="chevron.down"
+                              font="caption2"
+                              foregroundStyle="secondaryLabel"
+                            />
+                          </HStack>
+                        }
+                      >
+                        <Picker
+                          title="关注范围"
+                          value={restrict}
+                          onChanged={(value: string) =>
+                            setRestrict(value as ConnectionVisibility)
+                          }
+                        >
+                          <Label tag="public" title="公开" systemImage="globe" />
+                          <Label tag="private" title="私密" systemImage="lock" />
+                        </Picker>
+                        <Button
+                          title="推荐"
+                          systemImage="sparkles"
+                          action={() => setShowRecommendedUsers(true)}
+                        />
+                      </Menu>,
+                    ]
+                  : [
+                      <Text key="connection-title-badge" font="subheadline" fontWeight="semibold">
+                        {title}
+                      </Text>,
+                    ]
+                : showVisibilityPicker
                 ? connectionToolbar({
                     restrict,
                     onRestrictChange: setRestrict,

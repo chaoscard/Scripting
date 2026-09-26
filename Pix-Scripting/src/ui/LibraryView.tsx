@@ -1,5 +1,6 @@
 import {
   Button,
+  Device,
   HStack,
   Image,
   Label,
@@ -16,6 +17,7 @@ import {
   VStack,
   ZStack,
 } from "scripting"
+import { useDualRoute } from "./DualRouteContext"
 import {
   PAGE_TOOLBAR_BACKGROUND,
   PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
@@ -42,7 +44,7 @@ import {
   getCachedIllustBookmark,
   getCachedNovelBookmark,
 } from "../store/bookmarkSync"
-import { useAsyncGuard, useLatest, usePagedList, currentBatchSize } from "./Hooks"
+import { useAsyncGuard, useLatest, usePagedList, currentBatchSize, useLayoutMetrics } from "./Hooks"
 import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl, recordActiveAmbientImageUrl } from "./ambient"
 import type { PixivBookmarkTag, PixivIllustration, PixivNovel } from "../types"
 import {
@@ -118,6 +120,13 @@ export function LibraryView(props?: { initialKind?: LibraryKind }) {
     return items
   }, [hideNovels])
 
+  const layoutMetrics = useLayoutMetrics()
+  const { isSplitViewActive } = useDualRoute()
+  const isFullScreenPad =
+    Device.isiPad &&
+    !isSplitViewActive &&
+    layoutMetrics.width >= 675
+
   useRegisterBottomAccessory(
     "library",
     libraryItems.length <= 1 ? null : (
@@ -142,6 +151,7 @@ export function LibraryView(props?: { initialKind?: LibraryKind }) {
         isAppleMusic,
         restrict,
         isAscending,
+        isFullScreenPad,
         onKindChange: setKind,
         onRestrictChange: setRestrict,
         onAscendingChange: setIsAscending,
@@ -224,6 +234,7 @@ function libraryToolbar(props: {
   isAppleMusic?: boolean
   restrict: Visibility
   isAscending: boolean
+  isFullScreenPad?: boolean
   onKindChange: (kind: LibraryKind) => void
   onRestrictChange: (restrict: Visibility) => void
   onAscendingChange: (isAscending: boolean) => void
@@ -236,15 +247,34 @@ function libraryToolbar(props: {
       ? "小说"
       : "特辑"
 
+  const fullTitle = `我的收藏 · ${kindLabel}`
+
+  const trailingMenuLabel = props.isFullScreenPad ? (
+    <HStack alignment="center" spacing={4}>
+      <Text font="subheadline" fontWeight="semibold">
+        {fullTitle}
+      </Text>
+      <Image
+        systemName="chevron.down"
+        font="caption2"
+        foregroundStyle="secondaryLabel"
+      />
+    </HStack>
+  ) : (
+    <Image systemName="ellipsis.circle" />
+  )
+
+  const showKindPicker = isClassic || props.isFullScreenPad
+
   return {
-    principal: (
+    principal: props.isFullScreenPad ? undefined : (
       <Text font="title2" fontWeight="bold">
-        {isClassic ? `我的收藏 · ${kindLabel}` : "我的收藏"}
+        {isClassic ? fullTitle : "我的收藏"}
       </Text>
     ),
     topBarTrailing: [
-      <Menu key="more-menu" label={<Image systemName="ellipsis.circle" />}>
-        {isClassic && (
+      <Menu key="more-menu" label={trailingMenuLabel}>
+        {showKindPicker && (
           <Picker
             title="收藏类型"
             value={props.kind}

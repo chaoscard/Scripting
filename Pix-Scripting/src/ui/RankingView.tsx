@@ -552,15 +552,6 @@ function rankingToolbar(props: {
     </Text>
   )
 
-  const kindIcon =
-    props.kind === "illustration"
-      ? "photo"
-      : props.kind === "manga"
-        ? "photo.on.rectangle"
-        : props.kind === "novel"
-          ? "book"
-          : "clock.arrow.circlepath"
-
   const kindPicker = (
     <Picker
       title="排行榜类型"
@@ -597,8 +588,40 @@ function rankingToolbar(props: {
     </Picker>
   )
 
-  const trailingItems = props.isSplitViewActive ? (
-    <Menu key="ranking-split-more-menu" label={<Image systemName="ellipsis.circle" />}>
+  const trailingMenuLabel = isFullScreenPad ? (
+    <HStack alignment="center" spacing={4}>
+      <Text font="subheadline" fontWeight="semibold">
+        {props.isAppleMusic || props.kind === "advanced" || !modeTitle
+          ? baseTitle
+          : `${baseTitle} · ${modeTitle}`}
+      </Text>
+      <Image
+        systemName="chevron.down"
+        font="caption2"
+        foregroundStyle="secondaryLabel"
+      />
+    </HStack>
+  ) : (
+    <Image systemName="ellipsis.circle" />
+  )
+
+  const trailingItems = isFullScreenPad ? (
+    [
+      props.kind === "advanced" ? (
+        <Button
+          key="ranking-advanced-btn"
+          title="高级筛选"
+          systemImage="slider.horizontal.3"
+          action={props.onOpenAdvancedSheet}
+        />
+      ) : null,
+      <Menu key="ranking-wide-menu" label={trailingMenuLabel}>
+        {kindPicker}
+        {isClassic && props.kind !== "advanced" && props.activeModes.length > 0 ? modePicker : null}
+      </Menu>,
+    ].filter(Boolean)
+  ) : (
+    <Menu key="ranking-compact-menu" label={trailingMenuLabel}>
       {kindPicker}
       {isClassic && props.kind !== "advanced" && props.activeModes.length > 0 ? modePicker : null}
       {props.kind === "advanced" ? (
@@ -609,23 +632,7 @@ function rankingToolbar(props: {
         />
       ) : null}
     </Menu>
-  ) : [
-    props.kind === "advanced" ? (
-      <Button
-        key="ranking-advanced-btn"
-        action={props.onOpenAdvancedSheet}
-      >
-        <Image systemName="slider.horizontal.3" />
-      </Button>
-    ) : isClassic && props.activeModes.length > 0 ? (
-      <Menu key="ranking-period-menu" label={<Image systemName="chart.bar" />}>
-        {modePicker}
-      </Menu>
-    ) : null,
-    <Menu key="ranking-kind-menu" label={<Image systemName={kindIcon} />}>
-      {kindPicker}
-    </Menu>,
-  ].filter(Boolean)
+  )
 
   return appToolbar(props.onClose, titleNode, trailingItems, undefined, {
     isCompact: !isFullScreenPad,

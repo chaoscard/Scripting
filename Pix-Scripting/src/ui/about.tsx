@@ -1,5 +1,6 @@
 import {
   Button,
+  Device,
   HStack,
   Image,
   List,
@@ -12,6 +13,8 @@ import {
   useRef,
   useState,
 } from "scripting"
+import { useLayoutMetrics } from "./Hooks"
+import { useDualRoute } from "./DualRouteContext"
 import { SCRIPT_VERSION } from "../config"
 import { loadSettings, onSettingsChanged, updateSettings } from "../store/settings"
 import { AvatarImage, presentExternalURL } from "./components"
@@ -32,6 +35,12 @@ const KAZUMI_ICON_URL = "https://raw.githubusercontent.com/Predidit/Kazumi/main/
 
 export function AboutView() {
   const [settings, setSettings] = useState(loadSettings)
+  const { isSplitViewActive } = useDualRoute()
+  const layoutMetrics = useLayoutMetrics()
+  const isFullScreenPad =
+    Device.isiPad &&
+    !isSplitViewActive &&
+    layoutMetrics.width >= 675
 
   useEffect(() => {
     return onSettingsChanged(() => {
@@ -46,16 +55,23 @@ export function AboutView() {
   return (
     <ZStack
       frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-      navigationTitle="关于应用"
+      navigationTitle={isFullScreenPad ? "" : "关于应用"}
       navigationBarTitleDisplayMode="inline"
       toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
       toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
       toolbar={{
-        principal: (
+        principal: isFullScreenPad ? undefined : (
           <Text font="title2" fontWeight="bold">
             关于应用
           </Text>
         ),
+        topBarTrailing: isFullScreenPad
+          ? [
+              <Text key="about-wide-badge" font="subheadline" fontWeight="semibold">
+                关于应用
+              </Text>,
+            ]
+          : undefined,
       }}
     >
       {typeof ambientBackground === "object" && ambientBackground !== null ? (

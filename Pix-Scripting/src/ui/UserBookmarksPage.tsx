@@ -1,5 +1,6 @@
 import {
   Button,
+  Device,
   HStack,
   Image,
   Label,
@@ -15,6 +16,7 @@ import {
   VStack,
   ZStack,
 } from "scripting"
+import { useDualRoute } from "./DualRouteContext"
 import {
   PAGE_TOOLBAR_BACKGROUND,
   PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
@@ -33,7 +35,7 @@ import {
   onIllustBookmarkChanged,
   onNovelBookmarkChanged,
 } from "../store/bookmarkSync"
-import { useAsyncGuard, useLatest, usePagedList, currentBatchSize } from "./Hooks"
+import { useAsyncGuard, useLatest, usePagedList, currentBatchSize, useLayoutMetrics } from "./Hooks"
 import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl } from "./ambient"
 import type { PixivBookmarkTag, PixivIllustration, PixivNovel } from "../types"
 import {
@@ -72,6 +74,12 @@ export function UserBookmarksView(props: { userID: number }) {
   const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(() => getLastActiveAmbientImageUrl())
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl)
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
+  const { isSplitViewActive } = useDualRoute()
+  const layoutMetrics = useLayoutMetrics()
+  const isFullScreenPad =
+    Device.isiPad &&
+    !isSplitViewActive &&
+    layoutMetrics.width >= 675
 
   useEffect(() => {
     return onSettingsChanged(() => {
@@ -106,6 +114,10 @@ export function UserBookmarksView(props: { userID: number }) {
     isAppleMusic
   )
 
+  const fullTitle = !hideNovels
+    ? `收藏 · ${kind === "illustration" ? "插画·漫画" : "小说"}`
+    : "收藏"
+
   return (
     <ZStack
       navigationBarTitleDisplayMode="inline"
@@ -113,15 +125,43 @@ export function UserBookmarksView(props: { userID: number }) {
       toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
       background={ambientBackground}
       toolbar={{
-        principal: (
+        principal: isFullScreenPad ? undefined : (
           <Text font="title2" fontWeight="bold">
             {!isAppleMusic && !hideNovels
-              ? `收藏 · ${kind === "illustration" ? "插画·漫画" : "小说"}`
+              ? fullTitle
               : "收藏"}
           </Text>
         ),
-        topBarTrailing:
-          !isAppleMusic && !hideNovels
+        topBarTrailing: isFullScreenPad
+          ? [
+              <Menu
+                key="user-bookmarks-wide-menu"
+                label={
+                  <HStack alignment="center" spacing={4}>
+                    <Text font="subheadline" fontWeight="semibold">
+                      {fullTitle}
+                    </Text>
+                    <Image
+                      systemName="chevron.down"
+                      font="caption2"
+                      foregroundStyle="secondaryLabel"
+                    />
+                  </HStack>
+                }
+              >
+                {!hideNovels && (
+                  <Picker
+                    title="收藏类型"
+                    value={kind}
+                    onChanged={(v: string) => setKind(v as BookmarkKind)}
+                  >
+                    <Label tag="illustration" title="插画·漫画" systemImage="photo.on.rectangle" />
+                    <Label tag="novel" title="小说" systemImage="book" />
+                  </Picker>
+                )}
+              </Menu>,
+            ]
+          : !isAppleMusic && !hideNovels
             ? [
                 <Menu key="more-menu" label={<Image systemName="ellipsis.circle" />}>
                   <Picker

@@ -1,12 +1,18 @@
 import {
   Button,
+  Device,
+  HStack,
   Image,
+  Label,
   LazyVStack,
+  Menu,
+  Picker,
   Text,
   useEffect,
   useMemo,
   useState,
 } from "scripting"
+import { useDualRoute } from "./DualRouteContext"
 import { nextNovelMarkers, novelMarkers } from "../api/pixiv"
 import { novelThumbUrlOf, prefetch } from "../image/imageLoader"
 import {
@@ -15,7 +21,7 @@ import {
 } from "../store/settings"
 import { isNovelContentVisible } from "../store/contentFilter"
 import { onNovelMarkerChanged } from "../store/bookmarkSync"
-import { useLatest, usePagedList, currentBatchSize } from "./Hooks"
+import { useLatest, usePagedList, currentBatchSize, useLayoutMetrics } from "./Hooks"
 import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl, recordActiveAmbientImageUrl } from "./ambient"
 import { destinationElement } from "./DestinationElement"
 import {
@@ -65,6 +71,13 @@ export function NovelLibraryView() {
       setPageLayout(loadSettings().pageLayout)
     })
   }, [])
+
+  const { isSplitViewActive } = useDualRoute()
+  const layoutMetrics = useLayoutMetrics()
+  const isFullScreenPad =
+    Device.isiPad &&
+    !isSplitViewActive &&
+    layoutMetrics.width >= 675
 
   const sortedItems = useMemo(() => {
     if (!isAscending) return paged.items
@@ -129,30 +142,67 @@ export function NovelLibraryView() {
     })
   }, [])
 
+  const fullTitle = `小说书签 · ${isAscending ? "升序" : "降序"}`
+
+  const trailingActions = (() => {
+    if (isFullScreenPad) {
+      return [
+        <Menu
+          key="novel-library-wide-menu"
+          label={
+            <HStack alignment="center" spacing={4}>
+              <Text font="subheadline" fontWeight="semibold">
+                {fullTitle}
+              </Text>
+              <Image
+                systemName="chevron.down"
+                font="caption2"
+                foregroundStyle="secondaryLabel"
+              />
+            </HStack>
+          }
+        >
+          <Picker
+            title="排序方式"
+            value={isAscending ? "asc" : "desc"}
+            onChanged={(v: string) => setIsAscending(v === "asc")}
+          >
+            <Label tag="desc" title="降序（最新在前）" systemImage="arrow.down" />
+            <Label tag="asc" title="升序（最早在前）" systemImage="arrow.up" />
+          </Picker>
+        </Menu>,
+      ]
+    }
+
+    if (!isAppleMusic) {
+      return [
+        <Button
+          key="sort-btn"
+          action={() => {
+            try {
+              triggerHaptic("selection")
+            } catch {}
+            setIsAscending((v) => !v)
+          }}
+        >
+          <Image systemName={isAscending ? "arrow.up" : "arrow.down"} />
+        </Button>,
+      ]
+    }
+
+    return undefined
+  })()
+
   return (
     <RefreshableScrollView
       navigationBarTitleDisplayMode="inline"
       toolbar={{
-        principal: (
+        principal: isFullScreenPad ? undefined : (
           <Text font="title2" fontWeight="bold">
             小说书签
           </Text>
         ),
-        topBarTrailing: !isAppleMusic
-          ? [
-              <Button
-                key="sort-btn"
-                action={() => {
-                  try {
-                    triggerHaptic("selection")
-                  } catch {}
-                  setIsAscending((v) => !v)
-                }}
-              >
-                <Image systemName={isAscending ? "arrow.up" : "arrow.down"} />
-              </Button>,
-            ]
-          : undefined,
+        topBarTrailing: trailingActions,
       }}
       background={ambientBackground}
       refreshable={paged.refresh}

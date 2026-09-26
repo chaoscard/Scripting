@@ -7,6 +7,7 @@ import {
   HStack,
   Image,
   List,
+  Menu,
   NavigationLink,
   Picker,
   Rectangle,
@@ -24,8 +25,9 @@ import {
   VStack,
   ZStack,
 } from "scripting"
+import { useLayoutMetrics } from "./Hooks"
 import { useExperimentalAmbientPalette } from "./ambient"
-import { AppNavigationLink } from "./DualRouteContext"
+import { AppNavigationLink, useDualRoute } from "./DualRouteContext"
 import {
   PAGE_TOOLBAR_BACKGROUND,
   PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
@@ -132,6 +134,12 @@ export function SettingsView() {
   const [glassInteractiveKey, setGlassInteractiveKey] = useState(0)
 
   const [expanded, setExpanded] = useState<SectionExpandedState>(DEFAULT_EXPANDED_STATE)
+  const { isSplitViewActive } = useDualRoute()
+  const layoutMetrics = useLayoutMetrics()
+  const isFullScreenPad =
+    Device.isiPad &&
+    !isSplitViewActive &&
+    layoutMetrics.width >= 675
 
   function setExpandedKey<K extends keyof SectionExpandedState>(key: K, value: boolean) {
     setExpanded((prev) => ({ ...prev, [key]: value }))
@@ -211,12 +219,31 @@ export function SettingsView() {
     setSettings(updateSettings(patch))
   }
 
-  function handleResetSettings() {
-    const next = resetSettings()
-    setSettings(next)
-    setSettingsReset()
-    setExperimentalImmersionKey((k) => k + 1)
-    setActiveSheet("highlights")
+  async function handleResetSettings() {
+    try {
+      triggerHaptic("warning")
+    } catch {}
+    let confirmed = false
+    if (typeof Dialog !== "undefined" && typeof Dialog.confirm === "function") {
+      confirmed = await Dialog.confirm({
+        title: "重置应用设置",
+        message: "确定要将所有应用设置恢复为默认配置吗？该操作不可撤销。",
+        confirmLabel: "重置",
+        cancelLabel: "取消",
+      })
+    } else {
+      confirmed = true
+    }
+    if (confirmed) {
+      try {
+        triggerHaptic("warning")
+      } catch {}
+      const next = resetSettings()
+      setSettings(next)
+      setSettingsReset()
+      setExperimentalImmersionKey((k) => k + 1)
+      setActiveSheet("highlights")
+    }
   }
 
   const handleCloseHighlights = () => {
@@ -353,53 +380,91 @@ export function SettingsView() {
   return (
     <ZStack
       frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
-      navigationTitle="应用设置"
+      navigationTitle={isFullScreenPad ? "" : "应用设置"}
       navigationBarTitleDisplayMode="inline"
       toolbarBackground={PAGE_TOOLBAR_BACKGROUND}
       toolbarBackgroundVisibility={PAGE_TOOLBAR_BACKGROUND_VISIBILITY}
       toolbar={{
-        principal: (
+        principal: isFullScreenPad ? undefined : (
           <Text font="title2" fontWeight="bold">
             应用设置
           </Text>
         ),
-        topBarTrailing: [
-          <Button
-            action={toggleExpandAll}
-          >
-            <Image
-              systemName={isAllExpanded ? "rectangle.compress.vertical" : "rectangle.expand.vertical"}
-            />
-          </Button>,
-          <Button
-            action={() => {
-              triggerHaptic("light")
-              setActiveSheet("highlights")
-            }}
-          >
-            <Image systemName="lightbulb" />
-          </Button>,
-          <Button
-            action={() => {}}
-            contextMenu={{
-              menuItems: (
-                <Group>
-                  <Button
-                    title="重置为默认设置"
-                    systemImage="arrow.counterclockwise"
-                    role="destructive"
-                    action={handleResetSettings}
-                  />
-                </Group>
-              ),
-            }}
-          >
-            <Image
-              systemName={settingsReset ? "checkmark" : "arrow.counterclockwise"}
-              foregroundStyle={settingsReset ? "systemGreen" : undefined}
-            />
-          </Button>,
-        ],
+        topBarTrailing: isFullScreenPad
+          ? [
+              <Menu
+                key="settings-wide-menu"
+                label={
+                  <HStack alignment="center" spacing={4}>
+                    <Text font="subheadline" fontWeight="semibold">
+                      应用设置
+                    </Text>
+                    <Image
+                      systemName="chevron.down"
+                      font="caption2"
+                      foregroundStyle="secondaryLabel"
+                    />
+                  </HStack>
+                }
+              >
+                <Button
+                  title={isAllExpanded ? "折叠全部区块" : "展开全部区块"}
+                  systemImage={isAllExpanded ? "rectangle.compress.vertical" : "rectangle.expand.vertical"}
+                  action={toggleExpandAll}
+                />
+                <Button
+                  title="版本更新亮点"
+                  systemImage="lightbulb"
+                  action={() => {
+                    triggerHaptic("light")
+                    setActiveSheet("highlights")
+                  }}
+                />
+                <Button
+                  title="重置为默认设置"
+                  systemImage="arrow.counterclockwise"
+                  role="destructive"
+                  action={handleResetSettings}
+                />
+              </Menu>,
+            ]
+          : [
+              <Button
+                action={toggleExpandAll}
+              >
+                <Image
+                  systemName={isAllExpanded ? "rectangle.compress.vertical" : "rectangle.expand.vertical"}
+                />
+              </Button>,
+              <Button
+                action={() => {
+                  triggerHaptic("light")
+                  setActiveSheet("highlights")
+                }}
+              >
+                <Image systemName="lightbulb" />
+              </Button>,
+              <Button
+                action={() => {}}
+                contextMenu={{
+                  menuItems: (
+                    <Group>
+                      <Button
+                        title="重置为默认设置"
+                        systemImage="arrow.counterclockwise"
+                        role="destructive"
+                        action={handleResetSettings}
+                      />
+                    </Group>
+                  ),
+                }}
+              >
+                <Image
+                  systemName={settingsReset ? "checkmark" : "arrow.counterclockwise"}
+                  foregroundStyle={settingsReset ? "systemGreen" : undefined}
+                />
+              </Button>,
+            ],
       }}
     >
       {typeof ambientBackground === "object" && ambientBackground !== null ? (

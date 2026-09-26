@@ -130,6 +130,8 @@ export function IllustDetailView(props: { illustID: number }) {
     illust: current,
     isAppleMusic,
     isFullScreenPad,
+    quickActionEnabled,
+    quickActionType,
     bookmarked,
     bookmarkLoading,
     bookmarkLongPressLocked,

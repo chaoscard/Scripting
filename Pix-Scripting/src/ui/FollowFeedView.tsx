@@ -328,21 +328,6 @@ function followToolbar(props: {
         : "following_all"
       : props.mode
 
-  const modeIcon =
-    activeModeKey === "following_all"
-      ? "globe"
-      : activeModeKey === "following_private"
-        ? "lock"
-        : activeModeKey === "watchlist"
-          ? "bookmark"
-          : "person.2.badge.gearshape"
-  const kindIcon =
-    currentKind === "illust"
-      ? "photo"
-      : currentKind === "manga"
-        ? "photo.on.rectangle"
-        : "book"
-
   const modePicker = (
     <Picker
       title="动态类型"
@@ -389,26 +374,32 @@ function followToolbar(props: {
       </Picker>
     )
 
-  const trailingItems = props.isSplitViewActive ? (
-    <Menu key="follow-split-more-menu" label={<Image systemName="ellipsis.circle" />}>
+  const trailingMenuLabel = isFullScreenPad ? (
+    <HStack alignment="center" spacing={4}>
+      <Text font="subheadline" fontWeight="semibold">
+        {fullTitle}
+      </Text>
+      <Image
+        systemName="chevron.down"
+        font="caption2"
+        foregroundStyle="secondaryLabel"
+      />
+    </HStack>
+  ) : (
+    <Image systemName="ellipsis.circle" />
+  )
+
+  const trailingMenu = (
+    <Menu label={trailingMenuLabel}>
       {modePicker}
       {isClassic && !props.hideNovels ? kindPicker : null}
     </Menu>
-  ) : [
-    isClassic && !props.hideNovels ? (
-      <Menu key="follow-kind-menu" label={<Image systemName={kindIcon} />}>
-        {kindPicker}
-      </Menu>
-    ) : null,
-    <Menu key="follow-mode-menu" label={<Image systemName={modeIcon} />}>
-      {modePicker}
-    </Menu>,
-  ].filter(Boolean)
+  )
 
   return appToolbar(
     props.onClose,
     titleNode,
-    trailingItems,
+    trailingMenu,
     undefined,
     {
       isCompact: !isFullScreenPad,

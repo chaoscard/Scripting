@@ -67,21 +67,57 @@ export function AccountSwitcherSheet(props: {
     [activeUserId, switchingId, onClose]
   )
 
-  const handleRemoveAccount = useCallback((targetId: string) => {
+  const handleRemoveAccount = useCallback(async (targetId: string) => {
+    const targetAccount = accounts.find((a) => a.id === targetId)
+    const targetName = targetAccount?.name ?? "该账号"
     try {
-      triggerHaptic("medium")
+      triggerHaptic("warning")
     } catch {}
-    session.removeAccount(targetId)
-    setAccounts(session.getAllAccounts())
-  }, [])
+    let confirmed = false
+    if (typeof Dialog !== "undefined" && typeof Dialog.confirm === "function") {
+      confirmed = await Dialog.confirm({
+        title: "移除账号",
+        message: `确定要从本机移除账号「${targetName}」吗？移除后需重新登录。`,
+        confirmLabel: "移除",
+        cancelLabel: "取消",
+      })
+    } else {
+      confirmed = true
+    }
+    if (confirmed) {
+      try {
+        triggerHaptic("medium")
+      } catch {}
+      session.removeAccount(targetId)
+      setAccounts(session.getAllAccounts())
+    }
+  }, [accounts])
 
-  const handleSignOutCurrent = useCallback(() => {
+  const handleSignOutCurrent = useCallback(async () => {
+    const activeAccount = accounts.find((a) => a.id === activeUserId)
+    const activeName = activeAccount?.name ?? "当前账号"
     try {
-      triggerHaptic("medium")
+      triggerHaptic("warning")
     } catch {}
-    session.signOut(false)
-    onClose()
-  }, [onClose])
+    let confirmed = false
+    if (typeof Dialog !== "undefined" && typeof Dialog.confirm === "function") {
+      confirmed = await Dialog.confirm({
+        title: "退出登录",
+        message: `确定要退出账号「${activeName}」吗？`,
+        confirmLabel: "退出登录",
+        cancelLabel: "取消",
+      })
+    } else {
+      confirmed = true
+    }
+    if (confirmed) {
+      try {
+        triggerHaptic("medium")
+      } catch {}
+      session.signOut(false)
+      onClose()
+    }
+  }, [accounts, activeUserId, onClose])
 
   if (isAddingAccount) {
     return (

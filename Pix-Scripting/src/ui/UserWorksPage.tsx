@@ -1,5 +1,6 @@
 import {
   Button,
+  Device,
   Group,
   HStack,
   Image,
@@ -16,6 +17,7 @@ import {
   VStack,
   ZStack,
 } from "scripting"
+import { useDualRoute } from "./DualRouteContext"
 import {
   PAGE_TOOLBAR_BACKGROUND,
   PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
@@ -39,7 +41,7 @@ import {
   isNovelContentVisible,
 } from "../store/contentFilter"
 import { isUserFollowed, onUserFollowChanged } from "../store/userFollow"
-import { useAsyncGuard, useLatest, usePagedList, currentBatchSize } from "./Hooks"
+import { useAsyncGuard, useLatest, usePagedList, currentBatchSize, useLayoutMetrics } from "./Hooks"
 import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl, recordActiveAmbientImageUrl } from "./ambient"
 import type { PixivIllustration, PixivNovel } from "../types"
 import { triggerHaptic } from "../platform/haptics"
@@ -80,6 +82,12 @@ export function UserWorksView(props: { userID?: number; title?: string }) {
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
   const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
   const isAppleMusic = pageLayout === "appleMusic"
+  const { isSplitViewActive } = useDualRoute()
+  const layoutMetrics = useLayoutMetrics()
+  const isFullScreenPad =
+    Device.isiPad &&
+    !isSplitViewActive &&
+    layoutMetrics.width >= 675
   const [ambientImageUrl, setAmbientImageUrl] = useState<string | null>(
     () => getLastActiveAmbientImageUrl()
   )
@@ -131,6 +139,65 @@ export function UserWorksView(props: { userID?: number; title?: string }) {
     const isClassic = !isAppleMusic
     const tabName = tab === "illust" ? "插画" : tab === "manga" ? "漫画" : "小说"
     const fullTitle = isClassic ? `${baseTitle} · ${tabName}` : baseTitle
+    const wideFullTitle = `${baseTitle} · ${tabName}`
+
+    if (isFullScreenPad) {
+      return {
+        principal: undefined,
+        topBarTrailing: [
+          <Menu
+            key="works-wide-menu"
+            label={
+              <HStack alignment="center" spacing={4}>
+                <Text font="subheadline" fontWeight="semibold">
+                  {wideFullTitle}
+                </Text>
+                <Image
+                  systemName="chevron.down"
+                  font="caption2"
+                  foregroundStyle="secondaryLabel"
+                />
+              </HStack>
+            }
+          >
+            <Picker
+              title="作品类型"
+              value={tab}
+              onChanged={(k: string) => setTab(k as WorkTab)}
+            >
+              <Label tag="illust" title="插画" systemImage="photo" />
+              <Label tag="manga" title="漫画" systemImage="photo.on.rectangle" />
+              {!hideNovels && <Label tag="novel" title="小说" systemImage="book" />}
+            </Picker>
+            {isOwn && (
+              <Menu title="投稿" systemImage="square.and.pencil">
+                <Button
+                  title="插画投稿"
+                  systemImage="photo"
+                  action={() => {
+                    void Safari.present("https://www.pixiv.net/upload.php", false)
+                  }}
+                />
+                <Button
+                  title="漫画投稿"
+                  systemImage="photo.on.rectangle"
+                  action={() => {
+                    void Safari.present("https://www.pixiv.net/upload.php?uptype=manga", false)
+                  }}
+                />
+                <Button
+                  title="小说投稿"
+                  systemImage="book"
+                  action={() => {
+                    void Safari.present("https://www.pixiv.net/novel/upload.php", false)
+                  }}
+                />
+              </Menu>
+            )}
+          </Menu>,
+        ],
+      }
+    }
 
     const principalNode = (
       <Text font="title2" fontWeight="bold">
@@ -211,7 +278,7 @@ export function UserWorksView(props: { userID?: number; title?: string }) {
       principal: principalNode,
       topBarTrailing: trailingButtons.length > 0 ? trailingButtons : undefined,
     }
-  }, [isOwn, isAppleMusic, tab, hideNovels, props.title])
+  }, [isOwn, isAppleMusic, tab, hideNovels, props.title, isFullScreenPad])
 
   if (currentUserID == null) {
     return (

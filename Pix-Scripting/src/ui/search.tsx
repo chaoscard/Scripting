@@ -1500,6 +1500,13 @@ function searchToolbar(props: {
     </Text>
   )
 
+  const menuScopeLabel =
+    props.scope === "illust"
+      ? "插画"
+      : props.scope === "novel"
+        ? "小说"
+        : "用户"
+
   const sortLabel =
     props.sort === "date_desc"
       ? "最新"
@@ -1509,18 +1516,6 @@ function searchToolbar(props: {
 
   const isUserScope = props.scope === "user"
   const isFullScreenPad = props.isFullScreenPad ?? false
-  const scopeIcon =
-    props.scope === "illust"
-      ? "photo"
-      : props.scope === "novel"
-        ? "book"
-        : "person.crop.circle"
-  const sortIcon =
-    props.sort === "date_desc"
-      ? "clock"
-      : props.sort === "popular_desc"
-        ? "flame"
-        : "clock.arrow.circlepath"
 
   const scopePicker = (
     <Picker
@@ -1552,34 +1547,36 @@ function searchToolbar(props: {
     </Picker>
   )
 
-  const nonSplitItems = [
-    !isUserScope ? (
-      <Button
-        key="search-advanced-btn"
-        action={props.onAdvanced}
-      >
-        <Image systemName="slider.horizontal.3" />
-      </Button>
-    ) : null,
-    !isUserScope ? (
-      <Menu key="search-sort-menu" label={<Image systemName={sortIcon} />}>
-        {sortPicker}
-      </Menu>
-    ) : null,
-    isClassic ? (
-      <Menu key="search-scope-menu" label={<Image systemName={scopeIcon} />}>
-        {scopePicker}
-      </Menu>
-    ) : null,
-  ].filter(Boolean)
+  const wideMenuTitle = isClassic
+    ? isUserScope
+      ? "用户"
+      : `${menuScopeLabel} · ${sortLabel}`
+    : isUserScope
+      ? "用户"
+      : sortLabel
 
-  const moreMenuNode = (
-    <Menu key="search-more-menu" label={<Image systemName="ellipsis.circle" />}>
-      {isClassic ? scopePicker : null}
+  const wideMenuLabel = (
+    <HStack alignment="center" spacing={4}>
+      <Text font="subheadline" fontWeight="semibold">
+        {wideMenuTitle}
+      </Text>
+      <Image
+        systemName="chevron.down"
+        font="caption2"
+        foregroundStyle="secondaryLabel"
+      />
+    </HStack>
+  )
+
+  const menuLabel = isFullScreenPad ? wideMenuLabel : <Image systemName="ellipsis.circle" />
+
+  const searchMenuNode = (
+    <Menu key="search-main-menu" label={menuLabel}>
+      {isClassic || (isFullScreenPad && isUserScope) ? scopePicker : null}
       {!isUserScope ? sortPicker : null}
       {!isUserScope ? (
         <Button
-          title="高级"
+          title="高级搜索"
           systemImage="slider.horizontal.3"
           action={props.onAdvanced}
         />
@@ -1588,14 +1585,8 @@ function searchToolbar(props: {
   )
 
   const trailingItems = (() => {
-    // 1. 平行视界双栏：左栏收敛为单个更多菜单（苹果音乐用户范围除外）
-    if (props.isSplitViewActive) {
-      if (props.isAppleMusic && isUserScope) return undefined
-      return moreMenuNode
-    }
-
-    // 2. 单栏模式（iPad 全屏单栏、台前调度窄窗、iPhone 真机）：全部平铺展示动态图标菜单
-    return nonSplitItems.length > 0 ? nonSplitItems : undefined
+    if (props.isAppleMusic && isUserScope && !isFullScreenPad) return undefined
+    return searchMenuNode
   })()
 
   return appToolbar(

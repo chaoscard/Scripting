@@ -1393,90 +1393,103 @@ export function NovelDetailView(props: { novelID: number }) {
                   }
                 : undefined
             }
-            toolbar={{
-              topBarTrailing: [
-                ...(isAppleMusic
-                  ? [
-                      <Button
-                        action={() => setShowComments(true)}
-                      >
-                        <Image systemName="bubble.left" />
-                      </Button>,
-                    ]
-                  : [
-                      <Button
-                        disabled={bookmarkLoading || bookmarkLongPressLocked}
-                        action={toggleBookmark}
-                        simultaneousGesture={
-                          LongPressGesture({ minDuration: 500 }).onEnded(() => {
-                            setBookmarkLongPressLocked(true)
-                            handleBookmarkLongPress()
-                            setTimeout(() => setBookmarkLongPressLocked(false), 1500)
-                          })
-                        }
-                      >
-                        <Image
-                          systemName={bookmarked ? "heart.fill" : "heart"}
-                          foregroundStyle={bookmarked ? "systemPink" : undefined}
-                        />
-                      </Button>,
-                      <Button
-                        disabled={followLoading}
-                        action={toggleFollow}
-                        contextMenu={{
-                          menuItems: (
-                            <Group>
-                              {followed ? (
-                                followRestrict === "private" ? (
-                                  <Button
-                                    title="设为公开关注"
-                                    systemImage="globe"
-                                    disabled={followLoading}
-                                    action={() => void followWithVisibility("public")}
-                                  />
-                                ) : (
-                                  <Button
-                                    title="设为私密关注"
-                                    systemImage="lock"
-                                    disabled={followLoading}
-                                    action={() => void followWithVisibility("private")}
-                                  />
-                                )
-                              ) : (
-                                <Button
-                                  title="私密关注"
-                                  systemImage="lock"
-                                  disabled={followLoading}
-                                  action={() => void followWithVisibility("private")}
+            toolbar={(() => {
+              const hideToolbarBookmark = !isAppleMusic && quickActionEnabled && quickActionType === "bookmark"
+              const hideToolbarFollow = !isAppleMusic && quickActionEnabled && quickActionType === "follow"
+              const hasFreedSlot = hideToolbarBookmark || hideToolbarFollow
+
+              return {
+                topBarTrailing: [
+                  ...(isAppleMusic
+                    ? [
+                        <Button
+                          action={() => setShowComments(true)}
+                        >
+                          <Image systemName="bubble.left" />
+                        </Button>,
+                      ]
+                    : [
+                        ...(!hideToolbarBookmark
+                          ? [
+                              <Button
+                                disabled={bookmarkLoading || bookmarkLongPressLocked}
+                                action={toggleBookmark}
+                                simultaneousGesture={
+                                  LongPressGesture({ minDuration: 500 }).onEnded(() => {
+                                    setBookmarkLongPressLocked(true)
+                                    handleBookmarkLongPress()
+                                    setTimeout(() => setBookmarkLongPressLocked(false), 1500)
+                                  })
+                                }
+                              >
+                                <Image
+                                  systemName={bookmarked ? "heart.fill" : "heart"}
+                                  foregroundStyle={bookmarked ? "systemPink" : undefined}
                                 />
-                              )}
-                            </Group>
-                          ),
-                        }}
-                      >
-                        <Image
-                          systemName={
-                            followed
-                              ? (followRestrict === "private"
-                                  ? "person.badge.shield.checkmark"
-                                  : "person.fill.checkmark")
-                              : "person.badge.plus"
+                              </Button>,
+                            ]
+                          : []),
+                        ...(!hideToolbarFollow
+                          ? [
+                              <Button
+                                disabled={followLoading}
+                                action={toggleFollow}
+                                contextMenu={{
+                                  menuItems: (
+                                    <Group>
+                                      {followed ? (
+                                        followRestrict === "private" ? (
+                                          <Button
+                                            title="设为公开关注"
+                                            systemImage="globe"
+                                            disabled={followLoading}
+                                            action={() => void followWithVisibility("public")}
+                                          />
+                                        ) : (
+                                          <Button
+                                            title="设为私密关注"
+                                            systemImage="lock"
+                                            disabled={followLoading}
+                                            action={() => void followWithVisibility("private")}
+                                          />
+                                        )
+                                      ) : (
+                                        <Button
+                                          title="私密关注"
+                                          systemImage="lock"
+                                          disabled={followLoading}
+                                          action={() => void followWithVisibility("private")}
+                                        />
+                                      )}
+                                    </Group>
+                                  ),
+                                }}
+                              >
+                                <Image
+                                  systemName={
+                                    followed
+                                      ? (followRestrict === "private"
+                                          ? "person.badge.shield.checkmark"
+                                          : "person.fill.checkmark")
+                                      : "person.badge.plus"
+                                  }
+                                />
+                              </Button>,
+                            ]
+                          : []),
+                      ]),
+                  <Menu label={<Image systemName="ellipsis.circle" />}>
+                    {!isAppleMusic && isFullScreenPad && !hasFreedSlot ? (
+                      <Button
+                        title="主页"
+                        systemImage="person.crop.circle"
+                        action={() => {
+                          if (current.user?.id) {
+                            void requestPixivRoute(`user:${current.user.id}`)
                           }
-                        />
-                      </Button>,
-                    ]),
-                <Menu label={<Image systemName="ellipsis.circle" />}>
-                  {!isAppleMusic && isFullScreenPad ? (
-                    <Button
-                      title="主页"
-                      systemImage="person.crop.circle"
-                      action={() => {
-                        if (current.user?.id) {
-                          void requestPixivRoute(`user:${current.user.id}`)
-                        }
-                      }}
-                    />
-                  ) : null}
+                        }}
+                      />
+                    ) : null}
                   {!isAppleMusic ? (
                     <Button
                       title="评论"
@@ -1601,7 +1614,7 @@ export function NovelDetailView(props: { novelID: number }) {
               )}
             </Menu>
           </Menu>,
-          ...(isFullScreenPad && !isAppleMusic
+          ...(isFullScreenPad && !isAppleMusic && !hasFreedSlot
             ? []
             : [
                 <AppNavigationLink value={`user:${current.user.id}`}>
@@ -1612,7 +1625,8 @@ export function NovelDetailView(props: { novelID: number }) {
                 </AppNavigationLink>,
               ]),
         ],
-      }}
+      }
+    })()}
     >
       <VStack
         alignment="leading"
