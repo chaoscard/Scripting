@@ -74,15 +74,12 @@ export function appToolbar(
    * 自绘标题是否隐藏。
    *
    * 1. 平行视界双栏外壳（isSplit === true）：
-   *    - 左主流栏（!options?.isDetailPane）：顶栏已有 Tab 胶囊，一律隐藏中央标题避免两层拥挤；
-   *    - 右栏详情内胆（options?.isDetailPane === true）：无 Tab 胶囊，正常展示页面/详情大标题。
+   *    - 左主流栏与右栏详情内胆均正常展示各自页面/详情大标题。
    * 2. 单栏外壳（!isSplit）：
    *    - 宽屏全屏单栏（options?.hidePrincipalOnWide === true）：隐藏居中标题；
    *    - 紧凑单栏 / 台前调度悬浮窗口：绝不隐藏，始终展示饱满居中 22pt 大标题。
    */
-  const shouldHidePrincipal = isSplit
-    ? !options?.isDetailPane
-    : options?.hidePrincipalOnWide === true
+  const shouldHidePrincipal = options?.hidePrincipalOnWide === true
 
   let leadingButton: any = (
     <Button

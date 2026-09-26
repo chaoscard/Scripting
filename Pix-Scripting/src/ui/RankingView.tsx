@@ -128,8 +128,8 @@ export function RankingView(props: { onClose: () => void }) {
   const isFullScreenPad =
     Device.isiPad &&
     !isSplitViewActive &&
-    layout.width >= Device.screen.width - 20
-  const shouldHideTitle = isSplitViewActive || isFullScreenPad
+    layout.width >= 675
+  const shouldHideTitle = isFullScreenPad
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl, isTabActive)
 
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
@@ -526,7 +526,7 @@ function rankingToolbar(props: {
     props.isFullScreenPad ??
     (Device.isiPad &&
       !props.isSplitViewActive &&
-      layoutMetrics.width >= Device.screen.width - 20)
+      layoutMetrics.width >= 675)
   const isCompact = props.isCompact ?? layoutMetrics.isCompact
   const isClassic = !props.isAppleMusic
   const baseTitle =
@@ -552,64 +552,78 @@ function rankingToolbar(props: {
     </Text>
   )
 
-  const trailingMenuLabel = isFullScreenPad ? (
-    <HStack alignment="center" spacing={4}>
-      <Text font="subheadline" fontWeight="semibold">
-        {props.isAppleMusic || props.kind === "advanced" || !modeTitle
-          ? baseTitle
-          : `${baseTitle} · ${modeTitle}`}
-      </Text>
-      <Image
-        systemName="chevron.down"
-        font="caption2"
-        foregroundStyle="secondaryLabel"
+  const kindIcon =
+    props.kind === "illustration"
+      ? "photo"
+      : props.kind === "manga"
+        ? "photo.on.rectangle"
+        : props.kind === "novel"
+          ? "book"
+          : "clock.arrow.circlepath"
+
+  const kindPicker = (
+    <Picker
+      title="排行榜类型"
+      value={props.kind}
+      onChanged={(value: string) => props.onKindChange(value as RankingKind)}
+    >
+      <Label tag="illustration" title="插画" systemImage="photo" />
+      <Label tag="manga" title="漫画" systemImage="photo.on.rectangle" />
+      {props.hideNovels ? null : (
+        <Label tag="novel" title="小说" systemImage="book" />
+      )}
+      <Label
+        tag="advanced"
+        title="历史"
+        systemImage="clock.arrow.circlepath"
       />
-    </HStack>
-  ) : (
-    <Image systemName="ellipsis.circle" />
+    </Picker>
   )
 
-  const trailingItems = [
+  const modePicker = (
+    <Picker
+      title="榜单周期"
+      value={props.selectedMode}
+      onChanged={(value: string) => props.onModeChange(value)}
+    >
+      {props.activeModes.map((m) => (
+        <Label
+          key={m.value}
+          tag={m.value}
+          title={m.title}
+          systemImage="chart.bar"
+        />
+      ))}
+    </Picker>
+  )
+
+  const trailingItems = props.isSplitViewActive ? (
+    <Menu key="ranking-split-more-menu" label={<Image systemName="ellipsis.circle" />}>
+      {kindPicker}
+      {isClassic && props.kind !== "advanced" && props.activeModes.length > 0 ? modePicker : null}
+      {props.kind === "advanced" ? (
+        <Button
+          title="高级筛选"
+          systemImage="slider.horizontal.3"
+          action={props.onOpenAdvancedSheet}
+        />
+      ) : null}
+    </Menu>
+  ) : [
     props.kind === "advanced" ? (
       <Button
-        title="高级筛选"
-        systemImage="slider.horizontal.3"
+        key="ranking-advanced-btn"
         action={props.onOpenAdvancedSheet}
-      />
-    ) : null,
-    <Menu label={trailingMenuLabel}>
-      <Picker
-        title="排行榜类型"
-        value={props.kind}
-        onChanged={(value: string) => props.onKindChange(value as RankingKind)}
       >
-        <Label tag="illustration" title="插画" systemImage="photo" />
-        <Label tag="manga" title="漫画" systemImage="photo.on.rectangle" />
-        {props.hideNovels ? null : (
-          <Label tag="novel" title="小说" systemImage="book" />
-        )}
-        <Label
-          tag="advanced"
-          title="历史"
-          systemImage="clock.arrow.circlepath"
-        />
-      </Picker>
-      {isClassic && props.kind !== "advanced" && props.activeModes.length > 0 && (
-        <Picker
-          title="榜单周期"
-          value={props.selectedMode}
-          onChanged={(value: string) => props.onModeChange(value)}
-        >
-          {props.activeModes.map((m) => (
-            <Label
-              key={m.value}
-              tag={m.value}
-              title={m.title}
-              systemImage="chart.bar"
-            />
-          ))}
-        </Picker>
-      )}
+        <Image systemName="slider.horizontal.3" />
+      </Button>
+    ) : isClassic && props.activeModes.length > 0 ? (
+      <Menu key="ranking-period-menu" label={<Image systemName="chart.bar" />}>
+        {modePicker}
+      </Menu>
+    ) : null,
+    <Menu key="ranking-kind-menu" label={<Image systemName={kindIcon} />}>
+      {kindPicker}
     </Menu>,
   ].filter(Boolean)
 

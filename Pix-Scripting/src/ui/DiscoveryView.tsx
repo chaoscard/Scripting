@@ -99,8 +99,8 @@ export function DiscoveryView(props: { onClose: () => void }) {
   const isFullScreenPad =
     Device.isiPad &&
     !isSplitViewActive &&
-    layout.width >= Device.screen.width - 20
-  const shouldHideTitle = isSplitViewActive || isFullScreenPad
+    layout.width >= 675
+  const shouldHideTitle = isFullScreenPad
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl, isTabActive)
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
@@ -604,7 +604,7 @@ function exploreToolbar(props: {
     props.isFullScreenPad ??
     (Device.isiPad &&
       !props.isSplitViewActive &&
-      layoutMetrics.width >= Device.screen.width - 20)
+      layoutMetrics.width >= 675)
   const isCompact = props.isCompact ?? layoutMetrics.isCompact
   const isClassic = !props.isAppleMusic
   const kindLabel =
@@ -625,55 +625,62 @@ function exploreToolbar(props: {
     </Text>
   )
 
-  const trailingMenuLabel = isFullScreenPad ? (
-    <HStack alignment="center" spacing={4}>
-      <Text font="subheadline" fontWeight="semibold">
-        {props.isAppleMusic
-          ? props.mode === "pixivision"
-            ? "特辑"
-            : baseTitle
-          : props.mode === "pixivision"
-            ? "特辑"
-            : `${baseTitle} · ${kindLabel}`}
-      </Text>
-      <Image
-        systemName="chevron.down"
-        font="caption2"
-        foregroundStyle="secondaryLabel"
-      />
-    </HStack>
-  ) : (
-    <Image systemName="ellipsis.circle" />
+  const modeIcon =
+    props.mode === "recommended"
+      ? "sparkles"
+      : props.mode === "latest"
+        ? "clock"
+        : "rectangle.stack"
+  const kindIcon =
+    props.kind === "illustration"
+      ? "photo"
+      : props.kind === "manga"
+        ? "photo.on.rectangle"
+        : "book"
+
+  const modePicker = (
+    <Picker
+      title="探索类型"
+      value={props.mode}
+      onChanged={(value: string) => props.onModeChange(value as ExploreMode)}
+    >
+      <Label tag="recommended" title="推荐" systemImage="sparkles" />
+      <Label tag="latest" title="最新" systemImage="clock" />
+      <Label tag="pixivision" title="特辑" systemImage="rectangle.stack" />
+    </Picker>
   )
 
-  const trailingMenu = (
-    <Menu label={trailingMenuLabel}>
-      <Picker
-        title="探索类型"
-        value={props.mode}
-        onChanged={(value: string) => props.onModeChange(value as ExploreMode)}
-      >
-        <Label tag="recommended" title="推荐" systemImage="sparkles" />
-        <Label tag="latest" title="最新" systemImage="clock" />
-        <Label tag="pixivision" title="特辑" systemImage="rectangle.stack" />
-      </Picker>
-      {isClassic && props.mode !== "pixivision" && (
-        <Picker
-          title="媒体类型"
-          value={props.kind}
-          onChanged={(value: string) => props.onKindChange(value as FeedKind)}
-        >
-          <Label tag="illustration" title="插画" systemImage="photo" />
-          <Label tag="manga" title="漫画" systemImage="photo.on.rectangle" />
-          {!props.hideNovels && (
-            <Label tag="novel" title="小说" systemImage="book" />
-          )}
-        </Picker>
+  const kindPicker = (
+    <Picker
+      title="媒体类型"
+      value={props.kind}
+      onChanged={(value: string) => props.onKindChange(value as FeedKind)}
+    >
+      <Label tag="illustration" title="插画" systemImage="photo" />
+      <Label tag="manga" title="漫画" systemImage="photo.on.rectangle" />
+      {!props.hideNovels && (
+        <Label tag="novel" title="小说" systemImage="book" />
       )}
-    </Menu>
+    </Picker>
   )
 
-  return appToolbar(props.onClose, titleNode, trailingMenu, undefined, {
+  const trailingItems = props.isSplitViewActive ? (
+    <Menu key="explore-split-more-menu" label={<Image systemName="ellipsis.circle" />}>
+      {modePicker}
+      {isClassic && props.mode !== "pixivision" ? kindPicker : null}
+    </Menu>
+  ) : [
+    isClassic && props.mode !== "pixivision" ? (
+      <Menu key="explore-kind-menu" label={<Image systemName={kindIcon} />}>
+        {kindPicker}
+      </Menu>
+    ) : null,
+    <Menu key="explore-mode-menu" label={<Image systemName={modeIcon} />}>
+      {modePicker}
+    </Menu>,
+  ].filter(Boolean)
+
+  return appToolbar(props.onClose, titleNode, trailingItems, undefined, {
     isCompact: !isFullScreenPad,
     isSplitViewActive: props.isSplitViewActive,
     hidePrincipalOnWide: isFullScreenPad,

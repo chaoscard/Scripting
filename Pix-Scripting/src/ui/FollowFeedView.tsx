@@ -105,8 +105,8 @@ export function FollowFeedView(props: {
   const isFullScreenPad =
     Device.isiPad &&
     !isSplitViewActive &&
-    layout.width >= Device.screen.width - 20
-  const shouldHideTitle = isSplitViewActive || isFullScreenPad
+    layout.width >= 675
+  const shouldHideTitle = isFullScreenPad
   const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl, isTabActive || activated)
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
@@ -290,7 +290,7 @@ function followToolbar(props: {
     props.isFullScreenPad ??
     (Device.isiPad &&
       !props.isSplitViewActive &&
-      layoutMetrics.width >= Device.screen.width - 20)
+      layoutMetrics.width >= 675)
   const isCompact = props.isCompact ?? layoutMetrics.isCompact
   const isClassic = !props.isAppleMusic
   const baseTitle =
@@ -321,21 +321,6 @@ function followToolbar(props: {
     </Text>
   )
 
-  const trailingMenuLabel = isFullScreenPad ? (
-    <HStack alignment="center" spacing={4}>
-      <Text font="subheadline" fontWeight="semibold">
-        {fullTitle}
-      </Text>
-      <Image
-        systemName="chevron.down"
-        font="caption2"
-        foregroundStyle="secondaryLabel"
-      />
-    </HStack>
-  ) : (
-    <Image systemName="ellipsis.circle" />
-  )
-
   const activeModeKey =
     props.mode === "following"
       ? props.scope === "private"
@@ -343,54 +328,87 @@ function followToolbar(props: {
         : "following_all"
       : props.mode
 
+  const modeIcon =
+    activeModeKey === "following_all"
+      ? "globe"
+      : activeModeKey === "following_private"
+        ? "lock"
+        : activeModeKey === "watchlist"
+          ? "bookmark"
+          : "person.2.badge.gearshape"
+  const kindIcon =
+    currentKind === "illust"
+      ? "photo"
+      : currentKind === "manga"
+        ? "photo.on.rectangle"
+        : "book"
+
+  const modePicker = (
+    <Picker
+      title="动态类型"
+      value={activeModeKey}
+      onChanged={(value: string) => {
+        if (value === "following_all") {
+          props.onModeChange("following")
+          props.onScopeChange("all")
+        } else if (value === "following_private") {
+          props.onModeChange("following")
+          props.onScopeChange("private")
+        } else if (value === "watchlist") {
+          props.onModeChange("watchlist")
+        } else if (value === "friends") {
+          props.onModeChange("friends")
+        }
+      }}
+    >
+      <Label tag="following_all" title="公开关注" systemImage="globe" />
+      <Label tag="following_private" title="私密关注" systemImage="lock" />
+      <Label tag="watchlist" title="追更列表" systemImage="bookmark" />
+      <Label tag="friends" title="好友动态" systemImage="person.2.badge.gearshape" />
+    </Picker>
+  )
+
+  const kindPicker =
+    props.mode === "watchlist" ? (
+      <Picker
+        title="媒体类型"
+        value={currentKind}
+        onChanged={(v: string) => props.onKindChange(v)}
+      >
+        <Label tag="manga" title="漫画" systemImage="photo.on.rectangle" />
+        <Label tag="novel" title="小说" systemImage="book" />
+      </Picker>
+    ) : (
+      <Picker
+        title="媒体类型"
+        value={currentKind}
+        onChanged={(v: string) => props.onKindChange(v)}
+      >
+        <Label tag="illust" title="插画·漫画" systemImage="photo" />
+        <Label tag="novel" title="小说" systemImage="book" />
+      </Picker>
+    )
+
+  const trailingItems = props.isSplitViewActive ? (
+    <Menu key="follow-split-more-menu" label={<Image systemName="ellipsis.circle" />}>
+      {modePicker}
+      {isClassic && !props.hideNovels ? kindPicker : null}
+    </Menu>
+  ) : [
+    isClassic && !props.hideNovels ? (
+      <Menu key="follow-kind-menu" label={<Image systemName={kindIcon} />}>
+        {kindPicker}
+      </Menu>
+    ) : null,
+    <Menu key="follow-mode-menu" label={<Image systemName={modeIcon} />}>
+      {modePicker}
+    </Menu>,
+  ].filter(Boolean)
+
   return appToolbar(
     props.onClose,
     titleNode,
-    <Menu label={trailingMenuLabel}>
-      <Picker
-        title="动态类型"
-        value={activeModeKey}
-        onChanged={(value: string) => {
-          if (value === "following_all") {
-            props.onModeChange("following")
-            props.onScopeChange("all")
-          } else if (value === "following_private") {
-            props.onModeChange("following")
-            props.onScopeChange("private")
-          } else if (value === "watchlist") {
-            props.onModeChange("watchlist")
-          } else if (value === "friends") {
-            props.onModeChange("friends")
-          }
-        }}
-      >
-        <Label tag="following_all" title="公开关注" systemImage="globe" />
-        <Label tag="following_private" title="私密关注" systemImage="lock" />
-        <Label tag="watchlist" title="追更列表" systemImage="bookmark" />
-        <Label tag="friends" title="好友动态" systemImage="person.2.badge.gearshape" />
-      </Picker>
-      {isClassic &&
-        !props.hideNovels &&
-        (props.mode === "watchlist" ? (
-          <Picker
-            title="媒体类型"
-            value={currentKind}
-            onChanged={(v: string) => props.onKindChange(v)}
-          >
-            <Label tag="manga" title="漫画" systemImage="photo.on.rectangle" />
-            <Label tag="novel" title="小说" systemImage="book" />
-          </Picker>
-        ) : (
-          <Picker
-            title="媒体类型"
-            value={currentKind}
-            onChanged={(v: string) => props.onKindChange(v)}
-          >
-            <Label tag="illust" title="插画·漫画" systemImage="photo" />
-            <Label tag="novel" title="小说" systemImage="book" />
-          </Picker>
-        ))}
-    </Menu>,
+    trailingItems,
     undefined,
     {
       isCompact: !isFullScreenPad,

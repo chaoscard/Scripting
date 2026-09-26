@@ -485,7 +485,7 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
   const isFullScreenPad =
     Device.isiPad &&
     !isSplitViewActive &&
-    layoutMetrics.width >= Device.screen.width - 20
+    layoutMetrics.width >= 675
   const [visitedScopes, setVisitedScopes] = useState<Set<SearchScope>>(() => new Set([scope]))
 
   useEffect(() => {
@@ -984,6 +984,7 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
   }
 
   const activeFilterBadges = useMemo<ActiveFilterBadge[]>(() => {
+    if (scope === "user") return []
     const badges: ActiveFilterBadge[] = []
     if (advancedParams.bookmarkThreshold > 0) {
       badges.push({
@@ -1342,7 +1343,18 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
   }
 
   const shouldHideTitle = isSplitViewActive || isFullScreenPad
-  const navTitle = shouldHideTitle ? "" : submitted.trim() ? submitted.trim() : "搜索"
+  const scopeTitleLabel =
+    scope === "illust"
+      ? "插画·漫画"
+      : scope === "novel"
+        ? "小说"
+        : "用户"
+  const baseNavTitle = submitted.trim() ? submitted.trim() : "搜索"
+  const navTitle = shouldHideTitle
+    ? ""
+    : !isAppleMusic
+      ? `${baseNavTitle} · ${scopeTitleLabel}`
+      : baseNavTitle
 
   return (
     <ZStack
@@ -1419,7 +1431,7 @@ export function SearchView(props: { onClose: () => void; active?: boolean }) {
       searchable={{
         value: query,
         onChanged: onQueryChanged,
-        placement: isFullScreenPad ? "toolbar" : "navigationBarDrawer",
+        placement: "navigationBarDrawer",
         prompt: "输入关键词",
         presented: {
           value: searchPresented,
@@ -1495,63 +1507,106 @@ function searchToolbar(props: {
         ? "热门"
         : "最早"
 
+  const isUserScope = props.scope === "user"
   const isFullScreenPad = props.isFullScreenPad ?? false
-  const trailingMenuLabel = isFullScreenPad ? (
-    <HStack alignment="center" spacing={4}>
-      <Text font="subheadline" fontWeight="semibold">
-        {props.isAppleMusic ? sortLabel : scopeLabel}
-      </Text>
-      <Image
-        systemName="chevron.down"
-        font="caption2"
-        foregroundStyle="secondaryLabel"
-      />
-    </HStack>
-  ) : (
-    <Image systemName="ellipsis.circle" />
+  const scopeIcon =
+    props.scope === "illust"
+      ? "photo"
+      : props.scope === "novel"
+        ? "book"
+        : "person.crop.circle"
+  const sortIcon =
+    props.sort === "date_desc"
+      ? "clock"
+      : props.sort === "popular_desc"
+        ? "flame"
+        : "clock.arrow.circlepath"
+
+  const scopePicker = (
+    <Picker
+      title="搜索范围"
+      value={props.scope}
+      onChanged={(v: string) => props.onScopeChange(v as SearchScope)}
+    >
+      <Label tag="illust" title="插画·漫画" systemImage="photo" />
+      {!props.hideNovels && (
+        <Label tag="novel" title="小说" systemImage="book" />
+      )}
+      <Label tag="user" title="用户" systemImage="person.crop.circle" />
+    </Picker>
   )
+
+  const sortPicker = (
+    <Picker
+      title="排序方式"
+      value={props.sort}
+      onChanged={(value: string) => props.onSortChange(value as SearchSort)}
+    >
+      <Label tag="date_desc" title="最新" systemImage="clock" />
+      <Label tag="popular_desc" title="热门" systemImage="flame" />
+      <Label
+        tag="date_asc"
+        title="最早"
+        systemImage="clock.arrow.circlepath"
+      />
+    </Picker>
+  )
+
+  const nonSplitItems = [
+    !isUserScope ? (
+      <Button
+        key="search-advanced-btn"
+        action={props.onAdvanced}
+      >
+        <Image systemName="slider.horizontal.3" />
+      </Button>
+    ) : null,
+    !isUserScope ? (
+      <Menu key="search-sort-menu" label={<Image systemName={sortIcon} />}>
+        {sortPicker}
+      </Menu>
+    ) : null,
+    isClassic ? (
+      <Menu key="search-scope-menu" label={<Image systemName={scopeIcon} />}>
+        {scopePicker}
+      </Menu>
+    ) : null,
+  ].filter(Boolean)
+
+  const moreMenuNode = (
+    <Menu key="search-more-menu" label={<Image systemName="ellipsis.circle" />}>
+      {isClassic ? scopePicker : null}
+      {!isUserScope ? sortPicker : null}
+      {!isUserScope ? (
+        <Button
+          title="高级"
+          systemImage="slider.horizontal.3"
+          action={props.onAdvanced}
+        />
+      ) : null}
+    </Menu>
+  )
+
+  const trailingItems = (() => {
+    // 1. 平行视界双栏：左栏收敛为单个更多菜单（苹果音乐用户范围除外）
+    if (props.isSplitViewActive) {
+      if (props.isAppleMusic && isUserScope) return undefined
+      return moreMenuNode
+    }
+
+    // 2. 单栏模式（iPad 全屏单栏、台前调度窄窗、iPhone 真机）：全部平铺展示动态图标菜单
+    return nonSplitItems.length > 0 ? nonSplitItems : undefined
+  })()
 
   return appToolbar(
     props.onClose,
     titleNode,
-    <Menu label={trailingMenuLabel}>
-      {isClassic && (
-        <Picker
-          title="搜索范围"
-          value={props.scope}
-          onChanged={(v: string) => props.onScopeChange(v as SearchScope)}
-        >
-          <Label tag="illust" title="插画·漫画" systemImage="photo" />
-          {!props.hideNovels && (
-            <Label tag="novel" title="小说" systemImage="book" />
-          )}
-          <Label tag="user" title="用户" systemImage="person.crop.circle" />
-        </Picker>
-      )}
-      <Picker
-        title="排序方式"
-        value={props.sort}
-        onChanged={(value: string) => props.onSortChange(value as SearchSort)}
-      >
-        <Label tag="date_desc" title="最新" systemImage="clock" />
-        <Label tag="popular_desc" title="热门" systemImage="flame" />
-        <Label
-          tag="date_asc"
-          title="最早"
-          systemImage="clock.arrow.circlepath"
-        />
-      </Picker>
-      <Button
-        title="高级"
-        systemImage="slider.horizontal.3"
-        action={props.onAdvanced}
-      />
-    </Menu>,
+    trailingItems,
     undefined,
     {
       isCompact: !isFullScreenPad,
       isSplitViewActive: props.isSplitViewActive,
-      hidePrincipalOnWide: isFullScreenPad,
+      hidePrincipalOnWide: isFullScreenPad || props.isSplitViewActive,
     }
   )
 }

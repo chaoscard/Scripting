@@ -55,8 +55,8 @@ export function MoreView(props: { onClose: () => void }) {
   const isFullScreenPad =
     Device.isiPad &&
     !isSplitViewActive &&
-    layout.width >= Device.screen.width - 20
-  const shouldHideTitle = isSplitViewActive || isFullScreenPad
+    layout.width >= 675
+  const shouldHideTitle = isFullScreenPad
   const navTitle = shouldHideTitle ? "" : "我的"
   const user = session.user
   const [hideNovels, setHideNovels] = useState(() => loadSettings().hideNovels)
