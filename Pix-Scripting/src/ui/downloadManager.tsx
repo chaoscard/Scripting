@@ -1195,6 +1195,16 @@ export function DownloadDetailListView(props: {
     return "folder.fill"
   }, [creatorFolder, category])
 
+  const emptyCategoryIcon = useMemo(() => {
+    if (creatorFolder) return "person.2"
+    if (category === "illustrations") return "photo"
+    if (category === "ugoira") return "play.circle"
+    if (category === "manga") return "photo.on.rectangle"
+    if (category === "novels") return "book"
+    if (category === "pixivision") return "rectangle.stack"
+    return "folder"
+  }, [creatorFolder, category])
+
   const categoryColor = useMemo(() => {
     if (creatorFolder) return "systemPink"
     if (category === "illustrations") return "#0096FA"
@@ -1411,7 +1421,11 @@ export function DownloadDetailListView(props: {
             padding={{ vertical: 28 }}
             frame={{ maxWidth: "infinity" }}
           >
-            <Image systemName="folder.badge.questionmark" font="largeTitle" foregroundStyle="secondaryLabel" />
+            <Image
+              systemName={searchQuery ? "magnifyingglass" : emptyCategoryIcon}
+              font="largeTitle"
+              foregroundStyle="secondaryLabel"
+            />
             <Text font="subheadline" foregroundStyle="secondaryLabel" multilineTextAlignment="center">
               {searchQuery ? "未找到匹配的文件" : "当前分类暂无已下载文件"}
             </Text>
@@ -1965,9 +1979,13 @@ export function DownloadCreatorsListView(props: { onClose?: () => void }) {
             padding={{ vertical: 28 }}
             frame={{ maxWidth: "infinity" }}
           >
-            <Image systemName="folder.badge.questionmark" font="largeTitle" foregroundStyle="secondaryLabel" />
+            <Image
+              systemName={searchQuery ? "magnifyingglass" : "person.2"}
+              font="largeTitle"
+              foregroundStyle="secondaryLabel"
+            />
             <Text font="subheadline" foregroundStyle="secondaryLabel" multilineTextAlignment="center">
-              {searchQuery ? "未找到匹配的创作者" : "当前分类暂无已下载文件"}
+              {searchQuery ? "未找到匹配的创作者" : "暂无创作者归档"}
             </Text>
           </VStack>
         </Section>

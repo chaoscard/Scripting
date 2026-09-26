@@ -210,7 +210,13 @@ export function UserConnectionsView(props: {
                       ? "暂时没有粉丝"
                       : "暂时没有好友"
                 }
-                systemImage="person.2"
+                systemImage={
+                  props.kind === "following"
+                    ? "person.2"
+                    : props.kind === "follower"
+                      ? "person.2.badge.plus"
+                      : "person.2.badge.gearshape"
+                }
               />
             ) : (
               <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>

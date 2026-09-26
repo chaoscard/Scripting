@@ -95,7 +95,7 @@ export function RecommendedUsersSheet(props: {
         ) : paged.error && paged.items.length === 0 ? (
           <ErrorView message={paged.error} onRetry={paged.refresh} />
         ) : paged.items.length === 0 ? (
-          <EmptyView text="暂无推荐创作者" />
+          <EmptyView text="暂无推荐创作者" systemImage="person.2" />
         ) : (
           <GeometryReader>
             {(proxy) => {

@@ -78,7 +78,7 @@ export function RelatedIllustFeedView(props: { illustID: number }) {
                 ? "当前页面部分作品被内容显示设置过滤，暂时无法显示"
                 : "暂无相关作品"
             }
-            systemImage={paged.hasFilteredContent ? "eye.slash" : undefined}
+            systemImage={paged.hasFilteredContent ? "eye.slash" : "photo"}
           />
         ) : (
           <IllustFlowFeed

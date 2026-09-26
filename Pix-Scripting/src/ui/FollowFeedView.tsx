@@ -8,6 +8,7 @@ import {
   Menu,
   Picker,
   Text,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -47,7 +48,7 @@ import { destinationElement } from "./DestinationElement"
 import { useDualRoute } from "./DualRouteContext"
 import { DockSegmentedBar, useRegisterBottomAccessory } from "./bottomAccessory"
 import { useLatest, usePagedList, currentBatchSize, useLayoutMetrics } from "./Hooks"
-import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl } from "./ambient"
+import { useExperimentalAmbientPalette, getLastActiveAmbientImageUrl, recordActiveAmbientImageUrl } from "./ambient"
 import type {
   PixivIllustration,
   PixivNovel,
@@ -106,8 +107,21 @@ export function FollowFeedView(props: {
     !isSplitViewActive &&
     layout.width >= Device.screen.width - 20
   const shouldHideTitle = isSplitViewActive || isFullScreenPad
-  const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl, isTabActive)
+  const { ambientBackground } = useExperimentalAmbientPalette(ambientImageUrl, isTabActive || activated)
   const refreshHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve())
+
+  const handleAmbientImageChange = useCallback((url: string | null) => {
+    if (url && typeof url === "string" && url.trim().length > 0) {
+      setAmbientImageUrl(url)
+      recordActiveAmbientImageUrl(url)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (ambientImageUrl) {
+      recordActiveAmbientImageUrl(ambientImageUrl)
+    }
+  }, [ambientImageUrl])
 
   useEffect(() => {
     return onSettingsChanged(() => {
@@ -224,7 +238,7 @@ export function FollowFeedView(props: {
           hideNovels={hideNovels}
           isAppleMusic={isAppleMusic}
           onKindChange={setFollowingKind}
-          onFirstImageUrlChange={setAmbientImageUrl}
+          onFirstImageUrlChange={handleAmbientImageChange}
         />
       )}
 
@@ -236,7 +250,7 @@ export function FollowFeedView(props: {
           hideNovels={hideNovels}
           isAppleMusic={isAppleMusic}
           onKindChange={setWatchKind}
-          onFirstImageUrlChange={setAmbientImageUrl}
+          onFirstImageUrlChange={handleAmbientImageChange}
         />
       )}
 
@@ -248,7 +262,7 @@ export function FollowFeedView(props: {
           hideNovels={hideNovels}
           isAppleMusic={isAppleMusic}
           onKindChange={setFriendKind}
-          onFirstImageUrlChange={setAmbientImageUrl}
+          onFirstImageUrlChange={handleAmbientImageChange}
         />
       )}
     </ZStack>
@@ -445,15 +459,11 @@ function FollowingFeed(props: {
       const first = illustPaged.items[0]
       if (first) {
         onFirstImageUrlChange?.(cardThumbUrlOf(first))
-      } else if (!illustPaged.initialLoading && illustPaged.items.length === 0) {
-        onFirstImageUrlChange?.(null)
       }
     } else {
       const first = novelPaged.items[0]
       if (first) {
         onFirstImageUrlChange?.(novelThumbUrlOf(first))
-      } else if (!novelPaged.initialLoading && novelPaged.items.length === 0) {
-        onFirstImageUrlChange?.(null)
       }
     }
   }, [
@@ -496,7 +506,7 @@ function FollowingFeed(props: {
                     ? "当前页面部分作品被内容显示设置过滤，暂时无法显示"
                     : "关注的人还没有新作品"
                 }
-                systemImage={illustPaged.hasFilteredContent ? "eye.slash" : "person.2"}
+                systemImage={illustPaged.hasFilteredContent ? "eye.slash" : "photo"}
               />
             ) : (
               <IllustFlowFeed
@@ -618,8 +628,6 @@ function WatchlistFeed(props: {
     const first = currentPaged.items[0]
     if (first) {
       onFirstImageUrlChange?.(watchlistThumbUrlOf(first))
-    } else if (!currentPaged.initialLoading && currentPaged.items.length === 0) {
-      onFirstImageUrlChange?.(null)
     }
   }, [
     kind,
@@ -658,7 +666,7 @@ function WatchlistFeed(props: {
             ) : mangaPaged.error && mangaPaged.items.length === 0 ? (
               <ErrorView message={mangaPaged.error} onRetry={mangaPaged.refresh} />
             ) : mangaPaged.items.length === 0 ? (
-              <EmptyView text="暂无追更漫画，下拉刷新试试" systemImage="bookmark" />
+              <EmptyView text="暂无追更漫画，下拉刷新试试" systemImage="photo.on.rectangle" />
             ) : (
               <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
                 {mangaPaged.items.map((item, index) => (
@@ -693,7 +701,7 @@ function WatchlistFeed(props: {
               ) : novelPaged.error && novelPaged.items.length === 0 ? (
                 <ErrorView message={novelPaged.error} onRetry={novelPaged.refresh} />
               ) : novelPaged.items.length === 0 ? (
-                <EmptyView text="暂无追更小说，下拉刷新试试" systemImage="bookmark" />
+                <EmptyView text="暂无追更小说，下拉刷新试试" systemImage="book" />
               ) : (
                 <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
                   {novelPaged.items.map((item, index) => (
@@ -774,15 +782,11 @@ function FriendsFeed(props: {
       const first = illustPaged.items[0]
       if (first) {
         onFirstImageUrlChange?.(cardThumbUrlOf(first))
-      } else if (!illustPaged.initialLoading && illustPaged.items.length === 0) {
-        onFirstImageUrlChange?.(null)
       }
     } else {
       const first = novelPaged.items[0]
       if (first) {
         onFirstImageUrlChange?.(novelThumbUrlOf(first))
-      } else if (!novelPaged.initialLoading && novelPaged.items.length === 0) {
-        onFirstImageUrlChange?.(null)
       }
     }
   }, [
@@ -818,7 +822,7 @@ function FriendsFeed(props: {
                     ? "当前页面部分作品被内容显示设置过滤，暂时无法显示"
                     : "好友还没有新作品"
                 }
-                systemImage={illustPaged.hasFilteredContent ? "eye.slash" : "person.2"}
+                systemImage={illustPaged.hasFilteredContent ? "eye.slash" : "photo"}
               />
             ) : (
               <IllustFlowFeed

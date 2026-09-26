@@ -372,7 +372,7 @@ function RecommendedExploreFeed(props: {
           allowsHitTesting={kind === "manga"}
         >
           <RefreshableScrollView refreshable={mangaPaged.refresh}>
-            <IllustFeedContent paged={mangaPaged} label="推荐" />
+            <IllustFeedContent paged={mangaPaged} label="推荐" systemImage="photo.on.rectangle" />
           </RefreshableScrollView>
         </VStack>
       ) : null}
@@ -533,7 +533,7 @@ function LatestExploreFeed(props: {
           allowsHitTesting={kind === "manga"}
         >
           <RefreshableScrollView refreshable={mangaPaged.refresh}>
-            <IllustFeedContent paged={mangaPaged} label="最新作品" />
+            <IllustFeedContent paged={mangaPaged} label="最新作品" systemImage="photo.on.rectangle" />
           </RefreshableScrollView>
         </VStack>
       ) : null}
@@ -683,8 +683,9 @@ function exploreToolbar(props: {
 function IllustFeedContent(props: {
   paged: ReturnType<typeof usePagedList<PixivIllustration>>
   label: string
+  systemImage?: string
 }) {
-  const { paged, label } = props
+  const { paged, label, systemImage = "photo" } = props
   const [heroFirst, setHeroFirst] = useState(() => loadSettings().heroFirstFeedCard)
 
   useEffect(() => {
@@ -706,7 +707,7 @@ function IllustFeedContent(props: {
               ? "当前页面部分作品被内容显示设置过滤，暂时无法显示"
               : `暂无${label}，下拉刷新试试`
           }
-          systemImage={paged.hasFilteredContent ? "eye.slash" : "photo"}
+          systemImage={paged.hasFilteredContent ? "eye.slash" : systemImage}
         />
       ) : (
         <IllustFlowFeed

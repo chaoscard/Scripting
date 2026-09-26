@@ -100,7 +100,7 @@ export function RelatedUsersSheet(props: {
         ) : error && users.length === 0 ? (
           <ErrorView message={error} onRetry={loadRelated} />
         ) : users.length === 0 ? (
-          <EmptyView text="暂无更多相似创作者推荐" />
+          <EmptyView text="暂无更多相似创作者推荐" systemImage="person.2" />
         ) : (
           <GeometryReader>
             {(proxy) => {

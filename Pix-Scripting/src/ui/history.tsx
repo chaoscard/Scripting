@@ -910,7 +910,12 @@ function IllustHistoryContent(props: {
       kind === "manga"
         ? "暂无漫画浏览记录"
         : "暂无插画浏览记录"
-    return <EmptyView text={text} systemImage="clock" />
+    return (
+      <EmptyView
+        text={text}
+        systemImage={kind === "manga" ? "photo.on.rectangle" : "photo"}
+      />
+    )
   }
 
   return (
@@ -958,7 +963,7 @@ function NovelHistoryContent(props: {
     return (
       <EmptyView
         text="暂无小说浏览记录"
-        systemImage="clock"
+        systemImage="book"
       />
     )
   }

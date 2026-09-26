@@ -105,7 +105,7 @@ function TagIllustFeed(props: { tag: string }) {
                 ? "当前页面部分作品被内容显示设置过滤，暂时无法显示"
                 : "该标签下暂无插画作品"
             }
-            systemImage={paged.hasFilteredContent ? "eye.slash" : undefined}
+            systemImage={paged.hasFilteredContent ? "eye.slash" : "photo"}
           />
         ) : (
           <IllustFlowFeed
@@ -179,7 +179,7 @@ function TagNovelFeed(props: { tag: string }) {
                 ? "当前页面部分作品被内容显示设置过滤，暂时无法显示"
                 : "该标签下暂无小说作品"
             }
-            systemImage={paged.hasFilteredContent ? "eye.slash" : undefined}
+            systemImage={paged.hasFilteredContent ? "eye.slash" : "book"}
           />
         ) : (
           <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 10 }}>
@@ -261,7 +261,7 @@ function TagPixivisionFeed(props: { tag: string }) {
         ) : paged.items.length === 0 ? (
           <EmptyView
             text="该标签下暂无相关特辑"
-            systemImage="sparkles.rectangle.stack"
+            systemImage="rectangle.stack"
           />
         ) : (
           <LazyVStack alignment="leading" spacing={8} padding={{ horizontal: 12 }}>

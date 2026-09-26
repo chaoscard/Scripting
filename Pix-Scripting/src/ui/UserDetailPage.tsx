@@ -957,7 +957,7 @@ export function UserDetailView(props: { userID: number }) {
             frame={{ maxWidth: "infinity" }}
           >
             <UserProfileHeader detail={detail} webDetail={webDetail} />
-            <EmptyView text="暂无作品投稿" systemImage="photo.on.rectangle.angled" />
+            <EmptyView text="暂无作品投稿" systemImage="photo.stack" />
           </VStack>
         </RefreshableScrollView>
       ) : (

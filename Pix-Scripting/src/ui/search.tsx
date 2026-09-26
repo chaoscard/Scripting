@@ -2202,7 +2202,7 @@ function RecommendedUsersSection(props: {
   }
 
   if (paged.items.length === 0) {
-    return <EmptyView text="暂无推荐用户" systemImage="person.2" />
+    return <EmptyView text="暂无推荐用户" systemImage="person.crop.circle" />
   }
 
   return (
