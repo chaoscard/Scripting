@@ -1,5 +1,6 @@
 import {
   Button,
+  Color,
   Device,
   Group,
   HStack,
@@ -472,6 +473,11 @@ function historyToolbar(props: {
   const isClassic = !props.isAppleMusic
   const kindLabel = historyKindTitle(props.kind)
   const fullTitle = `浏览记录 · ${kindLabel}`
+  const settings = loadSettings()
+  const customTint =
+    settings.glassCustomTintEnabled && settings.glassTintColor
+      ? (settings.glassTintColor as Color)
+      : undefined
 
   async function handleClearConfirm() {
     try {
@@ -516,6 +522,13 @@ function historyToolbar(props: {
             </HStack>
           }
         >
+          {props.onOpenAnalytics ? (
+            <Button
+              title="我的足迹"
+              systemImage="chart.xyaxis.line"
+              action={props.onOpenAnalytics}
+            />
+          ) : null}
           <Picker
             title="记录类型"
             value={props.kind}
@@ -527,13 +540,6 @@ function historyToolbar(props: {
               <Label tag="novel" title="小说" systemImage="book" />
             )}
           </Picker>
-          {props.onOpenAnalytics ? (
-            <Button
-              title="我的足迹"
-              systemImage="chart.xyaxis.line"
-              action={props.onOpenAnalytics}
-            />
-          ) : null}
           <Button
             title={`清空${kindLabel}记录`}
             systemImage="trash"
@@ -613,41 +619,28 @@ function historyToolbar(props: {
         <Button
           key="history-clear-btn"
           role="destructive"
+          tint={customTint ?? "systemRed"}
           action={handleClearConfirm}
         >
-          <Image systemName="trash" />
+          <Image
+            systemName="trash"
+            foregroundStyle={customTint ?? "systemRed"}
+          />
         </Button>
       )
       return actions
     }
 
-    // 经典样式单栏：平铺展开「我的足迹」+「分类筛选菜单（动态图标）」+「清空记录」三联按钮
-    const actions: any[] = []
-    if (props.onOpenAnalytics) {
-      actions.push(
-        <Button
-          key="history-analytics-btn"
-          action={props.onOpenAnalytics}
-        >
-          <Image systemName="chart.xyaxis.line" />
-        </Button>
-      )
-    }
-    actions.push(
-      <Menu
-        key="history-kind-menu"
-        label={
-          <Image
-            systemName={
-              props.kind === "illustration"
-                ? "photo"
-                : props.kind === "manga"
-                  ? "photo.on.rectangle"
-                  : "book"
-            }
+    // 经典样式单栏（iPhone / 台前调度窄窗）：收拢为单一更多菜单，避免挤压中间标题「浏览记录 · 分类」
+    return (
+      <Menu key="history-classic-more-menu" label={<Image systemName="ellipsis.circle" />}>
+        {props.onOpenAnalytics ? (
+          <Button
+            title="我的足迹"
+            systemImage="chart.xyaxis.line"
+            action={props.onOpenAnalytics}
           />
-        }
-      >
+        ) : null}
         <Picker
           title="记录类型"
           value={props.kind}
@@ -659,18 +652,14 @@ function historyToolbar(props: {
             <Label tag="novel" title="小说" systemImage="book" />
           )}
         </Picker>
+        <Button
+          title={`清空${kindLabel}记录`}
+          systemImage="trash"
+          role="destructive"
+          action={handleClearConfirm}
+        />
       </Menu>
     )
-    actions.push(
-      <Button
-        key="history-clear-btn"
-        role="destructive"
-        action={handleClearConfirm}
-      >
-        <Image systemName="trash" />
-      </Button>
-    )
-    return actions
   })()
 
   return {

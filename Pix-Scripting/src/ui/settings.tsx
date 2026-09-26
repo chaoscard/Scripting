@@ -428,43 +428,71 @@ export function SettingsView() {
                 />
               </Menu>,
             ]
-          : [
-              <Button
-                action={toggleExpandAll}
-              >
-                <Image
-                  systemName={isAllExpanded ? "rectangle.compress.vertical" : "rectangle.expand.vertical"}
-                />
-              </Button>,
-              <Button
-                action={() => {
-                  triggerHaptic("light")
-                  setActiveSheet("highlights")
-                }}
-              >
-                <Image systemName="lightbulb" />
-              </Button>,
-              <Button
-                action={() => {}}
-                contextMenu={{
-                  menuItems: (
-                    <Group>
-                      <Button
-                        title="重置为默认设置"
-                        systemImage="arrow.counterclockwise"
-                        role="destructive"
-                        action={handleResetSettings}
-                      />
-                    </Group>
-                  ),
-                }}
-              >
-                <Image
-                  systemName={settingsReset ? "checkmark" : "arrow.counterclockwise"}
-                  foregroundStyle={settingsReset ? "systemGreen" : undefined}
-                />
-              </Button>,
-            ],
+          : isSplitViewActive
+            ? [
+                <Button
+                  key="settings-split-expand-btn"
+                  action={toggleExpandAll}
+                >
+                  <Image
+                    systemName={isAllExpanded ? "rectangle.compress.vertical" : "rectangle.expand.vertical"}
+                  />
+                </Button>,
+                <Button
+                  key="settings-split-highlights-btn"
+                  action={() => {
+                    triggerHaptic("light")
+                    setActiveSheet("highlights")
+                  }}
+                >
+                  <Image systemName="lightbulb" />
+                </Button>,
+                <Button
+                  key="settings-split-reset-btn"
+                  action={() => {}}
+                  contextMenu={{
+                    menuItems: (
+                      <Group>
+                        <Button
+                          title="重置为默认设置"
+                          systemImage="arrow.counterclockwise"
+                          role="destructive"
+                          action={handleResetSettings}
+                        />
+                      </Group>
+                    ),
+                  }}
+                >
+                  <Image
+                    systemName={settingsReset ? "checkmark" : "arrow.counterclockwise"}
+                    foregroundStyle={settingsReset ? "systemGreen" : undefined}
+                  />
+                </Button>,
+              ]
+            : [
+                // iPhone 样式与台前调度窄窗口：收拢为单一更多菜单，使得左侧返回与右侧菜单宽度对称，中间标题「应用设置」完全居中
+                <Menu key="settings-narrow-more-menu" label={<Image systemName="ellipsis.circle" />}>
+                  <Button
+                    title={isAllExpanded ? "折叠全部区块" : "展开全部区块"}
+                    systemImage={isAllExpanded ? "rectangle.compress.vertical" : "rectangle.expand.vertical"}
+                    action={toggleExpandAll}
+                  />
+                  <Button
+                    title="版本更新亮点"
+                    systemImage="lightbulb"
+                    action={() => {
+                      triggerHaptic("light")
+                      setActiveSheet("highlights")
+                    }}
+                  />
+                  <Button
+                    title="重置为默认设置"
+                    systemImage="arrow.counterclockwise"
+                    role="destructive"
+                    action={handleResetSettings}
+                  />
+                </Menu>,
+              ],
       }}
     >
       {typeof ambientBackground === "object" && ambientBackground !== null ? (

@@ -124,34 +124,62 @@ export function MoreView(props: { onClose: () => void }) {
       )
     }
 
-    // 3. 经典模式单栏（iPhone 真机 / iPad 台前调度窄窗 / iPad 全屏单栏）：平铺展示以图搜图、下载管理、我的头像
-    return [
-      <Button
-        key="reverse-search-btn"
-        action={() => {
-          try {
-            triggerHaptic("selection")
-          } catch {}
-          setActiveSheet("reverseSearch")
-        }}
-      >
-        <Image systemName="photo.badge.magnifyingglass" />
-      </Button>,
-      <Button
-        key="download-manager-btn"
-        action={() => navigateTo("downloadManager")}
-      >
-        <Image systemName="square.and.arrow.down" />
-      </Button>,
-      <Button
-        key="profile-avatar-btn"
-        buttonStyle="plain"
-        action={() => navigateTo(`user:${user.id}`)}
-      >
-        <AvatarImage url={avatarURL} size={28} />
-      </Button>,
-    ]
-  }, [isAppleMusic, isSplitViewActive, avatarURL, user?.id, navigateTo])
+    // 3. iPad 全屏宽屏单栏（isFullScreenPad）：空间充裕，平铺展示以图搜图、下载管理、我的头像
+    if (isFullScreenPad) {
+      return [
+        <Button
+          key="reverse-search-btn"
+          action={() => {
+            try {
+              triggerHaptic("selection")
+            } catch {}
+            setActiveSheet("reverseSearch")
+          }}
+        >
+          <Image systemName="photo.badge.magnifyingglass" />
+        </Button>,
+        <Button
+          key="download-manager-btn"
+          action={() => navigateTo("downloadManager")}
+        >
+          <Image systemName="square.and.arrow.down" />
+        </Button>,
+        <Button
+          key="profile-avatar-btn"
+          buttonStyle="plain"
+          action={() => navigateTo(`user:${user.id}`)}
+        >
+          <AvatarImage url={avatarURL} size={28} />
+        </Button>,
+      ]
+    }
+
+    // 4. 经典模式窄屏单栏（iPhone 真机 / iPad 台前调度窄窗）：收拢为单一更多菜单，使左侧关闭与右侧菜单对称，中间「我的」大标题绝对居中
+    return (
+      <Menu key="more-view-narrow-menu" label={<Image systemName="ellipsis.circle" />}>
+        <Button
+          title="查看主页"
+          systemImage="person.crop.circle"
+          action={() => navigateTo(`user:${user.id}`)}
+        />
+        <Button
+          title="以图搜图"
+          systemImage="photo.badge.magnifyingglass"
+          action={() => {
+            try {
+              triggerHaptic("selection")
+            } catch {}
+            setActiveSheet("reverseSearch")
+          }}
+        />
+        <Button
+          title="下载与文件管理"
+          systemImage="square.and.arrow.down"
+          action={() => navigateTo("downloadManager")}
+        />
+      </Menu>
+    )
+  }, [isAppleMusic, isSplitViewActive, isFullScreenPad, avatarURL, user?.id, navigateTo])
 
   useEffect(() => {
     return onSettingsChanged(() => {

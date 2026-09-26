@@ -334,10 +334,10 @@ export function AccountSwitcherSheet(props: {
 
             <Divider />
 
-            {/* 退出当前账号 */}
+            {/* 退出当前账号（防误触：移除轻点触发，仅保留系统原生长按上下文菜单确认） */}
             <Button
               buttonStyle="plain"
-              action={handleSignOutCurrent}
+              action={() => {}}
               contentShape="rect"
               frame={{ maxWidth: "infinity", alignment: "leading" }}
               contextMenu={{
