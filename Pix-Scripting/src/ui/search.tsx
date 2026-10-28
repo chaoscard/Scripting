@@ -1241,30 +1241,57 @@ export function SearchView(props: {
             </VStack>
           ) : null}
 
-          {/* 2. 未提交搜索状态：始终纯净展示热门标签或推荐创作者，永不突变闪烁 */}
+          {/* 2. 未提交搜索状态：始终纯净展示热门标签或推荐创作者，iPad 未打字常驻展示历史记录 */}
           {!submitted ? (
-            targetScope === "illust" ? (
-              <TrendingSection
-                tags={trendingIllust}
-                loading={trendingIllustLoading}
-                error={trendingIllustError}
-                onRetry={loadTrendingIllustData}
-                onSelect={submitSearch}
-              />
-            ) : targetScope === "novel" ? (
-              <TrendingSection
-                tags={trendingNovel}
-                loading={trendingNovelLoading}
-                error={trendingNovelError}
-                onRetry={loadTrendingNovelData}
-                onSelect={submitSearch}
-              />
-            ) : (
-              <RecommendedUsersSection
-                paged={userRecommendedPaged}
-                hideNovels={hideNovels}
-              />
-            )
+            <VStack spacing={8} frame={{ maxWidth: "infinity" }}>
+              {/* iPad 专属合屏模式：上方常驻搜索历史（有记录则显示，无记录自然隐去） */}
+              {Device.isiPad && historyItems.length > 0 && !query.trim() ? (
+                <SearchHistorySection
+                  entries={historyItems}
+                  isDoubleColumn={isFullScreenPad}
+                  hideIfEmpty={true}
+                  bottomInset={0}
+                  onSelect={(entry) => {
+                    const trans = entry.translatedName || getTagTranslation(entry.query)
+                    submitSearch(entry.query, trans)
+                  }}
+                  onRemove={(entry) => {
+                    removeSearchHistory(entry.query, targetScope)
+                    setHistoryItems(getSearchHistoryEntries(targetScope))
+                  }}
+                  onClear={() => {
+                    clearSearchHistory(targetScope)
+                    setHistoryItems([])
+                  }}
+                  onFillQuery={(q) => {
+                    setQuery(q)
+                  }}
+                />
+              ) : null}
+
+              {targetScope === "illust" ? (
+                <TrendingSection
+                  tags={trendingIllust}
+                  loading={trendingIllustLoading}
+                  error={trendingIllustError}
+                  onRetry={loadTrendingIllustData}
+                  onSelect={submitSearch}
+                />
+              ) : targetScope === "novel" ? (
+                <TrendingSection
+                  tags={trendingNovel}
+                  loading={trendingNovelLoading}
+                  error={trendingNovelError}
+                  onRetry={loadTrendingNovelData}
+                  onSelect={submitSearch}
+                />
+              ) : (
+                <RecommendedUsersSection
+                  paged={userRecommendedPaged}
+                  hideNovels={hideNovels}
+                />
+              )}
+            </VStack>
           ) : null}
 
           {/* 3. 已提交搜索：展示当前搜索结果列表 */}
@@ -1630,7 +1657,7 @@ export function SearchView(props: {
         {searchPresented && scope !== "user" && (
           query.trim().length > 0
             ? (tagSuggestions.length > 0 || directTargets.length > 0)
-            : historyItems.length > 0
+            : (!Device.isiPad && historyItems.length > 0)
         ) ? (
           <ScrollView
             frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
@@ -1644,8 +1671,8 @@ export function SearchView(props: {
               shadow={{ color: "#00000028", radius: 10, y: 3 }}
               frame={{ maxWidth: "infinity" }}
             >
-              {/* 分支 A：尚未输入关键词，展示搜索历史记录 */}
-              {!query.trim() && historyItems.length > 0 ? (
+              {/* 分支 A：尚未输入关键词，展示搜索历史记录（仅 iPhone） */}
+              {!Device.isiPad && !query.trim() && historyItems.length > 0 ? (
                 <VStack spacing={0} frame={{ maxWidth: "infinity" }}>
                   <HStack alignment="center" spacing={6} padding={{ horizontal: 14, top: 12, bottom: 8 }}>
                     <Image systemName="clock.arrow.circlepath" font="caption" foregroundStyle="secondaryLabel" />
@@ -2244,84 +2271,121 @@ function UserSuggestionsSection(props: {
 // -------------------- 搜索记录组件（iOS 现代卡片设计） --------------------
 
 function SearchHistoryItem(props: {
-  item: string
-  onSelect: (query: string) => void
-  onRemove: (query: string) => void
+  entry: SearchHistoryEntry
+  onSelect: (entry: SearchHistoryEntry) => void
+  onRemove: (entry: SearchHistoryEntry) => void
+  onFillQuery?: (query: string) => void
 }) {
-  const { item, onSelect, onRemove } = props
+  const { entry, onSelect, onRemove, onFillQuery } = props
+  const trans = entry.translatedName || getTagTranslation(entry.query)
 
   return (
     <HStack alignment="center" spacing={0} frame={{ maxWidth: "infinity" }}>
+      {/* 点击历史条目：直接提交搜索 */}
       <Button
         buttonStyle="plain"
-        action={() => onSelect(item)}
+        action={() => {
+          try {
+            triggerHaptic("selection")
+          } catch {}
+          onSelect(entry)
+        }}
         contentShape="rect"
         frame={{ maxWidth: "infinity", alignment: "leading" }}
       >
         <HStack
-          spacing={10}
           alignment="center"
-          contentShape="rect"
-          padding={{ horizontal: 14, vertical: 12 }}
+          spacing={10}
+          padding={{ horizontal: 14, vertical: 10 }}
           frame={{ maxWidth: "infinity", alignment: "leading" }}
+          contentShape="rect"
         >
           <Image
-            systemName="magnifyingglass"
+            systemName="clock"
             font="subheadline"
             foregroundStyle="secondaryLabel"
           />
-          <Text font="body" foregroundStyle="label" lineLimit={1}>
-            {item}
-          </Text>
+          <VStack alignment="leading" spacing={2} frame={{ maxWidth: "infinity", alignment: "leading" }}>
+            <Text font="body" foregroundStyle="label" lineLimit={1}>
+              {entry.query}
+            </Text>
+            {trans ? (
+              <Text font="caption" foregroundStyle="secondaryLabel" lineLimit={1}>
+                {trans}
+              </Text>
+            ) : null}
+          </VStack>
           <Spacer />
         </HStack>
       </Button>
+
+      {/* 单项删除按钮 */}
       <Button
         buttonStyle="plain"
         contentShape="rect"
         action={() => {
           try {
-            triggerHaptic("medium")
+            triggerHaptic("light")
           } catch {}
-          onRemove(item)
+          onRemove(entry)
         }}
       >
-        <HStack
-          alignment="center"
-          contentShape="rect"
-          padding={{ horizontal: 12, vertical: 12 }}
-        >
+        <HStack alignment="center" padding={{ horizontal: 10, vertical: 12 }}>
           <Image
-            systemName="xmark.circle.fill"
+            systemName="xmark.circle"
             font="subheadline"
-            foregroundStyle="secondaryLabel"
+            foregroundStyle="tertiaryLabel"
           />
         </HStack>
       </Button>
+
+      {/* 点击右侧角标：仅补全填入输入框 */}
+      {onFillQuery ? (
+        <Button
+          buttonStyle="plain"
+          action={() => {
+            try {
+              triggerHaptic("selection")
+            } catch {}
+            onFillQuery(entry.query + " ")
+          }}
+          contentShape="rect"
+        >
+          <HStack alignment="center" padding={{ leading: 4, trailing: 14, vertical: 12 }}>
+            <Image
+              systemName="arrow.up.left"
+              font="caption"
+              foregroundStyle="tertiaryLabel"
+            />
+          </HStack>
+        </Button>
+      ) : null}
     </HStack>
   )
 }
 
 function SearchHistorySection(props: {
-  history: string[]
+  entries: SearchHistoryEntry[]
   isDoubleColumn?: boolean
   hideIfEmpty?: boolean
   bottomInset?: number
-  onSelect: (query: string) => void
-  onRemove: (query: string) => void
+  onSelect: (entry: SearchHistoryEntry) => void
+  onRemove: (entry: SearchHistoryEntry) => void
   onClear: () => void
+  onFillQuery?: (query: string) => void
 }) {
   const {
-    history,
+    entries,
     isDoubleColumn = false,
-    hideIfEmpty = false,
-    bottomInset = Math.round(loadSettings().feedBottomInset / 2),
+    hideIfEmpty = true,
+    bottomInset = 0,
     onSelect,
     onRemove,
     onClear,
+    onFillQuery,
   } = props
 
-  if (hideIfEmpty && history.length === 0) {
+  if (hideIfEmpty && entries.length === 0) {
     return null
   }
 
@@ -2333,24 +2397,26 @@ function SearchHistorySection(props: {
     try {
       if (typeof Dialog !== "undefined" && typeof Dialog.confirm === "function") {
         confirmed = await Dialog.confirm({
-          title: "清空搜索记录",
-          message: "确定要清空全部搜索记录吗？",
+          title: "清空搜索历史",
+          message: "确定要清空全部搜索历史吗？",
           confirmLabel: "清空",
           cancelLabel: "取消",
         })
+      } else {
+        confirmed = true
       }
     } catch {
-      confirmed = false
+      confirmed = true
     }
     if (confirmed) {
       onClear()
     }
   }
 
-  const pairs: [string, string?][] = []
+  const pairs: [SearchHistoryEntry, SearchHistoryEntry?][] = []
   if (isDoubleColumn) {
-    for (let i = 0; i < history.length; i += 2) {
-      pairs.push([history[i], history[i + 1]])
+    for (let i = 0; i < entries.length; i += 2) {
+      pairs.push([entries[i], entries[i + 1]])
     }
   }
 
@@ -2358,58 +2424,41 @@ function SearchHistorySection(props: {
     <VStack
       alignment="leading"
       spacing={8}
-      padding={{ horizontal: 8, bottom: bottomInset }}
+      padding={{ horizontal: 8, top: 1, bottom: bottomInset }}
       frame={{ maxWidth: "infinity" }}
     >
       <HStack alignment="center" spacing={8} frame={{ maxWidth: "infinity" }} padding={{ horizontal: 4, vertical: 4 }}>
-        <Text font="subheadline" fontWeight="semibold" foregroundStyle="secondaryLabel">
-          搜索记录（{history.length}）
-        </Text>
+        <HStack alignment="center" spacing={6}>
+          <Image systemName="clock.arrow.circlepath" font="caption" foregroundStyle="secondaryLabel" />
+          <Text font="caption" fontWeight="semibold" foregroundStyle="secondaryLabel">
+            搜索历史
+          </Text>
+        </HStack>
         <Spacer />
-        {history.length > 0 ? (
+        {entries.length > 0 ? (
           <Button
             buttonStyle="plain"
             action={() => void handleClear()}
-            contentShape="capsule"
           >
-            <HStack
-              alignment="center"
-              spacing={4}
-              padding={{ horizontal: 10, vertical: 5 }}
-              glassEffect={appInteractiveGlass("capsule")}
-              contentShape="capsule"
-              clipShape="capsule"
-            >
+            <HStack alignment="center" spacing={4} padding={{ horizontal: 6, vertical: 4 }}>
               <Image
                 systemName="trash"
                 font="caption"
                 foregroundStyle="systemRed"
               />
-              <Text font="subheadline" fontWeight="medium" foregroundStyle="systemRed">
-                清除记录
+              <Text font="caption" fontWeight="semibold" foregroundStyle="systemRed">
+                清空
               </Text>
             </HStack>
           </Button>
         ) : null}
       </HStack>
 
-      {history.length === 0 ? (
-        <VStack
-          alignment="center"
-          spacing={8}
-          padding={{ vertical: 36 }}
-          frame={{ maxWidth: "infinity" }}
-        >
-          <Image systemName="clock" font="title2" foregroundStyle="tertiaryLabel" />
-          <Text font="subheadline" foregroundStyle="tertiaryLabel">
-            暂无搜索记录
-          </Text>
-        </VStack>
-      ) : (
+      {entries.length === 0 ? null : (
         <VStack
           spacing={0}
-          glassEffect={appGlass({ type: "rect", cornerRadius: 12 })}
-          clipShape={{ type: "rect", cornerRadius: 12 }}
+          glassEffect={appGlass({ type: "rect", cornerRadius: 14 })}
+          clipShape={{ type: "rect", cornerRadius: 14 }}
           frame={{ maxWidth: "infinity" }}
         >
           {isDoubleColumn
@@ -2419,17 +2468,20 @@ function SearchHistorySection(props: {
                   <HStack alignment="center" spacing={0} frame={{ maxWidth: "infinity" }}>
                     <VStack frame={{ maxWidth: "infinity", alignment: "leading" }}>
                       <SearchHistoryItem
-                        item={pair[0]}
+                        entry={pair[0]}
                         onSelect={onSelect}
                         onRemove={onRemove}
+                        onFillQuery={onFillQuery}
                       />
                     </VStack>
+                    <Divider />
                     {pair[1] ? (
                       <VStack frame={{ maxWidth: "infinity", alignment: "leading" }}>
                         <SearchHistoryItem
-                          item={pair[1]}
+                          entry={pair[1]}
                           onSelect={onSelect}
                           onRemove={onRemove}
+                          onFillQuery={onFillQuery}
                         />
                       </VStack>
                     ) : (
@@ -2438,13 +2490,14 @@ function SearchHistorySection(props: {
                   </HStack>
                 </VStack>
               ))
-            : history.map((item, index) => (
-                <VStack key={`${item}-${index}`} spacing={0} frame={{ maxWidth: "infinity" }}>
+            : entries.map((entry, index) => (
+                <VStack key={`${entry.query}-${index}`} spacing={0} frame={{ maxWidth: "infinity" }}>
                   {index > 0 ? <Divider /> : null}
                   <SearchHistoryItem
-                    item={item}
+                    entry={entry}
                     onSelect={onSelect}
                     onRemove={onRemove}
+                    onFillQuery={onFillQuery}
                   />
                 </VStack>
               ))}
