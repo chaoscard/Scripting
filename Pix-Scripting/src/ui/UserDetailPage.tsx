@@ -545,7 +545,7 @@ export function UserDetailView(props: { userID: number }) {
       } else {
         const confirmed = await Dialog.confirm({
           title: "确认导出原始 ZIP 帧包？",
-          message: `将拉取用户「${detail.user.name}」全部动图，分别打包为包含高清无损序列帧与完整延迟数据 (info.json) 的独立 ZIP 压缩包，存入画师专属 Ugoira 目录。`,
+          message: `将拉取用户「${detail.user.name}」全部动图，分别打包为包含高清无损序列帧与完整延迟数据 (info.json) 的独立 ZIP 压缩包，存入创作者专属 Ugoira 目录。`,
           confirmLabel: "开始导出",
           cancelLabel: "取消",
         })
@@ -562,7 +562,7 @@ export function UserDetailView(props: { userID: number }) {
           const result = await exportAuthorUgoiraZipToFiles(detail.user.name, userID, ugoiras, (msg) => setDownloadStatusText(msg))
           void Dialog.alert({
             title: "导出完成",
-            message: `已成功将 ${result.successCount} 部动图原始 ZIP 帧包导出至画师 Ugoira 文件夹，请在「下载与文件管理」中查看。`,
+            message: `已成功将 ${result.successCount} 部动图原始 ZIP 帧包导出至创作者 Ugoira 文件夹，请在「下载与文件管理」中查看。`,
           })
         } catch (e: any) {
           void Dialog.alert({ title: "导出失败", message: e?.message ?? "导出动图帧包时发生错误" })

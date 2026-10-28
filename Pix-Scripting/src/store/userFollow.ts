@@ -51,8 +51,8 @@ export function getUserFollowState(userID: number): UserFollowState | undefined 
 }
 
 /**
- * 补录服务端列表/作品接口附带的画师快照（Cache-First 语义）：
- * 仅当本地内存尚无该画师记录时才录入初值并广播；若本地已有记录，严禁被附带快照覆盖。
+ * 补录服务端列表/作品接口附带的创作者快照（Cache-First 语义）：
+ * 仅当本地内存尚无该创作者记录时才录入初值并广播；若本地已有记录，严禁被附带快照覆盖。
  */
 export function recordUserFollowed(
   userID: number,
@@ -73,7 +73,7 @@ export function recordUserFollowed(
 }
 
 /**
- * 仲裁当前画师的实际生效关注状态：
+ * 仲裁当前创作者的实际生效关注状态：
  * 优先取本地缓存，无缓存时回退至传入的服务端快照。
  */
 export function getEffectiveFollowState(

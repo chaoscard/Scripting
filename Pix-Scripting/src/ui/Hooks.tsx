@@ -723,7 +723,7 @@ export function useNovelBookmark(
 }
 
 /**
- * 响应式同步画师的关注状态
+ * 响应式同步创作者的关注状态
  */
 export function useUserFollow(
   userID: number,

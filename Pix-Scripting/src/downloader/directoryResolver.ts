@@ -86,7 +86,7 @@ export function getCategoryDirectory(category: DownloadCategory): string {
 }
 
 /**
- * 获取并确保特定创作者的存储子目录（例如：/Pix-Scripting/Creators/画师名 (UID)/Illustrations）
+ * 获取并确保特定创作者的存储子目录（例如：/Pix-Scripting/Creators/创作者名 (UID)/Illustrations）
  */
 export function getAuthorDownloadDirectory(
   authorName: string,

@@ -160,7 +160,7 @@ export function cachedFilePath(url: string): string | null {
  * 1. 排除小说封面与动图，仅从插画（history_illust.json）中选取；
  * 2. 100% 绝对过滤 R18 和 R18G（无论设置中是否开启显示，启动页绝对不可见）；
  * 3. AI 作品严格跟随设置项 settings.showAI 控制，若未开启则过滤；
- * 4. 遵守用户标签与画师黑名单拦截；
+ * 4. 遵守用户标签与创作者黑名单拦截；
  * 5. 从近期最多 30 张有效合规缓存插画中随机抽取 1 张展示；
  * 6. 若无可用合规插画缓存，安全返回 null 并自动降级为梦幻流体光晕渐变背景。
  */
@@ -199,7 +199,7 @@ export function getLatestCachedArtworkPath(): string | null {
         if (hasAITag) continue
       }
 
-      // 3. 检查常规内容过滤规则（画师黑名单、标签黑名单等）
+      // 3. 检查常规内容过滤规则（创作者黑名单、标签黑名单等）
       if (!isIllustContentVisible(illust as any, settings)) {
         continue
       }

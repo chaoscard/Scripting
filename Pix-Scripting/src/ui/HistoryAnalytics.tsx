@@ -645,7 +645,7 @@ function TopCreatorsSection(props: {
                 {String(idx + 1).padStart(2, "0")}
               </Text>
 
-              {/* 画师名称与心动信息 (严格靠左对齐，去除居中偏差) */}
+              {/* 创作者名称与心动信息 (严格靠左对齐，去除居中偏差) */}
               <VStack
                 alignment="leading"
                 spacing={2}

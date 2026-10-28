@@ -1945,7 +1945,7 @@ export function DownloadCreatorsListView(props: { onClose?: () => void }) {
         searchable={{
           value: searchQuery,
           onChanged: setSearchQuery,
-          prompt: "搜索画师或创作者名称…",
+          prompt: "搜索创作者名称…",
         }}
       >
       {/* 批量操作控制条（多选模式） */}

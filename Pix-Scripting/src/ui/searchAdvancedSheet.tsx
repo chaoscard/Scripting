@@ -1,6 +1,7 @@
 import {
   Button,
   DatePicker,
+  Divider,
   HStack,
   Image,
   Label,
@@ -9,21 +10,24 @@ import {
   Picker,
   ScrollView,
   Section,
+  Spacer,
   Text,
   TextField,
   Toggle,
   VStack,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "scripting"
-import { compileSearchQuery, stripBookmarkFilterFromWord } from "../api/pixiv"
+import { compileSearchQuery, searchAutocomplete, stripBookmarkFilterFromWord } from "../api/pixiv"
 import { session } from "../api/session"
 import { sheetTopBar } from "./components/pageChrome"
 import { SheetScaffold } from "./components/SheetScaffold"
 import type {
   AdvancedSearchParams,
   BookmarkThreshold,
+  PixivAutocompleteTag,
   SearchCategory,
   SearchMediaFilter,
   SearchScope,
@@ -33,6 +37,18 @@ import { loadSettings, type AppSettings } from "../store/settings"
 import { triggerHaptic } from "../platform/haptics"
 
 declare const Dialog: any
+
+export function extractActiveWordToken(text: string): { prefix: string; token: string } {
+  if (!text) return { prefix: "", token: "" }
+  const match = /^(.*[\s()（）|&+-])?([^\s()（）|&+-]+)$/u.exec(text)
+  if (match) {
+    return {
+      prefix: match[1] ?? "",
+      token: match[2] ?? "",
+    }
+  }
+  return { prefix: "", token: text.trim() }
+}
 
 export function formatDateToPixivDate(timestamp: number): string {
   const d = new Date(timestamp)
@@ -329,6 +345,11 @@ export function SearchAdvancedSheet(props: {
   const [shouldAutoFocus, setShouldAutoFocus] = useState<boolean>(
     () => !currentParams.word?.trim()
   )
+  const [tagSuggestions, setTagSuggestions] = useState<PixivAutocompleteTag[]>([])
+  const [tagSuggestionsLoading, setTagSuggestionsLoading] = useState(false)
+  const tagSeqRef = useRef(0)
+  const debounceTimerRef = useRef<any>(null)
+
   const queryInspection = useMemo(() => inspectSearchQuery(word), [word])
 
   useEffect(() => {
@@ -361,6 +382,66 @@ export function SearchAdvancedSheet(props: {
     }
   }, [shouldAutoFocus])
 
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current)
+      }
+    }
+  }, [])
+
+  const handleWordChanged = (val: string) => {
+    setWord(val)
+    if (shouldAutoFocus) {
+      setShouldAutoFocus(false)
+    }
+
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current)
+    }
+
+    const { token } = extractActiveWordToken(val)
+    const trimmed = token.trim()
+    if (!trimmed) {
+      tagSeqRef.current++
+      setTagSuggestions([])
+      setTagSuggestionsLoading(false)
+      return
+    }
+
+    const seq = ++tagSeqRef.current
+    debounceTimerRef.current = setTimeout(() => {
+      setTagSuggestionsLoading(true)
+      session
+        .call((authToken) => searchAutocomplete(trimmed, authToken))
+        .then((tags) => {
+          if (seq === tagSeqRef.current) {
+            setTagSuggestions(tags)
+            setTagSuggestionsLoading(false)
+          }
+        })
+        .catch(() => {
+          if (seq === tagSeqRef.current) {
+            setTagSuggestions([])
+            setTagSuggestionsLoading(false)
+          }
+        })
+    }, 300)
+  }
+
+  const handleApplySuggestion = (suggestionTag: string) => {
+    try {
+      triggerHaptic("selection")
+    } catch {}
+    const { prefix } = extractActiveWordToken(word)
+    if (prefix) {
+      setWord(`${prefix}${suggestionTag} `)
+    } else {
+      setWord(suggestionTag)
+    }
+    setTagSuggestions([])
+    setTagSuggestionsLoading(false)
+  }
   const minTimestamp = useMemo(() => new Date("2007-09-09").getTime(), [])
   const maxTimestamp = useMemo(() => Date.now(), [])
 
@@ -394,6 +475,8 @@ export function SearchAdvancedSheet(props: {
   }
 
   function handleReset() {
+    setTagSuggestions([])
+    setTagSuggestionsLoading(false)
     const { scope, mediaFilter } = scopeAndMediaFilterFromCategory(category)
     const defaults = getDefaultAdvancedSearchParams(scope, word, mediaFilter)
     setTarget(defaults.target)
@@ -494,14 +577,58 @@ export function SearchAdvancedSheet(props: {
             title="关键词"
             prompt="输入搜索关键词…"
             value={word}
-            onChanged={(val: string) => {
-              setWord(val)
-              if (shouldAutoFocus) {
-                setShouldAutoFocus(false)
-              }
-            }}
+            onChanged={handleWordChanged}
             autofocus={shouldAutoFocus}
           />
+          {tagSuggestions.length > 0 ? (
+            <VStack
+              alignment="leading"
+              spacing={0}
+              listRowInsets={{ top: 0, bottom: 0, leading: 16, trailing: 16 }}
+            >
+              {tagSuggestions.map((item, idx) => (
+                <VStack key={`${item.name}-${idx}`} spacing={0} frame={{ maxWidth: "infinity" }}>
+                  {idx > 0 ? <Divider /> : null}
+                  <Button
+                    buttonStyle="plain"
+                    action={() => handleApplySuggestion(item.name)}
+                    contentShape="rect"
+                    frame={{ maxWidth: "infinity", alignment: "leading" }}
+                  >
+                    <HStack
+                      alignment="center"
+                      spacing={10}
+                      padding={{ horizontal: 4, vertical: 10 }}
+                      frame={{ maxWidth: "infinity", alignment: "leading" }}
+                      contentShape="rect"
+                    >
+                      <Image
+                        systemName="magnifyingglass"
+                        font="subheadline"
+                        foregroundStyle="secondaryLabel"
+                      />
+                      <VStack alignment="leading" spacing={2} frame={{ maxWidth: "infinity", alignment: "leading" }}>
+                        <Text font="body" foregroundStyle="label" lineLimit={1}>
+                          {item.name}
+                        </Text>
+                        {item.translated_name ? (
+                          <Text font="caption" foregroundStyle="secondaryLabel" lineLimit={1}>
+                            {item.translated_name}
+                          </Text>
+                        ) : null}
+                      </VStack>
+                      <Spacer />
+                      <Image
+                        systemName="arrow.up.left"
+                        font="caption"
+                        foregroundStyle="tertiaryLabel"
+                      />
+                    </HStack>
+                  </Button>
+                </VStack>
+              ))}
+            </VStack>
+          ) : null}
           {queryInspection.shouldShow ? (
             <VStack alignment="leading" spacing={6} padding={{ top: 4, bottom: 4 }}>
               {queryInspection.humanSummary ? (

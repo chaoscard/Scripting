@@ -110,7 +110,7 @@ export function extractPixivIdFromSauceNaoData(data: Record<string, any>): numbe
 }
 
 /**
- * 异步穿透查询 Booru 图库（Danbooru / Gelbooru / Yande.re 等）以溯源原画 Pixiv ID 及 Pixiv 画师 UID
+ * 异步穿透查询 Booru 图库（Danbooru / Gelbooru / Yande.re 等）以溯源原画 Pixiv ID 及 Pixiv 创作者 UID
  */
 export async function resolveBooruPixivId(data: Record<string, any>): Promise<{
   pixivId?: number

@@ -1175,8 +1175,8 @@ ${THEME_CSS_VARS}
     height: 100%;
     min-height: 100%;
     box-sizing: border-box;
-    padding-top: max(48px, env(safe-area-inset-top));
-    padding-bottom: max(60px, env(safe-area-inset-bottom));
+    padding-top: 76px;
+    padding-bottom: 64px;
     padding-left: max(24px, env(safe-area-inset-left));
     padding-right: max(24px, env(safe-area-inset-right));
     overflow-x: auto;
@@ -2278,6 +2278,7 @@ export function NovelImmersiveReaderView(props: NovelImmersiveReaderViewProps) {
   }, [chunks, activeImages])
 
   const metrics = useLayoutMetrics()
+  const topInset = Device.isiPad ? 24 : (metrics.isLandscape ? 16 : 60)
   const bottomInset = metrics.isLandscape ? 18 : (Device.screen.height > 800 ? 32 : 16)
   const horizontalInset = metrics.isLandscape ? 32 : 20
 
@@ -2288,29 +2289,13 @@ export function NovelImmersiveReaderView(props: NovelImmersiveReaderViewProps) {
         background="systemBackground"
         preferredColorScheme={isDark ? "dark" : "light"}
         environments={{ colorScheme: isDark ? "dark" : "light" }}
+        navigationBarVisibility="hidden"
         statusBarHidden={!controlsVisible}
         toolbarVisibility={{
           visibility: controlsVisible ? "visible" : "hidden",
-          bars: ["navigationBar", "statusBar"],
+          bars: ["statusBar"],
         }}
         ignoresSafeArea={true}
-        toolbar={{
-          topBarLeading: [
-            <Button action={handleClose}>
-              <Image systemName="xmark" />
-            </Button>,
-          ],
-          topBarTrailing: [
-            <Button
-              action={() => {
-                triggerHaptic("light")
-                setShowTypography(true)
-              }}
-            >
-              <Image systemName="a.square" />
-            </Button>,
-          ],
-        }}
       >
       {/* 0. 沉浸式环境光大画布（与小说正文页同款，整屏铺满） */}
       {isVirtualNode(ambientBackground) ? (
@@ -2321,6 +2306,61 @@ export function NovelImmersiveReaderView(props: NovelImmersiveReaderViewProps) {
 
       {/* 1. 核心 WebView 纯净渲染引擎（横竖双引擎无缝调度） */}
       <WebView controller={controller} frame={{ maxWidth: "infinity", maxHeight: "infinity" }} />
+
+      {/* 2. 顶部自绘悬浮操作栏（完全替代系统 NavigationBar，彻底消除高度推挤震荡） */}
+      <VStack
+        frame={{ maxWidth: "infinity", maxHeight: "infinity", alignment: "top" }}
+        padding={{ top: topInset, horizontal: horizontalInset }}
+        opacity={controlsVisible ? 1 : 0}
+        animation={{ animation: Animation.smooth({ duration: 0.25 }), value: controlsVisible }}
+        allowsHitTesting={controlsVisible}
+      >
+        <HStack alignment="center" frame={{ maxWidth: "infinity" }}>
+          {/* 左上角：关闭按钮 */}
+          <Button buttonStyle="plain" action={handleClose}>
+            <ZStack
+              alignment="center"
+              frame={{ width: 44, height: 44 }}
+              glassEffect={appInteractiveGlass("circle")}
+              contentShape="circle"
+              shadow={{ color: "#0000001F", radius: 8, y: 2 }}
+            >
+              <Image
+                systemName="xmark"
+                font="body"
+                fontWeight="medium"
+                foregroundStyle="label"
+              />
+            </ZStack>
+          </Button>
+
+          <Spacer />
+
+          {/* 右上角：版式设置按钮 */}
+          <Button
+            buttonStyle="plain"
+            action={() => {
+              triggerHaptic("light")
+              setShowTypography(true)
+            }}
+          >
+            <ZStack
+              alignment="center"
+              frame={{ width: 44, height: 44 }}
+              glassEffect={appInteractiveGlass("circle")}
+              contentShape="circle"
+              shadow={{ color: "#0000001F", radius: 8, y: 2 }}
+            >
+              <Image
+                systemName="a.square"
+                font="body"
+                fontWeight="medium"
+                foregroundStyle="label"
+              />
+            </ZStack>
+          </Button>
+        </HStack>
+      </VStack>
 
 
       {/* 3. 悬浮底栏：页数指示器（多页小说时渲染，带自动轻柔淡出） */}

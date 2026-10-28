@@ -869,7 +869,7 @@ export function parsePixivisionDetailPage(
       pendingQuestion = null
     }
 
-    // 后置回填：若文章中解析到了嘉宾 profile.userId，或全篇仅有 1 位创作者，为所有 QA 问答自动对齐受访画师 ID
+    // 后置回填：若文章中解析到了嘉宾 profile.userId，或全篇仅有 1 位创作者，为所有 QA 问答自动对齐受访创作者 ID
     const fallbackUserId =
       currentProfileUserId ||
       (artworks.length > 0 && artworks.every((a) => a.authorID === artworks[0]?.authorID)

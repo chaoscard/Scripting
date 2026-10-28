@@ -169,7 +169,7 @@ export function formatFileTime(ms: number): string {
 }
 
 /**
- * 从文件名中提取可能的作品 ID、画师名与标题
+ * 从文件名中提取可能的作品 ID、创作者名与标题
  */
 export function extractFileMeta(fileName: string): { artworkId?: number; title: string; author?: string } {
   const clean = fileName.replace(/\.[^/.]+$/, "") // 去除后缀
@@ -419,7 +419,7 @@ export async function getStorageOverview(forceRefresh = false): Promise<StorageO
     pixivisionPhysicalStats.fileCount +
     creatorsStats.fileCount
 
-  // 2. 穿透聚合各分类统计（根目录 + 所有画师对应分类子目录，保证内外口径一致）
+  // 2. 穿透聚合各分类统计（根目录 + 所有创作者对应分类子目录，保证内外口径一致）
   const illStats = calculateCategoryAggregatedStats(root, "Illustrations")
   const ugStats = calculateCategoryAggregatedStats(root, "Ugoira")
   const mangaStats = calculateCategoryAggregatedStats(root, "Manga")
@@ -488,7 +488,7 @@ export function sortFiles(items: ManagedFileItem[], mode: SortMode = "date_desc"
 }
 
 /**
- * 扫描指定分类的文件列表（包含单篇导出与画师目录下的对应文件，支持脏标记缓存命中）
+ * 扫描指定分类的文件列表（包含单篇导出与创作者目录下的对应文件，支持脏标记缓存命中）
  */
 export async function scanCategoryFiles(
   category: DownloadFileCategory,
@@ -521,7 +521,7 @@ export async function scanCategoryFiles(
           for (const cf of creatorFolders) {
             const cfPath = `${creatorsDir}/${cf}`
             if (FileManager.isDirectorySync(cfPath)) {
-              // 扫描画师根与各子分类
+              // 扫描创作者根与各子分类
               const cfItems = await scanDirectoryFiles(cfPath, cf)
               results.push(...cfItems)
               for (const sub of subDirs) {
@@ -627,7 +627,7 @@ export async function scanCreatorDirectories(
             const mangaStats = calculateDirStats(`${fullPath}/Manga`)
             const novelStats = calculateDirStats(`${fullPath}/Novels`)
 
-            // 提取画师名和 UID
+            // 提取创作者名和 UID
             let authorName = folderName
             let authorId: number | undefined
             const idMatch = folderName.match(/\((\d+)\)$/)

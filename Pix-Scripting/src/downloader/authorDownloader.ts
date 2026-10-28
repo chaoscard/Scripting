@@ -205,7 +205,7 @@ export function clusterNovelsBySeries(
 }
 
 /**
- * 批量下载画师全量静态插画至专属相簿（支持断点续传与手动暂停/恢复/取消）
+ * 批量下载创作者全量静态插画至专属相簿（支持断点续传与手动暂停/恢复/取消）
  */
 export async function downloadAuthorIllustrationsToAlbum(
   authorName: string,
@@ -270,7 +270,7 @@ export async function downloadAuthorIllustrationsToAlbum(
 }
 
 /**
- * 批量下载画师全量动图至专属相簿（MP4 或 GIF，支持断点续传）
+ * 批量下载创作者全量动图至专属相簿（MP4 或 GIF，支持断点续传）
  */
 export async function downloadAuthorUgoiraToAlbum(
   authorName: string,
@@ -338,7 +338,7 @@ export async function downloadAuthorUgoiraToAlbum(
 }
 
 /**
- * 批量将画师全量动图导出至 Ugoira 存储文件夹 (独立 .mp4 / .gif 动图或帧包)
+ * 批量将创作者全量动图导出至 Ugoira 存储文件夹 (独立 .mp4 / .gif 动图或帧包)
  */
 export async function exportAuthorUgoiraToFiles(
   authorName: string,
@@ -414,7 +414,7 @@ export async function exportAuthorUgoiraToFiles(
 }
 
 /**
- * 批量将画师全量动图以原始 ZIP 帧包（包含每帧图像与完整 info.json 延迟数据）导出至画师专属 Ugoira 存储目录
+ * 批量将创作者全量动图以原始 ZIP 帧包（包含每帧图像与完整 info.json 延迟数据）导出至创作者专属 Ugoira 存储目录
  */
 export async function exportAuthorUgoiraZipToFiles(
   authorName: string,
@@ -471,8 +471,8 @@ export async function exportAuthorUgoiraZipToFiles(
 
         const failedCount = totalCount - successCount
         const summary = failedCount > 0
-          ? `已导出 ${successCount}/${totalCount} 部动图原始 ZIP 帧包至画师 Ugoira 文件夹（${failedCount} 部失败）。`
-          : `已成功将全部 ${totalCount} 部动图原始 ZIP 帧包导出至画师 Ugoira 文件夹。`
+          ? `已导出 ${successCount}/${totalCount} 部动图原始 ZIP 帧包至创作者 Ugoira 文件夹（${failedCount} 部失败）。`
+          : `已成功将全部 ${totalCount} 部动图原始 ZIP 帧包导出至创作者 Ugoira 文件夹。`
         resolve({ successCount, totalCount })
         return { summary }
       },
@@ -481,7 +481,7 @@ export async function exportAuthorUgoiraZipToFiles(
 }
 
 /**
- * 批量将画师全量静态插画打包导出为单一分层 ZIP 归档文件
+ * 批量将创作者全量静态插画打包导出为单一分层 ZIP 归档文件
  */
 export async function exportAuthorIllustrationsToZip(
   authorName: string,
@@ -597,7 +597,7 @@ export async function exportAuthorIllustrationsToZip(
 
           if (token) await token.checkOrWait()
 
-          // 写入画师与作品元数据
+          // 写入创作者与作品元数据
           const metaJson = {
             author: {
               id: authorId,
@@ -674,7 +674,7 @@ export async function exportAuthorIllustrationsToZip(
 }
 
 /**
- * 批量将画师漫画导出（系列合并为全集卷，单篇独立导出为单本）
+ * 批量将创作者漫画导出（系列合并为全集卷，单篇独立导出为单本）
  */
 export async function exportAuthorManga(
   authorName: string,
@@ -893,7 +893,7 @@ export async function exportAuthorManga(
 }
 
 /**
- * 批量将画师小说导出（系列合并为完整多章节 EPUB，单篇独立导出为单本 EPUB）
+ * 批量将创作者小说导出（系列合并为完整多章节 EPUB，单篇独立导出为单本 EPUB）
  */
 export async function exportAuthorNovels(
   authorName: string,

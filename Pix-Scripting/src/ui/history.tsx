@@ -2,6 +2,7 @@ import {
   Button,
   Color,
   Device,
+  Divider,
   Group,
   HStack,
   Image,
@@ -9,6 +10,8 @@ import {
   LazyVStack,
   Menu,
   Picker,
+  ScrollView,
+  Spacer,
   Text,
   useCallback,
   useEffect,
@@ -18,6 +21,10 @@ import {
   VStack,
   ZStack,
 } from "scripting"
+import { searchAutocomplete } from "../api/pixiv"
+import { session } from "../api/session"
+import type { PixivAutocompleteTag } from "../types"
+import { appGlass } from "./components/glass"
 import {
   PAGE_TOOLBAR_BACKGROUND,
   PAGE_TOOLBAR_BACKGROUND_VISIBILITY,
@@ -181,6 +188,61 @@ export function HistoryView() {
   const [kind, setKind] = useState<HistoryKind>("illustration")
   const [searchQuery, setSearchQuery] = useState("")
   const searchWords = useMemo(() => parseHistoryQuery(searchQuery), [searchQuery])
+  const [tagSuggestions, setTagSuggestions] = useState<PixivAutocompleteTag[]>([])
+  const [tagSuggestionsLoading, setTagSuggestionsLoading] = useState(false)
+  const tagSeqRef = useRef(0)
+  const debounceTimerRef = useRef<any>(null)
+
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current)
+      }
+    }
+  }, [])
+
+  const handleSearchQueryChanged = (val: string) => {
+    setSearchQuery(val)
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current)
+    }
+
+    const trimmed = val.trim()
+    if (!trimmed) {
+      tagSeqRef.current++
+      setTagSuggestions([])
+      setTagSuggestionsLoading(false)
+      return
+    }
+
+    const seq = ++tagSeqRef.current
+    debounceTimerRef.current = setTimeout(() => {
+      setTagSuggestionsLoading(true)
+      session
+        .call((authToken) => searchAutocomplete(trimmed, authToken))
+        .then((tags) => {
+          if (seq === tagSeqRef.current) {
+            setTagSuggestions(tags)
+            setTagSuggestionsLoading(false)
+          }
+        })
+        .catch(() => {
+          if (seq === tagSeqRef.current) {
+            setTagSuggestions([])
+            setTagSuggestionsLoading(false)
+          }
+        })
+    }, 300)
+  }
+
+  const handleApplySuggestion = (tag: string) => {
+    try {
+      triggerHaptic("selection")
+    } catch {}
+    setSearchQuery(tag)
+    setTagSuggestions([])
+    setTagSuggestionsLoading(false)
+  }
   const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
   const isAppleMusic = pageLayout === "appleMusic"
   const [visitedKinds, setVisitedKinds] = useState<Set<HistoryKind>>(() => new Set([kind]))
@@ -251,8 +313,10 @@ export function HistoryView() {
   useEffect(() => {
     return onActiveTabChanged((nextTab: PixivTabKind) => {
       if (nextTab !== tabRef.current) {
-        // 切换到其他 Tab 离开历史页：重置搜索关键词
+        // 切换到其他 Tab 离开历史页：重置搜索关键词与建议
         setSearchQuery("")
+        setTagSuggestions([])
+        setTagSuggestionsLoading(false)
       } else {
         // 切回历史页所属 Tab：若曾有静默回看标脏，执行全量重排刷新
         if (checkAndResetHistoryDirty()) {
@@ -350,8 +414,10 @@ export function HistoryView() {
           // 从二级详情页返回历史列表：拦截全量刷新，保持老作品原位不动，新推荐置顶
           return
         }
-        // 从上一级页面进入 / 退出历史页后重新进入：清空搜索关键词，恢复全量历史展示
+        // 从上一级页面进入 / 退出历史页后重新进入：清空搜索关键词与建议，恢复全量历史展示
         setSearchQuery("")
+        setTagSuggestions([])
+        setTagSuggestionsLoading(false)
         // 检测是否有标脏，有则全量重排刷新
         if (checkAndResetHistoryDirty()) {
           void refreshAllFeeds()
@@ -396,12 +462,70 @@ export function HistoryView() {
       })}
       searchable={{
         value: searchQuery,
-        onChanged: setSearchQuery,
+        onChanged: handleSearchQueryChanged,
         placement: "navigationBarDrawer",
         prompt: "搜索作者、标题和标签",
       }}
       frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
     >
+      {/* 搜索联想建议卡片：带毛玻璃背景、放大镜与官方翻译，点击快速将搜索词填入并过滤本地历史（自然完整展开） */}
+      {tagSuggestions.length > 0 ? (
+        <ScrollView
+          frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
+          padding={{ horizontal: 8, top: 1, bottom: 4 }}
+          zIndex={10}
+        >
+          <VStack
+            spacing={0}
+            glassEffect={appGlass({ type: "rect", cornerRadius: 14 })}
+            clipShape={{ type: "rect", cornerRadius: 14 }}
+            shadow={{ color: "#00000028", radius: 10, y: 3 }}
+            frame={{ maxWidth: "infinity" }}
+          >
+            {tagSuggestions.map((item, index) => (
+              <VStack key={`${item.name}-${index}`} spacing={0} frame={{ maxWidth: "infinity" }}>
+                {index > 0 ? <Divider /> : null}
+                <Button
+                  buttonStyle="plain"
+                  action={() => handleApplySuggestion(item.name)}
+                  contentShape="rect"
+                  frame={{ maxWidth: "infinity", alignment: "leading" }}
+                >
+                  <HStack
+                    alignment="center"
+                    spacing={10}
+                    padding={{ horizontal: 14, vertical: 10 }}
+                    frame={{ maxWidth: "infinity", alignment: "leading" }}
+                    contentShape="rect"
+                  >
+                    <Image
+                      systemName="magnifyingglass"
+                      font="subheadline"
+                      foregroundStyle="secondaryLabel"
+                    />
+                    <VStack alignment="leading" spacing={2} frame={{ maxWidth: "infinity", alignment: "leading" }}>
+                      <Text font="body" foregroundStyle="label" lineLimit={1}>
+                        {item.name}
+                      </Text>
+                      {item.translated_name ? (
+                        <Text font="caption" foregroundStyle="secondaryLabel" lineLimit={1}>
+                          {item.translated_name}
+                        </Text>
+                      ) : null}
+                    </VStack>
+                    <Spacer />
+                    <Image
+                      systemName="arrow.up.left"
+                      font="caption"
+                      foregroundStyle="tertiaryLabel"
+                    />
+                  </HStack>
+                </Button>
+              </VStack>
+            ))}
+          </VStack>
+        </ScrollView>
+      ) : null}
       {/* 1. 插画历史保活容器 */}
       <VStack
         frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
@@ -410,7 +534,7 @@ export function HistoryView() {
         allowsHitTesting={kind === "illustration"}
       >
         <RefreshableScrollView refreshable={() => refreshAllFeeds()}>
-          <VStack alignment="leading" spacing={8} frame={{ minHeight: 500, maxWidth: "infinity" }}>
+          <VStack alignment="leading" spacing={8} padding={{ top: 1 }} frame={{ minHeight: 500, maxWidth: "infinity" }}>
             <HistoryFeed
               kind="illustration"
               enabled={isTabActive && kind === "illustration"}
@@ -436,7 +560,7 @@ export function HistoryView() {
           allowsHitTesting={kind === "manga"}
         >
           <RefreshableScrollView refreshable={() => refreshAllFeeds()}>
-            <VStack alignment="leading" spacing={8} frame={{ minHeight: 500, maxWidth: "infinity" }}>
+            <VStack alignment="leading" spacing={8} padding={{ top: 1 }} frame={{ minHeight: 500, maxWidth: "infinity" }}>
               <HistoryFeed
                 kind="manga"
                 enabled={isTabActive && kind === "manga"}
@@ -463,7 +587,7 @@ export function HistoryView() {
           allowsHitTesting={kind === "novel"}
         >
           <RefreshableScrollView refreshable={() => refreshAllFeeds()}>
-            <VStack alignment="leading" spacing={8} frame={{ minHeight: 500, maxWidth: "infinity" }}>
+            <VStack alignment="leading" spacing={8} padding={{ top: 1 }} frame={{ minHeight: 500, maxWidth: "infinity" }}>
               <HistoryFeed
                 kind="novel"
                 enabled={isTabActive && kind === "novel" && !hideNovels}

@@ -21,7 +21,7 @@ export interface IllustAuthorCardProps {
 /**
  * 插画详情页作者展示卡片
  * 复用 ConnectionRow 视觉规范（毛玻璃底板、头像、昵称、@账号、圆形关注切换），
- * 首帧先画出 3 个纯净占位灰框避免布局跳动，后台异步拉取该画师最新的真实代表作并平滑淡入。
+ * 首帧先画出 3 个纯净占位灰框避免布局跳动，后台异步拉取该创作者最新的真实代表作并平滑淡入。
  * 绝不人为过滤隐藏当前作品，确保作品数恒 >= 1，彻底避免单篇作品时的卡片高度坍塌跳变。
  */
 export function IllustAuthorCard(props: IllustAuthorCardProps) {

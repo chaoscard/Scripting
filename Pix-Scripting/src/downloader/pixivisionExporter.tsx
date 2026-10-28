@@ -1202,7 +1202,7 @@ export async function exportPixivisionToEpub(
         </div>
         <div class="artwork-meta">
           <h2 class="artwork-title">${escapeXml(art.title)}</h2>
-          ${art.authorName ? `<div class="artwork-author">画师: ${escapeXml(art.authorName)}</div>` : ""}
+          ${art.authorName ? `<div class="artwork-author">创作者: ${escapeXml(art.authorName)}</div>` : ""}
           ${commentHtml}
         </div>
       </div>`

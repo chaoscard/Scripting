@@ -286,7 +286,7 @@ export async function exportMangaToCbz(options: MangaCbzOptions): Promise<Export
     const authorUrl = authorId ? `https://www.pixiv.net/users/${authorId}` : ""
     const workUrl = `https://www.pixiv.net/artworks/${id}`
     const notesParts: string[] = []
-    if (authorUrl) notesParts.push(`画师主页：${authorUrl}`)
+    if (authorUrl) notesParts.push(`创作者主页：${authorUrl}`)
     notesParts.push(`作品链接：${workUrl}`)
     if (normalizedChapters.length > 1) {
       notesParts.push(`连载规模：全 ${normalizedChapters.length} 话 / 共 ${allPagesToDownload.length} 页`)

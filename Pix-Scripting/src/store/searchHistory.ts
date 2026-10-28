@@ -13,6 +13,23 @@ export type SearchHistoryScope = "illust" | "novel" | "user"
 export interface SearchHistoryEntry {
   query: string
   searchedAt: number
+  translatedName?: string | null
+}
+
+// -------------------- 标签/词条中文翻译内存映射字典 --------------------
+const tagTranslationDict = new Map<string, string>()
+
+export function recordTagTranslation(tag: string, translation?: string | null): void {
+  const t = tag?.trim()
+  const trans = translation?.trim()
+  if (t && trans && t !== trans) {
+    tagTranslationDict.set(t, trans)
+  }
+}
+
+export function getTagTranslation(tag: string): string | null {
+  if (!tag) return null
+  return tagTranslationDict.get(tag.trim()) || null
 }
 
 export interface SearchHistoryStore {
@@ -99,6 +116,7 @@ export function normalizeHistoryEntries(
     const item = rawList[i]
     let query = ""
     let searchedAt = fallbackTime - i * 1000
+    let translatedName: string | null = null
 
     if (typeof item === "string") {
       query = item.trim()
@@ -109,11 +127,20 @@ export function normalizeHistoryEntries(
       if (typeof item.searchedAt === "number" && !isNaN(item.searchedAt) && item.searchedAt > 0) {
         searchedAt = item.searchedAt
       }
+      if (typeof item.translatedName === "string" && item.translatedName.trim()) {
+        translatedName = item.translatedName.trim()
+      }
     }
 
     if (query.length > 0 && !seen.has(query)) {
       seen.add(query)
-      result.push({ query, searchedAt })
+      const finalTrans = translatedName || tagTranslationDict.get(query) || null
+      if (finalTrans) {
+        recordTagTranslation(query, finalTrans)
+        result.push({ query, searchedAt, translatedName: finalTrans })
+      } else {
+        result.push({ query, searchedAt })
+      }
     }
   }
 
@@ -203,7 +230,11 @@ export function getSearchHistory(scope: SearchHistoryScope = "illust"): string[]
   return getSearchHistoryEntries(scope).map((e) => e.query)
 }
 
-export function addSearchHistory(query: string, scope: SearchHistoryScope = "illust"): string[] {
+export function addSearchHistory(
+  query: string,
+  scope: SearchHistoryScope = "illust",
+  translatedName?: string | null
+): string[] {
   const trimmed = query.trim()
   if (!trimmed) return getSearchHistory(scope)
   try {
@@ -211,9 +242,24 @@ export function addSearchHistory(query: string, scope: SearchHistoryScope = "ill
   } catch {}
   const store = getFullSearchHistoryStore()
   const current = store[scope] ?? []
+  const existing = current.find((item) => item.query === trimmed)
+  const finalTrans =
+    (translatedName && translatedName.trim()) ||
+    existing?.translatedName ||
+    tagTranslationDict.get(trimmed) ||
+    null
+
+  if (finalTrans) {
+    recordTagTranslation(trimmed, finalTrans)
+  }
+
   const filtered = current.filter((item) => item.query !== trimmed)
   const now = Date.now()
-  const next: SearchHistoryEntry[] = [{ query: trimmed, searchedAt: now }, ...filtered].slice(
+  const newEntry: SearchHistoryEntry = finalTrans
+    ? { query: trimmed, searchedAt: now, translatedName: finalTrans }
+    : { query: trimmed, searchedAt: now }
+
+  const next: SearchHistoryEntry[] = [newEntry, ...filtered].slice(
     0,
     MAX_SEARCH_HISTORY_ITEMS
   )
