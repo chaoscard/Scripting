@@ -314,6 +314,120 @@ function sameSyncEntries(
   )
 }
 
+function sameRecord(left?: Record<string, number>, right?: Record<string, number>): boolean {
+  const leftKeys = Object.keys(left ?? {})
+  const rightKeys = Object.keys(right ?? {})
+  if (leftKeys.length !== rightKeys.length) return false
+  return leftKeys.every((key) => left?.[key] === right?.[key])
+}
+
+// 0. 同步同步元数据文件 (sync_state.json)：墓碑与清空水位线的云端双向聚合
+async function syncSyncStateFile(
+  localDir: string,
+  cloudDir: string,
+  userId?: string | number | null
+): Promise<HistorySyncState> {
+  const fileName = SYNC_STATE_FILE
+  const localFile = `${localDir}/${fileName}`
+  const cloudFile = `${cloudDir}/${fileName}`
+
+  await prepareCloudFile(cloudFile)
+  assertSyncAccount(userId)
+
+  const localState = loadSyncState(userId)
+  pruneTombstones(localState)
+
+  const cloudRaw = readCloudJson<any>(cloudFile)
+  const cloudState: HistorySyncState = {
+    lastSyncTime: typeof cloudRaw?.lastSyncTime === "number" ? cloudRaw.lastSyncTime : 0,
+    tombstones: cloudRaw?.tombstones && typeof cloudRaw.tombstones === "object" ? cloudRaw.tombstones : {},
+    clearBefore: cloudRaw?.clearBefore && typeof cloudRaw.clearBefore === "object" ? cloudRaw.clearBefore : {},
+    searchTombstones: cloudRaw?.searchTombstones && typeof cloudRaw.searchTombstones === "object" ? cloudRaw.searchTombstones : {},
+    searchClearBefore: cloudRaw?.searchClearBefore && typeof cloudRaw.searchClearBefore === "object" ? cloudRaw.searchClearBefore : {},
+  }
+  pruneTombstones(cloudState)
+
+  const TOMBSTONE_TTL = 30 * 24 * 60 * 60 * 1000
+  const now = Date.now()
+
+  // 1. 合并插画/漫画/小说浏览历史单条删除墓碑
+  const mergedTombstones: Record<string, number> = {}
+  for (const src of [localState.tombstones, cloudState.tombstones]) {
+    if (!src) continue
+    for (const [k, v] of Object.entries(src)) {
+      if (typeof v === "number" && !isNaN(v) && now - v <= TOMBSTONE_TTL) {
+        mergedTombstones[k] = Math.max(mergedTombstones[k] ?? 0, v)
+      }
+    }
+  }
+
+  // 2. 合并浏览历史分类清空水位线
+  const mergedClearBefore: Partial<Record<HistoryContentKind, number>> = {}
+  for (const src of [localState.clearBefore, cloudState.clearBefore]) {
+    if (!src) continue
+    for (const [k, v] of Object.entries(src)) {
+      if (typeof v === "number" && !isNaN(v)) {
+        mergedClearBefore[k as HistoryContentKind] = Math.max(mergedClearBefore[k as HistoryContentKind] ?? 0, v)
+      }
+    }
+  }
+
+  // 3. 合并搜索历史墓碑与水位线
+  const mergedSearchTombstones: Record<string, number> = {}
+  for (const src of [localState.searchTombstones, cloudState.searchTombstones]) {
+    if (!src) continue
+    for (const [k, v] of Object.entries(src)) {
+      if (typeof v === "number" && !isNaN(v) && now - v <= TOMBSTONE_TTL) {
+        mergedSearchTombstones[k] = Math.max(mergedSearchTombstones[k] ?? 0, v)
+      }
+    }
+  }
+
+  const mergedSearchClearBefore: Partial<Record<SearchHistoryScope, number>> = {}
+  for (const src of [localState.searchClearBefore, cloudState.searchClearBefore]) {
+    if (!src) continue
+    for (const [k, v] of Object.entries(src)) {
+      if (typeof v === "number" && !isNaN(v)) {
+        mergedSearchClearBefore[k as SearchHistoryScope] = Math.max(mergedSearchClearBefore[k as SearchHistoryScope] ?? 0, v)
+      }
+    }
+  }
+
+  const mergedState: HistorySyncState = {
+    lastSyncTime: Math.max(localState.lastSyncTime, cloudState.lastSyncTime),
+    tombstones: mergedTombstones,
+    clearBefore: mergedClearBefore,
+    searchTombstones: mergedSearchTombstones,
+    searchClearBefore: mergedSearchClearBefore,
+  }
+
+  const localChanged =
+    !sameRecord(localState.tombstones, mergedTombstones) ||
+    !sameRecord(localState.clearBefore as any, mergedClearBefore as any) ||
+    !sameRecord(localState.searchTombstones, mergedSearchTombstones) ||
+    !sameRecord(localState.searchClearBefore as any, mergedSearchClearBefore as any)
+
+  const cloudChanged =
+    !sameRecord(cloudState.tombstones, mergedTombstones) ||
+    !sameRecord(cloudState.clearBefore as any, mergedClearBefore as any) ||
+    !sameRecord(cloudState.searchTombstones, mergedSearchTombstones) ||
+    !sameRecord(cloudState.searchClearBefore as any, mergedSearchClearBefore as any)
+
+  if (localChanged) {
+    saveSyncState(mergedState, userId)
+  }
+
+  if (cloudChanged || !FileManager.existsSync(cloudFile)) {
+    try {
+      writeTextSafely(cloudFile, JSON.stringify(mergedState))
+    } catch (e: any) {
+      console.warn("write cloud sync_state error:", e?.message ?? e)
+    }
+  }
+
+  return mergedState
+}
+
 // 1. 同步单个历史分类 (illustration / manga / novel)
 async function syncHistoryCategory(
   kind: HistoryContentKind,
@@ -354,6 +468,9 @@ async function syncHistoryCategory(
     const key = `${kind}:${id}`
     if (tombstones[key] && entry.viewedAt <= tombstones[key]) continue
     if (clearBeforeTs > 0 && entry.viewedAt <= clearBeforeTs) continue
+    if (tombstones[key] && entry.viewedAt > tombstones[key]) {
+      delete tombstones[key]
+    }
     map.set(id, entry)
   }
 
@@ -364,6 +481,9 @@ async function syncHistoryCategory(
     const key = `${kind}:${id}`
     if (tombstones[key] && entry.viewedAt <= tombstones[key]) continue
     if (clearBeforeTs > 0 && entry.viewedAt <= clearBeforeTs) continue
+    if (tombstones[key] && entry.viewedAt > tombstones[key]) {
+      delete tombstones[key]
+    }
 
     const existing = map.get(id)
     if (!existing || (typeof entry.viewedAt === "number" && entry.viewedAt > existing.viewedAt)) {
@@ -392,6 +512,11 @@ async function syncHistoryCategory(
       console.warn(`write cloud history for ${kind} error:`, e?.message ?? e)
     }
   }
+
+  // 同步结束后将可能消费/抹除的墓碑写回状态与本地磁盘
+  freshState.tombstones = { ...tombstones }
+  state.tombstones = { ...tombstones }
+  saveSyncState(freshState, userId)
 }
 
 // 2. 同步小说进度 (novel_progress.json)
@@ -463,23 +588,58 @@ async function syncSearchHistoryFile(
   const cloudRaw = readCloudJson<any>(cloudFile)
   const cloudUpdated = typeof cloudRaw?.updatedAt === "number" ? cloudRaw.updatedAt : 0
 
-  // 云端原始数据归一化（旧顶层数组归入 illust，与本地读取规则一致）。
+  // 云端原始数据归一化（旧顶层数组归入 illust，与本地读取规则一致；同步解析携带的墓碑与清空水位线）。
+  const cloudTombstones =
+    cloudRaw?.tombstones && typeof cloudRaw.tombstones === "object"
+      ? (cloudRaw.tombstones as Record<string, number>)
+      : undefined
+  const cloudClearBefore =
+    cloudRaw?.clearBefore && typeof cloudRaw.clearBefore === "object"
+      ? (cloudRaw.clearBefore as Record<string, number>)
+      : undefined
+
   const cloudStore: SearchHistoryStore = {
     illust: normalizeHistoryEntries(Array.isArray(cloudRaw) ? cloudRaw : cloudRaw?.illust, cloudUpdated),
     novel: normalizeHistoryEntries(cloudRaw?.novel, cloudUpdated),
     user: normalizeHistoryEntries(cloudRaw?.user, cloudUpdated),
     updatedAt: cloudUpdated,
+    tombstones: cloudTombstones,
+    clearBefore: cloudClearBefore,
   }
 
-  // 动态合并最新磁盘状态，防止长同步期间本地产生的新墓碑被遗漏
+  // 动态合并最新磁盘与跨端状态：四方墓碑与清空水位线聚合（内存快照、本地磁盘、本地store、云端store）
   const freshState = loadSyncState(userId)
-  const searchTombstones = {
-    ...(state.searchTombstones ?? {}),
-    ...(freshState.searchTombstones ?? {}),
+  const TOMBSTONE_TTL = 30 * 24 * 60 * 60 * 1000
+  const nowTs = Date.now()
+
+  const searchTombstones: Record<string, number> = {}
+  for (const src of [
+    state.searchTombstones,
+    freshState.searchTombstones,
+    localStore.tombstones,
+    cloudStore.tombstones,
+  ]) {
+    if (!src) continue
+    for (const [k, v] of Object.entries(src)) {
+      if (typeof v === "number" && !isNaN(v) && nowTs - v <= TOMBSTONE_TTL) {
+        searchTombstones[k] = Math.max(searchTombstones[k] ?? 0, v)
+      }
+    }
   }
-  const searchClearBefore = {
-    ...(state.searchClearBefore ?? {}),
-    ...(freshState.searchClearBefore ?? {}),
+
+  const searchClearBefore: Record<string, number> = {}
+  for (const src of [
+    state.searchClearBefore,
+    freshState.searchClearBefore,
+    localStore.clearBefore,
+    cloudStore.clearBefore,
+  ]) {
+    if (!src) continue
+    for (const [k, v] of Object.entries(src)) {
+      if (typeof v === "number" && !isNaN(v)) {
+        searchClearBefore[k] = Math.max(searchClearBefore[k] ?? 0, v)
+      }
+    }
   }
 
   // 双向增量合并（基于独立 searchedAt 与单条墓碑/清空水位线精确比对，杜绝僵尸词复活）
@@ -498,6 +658,10 @@ async function syncSearchHistoryFile(
       if (clearBeforeTs > 0 && entry.searchedAt <= clearBeforeTs) continue
       const tombstoneTs = searchTombstones[`${scope}:${query}`] ?? 0
       if (tombstoneTs > 0 && entry.searchedAt <= tombstoneTs) continue
+      // 若用户后续重新主动搜索（searchedAt > tombstoneTs），清除旧墓碑
+      if (tombstoneTs > 0 && entry.searchedAt > tombstoneTs) {
+        delete searchTombstones[`${scope}:${query}`]
+      }
 
       map.set(query, entry)
     }
@@ -509,6 +673,9 @@ async function syncSearchHistoryFile(
       if (clearBeforeTs > 0 && entry.searchedAt <= clearBeforeTs) continue
       const tombstoneTs = searchTombstones[`${scope}:${query}`] ?? 0
       if (tombstoneTs > 0 && entry.searchedAt <= tombstoneTs) continue
+      if (tombstoneTs > 0 && entry.searchedAt > tombstoneTs) {
+        delete searchTombstones[`${scope}:${query}`]
+      }
 
       const existing = map.get(query)
       if (!existing || entry.searchedAt > existing.searchedAt) {
@@ -530,6 +697,9 @@ async function syncSearchHistoryFile(
 
   const mergedUpdated = Math.max(localUpdated, cloudUpdated)
   const normalizationTime = Math.max(mergedUpdated, Date.now())
+  const hasTombstones = Object.keys(searchTombstones).length > 0
+  const hasClearBefore = Object.keys(searchClearBefore).length > 0
+
   // 先按原有时间过滤墓碑，再补齐旧数组可能产生的非正时间；确保本地替换再次
   // normalize 后与云端落盘一致，避免迁移后第二轮因词项时间变化再次同步。
   const mergedStore: SearchHistoryStore = {
@@ -537,27 +707,41 @@ async function syncSearchHistoryFile(
     novel: normalizeHistoryEntries(mergeScopeEntries("novel", localStore.novel, cloudStore.novel), normalizationTime),
     user: normalizeHistoryEntries(mergeScopeEntries("user", localStore.user, cloudStore.user), normalizationTime),
     updatedAt: mergedUpdated,
+    tombstones: hasTombstones ? searchTombstones : undefined,
+    clearBefore: hasClearBefore ? searchClearBefore : undefined,
   }
 
-  // 语义包括分类内词序、query 与 searchedAt，不包括容器 updatedAt。
-  const localChanged = scopes.some((scope) => !sameScopeEntries(localStore[scope], mergedStore[scope]))
-  const cloudChanged = scopes.some((scope) => !sameScopeEntries(cloudStore[scope], mergedStore[scope]))
+  // 语义包括分类内词序、query、searchedAt 以及跨端墓碑与清空水位线，不包括容器 updatedAt。
+  const localChanged =
+    scopes.some((scope) => !sameScopeEntries(localStore[scope], mergedStore[scope])) ||
+    !sameRecord(localStore.tombstones, mergedStore.tombstones) ||
+    !sameRecord(localStore.clearBefore, mergedStore.clearBefore)
+
+  const cloudChanged =
+    scopes.some((scope) => !sameScopeEntries(cloudStore[scope], mergedStore[scope])) ||
+    !sameRecord(cloudStore.tombstones, mergedStore.tombstones) ||
+    !sameRecord(cloudStore.clearBefore, mergedStore.clearBefore)
+
   // 不能只比较归一化云对象：缺失/空文件、旧字符串数组、未归一化条目仍须修盘。
   // updatedAt 在 SearchHistoryStore 中可省略；已存在的合法数值不同不构成迁移。
-  const cloudNeedsMigration = scopes.some((scope) =>
-    !Array.isArray(cloudRaw?.[scope]) || !sameScopeEntries(cloudRaw[scope], cloudStore[scope])
-  ) || (cloudRaw?.updatedAt !== undefined && typeof cloudRaw.updatedAt !== "number")
+  const cloudNeedsMigration =
+    scopes.some((scope) =>
+      !Array.isArray(cloudRaw?.[scope]) || !sameScopeEntries(cloudRaw[scope], cloudStore[scope])
+    ) ||
+    (cloudRaw?.updatedAt !== undefined && typeof cloudRaw.updatedAt !== "number") ||
+    (cloudRaw?.tombstones !== undefined && typeof cloudRaw.tombstones !== "object") ||
+    (cloudRaw?.clearBefore !== undefined && typeof cloudRaw.clearBefore !== "object")
 
   if (localChanged || cloudChanged) {
     mergedStore.updatedAt = normalizationTime
   }
 
-  // 1. 仅语义变更才替换本地、持久化并广播；不为容器时间戳差异刷新订阅者。
+  // 1. 仅语义与防复活元数据变更才替换本地、持久化并广播；不为容器时间戳差异刷新订阅者。
   if (localChanged) {
     replaceSearchHistoryStore(mergedStore, true)
   }
 
-  // 2. 内容变更或物理格式待迁移才写云端（包括清除已删除的脏条目）。
+  // 2. 内容变更或物理格式待迁移才写云端（包括清除已删除的脏条目与同步墓碑）。
   if (cloudChanged || cloudNeedsMigration) {
     try {
       writeTextSafely(cloudFile, JSON.stringify(mergedStore))
@@ -565,6 +749,11 @@ async function syncSearchHistoryFile(
       console.warn("write cloud search history error:", e?.message ?? e)
     }
   }
+
+  // 3. 将聚合后的墓碑与水位线写回本地 sync_state，保持双向一致
+  freshState.searchTombstones = { ...searchTombstones }
+  freshState.searchClearBefore = { ...searchClearBefore }
+  saveSyncState(freshState, userId)
 }
 
 // 统一立即同步入口（用于下拉刷新、多维触发或定时调度）
@@ -597,22 +786,28 @@ export async function syncHistoryNow(userId?: string | number | null): Promise<b
     flushSearchHistory()
 
     const localDir = pixivHistoryDirectory(uid)
-    const state = loadSyncState(uid)
-    pruneTombstones(state)
 
-    // 2. 依次同步 5 个独立文件；目录与 await 后守卫共用入口绑定的账号。
+    // 0. 优先同步与聚合云端与本地的墓碑与清空水位线
+    const state = await syncSyncStateFile(localDir, cloudDir, uid)
+
+    // 1. 依次同步 5 个独立业务文件；各分类均能感知多端聚合后的最新墓碑与水位线
     await syncHistoryCategory("illustration", localDir, cloudDir, state, uid)
     await syncHistoryCategory("manga", localDir, cloudDir, state, uid)
     await syncHistoryCategory("novel", localDir, cloudDir, state, uid)
     await syncNovelProgressFile(localDir, cloudDir, uid)
     await syncSearchHistoryFile(localDir, cloudDir, state, uid)
 
-    // 3. 更新同步状态：重新从磁盘读取最新状态，防止冲掉同步在途产生的局部修改
+    // 2. 更新同步状态：重新从磁盘读取最新状态，防止冲掉同步在途产生的局部修改
     assertSyncAccount(uid)
     const latestState = loadSyncState(uid)
     pruneTombstones(latestState)
     latestState.lastSyncTime = Date.now()
     saveSyncState(latestState, uid)
+    try {
+      writeTextSafely(`${cloudDir}/${SYNC_STATE_FILE}`, JSON.stringify(latestState))
+    } catch (e: any) {
+      console.warn("write cloud final sync_state error:", e?.message ?? e)
+    }
     return true
   } catch (error: any) {
     console.warn("syncHistoryNow error:", error?.message ?? error)
