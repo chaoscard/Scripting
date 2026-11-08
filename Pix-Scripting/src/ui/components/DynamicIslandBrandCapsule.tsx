@@ -9,6 +9,7 @@ import {
 } from "scripting"
 import { appGlass, appThemeColor } from "./glass"
 import { onSettingsChanged } from "../../store/settings"
+import { getSessionBrandFont } from "./brandFont"
 
 /**
  * 灵动岛中心线自适应算法
@@ -77,7 +78,7 @@ export function DynamicIslandBrandCapsule() {
     return null
   }
 
-  // 默认系统蓝（systemBlue），并实时响应跟随用户的自定义色调
+  // 1. 品牌调色板图标：默认系统蓝（systemBlue），并实时响应跟随用户的自定义色调
   const [tintColor, setTintColor] = useState(() => appThemeColor("systemBlue"))
 
   useEffect(() => {
@@ -85,6 +86,9 @@ export function DynamicIslandBrandCapsule() {
       setTintColor(appThemeColor("systemBlue"))
     })
   }, [])
+
+  // 2. 品牌字标字体：单次会话随机锁定 15 款开机内置原厂英文字体之一
+  const brandFontName = getSessionBrandFont()
 
   const capsuleHeight = 28
 
@@ -121,13 +125,13 @@ export function DynamicIslandBrandCapsule() {
         frame={{ width: 16, height: 16, alignment: "center" }}
       />
 
-      {/* 品牌名称：16pt 系统默认字体，加粗一号（semibold） */}
+      {/* 品牌名称：16pt，15款开机自带顶级英文字体随机轮换 */}
       <Text
-        font={16}
+        font={{ name: brandFontName, size: 16 }}
         fontWeight="semibold"
         foregroundStyle="label"
         lineLimit={1}
-        minScaleFactor={0.75}
+        minScaleFactor={0.6}
       >
         Pixiv
       </Text>

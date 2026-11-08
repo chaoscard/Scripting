@@ -26,6 +26,7 @@ import {
 import { isPixivCookieDomain } from "../api/pixiv"
 import { session } from "../api/session"
 import { appToolbar } from "./components"
+import { getSessionBrandFont } from "./components/brandFont"
 import { LoginNetworkSheet } from "./LoginNetworkSheet"
 import { DreamyFluidBackground } from "./components/DreamyBackground"
 
@@ -207,10 +208,12 @@ export function LoginView(props: {
           padding={32}
         >
           <Text
-            font={38}
+            font={{ name: getSessionBrandFont(), size: 38 }}
             fontWeight="heavy"
             foregroundStyle="white"
             shadow={{ color: "rgba(0, 0, 0, 0.32)", radius: 10, y: 3 }}
+            lineLimit={1}
+            minScaleFactor={0.6}
           >
             Pix-Scripting
           </Text>
@@ -233,10 +236,12 @@ export function LoginView(props: {
           padding={32}
         >
           <Text
-            font={38}
+            font={{ name: getSessionBrandFont(), size: 38 }}
             fontWeight="heavy"
             foregroundStyle="white"
             shadow={{ color: "rgba(0, 0, 0, 0.32)", radius: 10, y: 3 }}
+            lineLimit={1}
+            minScaleFactor={0.6}
           >
             Pix-Scripting
           </Text>

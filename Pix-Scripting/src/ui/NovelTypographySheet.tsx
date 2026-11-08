@@ -33,9 +33,12 @@ import {
 
 const PRESET_FONTS: { id: BuiltinFontId; name: string; desc: string }[] = [
   { id: "system", name: "系统默认", desc: "苹方 PingFang" },
-  { id: "songti", name: "经典宋体", desc: "宋体 / 纸书感" },
-  { id: "kaiti", name: "优美楷体", desc: "楷体 / 古雅" },
-  { id: "yuanti", name: "柔和圆体", desc: "圆体 / 亲和" },
+  { id: "songti", name: "经典宋体", desc: "宋体-简 / 纸书感" },
+  { id: "kaiti", name: "优美楷体", desc: "楷体-简 / 清雅古风" },
+  { id: "yuanti", name: "柔和圆体", desc: "圆体-简 / 亲和萌系" },
+  { id: "hiragino_mincho", name: "冬青明朝", desc: "日系和风 / 轻小说" },
+  { id: "hiragino_maru", name: "冬青丸黑", desc: "日系圆黑 / 萌系漫感" },
+  { id: "hiragino_sans", name: "冬青角黑", desc: "日系角黑 / 紧凑现代" },
 ]
 
 export function NovelTypographySheet(props: { onClose?: () => void }) {

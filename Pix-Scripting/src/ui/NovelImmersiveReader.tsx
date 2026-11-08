@@ -201,18 +201,27 @@ function resolveUploadedImageUrl(
 }
 
 function resolveFontFamily(settings: NovelReaderSettings): string {
-  const fontName = resolveFontName(settings.fontId, settings.customFontPostscriptName)
-  if (fontName) {
-    return `"${fontName}", -apple-system, BlinkMacSystemFont, sans-serif`
-  }
   if (settings.fontId === "songti") {
-    return "ui-serif, 'Songti SC', 'Source Han Serif SC', 'Hiragino Mincho ProN', serif"
+    return "ui-serif, 'Songti SC', 'Source Han Serif SC', serif"
   }
   if (settings.fontId === "kaiti") {
     return "'Kaiti SC', 'STKaiti', serif"
   }
   if (settings.fontId === "yuanti") {
     return "'Yuanti SC', 'STYuan', sans-serif"
+  }
+  if (settings.fontId === "hiragino_mincho") {
+    return "'Hiragino Mincho ProN', 'HiraMinProN-W3', serif"
+  }
+  if (settings.fontId === "hiragino_maru") {
+    return "'Hiragino Maru Gothic ProN', 'HiraMaruProN-W4', sans-serif"
+  }
+  if (settings.fontId === "hiragino_sans") {
+    return "'Hiragino Sans', 'Hiragino Kaku Gothic ProN', sans-serif"
+  }
+  const fontName = resolveFontName(settings.fontId, settings.customFontPostscriptName)
+  if (fontName) {
+    return `"${fontName}", -apple-system, BlinkMacSystemFont, sans-serif`
   }
   return "-apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif"
 }

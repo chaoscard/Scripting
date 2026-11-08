@@ -1,7 +1,14 @@
 import { migrateLocalToCloudIfNeeded, pixivNovelReaderDirectory } from "./dataDirectory"
 import { recoverFile, writeTextSafely } from "./safeFile"
 
-export type BuiltinFontId = "system" | "songti" | "kaiti" | "yuanti"
+export type BuiltinFontId =
+  | "system"
+  | "songti"
+  | "kaiti"
+  | "yuanti"
+  | "hiragino_mincho"
+  | "hiragino_maru"
+  | "hiragino_sans"
 export type NovelFontId = BuiltinFontId | "custom"
 
 export type NovelFontWeight = "regular" | "medium" | "bold"
@@ -152,6 +159,12 @@ export function resolveFontName(
       return "Kaiti SC"
     case "yuanti":
       return "Yuanti SC"
+    case "hiragino_mincho":
+      return "Hiragino Mincho ProN"
+    case "hiragino_maru":
+      return "Hiragino Maru Gothic ProN"
+    case "hiragino_sans":
+      return "Hiragino Sans"
     case "system":
     default:
       return undefined // 使用系统默认字体

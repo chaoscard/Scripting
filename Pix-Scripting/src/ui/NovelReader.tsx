@@ -763,16 +763,24 @@ export function buildVerticalHtml(
   ambientActive?: boolean,
   ambientBgCss?: string
 ): string {
-  const fontName = resolveFontName(settings.fontId, settings.customFontPostscriptName)
   let fontFamily = "-apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif"
-  if (fontName) {
-    fontFamily = `"${fontName}", -apple-system, BlinkMacSystemFont, sans-serif`
-  } else if (settings.fontId === "songti") {
-    fontFamily = "ui-serif, 'Songti SC', 'Source Han Serif SC', 'Hiragino Mincho ProN', serif"
+  if (settings.fontId === "songti") {
+    fontFamily = "ui-serif, 'Songti SC', 'Source Han Serif SC', serif"
   } else if (settings.fontId === "kaiti") {
     fontFamily = "'Kaiti SC', 'STKaiti', serif"
   } else if (settings.fontId === "yuanti") {
     fontFamily = "'Yuanti SC', 'STYuan', sans-serif"
+  } else if (settings.fontId === "hiragino_mincho") {
+    fontFamily = "'Hiragino Mincho ProN', 'HiraMinProN-W3', serif"
+  } else if (settings.fontId === "hiragino_maru") {
+    fontFamily = "'Hiragino Maru Gothic ProN', 'HiraMaruProN-W4', sans-serif"
+  } else if (settings.fontId === "hiragino_sans") {
+    fontFamily = "'Hiragino Sans', 'Hiragino Kaku Gothic ProN', sans-serif"
+  } else {
+    const fontName = resolveFontName(settings.fontId, settings.customFontPostscriptName)
+    if (fontName) {
+      fontFamily = `"${fontName}", -apple-system, BlinkMacSystemFont, sans-serif`
+    }
   }
 
   const weightMap: Record<string, string> = {
@@ -1544,16 +1552,24 @@ function NovelVerticalReaderView(props: {
     const ctrl = controllerRef.current
     if (!ctrl) return
 
-    const fontName = resolveFontName(settings.fontId, settings.customFontPostscriptName)
     let fontFamily = "-apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif"
-    if (fontName) {
-      fontFamily = `"${fontName}", -apple-system, BlinkMacSystemFont, sans-serif`
-    } else if (settings.fontId === "songti") {
-      fontFamily = "ui-serif, 'Songti SC', 'Source Han Serif SC', 'Hiragino Mincho ProN', serif"
+    if (settings.fontId === "songti") {
+      fontFamily = "ui-serif, 'Songti SC', 'Source Han Serif SC', serif"
     } else if (settings.fontId === "kaiti") {
       fontFamily = "'Kaiti SC', 'STKaiti', serif"
     } else if (settings.fontId === "yuanti") {
       fontFamily = "'Yuanti SC', 'STYuan', sans-serif"
+    } else if (settings.fontId === "hiragino_mincho") {
+      fontFamily = "'Hiragino Mincho ProN', 'HiraMinProN-W3', serif"
+    } else if (settings.fontId === "hiragino_maru") {
+      fontFamily = "'Hiragino Maru Gothic ProN', 'HiraMaruProN-W4', sans-serif"
+    } else if (settings.fontId === "hiragino_sans") {
+      fontFamily = "'Hiragino Sans', 'Hiragino Kaku Gothic ProN', sans-serif"
+    } else {
+      const fontName = resolveFontName(settings.fontId, settings.customFontPostscriptName)
+      if (fontName) {
+        fontFamily = `"${fontName}", -apple-system, BlinkMacSystemFont, sans-serif`
+      }
     }
 
     const weightMap: Record<string, string> = {
