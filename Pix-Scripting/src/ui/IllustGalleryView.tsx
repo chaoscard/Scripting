@@ -30,6 +30,7 @@ import {
 import { sharpenFadeDurationSec } from "./components/CachedImage"
 import { appCustomTint, appInteractiveGlass } from "./components/glass"
 import { PrivacyShield } from "./components/PrivacyShield"
+import { DynamicIslandBrandCapsule } from "./components/DynamicIslandBrandCapsule"
 import {
   downloadIllustToAlbum,
   fetchImageBinaryWithRetry,
@@ -640,6 +641,9 @@ export function IllustGalleryView(props: {
 
         {/* 顶层：多任务隐私保护（切后台时毛玻璃遮罩大图） */}
         <PrivacyShield />
+
+        {/* 顶层：灵动岛区域品牌玻璃胶囊（全屏大图查看时始终常驻） */}
+        <DynamicIslandBrandCapsule />
       </ZStack>
     </NavigationStack>
   )

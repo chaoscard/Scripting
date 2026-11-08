@@ -26,6 +26,7 @@ import {
 } from "scripting"
 import { appGlass, appInteractiveGlass, appCustomTint } from "./components/glass"
 import { PrivacyShield } from "./components/PrivacyShield"
+import { DynamicIslandBrandCapsule } from "./components/DynamicIslandBrandCapsule"
 import { useLayoutMetrics, useEffectiveIsDark } from "./Hooks"
 import { presentExternalURL, routeForDescriptionLink } from "./components"
 import { requestPixivRoute } from "../store/routeNavigation"
@@ -2512,6 +2513,9 @@ export function NovelImmersiveReaderView(props: NovelImmersiveReaderViewProps) {
 
       {/* 6. 多任务隐私保护遮罩 */}
       <PrivacyShield />
+
+      {/* 7. 灵动岛区域品牌玻璃胶囊（小说沉浸阅读时始终常驻） */}
+      <DynamicIslandBrandCapsule />
     </ZStack>
   </NavigationStack>
 )
