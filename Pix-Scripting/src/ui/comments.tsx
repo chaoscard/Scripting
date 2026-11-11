@@ -531,21 +531,15 @@ function CommentInputBar(props: {
     const success = await onSendText(content)
     if (success) {
       setText("")
-      withAnimation(() => {
-        setShowEmotePanel(false)
-      })
+      setShowEmotePanel(false)
     }
   }
 
   const handleSendStamp = async (stampID: number) => {
     if (posting) return
     triggerHaptic("selection")
-    const success = await onSendStamp(stampID)
-    if (success) {
-      withAnimation(() => {
-        setShowEmotePanel(false)
-      })
-    }
+    setShowEmotePanel(false)
+    await onSendStamp(stampID)
   }
 
   return (
@@ -593,27 +587,42 @@ function CommentInputBar(props: {
       >
         <Button
           buttonStyle="plain"
-          frame={{ width: 36, height: 36 }}
+          frame={{ width: 42, height: 42 }}
           glassEffect={appGlass("circle")}
           contentShape="circle"
           action={() => {
             triggerHaptic("selection")
-            withAnimation(() => {
-              setShowEmotePanel((prev) => !prev)
-            })
+            setShowEmotePanel((prev) => !prev)
+          }}
+          popover={{
+            isPresented: showEmotePanel,
+            onChanged: setShowEmotePanel,
+            arrowEdge: "bottom",
+            presentationCompactAdaptation: "popover",
+            content: (
+              <EmotePickerPanel
+                tab={emoteTab}
+                onTabChanged={setEmoteTab}
+                categoryKey={stampCategoryKey}
+                onCategoryChanged={setStampCategoryKey}
+                onSelectEmoji={(emojiCode) => setText((prev) => prev + emojiCode)}
+                onSelectStamp={handleSendStamp}
+                disabled={posting}
+              />
+            ),
           }}
         >
           <Image
-            systemName={showEmotePanel ? "keyboard" : "face.smiling"}
-            font="body"
+            systemName="face.smiling"
+            font="title3"
             foregroundStyle={themeColor}
           />
         </Button>
         <HStack
           alignment="center"
-          padding={{ horizontal: 12, vertical: 6 }}
+          padding={{ horizontal: 14, vertical: 8 }}
           glassEffect={appGlass("capsule")}
-          frame={{ maxWidth: "infinity" }}
+          frame={{ maxWidth: "infinity", minHeight: 42 }}
         >
           <TextField
             key={replyTarget ? `reply-${replyTarget.seq}` : "comment-default"}
@@ -630,38 +639,25 @@ function CommentInputBar(props: {
         </HStack>
         <Button
           buttonStyle="plain"
-          frame={{ width: 36, height: 36 }}
+          frame={{ width: 42, height: 42 }}
           glassEffect={!posting && text.trim() ? undefined : appGlass("circle")}
           contentShape="circle"
           disabled={posting || !text.trim()}
           action={handleSendText}
         >
-          <ZStack frame={{ width: 36, height: 36 }} alignment="center">
+          <ZStack frame={{ width: 42, height: 42 }} alignment="center">
             {!posting && text.trim() ? (
-              <Circle fill={themeColor} frame={{ width: 36, height: 36 }} />
+              <Circle fill={themeColor} frame={{ width: 42, height: 42 }} />
             ) : null}
             <Image
               systemName="arrow.up"
-              font="body"
+              font="title3"
               fontWeight="semibold"
               foregroundStyle={!posting && text.trim() ? "white" : "tertiaryLabel"}
             />
           </ZStack>
         </Button>
       </HStack>
-
-      {/* 官方 Emoji 和 Stamp 面板（支持菜单切换） */}
-      {showEmotePanel ? (
-        <EmotePickerPanel
-          tab={emoteTab}
-          onTabChanged={setEmoteTab}
-          categoryKey={stampCategoryKey}
-          onCategoryChanged={setStampCategoryKey}
-          onSelectEmoji={(emojiCode) => setText((prev) => prev + emojiCode)}
-          onSelectStamp={handleSendStamp}
-          disabled={posting}
-        />
-      ) : null}
     </VStack>
   )
 }
@@ -1089,11 +1085,9 @@ function EmotePickerPanel(props: {
   return (
     <VStack
       spacing={8}
-      padding={8}
-      glassEffect={appGlass({ type: "rect", cornerRadius: 14 })}
-      glassEffectTransition="materialize"
-      transition={Transition.move("bottom").combined(Transition.opacity())}
-      frame={{ maxWidth: "infinity", height: 220 }}
+      padding={{ horizontal: 16, vertical: 10 }}
+      presentationCompactAdaptation="popover"
+      frame={{ width: 344, height: 280 }}
     >
       {/* 顶部菜单切换栏 */}
       <HStack
@@ -1143,10 +1137,10 @@ function EmotePickerPanel(props: {
 
       {/* 内容区域：Emoji 列表 或 Stamp 列表 */}
       {tab === "emoji" ? (
-        <ScrollView frame={{ maxWidth: "infinity", maxHeight: 170 }}>
+        <ScrollView frame={{ maxWidth: "infinity", maxHeight: 228 }}>
           <LazyVGrid
-            columns={[{ size: { type: "adaptive", min: 38, max: 48 } }]}
-            spacing={8}
+            columns={[{ size: { type: "adaptive", min: 32, max: 38 }, spacing: 4 }]}
+            spacing={6}
           >
             {PIXIV_EMOJIS.map((item) => (
               <Button
@@ -1165,9 +1159,15 @@ function EmotePickerPanel(props: {
           </LazyVGrid>
         </ScrollView>
       ) : (
-        <ScrollView frame={{ maxWidth: "infinity", maxHeight: 170 }}>
+        <ScrollView frame={{ maxWidth: "infinity", maxHeight: 228 }}>
           <LazyVGrid
-            columns={[{ size: { type: "adaptive", min: 60, max: 76 } }]}
+            columns={[
+              { size: 56, spacing: 8 },
+              { size: 56, spacing: 8 },
+              { size: 56, spacing: 8 },
+              { size: 56, spacing: 8 },
+              { size: 56 },
+            ]}
             spacing={8}
           >
             {currentStamps.map((stamp) => (

@@ -235,13 +235,26 @@ export function HistoryView() {
     }, 300)
   }
 
+  const dismissSuggestions = () => {
+    tagSeqRef.current++
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current)
+      debounceTimerRef.current = null
+    }
+    setTagSuggestions([])
+    setTagSuggestionsLoading(false)
+  }
+
   const handleApplySuggestion = (tag: string) => {
     try {
       triggerHaptic("selection")
     } catch {}
     setSearchQuery(tag)
-    setTagSuggestions([])
-    setTagSuggestionsLoading(false)
+    dismissSuggestions()
+  }
+
+  const handleSearchSubmit = () => {
+    dismissSuggestions()
   }
   const [pageLayout, setPageLayout] = useState(() => loadSettings().pageLayout)
   const isAppleMusic = pageLayout === "appleMusic"
@@ -466,6 +479,11 @@ export function HistoryView() {
         placement: "navigationBarDrawer",
         prompt: "搜索作者、标题和标签",
       }}
+      onSubmit={{
+        triggers: "search",
+        action: handleSearchSubmit,
+      }}
+      submitLabel="search"
       frame={{ maxWidth: "infinity", maxHeight: "infinity" }}
     >
       {/* 搜索联想建议卡片：带毛玻璃背景、放大镜与官方翻译，点击快速将搜索词填入并过滤本地历史（自然完整展开） */}

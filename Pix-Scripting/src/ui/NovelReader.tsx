@@ -15,6 +15,8 @@ import {
   VStack,
   WebView,
   type Color,
+  type FontWeight,
+  type StyledText,
 } from "scripting"
 import { appGlass } from "./components/glass"
 import { requestPixivRoute } from "../store/routeNavigation"
@@ -33,6 +35,8 @@ import {
   loadNovelReaderSettings,
   onNovelReaderSettingsChanged,
   resolveFontName,
+  type NovelFontId,
+  type NovelFontWeight,
   type NovelReaderSettings,
 } from "../store/novelReaderSettings"
 import { getNovelProgress, recordNovelProgress } from "../store/novelProgress"
@@ -49,17 +53,27 @@ export function escapeHtml(text: string): string {
 
 /**
  * 将 Pixiv 小说注音 [[rb: 汉字 > 假名]] 转换为标准文本 汉字(假名)
+ * 并将 [b: 加粗文本] 剥离为普通文本
  */
 export function formatPixivRubyText(rawText: string): string {
-  if (!rawText || !rawText.includes("[[rb:")) return rawText
-  return rawText.replace(
-    /\[\[rb:\s*([^\r\n>]+?)\s*(?:>|&gt;)\s*([^\r\n\]]+?)\s*\]\]/g,
-    (_, kanji: string, ruby: string) => `${kanji.trim()}(${ruby.trim()})`
+  if (!rawText) return ""
+  let text = rawText
+  if (text.includes("[[rb:")) {
+    text = text.replace(
+      /\[\[rb:\s*([^\r\n>]+?)\s*(?:>|&gt;)\s*([^\r\n\]]+?)\s*\]\]/g,
+      (_, kanji: string, ruby: string) => `${kanji.trim()}(${ruby.trim()})`
+    )
+  }
+  // 剥离 [b: ...]、［b: ...］、[[b: ...]] 与全角冒号
+  text = text.replace(
+    /(?:\[{1,2}|［{1,2})[bB]\s*[:：]\s*([^\]］\r\n]+?)(?:\]{1,2}|］{1,2})/g,
+    "$1"
   )
+  return text
 }
 
 /**
- * 将 Pixiv 小说注音与 jumpuri 链接转换为 HTML 标签
+ * 将 Pixiv 小说注音、加粗与 jumpuri 链接转换为 HTML 标签
  */
 export function formatPixivRubyToHtml(rawText: string): string {
   if (!rawText) return ""
@@ -76,14 +90,33 @@ export function formatPixivRubyToHtml(rawText: string): string {
     )
   }
 
-  // 2. 处理 [[rb: 汉字 > 假名]]
-  const parts = textWithLinks.split(/(\[\[rb:\s*[^>\r\n]+?\s*(?:>|&gt;)\s*[^\]\r\n]+?\s*\]\])/g)
+  // 2. 切分行内特殊标签：[[rb: 汉字 > 假名]]、双括号加粗 [[b: ...]]、单括号加粗 [b: ...]（支持全角括号与冒号）
+  const INLINE_TAG_SPLIT =
+    /(\[\[rb:\s*[^>\r\n]+?\s*(?:>|&gt;)\s*[^\]\r\n]+?\s*\]\]|(?:\[{2}|［{2})[bB]\s*[:：]\s*[^\]］\r\n]+?(?:\]{2}|］{2})|(?:\[|［)[bB]\s*[:：]\s*[^\]］\r\n]+?(?:\]|］))/g
+
+  const parts = textWithLinks.split(INLINE_TAG_SPLIT)
   let html = parts
     .map((part) => {
-      const match = part.match(/^\[\[rb:\s*([^>\r\n]+?)\s*(?:>|&gt;)\s*([^\]\r\n]+?)\s*\]\]$/)
-      if (match) {
-        return `<ruby>${escapeHtml(match[1].trim())}<rt>${escapeHtml(match[2].trim())}</rt></ruby>`
+      if (!part) return ""
+
+      // 2.1 [[rb: 汉字 > 假名]]
+      const rbMatch = part.match(/^\[\[rb:\s*([^>\r\n]+?)\s*(?:>|&gt;)\s*([^\]\r\n]+?)\s*\]\]$/)
+      if (rbMatch) {
+        return `<ruby>${escapeHtml(rbMatch[1].trim())}<rt>${escapeHtml(rbMatch[2].trim())}</rt></ruby>`
       }
+
+      // 2.2 双括号加粗 [[b: ...]]
+      const boldDoubleMatch = part.match(/^(?:\[{2}|［{2})[bB]\s*[:：]\s*([^\]］\r\n]+?)(?:\]{2}|］{2})$/)
+      if (boldDoubleMatch) {
+        return `<strong>${formatPixivRubyToHtml(boldDoubleMatch[1].trim())}</strong>`
+      }
+
+      // 2.3 单括号加粗 [b: ...]
+      const boldSingleMatch = part.match(/^(?:\[|［)[bB]\s*[:：]\s*([^\]］\r\n]+?)(?:\]|］)$/)
+      if (boldSingleMatch) {
+        return `<strong>${formatPixivRubyToHtml(boldSingleMatch[1].trim())}</strong>`
+      }
+
       return escapeHtml(part)
     })
     .join("")
@@ -168,14 +201,25 @@ function processLineIntoNovelItems(
   }
 
   // 2. [chapter: xxx]
-  const chapterMatch = trimmedLine.match(/^\[chapter\s*[:：]\s*(.+?)\]$/i)
+  const chapterMatch = trimmedLine.match(/^(?:\[|［)chapter\s*[:：]\s*(.*)$/i)
   if (chapterMatch) {
     flushTextBuffer(state)
     state.chapterIndex += 1
+    let rawContent = chapterMatch[1].trim()
+    if (rawContent.endsWith("]") || rawContent.endsWith("］")) {
+      rawContent = rawContent.slice(0, -1).trim()
+    }
+    // 剥离章节名内部可能嵌套的 [b:...]、［b:...］、[[b:...]]
+    const cleanTitle = rawContent
+      .replace(
+        /^(?:\[{1,2}|［{1,2})[bB]\s*[:：]\s*([\s\S]+?)(?:\]{1,2}|］{1,2})$/,
+        "$1"
+      )
+      .trim()
     state.items.push({
       type: "chapter",
       id: `chapter-${state.chapterIndex}`,
-      title: chapterMatch[1].trim(),
+      title: cleanTitle,
     })
     return
   }
@@ -359,6 +403,104 @@ function getUploadedImageUrl(info?: TextEmbeddedImage): string | null {
   )
 }
 
+function resolveBoldFontConfig(
+  fontId: NovelFontId,
+  baseWeight: NovelFontWeight,
+  fontSize: number,
+  customFontName?: string | null
+): { font?: { name: string; size: number }; strokeWidth?: number; bold: boolean } {
+  // 1. 系统默认（苹方）
+  if (fontId === "system" || !fontId) {
+    const name = baseWeight === "bold" ? "PingFangSC-Bold" : "PingFangSC-Semibold"
+    return { font: { name, size: fontSize }, strokeWidth: -1.5, bold: true }
+  }
+  // 2. 经典宋体
+  if (fontId === "songti") {
+    return { font: { name: "SongtiSC-Bold", size: fontSize }, strokeWidth: -1.5, bold: true }
+  }
+  // 3. 柔和圆体
+  if (fontId === "yuanti") {
+    return { font: { name: "YuantiSC-Bold", size: fontSize }, strokeWidth: -1.5, bold: true }
+  }
+  // 4. 冬青明朝
+  if (fontId === "hiragino_mincho") {
+    return { font: { name: "HiraMinProN-W6", size: fontSize }, strokeWidth: -1.5, bold: true }
+  }
+  // 5. 冬青角黑
+  if (fontId === "hiragino_sans") {
+    return { font: { name: "HiraginoSans-W6", size: fontSize }, strokeWidth: -1.5, bold: true }
+  }
+  // 6. 冬青丸黑
+  if (fontId === "hiragino_maru") {
+    return { font: { name: "HiraMaruProN-W4", size: fontSize }, strokeWidth: -2.0, bold: true }
+  }
+  // 7. 优美楷体（iOS 固件中仅单字体）或单字重自定义字体
+  if (fontId === "kaiti") {
+    return { font: { name: "Kaiti SC", size: fontSize }, strokeWidth: -2.5, bold: true }
+  }
+  if (customFontName) {
+    return { font: { name: customFontName, size: fontSize }, strokeWidth: -2.5, bold: true }
+  }
+  return { strokeWidth: -2.5, bold: true }
+}
+
+function parseNovelTextToStyledContent(
+  rawText: string,
+  settings: NovelReaderSettings
+): (string | StyledText)[] | null {
+  if (!rawText) return null
+  if (
+    !rawText.includes("[b:") &&
+    !rawText.includes("[B:") &&
+    !rawText.includes("［b:") &&
+    !rawText.includes("［B:") &&
+    !rawText.includes("［b：") &&
+    !rawText.includes("［B：") &&
+    !rawText.includes("[b：") &&
+    !rawText.includes("[B：")
+  ) {
+    return null
+  }
+
+  // 先处理注音 [[rb: 汉字 > 假名]] 为标准 汉字(假名)
+  let text = rawText
+  if (text.includes("[[rb:")) {
+    text = text.replace(
+      /\[\[rb:\s*([^\r\n>]+?)\s*(?:>|&gt;)\s*([^\r\n\]]+?)\s*\]\]/g,
+      (_, kanji: string, ruby: string) => `${kanji.trim()}(${ruby.trim()})`
+    )
+  }
+
+  const BOLD_SPLIT_REGEX =
+    /((?:\[{1,2}|［{1,2})[bB]\s*[:：]\s*[^\]］\r\n]+?(?:\]{1,2}|］{1,2}))/g
+
+  const parts = text.split(BOLD_SPLIT_REGEX)
+  const boldConfig = resolveBoldFontConfig(
+    settings.fontId,
+    settings.fontWeight,
+    settings.fontSize,
+    settings.customFontPostscriptName
+  )
+  const contents: (string | StyledText)[] = []
+
+  for (const part of parts) {
+    if (!part) continue
+    const boldMatch = part.match(
+      /^(?:\[{1,2}|［{1,2})[bB]\s*[:：]\s*([^\]］\r\n]+?)(?:\]{1,2}|］{1,2})$/
+    )
+    if (boldMatch) {
+      contents.push({
+        content: boldMatch[1].trim(),
+        ...boldConfig,
+      })
+    } else {
+      contents.push(part)
+    }
+  }
+
+  return contents.length > 0 ? contents : null
+}
+
 /**
  * 文本段落渲染（纯原生 Text 渲染，整页一体化滚动，支持精确划词与复制）
  */
@@ -378,7 +520,29 @@ function NovelChunkTextView(props: {
     return settings.fontSize
   }, [fontName, settings.fontSize])
 
-  const plainFormattedText = useMemo(() => formatPixivRubyText(text), [text])
+  const styledContent = useMemo(
+    () => parseNovelTextToStyledContent(text, settings),
+    [text, settings]
+  )
+
+  const plainFormattedText = useMemo(
+    () => (!styledContent ? formatPixivRubyText(text) : ""),
+    [styledContent, text]
+  )
+
+  if (styledContent) {
+    return (
+      <Text
+        styledText={{ content: styledContent }}
+        font={resolvedFont}
+        lineSpacing={lineSpacing}
+        multilineTextAlignment="leading"
+        textSelection={true}
+        padding={{ horizontal: 16, vertical: 3 }}
+        frame={{ maxWidth: "infinity", alignment: "leading" }}
+      />
+    )
+  }
 
   return (
     <Text
@@ -670,7 +834,7 @@ function NovelChunkRenderer(props: {
           fontWeight="bold"
           frame={{ maxWidth: "infinity", alignment: "leading" }}
         >
-          {item.title ?? ""}
+          {formatPixivRubyText(item.title ?? "")}
         </Text>
         <Divider />
       </VStack>
@@ -828,7 +992,7 @@ export function buildVerticalHtml(
       )
     } else if (chunk.type === "chapter") {
       bodyHtmlParts.push(
-        `<div id="${chunk.id}" class="chapter-block" data-page="${currentPage}" data-chunk-id="${chunk.id}"><div class="chapter-tag">CHAPTER</div><h2 class="chapter-title">${escapeHtml(chunk.title ?? "")}</h2></div>`
+        `<div id="${chunk.id}" class="chapter-block" data-page="${currentPage}" data-chunk-id="${chunk.id}"><div class="chapter-tag">CHAPTER</div><h2 class="chapter-title">${formatPixivRubyToHtml(chunk.title ?? "")}</h2></div>`
       )
     } else if (chunk.type === "uploadedimage") {
       const cached = imageCache?.[chunk.id]
@@ -935,6 +1099,9 @@ ${themeCssVars}
     white-space: pre-wrap;
     line-break: strict;
     word-break: break-all;
+  }
+  strong, b {
+    font-weight: bold;
   }
   .empty-line {
     width: 14px;

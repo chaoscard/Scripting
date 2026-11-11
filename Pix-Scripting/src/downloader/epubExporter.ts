@@ -383,9 +383,9 @@ function formatCaptionToXHtml(rawCaption?: string, headerTitle?: string): string
 function formatInlineToXHtml(text: string): string {
   if (!text) return ""
 
-  // 匹配 [[rb: 汉字 > 假名 ]]、[ruby text=假名]汉字[/ruby] 以及 [[jumpuri: 标题 > url ]]
+  // 匹配 [[rb: 汉字 > 假名 ]]、[ruby text=假名]汉字[/ruby]、[[jumpuri: 标题 > url ]] 以及 [b: 加粗文本]（支持半角/全角括号与冒号）
   const INLINE_REGEX =
-    /(\[\[rb:\s*[^>\r\n]+?\s*(?:>|&gt;)\s*[^\]\r\n]+?\s*\]\]|\[ruby\s+text=[^\]]+?\].*?\[\/ruby\]|\[\[jumpuri:\s*[^>\r\n]+?\s*(?:>|&gt;)\s*[^\]\r\n]+?\s*\]\])/gi
+    /(\[\[rb:\s*[^>\r\n]+?\s*(?:>|&gt;)\s*[^\]\r\n]+?\s*\]\]|\[ruby\s+text=[^\]]+?\].*?\[\/ruby\]|\[\[jumpuri:\s*[^>\r\n]+?\s*(?:>|&gt;)\s*[^\]\r\n]+?\s*\]\]|(?:\[{2}|［{2})[bB]\s*[:：]\s*[^\]］\r\n]+?(?:\]{2}|］{2})|(?:\[|［)[bB]\s*[:：]\s*[^\]］\r\n]+?(?:\]|］))/gi
 
   const parts = text.split(INLINE_REGEX)
   return parts
@@ -412,6 +412,22 @@ function formatInlineToXHtml(text: string): string {
       )
       if (jumpMatch) {
         return `<a href="${escapeXml(jumpMatch[2].trim())}">${escapeXml(jumpMatch[1].trim())}</a>`
+      }
+
+      // 4. 双括号加粗 [[b: ...]]
+      const boldDoubleMatch = part.match(
+        /^(?:\[{2}|［{2})[bB]\s*[:：]\s*([^\]］\r\n]+?)(?:\]{2}|］{2})$/
+      )
+      if (boldDoubleMatch) {
+        return `<strong>${escapeXml(boldDoubleMatch[1].trim())}</strong>`
+      }
+
+      // 5. 单括号加粗 [b: ...]
+      const boldSingleMatch = part.match(
+        /^(?:\[|［)[bB]\s*[:：]\s*([^\]］\r\n]+?)(?:\]|］)$/
+      )
+      if (boldSingleMatch) {
+        return `<strong>${escapeXml(boldSingleMatch[1].trim())}</strong>`
       }
 
       // 普通纯文本：安全转义 XML
@@ -448,9 +464,19 @@ function formatNovelTextToXHtml(
       if (!seg) continue
 
       // 1. [chapter: 章节名]
-      const chapMatch = seg.match(/^\[chapter\s*[:：]\s*(.+?)\]$/i)
+      const chapMatch = seg.match(/^(?:\[|［)chapter\s*[:：]\s*(.*)$/i)
       if (chapMatch) {
-        resultBlocks.push(`<h2>${escapeXml(chapMatch[1].trim())}</h2>`)
+        let rawContent = chapMatch[1].trim()
+        if (rawContent.endsWith("]") || rawContent.endsWith("］")) {
+          rawContent = rawContent.slice(0, -1).trim()
+        }
+        const cleanTitle = rawContent
+          .replace(
+            /^(?:\[{1,2}|［{1,2})[bB]\s*[:：]\s*([\s\S]+?)(?:\]{1,2}|］{1,2})$/,
+            "$1"
+          )
+          .trim()
+        resultBlocks.push(`<h2>${escapeXml(cleanTitle)}</h2>`)
         continue
       }
 
@@ -891,8 +917,16 @@ export async function exportNovelToEpub(options: NovelEpubOptions): Promise<stri
       const isChapMultiPage = rawParts.length > 1
       const pages: NovelPageSection[] = rawParts.map((part, pIdx) => {
         const pageIndex = pIdx + 1
-        const chapMatch = part.match(/\[chapter\s*[:：]\s*(.+?)\]/i)
-        const chapterHeading = chapMatch ? chapMatch[1].trim() : undefined
+        const chapMatch = part.match(/(?:\[|［)chapter\s*[:：]\s*(.+?)(?:\]|］)/i)
+        let chapterHeading = chapMatch ? chapMatch[1].trim() : undefined
+        if (chapterHeading) {
+          chapterHeading = chapterHeading
+            .replace(
+              /^(?:\[{1,2}|［{1,2})[bB]\s*[:：]\s*([\s\S]+?)(?:\]{1,2}|］{1,2})$/,
+              "$1"
+            )
+            .trim()
+        }
 
         const xhtmlId = isSingleNovel
           ? `page_${pageIndex}`

@@ -315,7 +315,7 @@ function buildHorizontalImmersiveHtml(options: BuildHtmlOptions): string {
       bodyParts.push(
         `<div id="${chunk.id}" class="novel-chunk chapter-block" data-page="${currentPage}" data-chunk-id="${chunk.id}">
           <div class="chapter-tag">CHAPTER</div>
-          <h2 class="chapter-title">${escapeHtml(chunk.title ?? "")}</h2>
+          <h2 class="chapter-title">${formatPixivRubyToHtml(chunk.title ?? "")}</h2>
         </div>`
       )
     } else if (chunk.type === "uploadedimage") {
@@ -502,6 +502,9 @@ ${THEME_CSS_VARS}
     word-break: break-word;
     text-align: justify;
     line-break: strict;
+  }
+  strong, b {
+    font-weight: 700;
   }
   .empty-line {
     height: 1.1em;
@@ -1029,7 +1032,7 @@ function buildVerticalImmersiveHtml(options: BuildHtmlOptions): string {
       bodyParts.push(
         `<div id="${chunk.id}" class="novel-chunk chapter-block" data-page="${currentPage}" data-chunk-id="${chunk.id}">
           <div class="chapter-tag">CHAPTER</div>
-          <h2 class="chapter-title">${escapeHtml(chunk.title ?? "")}</h2>
+          <h2 class="chapter-title">${formatPixivRubyToHtml(chunk.title ?? "")}</h2>
         </div>`
       )
     } else if (chunk.type === "uploadedimage") {
@@ -1233,6 +1236,9 @@ ${THEME_CSS_VARS}
     white-space: pre-wrap;
     line-break: strict;
     word-break: break-all;
+  }
+  strong, b {
+    font-weight: 700;
   }
   .empty-line {
     width: 14px;
