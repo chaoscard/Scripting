@@ -503,9 +503,6 @@ ${THEME_CSS_VARS}
     text-align: justify;
     line-break: strict;
   }
-  strong, b {
-    font-weight: 700;
-  }
   .empty-line {
     height: 1.1em;
   }
@@ -1236,9 +1233,6 @@ ${THEME_CSS_VARS}
     white-space: pre-wrap;
     line-break: strict;
     word-break: break-all;
-  }
-  strong, b {
-    font-weight: 700;
   }
   .empty-line {
     width: 14px;

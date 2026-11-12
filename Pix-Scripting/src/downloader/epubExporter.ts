@@ -378,16 +378,22 @@ function formatCaptionToXHtml(rawCaption?: string, headerTitle?: string): string
 }
 
 /**
- * 将段落文本内的行内语法（Ruby 注音、jumpuri 链接）转换为标准且安全转义的 XHTML
+ * 将段落文本内的行内语法（Ruby 注音、jumpuri 链接）转换为标准且安全转义的 XHTML，并忽略剥离 [b:...] 加粗标记
  */
 function formatInlineToXHtml(text: string): string {
   if (!text) return ""
 
-  // 匹配 [[rb: 汉字 > 假名 ]]、[ruby text=假名]汉字[/ruby]、[[jumpuri: 标题 > url ]] 以及 [b: 加粗文本]（支持半角/全角括号与冒号）
-  const INLINE_REGEX =
-    /(\[\[rb:\s*[^>\r\n]+?\s*(?:>|&gt;)\s*[^\]\r\n]+?\s*\]\]|\[ruby\s+text=[^\]]+?\].*?\[\/ruby\]|\[\[jumpuri:\s*[^>\r\n]+?\s*(?:>|&gt;)\s*[^\]\r\n]+?\s*\]\]|(?:\[{2}|［{2})[bB]\s*[:：]\s*[^\]］\r\n]+?(?:\]{2}|］{2})|(?:\[|［)[bB]\s*[:：]\s*[^\]］\r\n]+?(?:\]|］))/gi
+  // 忽略并剥离 [b: ...]、［b: ...］等加粗语法标记为纯文本（不渲染 strong）
+  const cleanText = text.replace(
+    /(?:\[{1,2}|［{1,2})[bB]\s*[:：]\s*((?:\[\[rb:[^\r\n]+?\]\]|[^\]］\r\n])+?)(?:\]{1,2}|］{1,2})/g,
+    "$1"
+  )
 
-  const parts = text.split(INLINE_REGEX)
+  // 匹配 [[rb: 汉字 > 假名 ]]、[ruby text=假名]汉字[/ruby] 以及 [[jumpuri: 标题 > url ]]
+  const INLINE_REGEX =
+    /(\[\[rb:\s*[^>\r\n]+?\s*(?:>|&gt;)\s*[^\]\r\n]+?\s*\]\]|\[ruby\s+text=[^\]]+?\].*?\[\/ruby\]|\[\[jumpuri:\s*[^>\r\n]+?\s*(?:>|&gt;)\s*[^\]\r\n]+?\s*\]\])/gi
+
+  const parts = cleanText.split(INLINE_REGEX)
   return parts
     .map((part) => {
       if (!part) return ""
@@ -412,22 +418,6 @@ function formatInlineToXHtml(text: string): string {
       )
       if (jumpMatch) {
         return `<a href="${escapeXml(jumpMatch[2].trim())}">${escapeXml(jumpMatch[1].trim())}</a>`
-      }
-
-      // 4. 双括号加粗 [[b: ...]]
-      const boldDoubleMatch = part.match(
-        /^(?:\[{2}|［{2})[bB]\s*[:：]\s*([^\]］\r\n]+?)(?:\]{2}|］{2})$/
-      )
-      if (boldDoubleMatch) {
-        return `<strong>${escapeXml(boldDoubleMatch[1].trim())}</strong>`
-      }
-
-      // 5. 单括号加粗 [b: ...]
-      const boldSingleMatch = part.match(
-        /^(?:\[|［)[bB]\s*[:：]\s*([^\]］\r\n]+?)(?:\]|］)$/
-      )
-      if (boldSingleMatch) {
-        return `<strong>${escapeXml(boldSingleMatch[1].trim())}</strong>`
       }
 
       // 普通纯文本：安全转义 XML
